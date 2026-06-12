@@ -1,0 +1,39 @@
+services:
+  web:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+      - web_venv:/opt/venv
+      - web_node_modules:/app/node_modules
+    command: >
+      /bin/sh -c
+      "npm install &&
+      npm run build:css &&
+      uv run gunicorn -b 0.0.0.0:5000 'app:create_app()'"
+
+  db:
+    image: mariadb:11
+    profiles: ["localdb"]
+    environment:
+      MARIADB_DATABASE: dudefish_os
+      MARIADB_USER: username
+      MARIADB_PASSWORD: password
+      MARIADB_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uusername -ppassword --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mariadb_data:
+  web_venv:
+  web_node_modules:

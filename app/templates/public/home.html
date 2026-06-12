@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Dude Fish OS | Warm, practical shop software{% endblock %}
+
+{% block content %}
+  <section class="grid gap-8 lg:grid-cols-[1.3fr_0.7fr] lg:items-center">
+    <div class="space-y-6">
+      <span class="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-sm font-medium text-cyan-200">
+        Fresh rebuild foundation
+      </span>
+      <div class="space-y-4">
+        <h1 class="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+          Warm, practical software for a growing 3D printing business.
+        </h1>
+        <p class="max-w-2xl text-lg text-slate-300">
+          Dude Fish OS brings together the public website, shop operations, and future POS workflow in one clean Flask foundation.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="{{ url_for('auth.login') }}" class="rounded-full bg-cyan-400 px-5 py-3 font-medium text-slate-950 hover:bg-cyan-300">
+          Open the dashboard
+        </a>
+        <a href="#highlights" class="rounded-full border border-slate-700 px-5 py-3 font-medium text-slate-100 hover:border-slate-500 hover:bg-slate-900">
+          See what’s included
+        </a>
+      </div>
+    </div>
+
+    <div class="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-cyan-950/20">
+      <h2 class="text-lg font-semibold text-white">Phase 1 highlights</h2>
+      <ul class="mt-4 space-y-3 text-sm text-slate-300">
+        <li>• Flask app factory and clean blueprint setup</li>
+        <li>• Login/logout with roles and CSRF protection</li>
+        <li>• Dashboard shell for the future business toolkit</li>
+        <li>• Docker, Postgres wiring, and test-ready foundation</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="highlights" class="mt-12 grid gap-4 md:grid-cols-3">
+    {% for item in [
+      ('Public Site', 'A branded landing page is in place so the project starts feeling real right away.'),
+      ('Auth Foundation', 'Admin access is protected with hashed passwords, safe redirects, and a reusable login form.'),
+      ('Future-Ready Shape', 'Blueprints, services, schemas, and migrations are scaffolded for the next phases.')
+    ] %}
+      <article class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+        <h3 class="text-lg font-semibold text-white">{{ item[0] }}</h3>
+        <p class="mt-2 text-sm leading-6 text-slate-300">{{ item[1] }}</p>
+      </article>
+    {% endfor %}
+  </section>
+{% endblock %}

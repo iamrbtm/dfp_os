@@ -1,0 +1,45 @@
+[project]
+name = "dfp-os"
+version = "0.1.0"
+description = "Dude Fish OS foundation for Dude Fish Printing."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "click>=8.1.8",
+    "email-validator>=2.2.0",
+    "flask>=3.1.0",
+    "flask-login>=0.6.3",
+    "flask-migrate>=4.1.0",
+    "flask-smorest>=0.46.1",
+    "flask-sqlalchemy>=3.1.1",
+    "flask-wtf>=1.2.2",
+    "gunicorn>=23.0.0",
+    "marshmallow>=3.26.1",
+    "pymysql>=1.1.1",
+    "python-dotenv>=1.1.0",
+    "rich>=14.0.0",
+    "sqlalchemy>=2.0.41",
+    "wtforms>=3.2.1",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "pytest>=8.4.0",
+    "pytest-cov>=6.1.1",
+    "ruff>=0.11.13",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.black]
+line-length = 100
+target-version = ["py314"]
