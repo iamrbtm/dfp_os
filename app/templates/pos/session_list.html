@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}POS Sessions{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-slate-100">POS Sessions</h1>
+    <a href="{{ url_for('pos.session_new') }}" class="bg-cyan-600 text-white px-4 py-2 rounded hover:bg-cyan-700">Open Session</a>
+  </div>
+
+  <form method="get" class="mb-4 flex gap-2">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="Search sessions..." class="border border-slate-600 rounded px-3 py-2 flex-1 bg-slate-800 text-slate-100 placeholder-slate-400">
+    <button type="submit" class="bg-slate-700 text-slate-200 px-4 py-2 rounded hover:bg-slate-600">Search</button>
+  </form>
+
+  <div class="overflow-x-auto">
+    <table class="w-full bg-slate-800 border border-slate-700 rounded shadow text-slate-200">
+      <thead>
+        <tr class="bg-slate-700 text-left text-slate-300">
+          <th class="p-3">Session</th>
+          <th class="p-3">Status</th>
+          <th class="p-3">Opened</th>
+          <th class="p-3">Opened By</th>
+          <th class="p-3">Sales</th>
+          <th class="p-3">Total</th>
+          <th class="p-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr class="border-t border-slate-700 hover:bg-slate-700">
+          <td class="p-3 font-mono">{{ s.session_number }}</td>
+          <td class="p-3">
+            <span class="px-2 py-1 rounded text-sm {% if s.status == 'open' %}bg-green-900 text-green-300{% elif s.status == 'closed' %}bg-slate-600 text-slate-200{% else %}bg-red-900 text-red-300{% endif %}">
+              {{ s.status.value }}
+            </span>
+          </td>
+          <td class="p-3">{{ s.opened_at.strftime('%Y-%m-%d %H:%M') if s.opened_at else '' }}</td>
+          <td class="p-3">{{ s.opened_by.first_name if s.opened_by else '' }}</td>
+          <td class="p-3">{{ s.sales|length if s.sales else 0 }}</td>
+          <td class="p-3">${{ "%.2f"|format(s.sales|sum(attribute='total')) if s.sales else '0.00' }}</td>
+          <td class="p-3 flex gap-2">
+            {% if s.status == 'open' %}
+            <a href="{{ url_for('pos.pos_screen', session_id=s.id) }}" class="text-cyan-400 hover:underline">POS</a>
+            <a href="{{ url_for('pos.session_detail', session_id=s.id) }}" class="text-cyan-400 hover:underline">Detail</a>
+            {% else %}
+            <a href="{{ url_for('pos.session_detail', session_id=s.id) }}" class="text-cyan-400 hover:underline">View</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="p-6 text-center text-slate-500">No sessions yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pagination.pages > 1 %}
+  <div class="mt-4 flex justify-center gap-2">
+    {% for p in range(1, pagination.pages + 1) %}
+    <a href="{{ url_for('pos.session_list', page=p, q=q) }}" class="px-3 py-1 rounded {% if p == pagination.page %}bg-cyan-600 text-white{% else %}bg-slate-700 text-slate-200 hover:bg-slate-600{% endif %}">{{ p }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

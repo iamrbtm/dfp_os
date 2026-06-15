@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Session {{ session.session_number }}{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-slate-100">Session {{ session.session_number }}</h1>
+    <div class="flex gap-2">
+      {% if session.status == 'open' %}
+      <a href="{{ url_for('pos.pos_screen', session_id=session.id) }}" class="bg-cyan-600 text-white px-4 py-2 rounded hover:bg-cyan-700">Open POS</a>
+      <a href="{{ url_for('pos.session_close', session_id=session.id) }}" class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700">Close Session</a>
+      {% endif %}
+      <a href="{{ url_for('pos.session_list') }}" class="bg-slate-700 text-slate-200 px-4 py-2 rounded hover:bg-slate-600">Back</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-slate-800 border border-slate-700 rounded shadow p-4">
+      <p class="text-sm text-slate-400">Status</p>
+      <p class="font-bold text-slate-100">{{ session.status.value }}</p>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded shadow p-4">
+      <p class="text-sm text-slate-400">Opening Cash</p>
+      <p class="font-bold text-slate-100">${{ "%.2f"|format(session.opening_cash) }}</p>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded shadow p-4">
+      <p class="text-sm text-slate-400">Total Sales</p>
+      <p class="font-bold text-slate-100">${{ "%.2f"|format(summary.total_sales) }}</p>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded shadow p-4">
+      <p class="text-sm text-slate-400">Sale Count</p>
+      <p class="font-bold text-slate-100">{{ summary.sale_count }}</p>
+    </div>
+    {% if session.status == 'closed' %}
+    <div class="bg-slate-800 border border-slate-700 rounded shadow p-4">
+      <p class="text-sm text-slate-400">Expected Cash</p>
+      <p class="font-bold text-slate-100">${{ "%.2f"|format(session.expected_cash) }}</p>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded shadow p-4">
+      <p class="text-sm text-slate-400">Actual Cash</p>
+      <p class="font-bold text-slate-100">${{ "%.2f"|format(session.closing_cash) }}</p>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded shadow p-4">
+      <p class="text-sm text-slate-400">Difference</p>
+      <p class="font-bold {% if session.cash_difference < 0 %}text-red-400{% elif session.cash_difference > 0 %}text-green-400{% endif %}">
+        ${{ "%.2f"|format(session.cash_difference) }}
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if summary.payment_totals %}
+  <div class="bg-slate-800 border border-slate-700 rounded shadow p-4 mb-6">
+    <h2 class="font-bold text-slate-100 mb-2">Payment Totals</h2>
+    {% for method, total in summary.payment_totals.items() %}
+    <div class="flex justify-between py-1 border-b border-slate-700 last:border-0 text-slate-300">
+      <span>{{ method.replace('_', ' ').title() }}</span>
+      <span class="font-bold">${{ "%.2f"|format(total) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="bg-slate-800 border border-slate-700 rounded shadow overflow-hidden">
+    <h2 class="font-bold text-slate-100 p-4 border-b border-slate-700">Sales</h2>
+    <table class="w-full text-slate-200">
+      <thead>
+        <tr class="bg-slate-700 text-left text-sm text-slate-300">
+          <th class="p-3">Sale #</th>
+          <th class="p-3">Time</th>
+          <th class="p-3">Items</th>
+          <th class="p-3">Payment</th>
+          <th class="p-3">Total</th>
+          <th class="p-3">Receipt</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sale in summary.sales %}
+        <tr class="border-t border-slate-700 hover:bg-slate-700">
+          <td class="p-3 font-mono text-sm">{{ sale.sale_number }}</td>
+          <td class="p-3 text-sm">{{ sale.created_at.strftime('%H:%M') if sale.created_at else '' }}</td>
+          <td class="p-3 text-sm">{{ sale.items|length }}</td>
+          <td class="p-3 text-sm">{{ sale.payment_method.replace('_', ' ').title() }}</td>
+          <td class="p-3 font-bold">${{ "%.2f"|format(sale.total) }}</td>
+          <td class="p-3"><a href="{{ url_for('pos.receipt', session_id=session.id, sale_id=sale.id) }}" class="text-cyan-400 text-sm hover:underline">Receipt</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="p-6 text-center text-slate-500">No sales in this session.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

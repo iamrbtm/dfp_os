@@ -6,6 +6,8 @@
     <title>{% block title %}{{ app_name }}{% endblock %}</title>
     <meta name="description" content="Dude Fish OS helps Dude Fish Printing run the shop, sell at markets, and stay organized.">
     <link rel="stylesheet" href="{{ url_for('static', filename='dist/app.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.x.x/dist/htmx.min.js" defer></script>
     {% block head %}{% endblock %}
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100">

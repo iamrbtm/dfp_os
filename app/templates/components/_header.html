@@ -5,8 +5,10 @@
     </a>
     <nav class="flex items-center gap-3 text-sm text-slate-200">
       <a href="{{ url_for('public.home') }}" class="rounded-full px-3 py-2 hover:bg-slate-900">Home</a>
+      <a href="{{ url_for('public.shop') }}" class="rounded-full px-3 py-2 hover:bg-slate-900">Shop</a>
       {% if current_user.is_authenticated %}
         <a href="{{ url_for('dashboard.index') }}" class="rounded-full px-3 py-2 hover:bg-slate-900">Dashboard</a>
+        <a href="{{ url_for('products.list_resource', resource_key='products') }}" class="rounded-full px-3 py-2 hover:bg-slate-900">Catalog</a>
         <form action="{{ url_for('auth.logout') }}" method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="rounded-full bg-cyan-400 px-4 py-2 font-medium text-slate-950 hover:bg-cyan-300">

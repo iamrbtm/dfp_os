@@ -7,7 +7,16 @@ from dotenv import load_dotenv
 from flask import Flask, render_template
 
 from app.blueprints.auth import bp as auth_bp
+from app.blueprints.api import register_api_blueprints
+from app.blueprints.customers import bp as customers_bp
+from app.blueprints.custom_orders import bp as custom_orders_bp
 from app.blueprints.dashboard import bp as dashboard_bp
+from app.blueprints.inventory import bp as inventory_bp
+from app.blueprints.orders import bp as orders_bp
+from app.blueprints.pos import bp as pos_bp
+from app.blueprints.print_jobs import bp as print_jobs_bp
+from app.blueprints.printers import bp as printers_bp
+from app.blueprints.products import bp as products_bp
 from app.blueprints.public import bp as public_bp
 from app.cli import seed_group
 from app.extensions import api, csrf, db, login_manager, migrate
@@ -67,6 +76,15 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(public_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(products_bp)
+    app.register_blueprint(inventory_bp)
+    app.register_blueprint(printers_bp)
+    app.register_blueprint(customers_bp)
+    app.register_blueprint(custom_orders_bp)
+    app.register_blueprint(orders_bp)
+    app.register_blueprint(pos_bp)
+    app.register_blueprint(print_jobs_bp)
+    register_api_blueprints(api)
 
 
 def register_cli(app: Flask) -> None:

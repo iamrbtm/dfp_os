@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}POS - {{ session.session_number }}{% endblock %}
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+{% block content %}
+<div x-data="posApp()" class="flex flex-col lg:flex-row gap-4 h-[calc(100vh-8rem)]">
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <div class="flex items-center justify-between mb-3 flex-shrink-0">
+      <div>
+        <span class="font-mono font-bold text-lg text-slate-100">{{ session.session_number }}</span>
+        <span class="text-sm text-slate-400 ml-2">Cash: ${{ "%.2f"|format(session.opening_cash) }}</span>
+        {% if session.market_id %}<span class="text-sm text-slate-400 ml-2">Market #{{ session.market_id }}</span>{% endif %}
+      </div>
+      <div class="flex gap-2">
+        <a href="{{ url_for('pos.session_detail', session_id=session.id) }}" class="text-sm text-cyan-400 hover:underline">Session</a>
+        <a href="{{ url_for('pos.session_list') }}" class="text-sm text-slate-400 hover:underline">Sessions</a>
+      </div>
+    </div>
+
+    <div class="flex gap-2 mb-3 overflow-x-auto flex-shrink-0">
+      <button @click="category = null; loadProducts()" class="px-4 py-2 rounded text-sm font-medium whitespace-nowrap"
+              :class="category === null ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'">All</button>
+      {% for cat in categories %}
+      <button @click="category = {{ cat.id }}; loadProducts()" class="px-4 py-2 rounded text-sm font-medium whitespace-nowrap"
+              :class="category === {{ cat.id }} ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'">{{ cat.name }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="mb-3 flex-shrink-0">
+      <input type="text" x-model="search"
+             @input.debounce="loadProducts()"
+             placeholder="Search products..."
+             class="w-full border border-slate-600 rounded-lg px-4 py-3 text-lg bg-slate-800 text-slate-100 placeholder-slate-400">
+    </div>
+
+    <div id="product-grid" class="flex-1 overflow-y-auto">
+      {% include "pos/_product_grid.html" %}
+    </div>
+  </div>
+
+  <div class="lg:w-96 flex flex-col bg-slate-800 rounded-lg shadow-lg overflow-hidden border border-slate-700" x-show="cart.length > 0">
+    <div class="bg-cyan-700 text-white px-4 py-3 font-bold flex justify-between">
+      <span>Cart</span>
+      <span x-text="'$' + cartTotal().toFixed(2)"></span>
+    </div>
+    <div class="flex-1 overflow-y-auto p-3 space-y-3">
+      <template x-for="(item, idx) in cart" :key="idx">
+        <div class="flex items-start gap-2 border-b border-slate-700 pb-2">
+          <div class="flex-1 min-w-0">
+            <p class="font-medium text-sm text-slate-100 truncate" x-text="item.description"></p>
+            <p class="text-xs text-slate-400" x-text="'$' + item.unit_price.toFixed(2) + ' x ' + item.quantity"></p>
+          </div>
+          <div class="flex items-center gap-1">
+            <button @click="item.quantity = Math.max(1, item.quantity - 1); recalc()" class="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm">-</button>
+            <span class="w-6 text-center text-sm font-medium text-slate-100" x-text="item.quantity"></span>
+            <button @click="item.quantity += 1; recalc()" class="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm">+</button>
+          </div>
+          <div class="text-right min-w-[5rem]">
+            <p class="font-medium text-sm text-slate-100" x-text="'$' + item.line_total.toFixed(2)"></p>
+            <button @click="cart = cart.filter((_, i) => i !== idx); recalc()" class="text-red-400 text-xs hover:underline">Remove</button>
+          </div>
+        </div>
+      </template>
+    </div>
+    <div class="border-t border-slate-700 p-4 space-y-2">
+      <div class="flex justify-between text-sm text-slate-300">
+        <span>Subtotal</span>
+        <span x-text="'$' + subtotal().toFixed(2)"></span>
+      </div>
+      <div class="flex justify-between text-sm text-slate-300">
+        <span>Tax (9.25%)</span>
+        <span x-text="'$' + taxAmount().toFixed(2)"></span>
+      </div>
+      <div class="flex justify-between font-bold text-lg text-slate-100 border-t border-slate-700 pt-2">
+        <span>Total</span>
+        <span x-text="'$' + cartTotal().toFixed(2)"></span>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-300 mb-1">Payment</label>
+        <select x-model="paymentMethod" class="w-full border border-slate-600 rounded px-3 py-2 text-sm bg-slate-800 text-slate-100">
+          <option value="cash">Cash</option>
+          <option value="card_external">Card (External)</option>
+          <option value="venmo">Venmo</option>
+          <option value="cash_app">Cash App</option>
+          <option value="apple_pay">Apple Pay</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div x-show="paymentMethod === 'cash'">
+        <label class="block text-sm font-medium text-slate-300 mb-1">Amount Received</label>
+        <input type="number" x-model="amountReceived" step="0.01" class="w-full border border-slate-600 rounded px-3 py-2 text-lg bg-slate-800 text-slate-100 placeholder-slate-400">
+        <p x-show="parseFloat(amountReceived) >= cartTotal()" class="text-sm text-green-400 mt-1">
+          Change: $<span x-text="(parseFloat(amountReceived) - cartTotal()).toFixed(2)"></span>
+        </p>
+      </div>
+      <div x-show="paymentMethod !== 'cash'">
+        <input type="number" x-model="amountReceived" :value="cartTotal()" step="0.01" class="w-full border border-slate-600 rounded px-3 py-2 text-lg bg-slate-800 text-slate-100 placeholder-slate-400">
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-300 mb-1">Customer (optional)</label>
+        <select x-model="customerId" class="w-full border border-slate-600 rounded px-3 py-2 text-sm bg-slate-800 text-slate-100">
+          <option value="">Walk-in Customer</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}">{{ c.first_name }} {{ c.last_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex gap-2">
+        <input type="text" x-model="quickName" placeholder="Quick: First Last" class="flex-1 border border-slate-600 rounded px-3 py-2 text-sm bg-slate-800 text-slate-100 placeholder-slate-400">
+        <button @click="quickCustomer()" class="bg-slate-700 text-slate-200 px-3 py-2 rounded text-sm hover:bg-slate-600">Add</button>
+      </div>
+
+      <button @click="checkout()" :disabled="cart.length === 0"
+              class="w-full bg-green-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+        Complete Sale
+      </button>
+    </div>
+  </div>
+
+  <div x-show="cart.length === 0" class="lg:w-96 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-lg text-slate-500 text-lg">
+    Cart is empty
+  </div>
+</div>
+
+<div id="checkout-result"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function posApp() {
+  return {
+    taxRate: 0.0925,
+    category: null,
+    search: '',
+    cart: [],
+    paymentMethod: 'cash',
+    amountReceived: 0,
+    customerId: '',
+    quickName: '',
+    loading: false,
+    init() {
+      this.loadProducts();
+    },
+    loadProducts() {
+      let url = '{{ url_for("pos.product_grid", session_id=session.id) }}';
+      let params = new URLSearchParams();
+      if (this.category) params.set('category', this.category);
+      if (this.search) params.set('q', this.search);
+      fetch(url + '?' + params.toString())
+        .then(r => r.text())
+        .then(html => {
+          document.getElementById('product-grid').innerHTML = html;
+          if (typeof Alpine !== 'undefined') {
+            Alpine.initTree(document.getElementById('product-grid'));
+          }
+        });
+    },
+    addToCart(productId, name, price, variantId) {
+      let existing = this.cart.find(i => i.product_id === productId && (!variantId || i.variant_id === variantId));
+      if (existing) {
+        existing.quantity += 1;
+        existing.line_total = existing.quantity * existing.unit_price;
+      } else {
+        this.cart.push({
+          product_id: productId,
+          variant_id: variantId || null,
+          description: name,
+          unit_price: parseFloat(price),
+          quantity: 1,
+          line_total: parseFloat(price),
+          item_type: 'product',
+          discount_amount: 0,
+        });
+      }
+      this.recalc();
+    },
+    recalc() {
+      this.cart.forEach(item => {
+        item.line_total = item.quantity * item.unit_price - item.discount_amount;
+      });
+    },
+    subtotal() {
+      return this.cart.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
+    },
+    taxAmount() {
+      return this.subtotal() * this.taxRate;
+    },
+    cartTotal() {
+      return this.subtotal() + this.taxAmount();
+    },
+    checkout() {
+      if (this.cart.length === 0) return;
+      let received = this.paymentMethod === 'cash' ? parseFloat(this.amountReceived) : this.cartTotal();
+      if (this.paymentMethod === 'cash' && received < this.cartTotal()) {
+        alert('Amount received must be at least the total.');
+        return;
+      }
+      fetch('{{ url_for("pos.checkout", session_id=session.id) }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+        },
+        body: JSON.stringify({
+          items: this.cart,
+          payment_method: this.paymentMethod,
+          amount_received: received,
+          customer_id: this.customerId || null,
+          tax_total: this.taxAmount(),
+        }),
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.redirect) {
+          window.location.href = data.redirect;
+        } else if (data.error) {
+          alert(data.error);
+        }
+      });
+    },
+    quickCustomer() {
+      let parts = this.quickName.trim().split(' ');
+      if (parts.length < 2) { alert('Enter First and Last name'); return; }
+      fetch('{{ url_for("pos.quick_customer") }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+        },
+        body: JSON.stringify({ first_name: parts[0], last_name: parts.slice(1).join(' ') }),
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.id) {
+          this.customerId = data.id;
+          this.quickName = '';
+          location.reload();
+        }
+      });
+    },
+  };
+}
+</script>
+{% endblock %}
