@@ -13,6 +13,10 @@ services:
       /bin/sh -c
       "npm install &&
       npm run build:css &&
+      for i in $$(seq 1 30); do
+        uv run flask --app app:create_app db upgrade && break;
+        echo 'Waiting for database...' && sleep 2;
+      done &&
       uv run gunicorn -b 0.0.0.0:5000 'app:create_app()'"
 
   db:
