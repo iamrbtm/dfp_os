@@ -1,3 +1,4 @@
+from app.schemas.api_token import ApiTokenSchema
 from app.schemas.catalog import (
     CategorySchema,
     CollectionSchema,
@@ -29,6 +30,7 @@ from app.schemas.print_job import PrintJobSchema
 
 __all__ = [
     "AMSUnitSchema",
+    "ApiTokenSchema",
     "CategorySchema",
     "CollectionSchema",
     "CustomerSchema",

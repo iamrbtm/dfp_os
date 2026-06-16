@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from flask import jsonify, request
+from flask import g, jsonify, request
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
@@ -13,6 +13,7 @@ from app.models import (
     AMSUnit,
     AMSUnitStatus,
     AMSUnitType,
+    ApiToken,
     Category,
     Collection,
     CustomRequest,
@@ -50,6 +51,7 @@ from app.models import (
 )
 from app.schemas import (
     AMSUnitSchema,
+    ApiTokenSchema,
     CategorySchema,
     CollectionSchema,
     CustomRequestSchema,
@@ -78,6 +80,7 @@ from app.services.crud import (
     paginate_query,
     save_instance,
 )
+from app.extensions import db
 from app.utils.auth import api_token_required
 
 catalog_blp = Blueprint("catalog_api", __name__, url_prefix="/api/v1")
@@ -817,6 +820,65 @@ class AnalyticsExpenses(MethodView):
             "total_expenses": float(e["total_expenses"]),
             "by_category": [{"category": c["category"], "total": float(c["total"]), "count": c["count"]} for c in e["by_category"]],
         })
+
+
+@catalog_blp.route("/api-tokens")
+class ApiTokenCollection(MethodView):
+    @api_token_required
+    def get(self):
+        from app.models import ApiToken
+        tokens = ApiToken.query.filter_by(user_id=g.api_user.id).order_by(ApiToken.created_at.desc()).all()
+        schema = ApiTokenSchema(many=True)
+        return jsonify({"data": schema.dump(tokens)})
+
+    @api_token_required
+    def post(self):
+        from app.services.api_tokens import create_api_token
+        payload = request.get_json(silent=True) or {}
+        name = payload.get("name", "").strip()
+        if not name:
+            return jsonify({"error": {"code": "validation_error", "message": "Token name is required.", "details": {}}}), 400
+        scopes = payload.get("scopes", "")
+        expires_at_str = payload.get("expires_at")
+
+        expires_at = None
+        if expires_at_str:
+            try:
+                from datetime import datetime, timezone
+                expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except ValueError:
+                return jsonify({"error": {"code": "validation_error", "message": "Invalid expires_at format (use YYYY-MM-DD).", "details": {}}}), 400
+
+        token, raw_token = create_api_token(
+            user=g.api_user,
+            name=name,
+            scopes=scopes.split(",") if scopes else None,
+            expires_at=expires_at,
+        )
+        schema = ApiTokenSchema()
+        result = schema.dump(token)
+        result["raw_token"] = raw_token
+        return jsonify({"data": result}), 201
+
+
+@catalog_blp.route("/api-tokens/<int:token_id>")
+class ApiTokenItem(MethodView):
+    @api_token_required
+    def get(self, token_id: int):
+        token = db.session.get(ApiToken, token_id)
+        if token is None or token.user_id != g.api_user.id:
+            return jsonify({"error": {"code": "not_found", "message": "API token not found.", "details": {}}}), 404
+        return jsonify({"data": ApiTokenSchema().dump(token)})
+
+    @api_token_required
+    def delete(self, token_id: int):
+        token = db.session.get(ApiToken, token_id)
+        if token is None or token.user_id != g.api_user.id:
+            return jsonify({"error": {"code": "not_found", "message": "API token not found.", "details": {}}}), 404
+        from app.models.base import utc_now
+        token.revoked_at = utc_now()
+        db.session.commit()
+        return jsonify({"status": "revoked"})
 
 
 def register_api_blueprints(api):

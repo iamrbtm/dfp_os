@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -27,6 +27,13 @@ class ApiToken(PrimaryKeyMixin, TimestampMixin, db.Model):
     def is_active(self) -> bool:
         if self.revoked_at is not None:
             return False
-        if self.expires_at is not None and self.expires_at <= utc_now():
-            return False
+        if self.expires_at is not None:
+            now = utc_now()
+            expires = self.expires_at
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+            if now.tzinfo is None:
+                now = now.replace(tzinfo=timezone.utc)
+            if expires <= now:
+                return False
         return True

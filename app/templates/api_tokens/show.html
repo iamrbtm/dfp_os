@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}API Token Created{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto">
+  <h1 class="text-2xl font-bold mb-6" style="color: var(--color-text);">API Token Created</h1>
+  <div class="app-card p-6 space-y-4">
+    <div class="app-alert app-alert-warning">
+      <p class="font-bold">Copy this token now!</p>
+      <p class="text-sm">You will not be able to see it again. If you lose it, you will need to revoke this token and create a new one.</p>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Token Name</label>
+      <p style="color: var(--color-text);">{{ token.name }}</p>
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Raw Token</label>
+      <div class="app-input font-mono text-xs break-all select-all" style="word-break: break-all; padding: 0.75rem; background-color: var(--color-bg-inset);">
+        {{ raw_token }}
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Use in Authorization header</label>
+      <div class="app-input font-mono text-xs select-all" style="word-break: break-all; padding: 0.75rem; background-color: var(--color-bg-inset);">
+        Authorization: Bearer {{ raw_token }}
+      </div>
+    </div>
+    <div class="flex gap-3">
+      <a href="{{ url_for('api_tokens.list_tokens') }}" class="app-btn app-btn-primary">Back to Tokens</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

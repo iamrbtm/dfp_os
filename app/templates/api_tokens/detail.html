@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}API Token Detail{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold" style="color: var(--color-text);">API Token: {{ token.name }}</h1>
+    <a href="{{ url_for('api_tokens.list_tokens') }}" class="app-btn app-btn-secondary">Back</a>
+  </div>
+
+  <div class="app-card p-6 space-y-4">
+    <div>
+      <span class="text-sm font-medium" style="color: var(--color-text-muted);">Status</span>
+      <p>
+        {% if token.is_active %}
+        <span class="app-badge app-badge-success">Active</span>
+        {% else %}
+        <span class="app-badge app-badge-danger">Revoked</span>
+        {% endif %}
+      </p>
+    </div>
+    <div>
+      <span class="text-sm font-medium" style="color: var(--color-text-muted);">Prefix</span>
+      <p class="font-mono" style="color: var(--color-text);">{{ token.prefix }}...</p>
+    </div>
+    <div>
+      <span class="text-sm font-medium" style="color: var(--color-text-muted);">Scopes</span>
+      <p style="color: var(--color-text);">{{ token.scopes or 'Full access' }}</p>
+    </div>
+    <div>
+      <span class="text-sm font-medium" style="color: var(--color-text-muted);">Created</span>
+      <p style="color: var(--color-text);">{{ token.created_at.strftime('%Y-%m-%d %H:%M') if token.created_at else '' }}</p>
+    </div>
+    <div>
+      <span class="text-sm font-medium" style="color: var(--color-text-muted);">Last Used</span>
+      <p style="color: var(--color-text);">{{ token.last_used_at.strftime('%Y-%m-%d %H:%M') if token.last_used_at else 'Never' }}</p>
+    </div>
+    <div>
+      <span class="text-sm font-medium" style="color: var(--color-text-muted);">Expires</span>
+      <p style="color: var(--color-text);">{{ token.expires_at.strftime('%Y-%m-%d') if token.expires_at else 'Never' }}</p>
+    </div>
+
+    {% if token.is_active %}
+    <form method="post" action="{{ url_for('api_tokens.revoke_token', token_id=token.id) }}" onsubmit="return confirm('Revoke this token? Any integrations using it will stop working.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="app-btn" style="background-color: var(--color-danger); color: #fff; border-color: var(--color-danger);">Revoke Token</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

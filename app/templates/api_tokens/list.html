@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}API Tokens{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold" style="color: var(--color-text);">API Tokens</h1>
+    <a href="{{ url_for('api_tokens.create_token') }}" class="app-btn app-btn-primary">Create Token</a>
+  </div>
+
+  {% if tokens %}
+  <table class="app-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Prefix</th>
+        <th>Status</th>
+        <th>Last Used</th>
+        <th>Expires</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for token in tokens %}
+      <tr>
+        <td>{{ token.name }}</td>
+        <td class="font-mono text-sm">{{ token.prefix }}...</td>
+        <td>
+          {% if token.is_active %}
+          <span class="app-badge app-badge-success">Active</span>
+          {% else %}
+          <span class="app-badge app-badge-danger">Revoked</span>
+          {% endif %}
+        </td>
+        <td class="text-sm">{{ token.last_used_at.strftime('%Y-%m-%d %H:%M') if token.last_used_at else 'Never' }}</td>
+        <td class="text-sm">{{ token.expires_at.strftime('%Y-%m-%d') if token.expires_at else 'Never' }}</td>
+        <td>
+          <a href="{{ url_for('api_tokens.token_detail', token_id=token.id) }}" class="app-link">View</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="app-card p-8 text-center" style="color: var(--color-text-muted);">
+    <p class="mb-4">No API tokens yet.</p>
+    <a href="{{ url_for('api_tokens.create_token') }}" class="app-btn app-btn-primary">Create your first token</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

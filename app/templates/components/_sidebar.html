@@ -46,6 +46,10 @@
        style="{% if active_section == 'inventory' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Inventory
     </a>
+    <a href="{{ url_for('api_tokens.list_tokens') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'api_tokens' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      API Tokens
+    </a>
     <a href="{{ url_for('settings.themes') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'settings' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Settings

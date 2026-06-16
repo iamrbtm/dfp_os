@@ -9,6 +9,7 @@ from flask import Flask, render_template
 from app.blueprints.auth import bp as auth_bp
 from app.blueprints.analytics import bp as analytics_bp
 from app.blueprints.api import register_api_blueprints
+from app.blueprints.api_tokens import bp as api_tokens_bp
 from app.blueprints.customers import bp as customers_bp
 from app.blueprints.expenses import bp as expenses_bp
 from app.blueprints.custom_orders import bp as custom_orders_bp
@@ -92,6 +93,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(markets_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(expenses_bp)
+    app.register_blueprint(api_tokens_bp)
     register_api_blueprints(api)
 
 
@@ -134,6 +136,7 @@ def register_context_processors(app: Flask) -> None:
             "inventory": "inventory",
             "markets": "markets",
             "expenses": "expenses",
+            "api_tokens": "api_tokens",
             "settings": "settings",
             "auth": None,
             "public": None,
@@ -183,6 +186,10 @@ def register_context_processors(app: Flask) -> None:
             "expenses": [
                 ("Expenses", url_for("expenses.list_resource", resource_key="expenses")),
                 ("New Expense", url_for("expenses.create_resource", resource_key="expenses")),
+            ],
+            "api_tokens": [
+                ("API Tokens", url_for("api_tokens.list_tokens")),
+                ("Create Token", url_for("api_tokens.create_token")),
             ],
             "settings": [
                 ("Themes", url_for("settings.themes")),

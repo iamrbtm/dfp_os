@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Create API Token{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto">
+  <h1 class="text-2xl font-bold mb-6" style="color: var(--color-text);">Create API Token</h1>
+  <form method="post" class="app-card p-6 space-y-4">
+    <div>
+      <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Token Name</label>
+      <input type="text" name="name" required class="app-input" placeholder="e.g. Development, CI/CD, Integration">
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Scopes</label>
+      <input type="text" name="scopes" class="app-input" placeholder="Leave blank for full access">
+      <p class="text-xs mt-1" style="color: var(--color-text-muted);">Comma-separated. Not yet enforced — reserved for future use.</p>
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Expires At</label>
+      <input type="date" name="expires_at" class="app-input">
+      <p class="text-xs mt-1" style="color: var(--color-text-muted);">Leave blank for no expiration.</p>
+    </div>
+    <div class="flex gap-3">
+      <button type="submit" class="app-btn app-btn-primary">Create Token</button>
+      <a href="{{ url_for('api_tokens.list_tokens') }}" class="app-btn app-btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
