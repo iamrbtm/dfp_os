@@ -8,6 +8,7 @@ from app.models import (
     AMSUnit,
     AMSUnitStatus,
     AMSUnitType,
+    ApiToken,
     Category,
     Collection,
     CustomRequest,
@@ -45,6 +46,7 @@ from app.models import (
     ProductStatus,
     ProductType,
     ProductVariant,
+    Setting,
     User,
     UserRole,
 )
@@ -1001,6 +1003,9 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         },
     )
 
+    from app.services.settings import seed_default_settings
+    seed_default_settings()
+
     db.session.commit()
     return {
         "categories": Category.query.count(),
@@ -1025,4 +1030,5 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         "pos_sessions": PosSession.query.count(),
         "pos_sales": PosSale.query.count(),
         "pos_sale_items": PosSaleItem.query.count(),
+        "settings": Setting.query.count(),
     }

@@ -54,6 +54,7 @@ from app.schemas import (
     ApiTokenSchema,
     CategorySchema,
     CollectionSchema,
+    SettingSchema,
     CustomRequestSchema,
     CustomerSchema,
     ExpenseSchema,
@@ -879,6 +880,41 @@ class ApiTokenItem(MethodView):
         token.revoked_at = utc_now()
         db.session.commit()
         return jsonify({"status": "revoked"})
+
+
+@catalog_blp.route("/settings")
+class SettingCollection(MethodView):
+    @api_token_required
+    def get(self):
+        from app.services.settings import get_all_settings
+        settings = get_all_settings()
+        return jsonify({"data": SettingSchema(many=True).dump(settings)})
+
+
+@catalog_blp.route("/settings/<string:key>")
+class SettingItem(MethodView):
+    @api_token_required
+    def get(self, key: str):
+        from app.models import Setting
+        from sqlalchemy import select
+        setting = db.session.scalar(select(Setting).where(Setting.key == key))
+        if setting is None:
+            return jsonify({"error": {"code": "not_found", "message": "Setting not found.", "details": {}}}), 404
+        return jsonify({"data": SettingSchema().dump(setting)})
+
+    @api_token_required
+    def put(self, key: str):
+        from app.services.settings import set_setting
+        payload = request.get_json(silent=True) or {}
+        if "value" not in payload:
+            return jsonify({"error": {"code": "validation_error", "message": "value is required.", "details": {}}}), 400
+        setting = set_setting(
+            key=key,
+            value=payload["value"],
+            description=payload.get("description"),
+            type=payload.get("type", "string"),
+        )
+        return jsonify({"data": SettingSchema().dump(setting)})
 
 
 def register_api_blueprints(api):

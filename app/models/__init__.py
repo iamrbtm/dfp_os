@@ -26,6 +26,7 @@ from app.models.pos import (
     PosSessionStatus,
 )
 from app.models.print_job import PrintJob, PrintJobStatus
+from app.models.setting import Setting
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -67,6 +68,7 @@ __all__ = [
     "PrintJob",
     "PrintJobStatus",
     "Product",
+    "Setting",
     "ProductStatus",
     "ProductType",
     "ProductVariant",

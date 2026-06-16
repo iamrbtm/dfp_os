@@ -192,6 +192,7 @@ def register_context_processors(app: Flask) -> None:
                 ("Create Token", url_for("api_tokens.create_token")),
             ],
             "settings": [
+                ("Settings", url_for("settings.settings_list")),
                 ("Themes", url_for("settings.themes")),
             ],
         }

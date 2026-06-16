@@ -27,6 +27,7 @@ from app.schemas.pos import (
     PosSessionSchema,
 )
 from app.schemas.print_job import PrintJobSchema
+from app.schemas.setting import SettingSchema
 
 __all__ = [
     "AMSUnitSchema",
@@ -54,6 +55,7 @@ __all__ = [
     "PrinterSchema",
     "PrintJobSchema",
     "ProductSchema",
+    "SettingSchema",
     "ProductVariantSchema",
     "ResourceListEnvelope",
 ]

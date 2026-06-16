@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6" style="color: var(--color-text);">Settings</h1>
+
+  <form method="post" action="{{ url_for('settings.settings_update') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% for group_name, group_settings in setting_groups.items() %}
+    <div class="app-card p-6 mb-6">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">{{ group_name }}</h2>
+      <div class="grid gap-4">
+        {% for setting in group_settings %}
+        <div>
+          <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">
+            {{ setting.key.replace('_', ' ').title() }}
+          </label>
+          {% if setting.description %}
+          <p class="text-xs mb-1" style="color: var(--color-text-muted);">{{ setting.description }}</p>
+          {% endif %}
+          {% if setting.type == 'boolean' %}
+          <select name="{{ setting.key }}" class="app-select">
+            <option value="true" {% if setting.value == 'true' %}selected{% endif %}>Enabled</option>
+            <option value="false" {% if setting.value == 'false' %}selected{% endif %}>Disabled</option>
+          </select>
+          {% else %}
+          <input type="text" name="{{ setting.key }}" value="{{ setting.value }}" class="app-input">
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <div class="flex gap-3">
+      <button type="submit" class="app-btn app-btn-primary">Save Settings</button>
+      <a href="{{ url_for('dashboard.index') }}" class="app-btn app-btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
