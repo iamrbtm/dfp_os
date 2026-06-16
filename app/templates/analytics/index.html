@@ -1,0 +1,424 @@
+{% extends "base.html" %}
+{% block title %}Analytics | {{ app_name }}{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.x.x/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Analytics</h1>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Today's Revenue</p>
+      <p class="mt-2 text-2xl font-bold" style="color: var(--color-success);">${{ "{:,.2f}".format(summary.today_revenue) }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Month Revenue</p>
+      <p class="mt-2 text-2xl font-bold" style="color: var(--color-success);">${{ "{:,.2f}".format(summary.month_revenue) }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Month POS Revenue</p>
+      <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">${{ "{:,.2f}".format(summary.month_pos_revenue) }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Est. Month Profit</p>
+      <p class="mt-2 text-2xl font-bold" style="{% if summary.estimated_month_profit >= 0 %}color: var(--color-success){% else %}color: var(--color-danger){% endif %}">${{ "{:,.2f}".format(summary.estimated_month_profit) }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Open Orders</p>
+      <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">{{ summary.open_orders_count }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Open Custom Requests</p>
+      <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">{{ summary.open_custom_requests }}</p>
+      <div class="mt-3">
+        <canvas id="customOrderChart" height="80"></canvas>
+      </div>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Print Jobs Queued</p>
+      <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">{{ summary.print_jobs_queued }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Low Inventory Items</p>
+      <p class="mt-2 text-2xl font-bold" style="{% if summary.low_inventory_count > 0 %}color: var(--color-warning){% else %}color: var(--color-text){% endif %}">{{ summary.low_inventory_count }}</p>
+    </article>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-2">
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Revenue by Day (POS)</h2>
+      <canvas id="posRevenueChart" height="200"></canvas>
+      {% if not pos.sales_by_day %}
+      <p class="text-sm mt-4" style="color: var(--color-text-muted);">No POS sales in the last {{ pos.days }} days.</p>
+      {% endif %}
+    </article>
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Payment Methods</h2>
+      <canvas id="paymentChart" height="200"></canvas>
+      {% if not pos.payment_totals %}
+      <p class="text-sm mt-4" style="color: var(--color-text-muted);">No payment data yet.</p>
+      {% endif %}
+    </article>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-2">
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Top Products (Revenue)</h2>
+      <canvas id="topProductsChart" height="200"></canvas>
+      {% if not products %}
+      <p class="text-sm mt-4" style="color: var(--color-text-muted);">No product data yet.</p>
+      {% endif %}
+    </article>
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Expenses by Category</h2>
+      <canvas id="expenseChart" height="200"></canvas>
+      {% if not expenses.by_category %}
+      <p class="text-sm mt-4" style="color: var(--color-text-muted);">No expense data yet.</p>
+      {% endif %}
+    </article>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-2">
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Expense Monthly Trend</h2>
+      <canvas id="expenseTrendChart" height="200"></canvas>
+      {% if not expenses.monthly_trend %}
+      <p class="text-sm mt-4" style="color: var(--color-text-muted);">No expense trend data yet.</p>
+      {% endif %}
+    </article>
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Printer Failure Rate</h2>
+      <canvas id="printerChart" height="200"></canvas>
+      {% if not printing.printers %}
+      <p class="text-sm mt-4" style="color: var(--color-text-muted);">No printer data yet.</p>
+      {% endif %}
+    </article>
+  </div>
+
+  {% if printing.printers %}
+  <article class="app-card p-5">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Printer Stats</h2>
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th>Printer</th>
+            <th>Status</th>
+            <th>Completed</th>
+            <th>Failed</th>
+            <th>Queued</th>
+            <th>Hours</th>
+            <th>Failure Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in printing.printers %}
+          <tr>
+            <td>{{ p.name }}</td>
+            <td>{{ p.status }}</td>
+            <td>{{ p.completed }}</td>
+            <td>{{ p.failed }}</td>
+            <td>{{ p.queued }}</td>
+            <td>{{ "%.1f"|format(p.total_hours) }}</td>
+            <td>{{ p.failure_rate }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+  {% endif %}
+
+  {% if markets %}
+  <article class="app-card p-5">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Market Performance</h2>
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th>Market</th>
+            <th>Date</th>
+            <th>Sales</th>
+            <th>Expenses</th>
+            <th>Booth Cost</th>
+            <th>Profit</th>
+            <th>Units</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in markets %}
+          <tr>
+            <td>{{ m.name }}</td>
+            <td>{{ m.date or "—" }}</td>
+            <td>${{ "{:,.2f}".format(m.total_sales) }}</td>
+            <td>${{ "{:,.2f}".format(m.total_expenses) }}</td>
+            <td>${{ "{:,.2f}".format(m.booth_cost) }}</td>
+            <td style="{% if m.profit >= 0 %}color: var(--color-success){% else %}color: var(--color-danger){% endif %}">${{ "{:,.2f}".format(m.profit) }}</td>
+            <td>{{ m.units_sold }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+  {% endif %}
+
+  {% if inventory.location_counts %}
+  <div class="grid gap-6 lg:grid-cols-2">
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Inventory by Location</h2>
+      <canvas id="locationChart" height="200"></canvas>
+    </article>
+    <article class="app-card p-5">
+      <div class="space-y-3">
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Inventory Summary</h2>
+        <div class="grid gap-3 grid-cols-2">
+          <div class="app-card p-4">
+            <p class="text-sm" style="color: var(--color-text-muted);">Low Stock Items</p>
+            <p class="text-xl font-bold" style="color: var(--color-warning);">{{ inventory.low_stock_count }}</p>
+          </div>
+          <div class="app-card p-4">
+            <p class="text-sm" style="color: var(--color-text-muted);">Filament Low</p>
+            <p class="text-xl font-bold" style="color: var(--color-warning);">{{ inventory.filament_low }}</p>
+          </div>
+          <div class="app-card p-4">
+            <p class="text-sm" style="color: var(--color-text-muted);">Filament Empty</p>
+            <p class="text-xl font-bold" style="color: var(--color-danger);">{{ inventory.filament_empty }}</p>
+          </div>
+          <div class="app-card p-4">
+            <p class="text-sm" style="color: var(--color-text-muted);">Estimated Value</p>
+            <p class="text-xl font-bold" style="color: var(--color-text);">${{ "{:,.2f}".format(inventory.total_inventory_value) }}</p>
+          </div>
+        </div>
+      </div>
+    </article>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  function getCSS(varName) {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#6366f1';
+  }
+
+  function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '99, 102, 241';
+  }
+
+  const textColor = getCSS('--color-text');
+  const mutedColor = getCSS('--color-text-muted');
+  const successColor = getCSS('--color-success');
+  const warningColor = getCSS('--color-warning');
+  const dangerColor = getCSS('--color-danger');
+  const primaryColor = getCSS('--color-primary');
+
+  {% if pos.sales_by_day %}
+  new Chart(document.getElementById('posRevenueChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ pos.sales_by_day.keys()|list|tojson }},
+      datasets: [{
+        label: 'Revenue',
+        data: {{ pos.sales_by_day.values()|list|tojson }},
+        backgroundColor: 'rgba(' + hexToRgb(primaryColor) + ', 0.6)',
+        borderColor: primaryColor,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: mutedColor, maxRotation: 45 } },
+        y: { ticks: { color: mutedColor }, beginAtZero: true }
+      }
+    }
+  });
+  {% endif %}
+
+  {% if pos.payment_totals %}
+  new Chart(document.getElementById('paymentChart'), {
+    type: 'doughnut',
+    data: {
+      labels: {{ pos.payment_totals.keys()|list|tojson }},
+      datasets: [{
+        data: {{ pos.payment_totals.values()|list|tojson }},
+        backgroundColor: [successColor, warningColor, dangerColor, primaryColor, '#8b5cf6', '#06b6d4']
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: textColor }
+        }
+      }
+    }
+  });
+  {% endif %}
+
+  {% if products %}
+  new Chart(document.getElementById('topProductsChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ products|map(attribute='name')|list|tojson }},
+      datasets: [{
+        label: 'Revenue',
+        data: {{ products|map(attribute='revenue')|map('float')|list|tojson }},
+        backgroundColor: 'rgba(' + hexToRgb(successColor) + ', 0.6)',
+        borderColor: successColor,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: mutedColor }, beginAtZero: true },
+        y: { ticks: { color: mutedColor } }
+      }
+    }
+  });
+  {% endif %}
+
+  {% if expenses.by_category %}
+  new Chart(document.getElementById('expenseChart'), {
+    type: 'doughnut',
+    data: {
+      labels: {{ expenses.by_category|map(attribute='category')|list|tojson }},
+      datasets: [{
+        data: {{ expenses.by_category|map(attribute='total')|map('float')|list|tojson }},
+        backgroundColor: [dangerColor, warningColor, '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#6366f1']
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: textColor }
+        }
+      }
+    }
+  });
+  {% endif %}
+
+  {% if expenses.monthly_trend %}
+  new Chart(document.getElementById('expenseTrendChart'), {
+    type: 'line',
+    data: {
+      labels: {{ expenses.monthly_trend|map(attribute='month')|list|tojson }},
+      datasets: [{
+        label: 'Expenses',
+        data: {{ expenses.monthly_trend|map(attribute='total')|map('float')|list|tojson }},
+        borderColor: dangerColor,
+        backgroundColor: 'rgba(' + hexToRgb(dangerColor) + ', 0.1)',
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: mutedColor } },
+        y: { ticks: { color: mutedColor }, beginAtZero: true }
+      }
+    }
+  });
+  {% endif %}
+
+  {% if printing.printers %}
+  new Chart(document.getElementById('printerChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ printing.printers|map(attribute='name')|list|tojson }},
+      datasets: [
+        {
+          label: 'Completed',
+          data: {{ printing.printers|map(attribute='completed')|list|tojson }},
+          backgroundColor: 'rgba(' + hexToRgb(successColor) + ', 0.6)'
+        },
+        {
+          label: 'Failed',
+          data: {{ printing.printers|map(attribute='failed')|list|tojson }},
+          backgroundColor: 'rgba(' + hexToRgb(dangerColor) + ', 0.6)'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: textColor }
+        }
+      },
+      scales: {
+        x: { ticks: { color: mutedColor } },
+        y: { ticks: { color: mutedColor }, beginAtZero: true }
+      }
+    }
+  });
+  {% endif %}
+
+  {% if summary.custom_requests_open is defined %}
+  new Chart(document.getElementById('customOrderChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Paid', 'Open'],
+      datasets: [{
+        data: [{{ summary.custom_requests_paid }}, {{ summary.custom_requests_open }}],
+        backgroundColor: [successColor, warningColor],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '65%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: textColor, boxWidth: 10, padding: 8, font: { size: 10 } }
+        }
+      }
+    }
+  });
+  {% endif %}
+
+  {% if inventory.location_counts %}
+  new Chart(document.getElementById('locationChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ inventory.location_counts|map(attribute='name')|list|tojson }},
+      datasets: [{
+        label: 'Quantity',
+        data: {{ inventory.location_counts|map(attribute='quantity')|list|tojson }},
+        backgroundColor: 'rgba(' + hexToRgb(primaryColor) + ', 0.6)',
+        borderColor: primaryColor,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: mutedColor } },
+        y: { ticks: { color: mutedColor }, beginAtZero: true }
+      }
+    }
+  });
+  {% endif %}
+});
+</script>
+{% endblock %}

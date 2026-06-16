@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ resource.plural }} | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+        <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ resource.plural }}</h1>
+        <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">Manage {{ resource.plural.lower() }} for the catalog, fleet, and inventory systems.</p>
+      </div>
+      <a href="{{ url_for(request.endpoint.replace('list_resource', 'create_resource'), resource_key=resource.key) }}" class="app-btn app-btn-primary">
+        New {{ resource.singular }}
+      </a>
+    </div>
+
+    <form method="get" class="app-card p-4">
+      <div class="flex flex-col gap-3 sm:flex-row">
+        <input type="search" name="q" value="{{ search_term }}" placeholder="Search {{ resource.plural.lower() }}" class="app-input">
+        <button type="submit" class="app-btn app-btn-secondary">Search</button>
+      </div>
+    </form>
+
+    {% if rows %}
+      <div class="app-card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="app-table">
+            <thead>
+              <tr>
+                {% for column in columns %}
+                  <th class="font-medium">{{ column }}</th>
+                {% endfor %}
+                <th class="font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  {% for cell in row.cells %}
+                    <td>{{ cell }}</td>
+                  {% endfor %}
+                  <td>
+                    <div class="flex flex-wrap gap-2">
+                      <a href="{{ url_for(request.endpoint.replace('list_resource', 'detail_resource'), resource_key=resource.key, resource_id=row.id) }}" class="app-link">View</a>
+                      <a href="{{ url_for(request.endpoint.replace('list_resource', 'edit_resource'), resource_key=resource.key, resource_id=row.id) }}" class="app-link" style="color: var(--color-text-muted);">Edit</a>
+                      <form action="{{ url_for(request.endpoint.replace('list_resource', 'archive_resource_view'), resource_key=resource.key, resource_id=row.id) }}" method="post" onsubmit="return confirm('Archive this {{ resource.singular.lower() }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="app-link" style="color: var(--color-danger);">Archive</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% else %}
+      <div class="app-empty">
+        No {{ resource.plural.lower() }} found yet.
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

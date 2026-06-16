@@ -39,3 +39,21 @@ def test_initial_migration_upgrades_successfully(tmp_path: Path):
         upgrade(directory=app.config["MIGRATIONS_DIR"])
         inspector = db.inspect(db.engine)
         assert "users" in inspector.get_table_names()
+        assert "products" in inspector.get_table_names()
+        assert "categories" in inspector.get_table_names()
+
+
+def test_seed_demo_command_is_idempotent(app, runner):
+    first_run = runner.invoke(args=["seed", "demo"])
+    second_run = runner.invoke(args=["seed", "demo"])
+
+    assert first_run.exit_code == 0
+    assert second_run.exit_code == 0
+    assert "Demo seed complete." in first_run.output
+
+    with app.app_context():
+        from app.models import Category, Printer, Product
+
+        assert Category.query.count() >= 8
+        assert Product.query.count() >= 13
+        assert Printer.query.count() == 8

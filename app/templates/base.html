@@ -1,20 +1,44 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{ active_theme }}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ app_name }}{% endblock %}</title>
     <meta name="description" content="Dude Fish OS helps Dude Fish Printing run the shop, sell at markets, and stay organized.">
     <link rel="stylesheet" href="{{ url_for('static', filename='dist/app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='src/css/theme-tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='src/css/app.css') }}">
     {% block head %}{% endblock %}
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.x.x/dist/htmx.min.js" defer></script>
+    <script src="{{ url_for('static', filename='src/js/theme-switcher.js') }}" defer></script>
   </head>
-  <body class="min-h-screen bg-slate-950 text-slate-100">
-    {% include "components/_header.html" %}
-    <main class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      {% include "components/_flash_messages.html" %}
-      {% block content %}{% endblock %}
-    </main>
-    {% include "components/_footer.html" %}
+  <body x-data="{ sidebarOpen: false }" class="app-shell">
+    {% if current_user.is_authenticated %}
+      {% include "components/_sidebar.html" %}
+      <div class="lg:ml-64 min-h-screen flex flex-col" style="background-color: var(--color-bg);">
+        {% include "components/_context_bar.html" %}
+    {% else %}
+      {% include "components/_header.html" %}
+    {% endif %}
+
+      <main class="flex-1 mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {% include "components/_flash_messages.html" %}
+        {% block content %}{% endblock %}
+      </main>
+      {% include "components/_footer.html" %}
+
+    {% if current_user.is_authenticated %}
+      </div>
+    {% endif %}
+
+    {% if current_user.is_authenticated %}
+    <div x-show="sidebarOpen" x-cloak
+         class="fixed inset-0 z-30 bg-black/50 lg:hidden"
+         @click="sidebarOpen = false">
+    </div>
+    {% endif %}
+
     <script src="{{ url_for('static', filename='src/js/app.js') }}" defer></script>
     {% block scripts %}{% endblock %}
   </body>

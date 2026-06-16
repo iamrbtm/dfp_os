@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Receipt {{ sale.sale_number }}{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto">
+  <div class="app-card p-6 text-center">
+    <h1 class="text-xl font-bold" style="color: var(--color-text);">Dude Fish Printing</h1>
+    <p class="text-sm" style="color: var(--color-text-muted);">Sale Complete</p>
+    <div class="my-4 pt-4 text-left" style="border-top: 1px solid var(--color-divider);">
+      <p class="text-sm" style="color: var(--color-text);"><strong>Date:</strong> {{ sale.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+      <p class="text-sm" style="color: var(--color-text);"><strong>Sale:</strong> {{ sale.sale_number }}</p>
+      <p class="text-sm" style="color: var(--color-text);"><strong>Session:</strong> {{ session.session_number }}</p>
+      {% if sale.customer %}
+      <p class="text-sm" style="color: var(--color-text);"><strong>Customer:</strong> {{ sale.customer.first_name }} {{ sale.customer.last_name }}</p>
+      {% endif %}
+    </div>
+
+    <table class="app-table text-sm">
+      <thead>
+        <tr>
+          <th class="text-left">Item</th>
+          <th class="text-right">Qty</th>
+          <th class="text-right">Price</th>
+          <th class="text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in sale.items %}
+        <tr>
+          <td class="text-left">{{ item.description }}</td>
+          <td class="text-right">{{ item.quantity }}</td>
+          <td class="text-right">${{ "%.2f"|format(item.unit_price) }}</td>
+          <td class="text-right">${{ "%.2f"|format(item.line_total) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="pt-3 space-y-1 text-sm" style="border-top: 1px solid var(--color-divider);">
+      <div class="flex justify-between" style="color: var(--color-text);">
+        <span>Subtotal</span>
+        <span>${{ "%.2f"|format(sale.subtotal) }}</span>
+      </div>
+      {% if sale.discount_total > 0 %}
+      <div class="flex justify-between" style="color: var(--color-danger);">
+        <span>Discount</span>
+        <span>-${{ "%.2f"|format(sale.discount_total) }}</span>
+      </div>
+      {% endif %}
+      <div class="flex justify-between font-bold text-lg" style="color: var(--color-text);">
+        <span>Total</span>
+        <span>${{ "%.2f"|format(sale.total) }}</span>
+      </div>
+      <div class="flex justify-between" style="color: var(--color-text);">
+        <span>Paid ({{ sale.payment_method.replace('_', ' ').title() }})</span>
+        <span>${{ "%.2f"|format(sale.amount_received) }}</span>
+      </div>
+      {% if sale.change_due > 0 %}
+      <div class="flex justify-between" style="color: var(--color-success);">
+        <span>Change Due</span>
+        <span>${{ "%.2f"|format(sale.change_due) }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="mt-6 flex gap-3 justify-center">
+      <button onclick="window.print()" class="app-btn app-btn-primary">Print</button>
+      <a href="{{ url_for('pos.pos_screen', session_id=session.id) }}" class="app-btn app-btn-primary" style="background-color: var(--color-success); border-color: var(--color-success);">New Sale</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

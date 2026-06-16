@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Close Session {{ session.session_number }}{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto">
+  <h1 class="text-2xl font-bold mb-6" style="color: var(--color-text);">Close Session {{ session.session_number }}</h1>
+  <div class="app-card p-4 mb-4 space-y-1" style="color: var(--color-text);">
+    <p><strong>Opened:</strong> {{ session.opened_at.strftime('%Y-%m-%d %H:%M') }}</p>
+    <p><strong>Opening Cash:</strong> ${{ "%.2f"|format(session.opening_cash) }}</p>
+    <p><strong>Expected Cash:</strong> ${{ "%.2f"|format(expected_cash) }}</p>
+  </div>
+  <form method="post" class="app-card p-6 space-y-4" x-data="cashCounter()">
+    {{ form.hidden_tag() }}
+    <fieldset>
+      <legend class="text-sm font-medium mb-2" style="color: var(--color-text);">Cash Count</legend>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.hundreds.label.text }}</label>
+          {{ form.hundreds(class_='app-input', **{'x-model': 'hundreds', 'x-on:input': 'calculate()'}) }}
+        </div>
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.fifties.label.text }}</label>
+          {{ form.fifties(class_='app-input', **{'x-model': 'fifties', 'x-on:input': 'calculate()'}) }}
+        </div>
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.twenties.label.text }}</label>
+          {{ form.twenties(class_='app-input', **{'x-model': 'twenties', 'x-on:input': 'calculate()'}) }}
+        </div>
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.tens.label.text }}</label>
+          {{ form.tens(class_='app-input', **{'x-model': 'tens', 'x-on:input': 'calculate()'}) }}
+        </div>
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.fives.label.text }}</label>
+          {{ form.fives(class_='app-input', **{'x-model': 'fives', 'x-on:input': 'calculate()'}) }}
+        </div>
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.ones.label.text }}</label>
+          {{ form.ones(class_='app-input', **{'x-model': 'ones', 'x-on:input': 'calculate()'}) }}
+        </div>
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.quarters.label.text }}</label>
+          {{ form.quarters(class_='app-input', **{'x-model': 'quarters', 'x-on:input': 'calculate()'}) }}
+        </div>
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.dimes.label.text }}</label>
+          {{ form.dimes(class_='app-input', **{'x-model': 'dimes', 'x-on:input': 'calculate()'}) }}
+        </div>
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.nickels.label.text }}</label>
+          {{ form.nickels(class_='app-input', **{'x-model': 'nickels', 'x-on:input': 'calculate()'}) }}
+        </div>
+        <div>
+          <label class="block text-xs" style="color: var(--color-text-muted);">{{ form.pennies.label.text }}</label>
+          {{ form.pennies(class_='app-input', **{'x-model': 'pennies', 'x-on:input': 'calculate()'}) }}
+        </div>
+      </div>
+    </fieldset>
+    <div class="flex items-center justify-between border-t pt-4" style="border-color: var(--color-border);">
+      <span class="text-sm font-medium" style="color: var(--color-text);">Cash Counted:</span>
+      <span class="text-xl font-bold" style="color: var(--color-text);" x-text="'$' + counted.toFixed(2)">$0.00</span>
+    </div>
+    <div>
+      {{ form.notes.label(class_='block text-sm font-medium mb-1', style='color: var(--color-text);') }}
+      {{ form.notes(class_='app-textarea', rows=3) }}
+    </div>
+    <div class="flex gap-3">
+      <button type="submit" class="app-btn" style="background-color: var(--color-warning); color: #000; border-color: var(--color-warning);">Close Session</button>
+      <a href="{{ url_for('pos.session_detail', session_id=session.id) }}" class="app-btn app-btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+function cashCounter() {
+  return {
+    hundreds: 0, fifties: 0, twenties: 0, tens: 0, fives: 0, ones: 0,
+    quarters: 0, dimes: 0, nickels: 0, pennies: 0,
+    counted: 0,
+    calculate() {
+      this.counted = (
+        parseFloat(this.hundreds || 0) * 100 +
+        parseFloat(this.fifties || 0) * 50 +
+        parseFloat(this.twenties || 0) * 20 +
+        parseFloat(this.tens || 0) * 10 +
+        parseFloat(this.fives || 0) * 5 +
+        parseFloat(this.ones || 0) * 1 +
+        parseFloat(this.quarters || 0) * 0.25 +
+        parseFloat(this.dimes || 0) * 0.10 +
+        parseFloat(this.nickels || 0) * 0.05 +
+        parseFloat(this.pennies || 0) * 0.01
+      );
+    }
+  }
+}
+</script>
+{% endblock %}

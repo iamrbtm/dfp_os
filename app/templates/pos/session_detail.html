@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Session {{ session.session_number }}{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold" style="color: var(--color-text);">Session {{ session.session_number }}</h1>
+    <div class="flex gap-2">
+      {% if session.status == 'open' %}
+      <a href="{{ url_for('pos.pos_screen', session_id=session.id) }}" class="app-btn app-btn-primary">Open POS</a>
+      <a href="{{ url_for('pos.session_close', session_id=session.id) }}" class="app-btn" style="background-color: var(--color-warning); color: #fff; border-color: var(--color-warning);">Close Session</a>
+      {% endif %}
+      <a href="{{ url_for('pos.session_list') }}" class="app-btn app-btn-secondary">Back</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="app-card p-4">
+      <p class="text-sm" style="color: var(--color-text-muted);">Status</p>
+      <p class="font-bold" style="color: var(--color-text);">{{ session.status.value }}</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-sm" style="color: var(--color-text-muted);">Opening Cash</p>
+      <p class="font-bold" style="color: var(--color-text);">${{ "%.2f"|format(session.opening_cash) }}</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-sm" style="color: var(--color-text-muted);">Total Sales</p>
+      <p class="font-bold" style="color: var(--color-text);">${{ "%.2f"|format(summary.total_sales) }}</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-sm" style="color: var(--color-text-muted);">Sale Count</p>
+      <p class="font-bold" style="color: var(--color-text);">{{ summary.sale_count }}</p>
+    </div>
+    {% if session.status == 'closed' %}
+    <div class="app-card p-4">
+      <p class="text-sm" style="color: var(--color-text-muted);">Expected Cash</p>
+      <p class="font-bold" style="color: var(--color-text);">${{ "%.2f"|format(session.expected_cash) }}</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-sm" style="color: var(--color-text-muted);">Actual Cash</p>
+      <p class="font-bold" style="color: var(--color-text);">${{ "%.2f"|format(session.closing_cash) }}</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-sm" style="color: var(--color-text-muted);">Difference</p>
+      <p class="font-bold" style="color: {% if session.cash_difference < 0 %}var(--color-danger){% elif session.cash_difference > 0 %}var(--color-success){% else %}var(--color-text){% endif %};">
+        ${{ "%.2f"|format(session.cash_difference) }}
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if summary.payment_totals %}
+  <div class="app-card p-4 mb-6">
+    <h2 class="font-bold mb-2" style="color: var(--color-text);">Payment Totals</h2>
+    {% for method, total in summary.payment_totals.items() %}
+    <div class="flex justify-between py-1" style="border-bottom: 1px solid var(--color-divider); color: var(--color-text);">
+      <span>{{ method.replace('_', ' ').title() }}</span>
+      <span class="font-bold">${{ "%.2f"|format(total) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="app-card overflow-hidden">
+    <h2 class="font-bold p-4" style="border-bottom: 1px solid var(--color-divider); color: var(--color-text);">Sales</h2>
+    <table class="app-table">
+      <thead>
+        <tr>
+          <th>Sale #</th>
+          <th>Time</th>
+          <th>Items</th>
+          <th>Payment</th>
+          <th>Total</th>
+          <th>Receipt</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sale in summary.sales %}
+        <tr>
+          <td class="font-mono text-sm">{{ sale.sale_number }}</td>
+          <td class="text-sm">{{ sale.created_at.strftime('%H:%M') if sale.created_at else '' }}</td>
+          <td class="text-sm">{{ sale.items|length }}</td>
+          <td class="text-sm">{{ sale.payment_method.replace('_', ' ').title() }}</td>
+          <td class="font-bold">${{ "%.2f"|format(sale.total) }}</td>
+          <td><a href="{{ url_for('pos.receipt', session_id=session.id, sale_id=sale.id) }}" class="app-link text-sm">Receipt</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="app-empty">No sales in this session.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import click
 from flask import current_app
 
+from app.services.demo_seed import seed_demo_data
 from app.services.users import ensure_admin_user
 
 
@@ -32,3 +33,15 @@ def seed_admin() -> None:
         return
 
     click.echo(f"Admin user already exists: {user.email}")
+
+
+@seed_group.command("demo")
+def seed_demo() -> None:
+    """Create Phase 3 demo data (catalog, fleet, orders, customers, print jobs)."""
+    counts = seed_demo_data(
+        admin_email=current_app.config["ADMIN_EMAIL"],
+        admin_password=current_app.config["ADMIN_PASSWORD"],
+    )
+    click.echo("Demo seed complete.")
+    for key, value in counts.items():
+        click.echo(f"- {key}: {value}")

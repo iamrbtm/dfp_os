@@ -1,0 +1,99 @@
+<div class="app-sidebar fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-200 lg:translate-x-0 flex flex-col"
+     :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
+  <div class="flex items-center justify-between px-4 py-4 border-b flex-shrink-0" style="border-color: var(--color-sidebar-border);">
+    <a href="{{ url_for('dashboard.index') }}" class="text-lg font-semibold tracking-tight" style="color: var(--color-sidebar-text);">
+      {{ app_name }}
+    </a>
+    <button @click="sidebarOpen = false" class="lg:hidden p-1 rounded" style="color: var(--color-sidebar-muted);">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+    <a href="{{ url_for('dashboard.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'dashboard' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Dashboard
+    </a>
+    <a href="{{ url_for('pos.session_list') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'pos' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      POS
+    </a>
+    <a href="{{ url_for('products.list_resource', resource_key='products') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'products' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Products
+    </a>
+    <a href="{{ url_for('customers.list_resource', resource_key='customers') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'customers' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Customers
+    </a>
+    <a href="{{ url_for('orders.list_resource', resource_key='orders') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'orders' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Orders
+    </a>
+    <a href="{{ url_for('custom_orders.list_resource', resource_key='requests') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'custom_orders' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Custom Orders
+    </a>
+    <a href="{{ url_for('printers.list_resource', resource_key='printers') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'printers' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Printers
+    </a>
+    <a href="{{ url_for('print_jobs.list_resource', resource_key='print-jobs') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'print_jobs' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Print Jobs
+    </a>
+    <a href="{{ url_for('inventory.list_resource', resource_key='records') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'inventory' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Inventory
+    </a>
+    <a href="{{ url_for('api_tokens.list_tokens') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'api_tokens' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      API Tokens
+    </a>
+    <a href="{{ url_for('settings.themes') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'settings' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Settings
+    </a>
+    <a href="{{ url_for('markets.list_resource', resource_key='markets') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'markets' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Markets
+    </a>
+    <a href="{{ url_for('expenses.list_resource', resource_key='expenses') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'expenses' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Expenses
+    </a>
+    <a href="{{ url_for('analytics.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'analytics' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Analytics
+    </a>
+  </nav>
+
+  <div class="border-t px-4 py-4 flex-shrink-0" style="border-color: var(--color-sidebar-border);">
+    {% if current_user.is_authenticated %}
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+           style="background-color: var(--color-primary); color: var(--color-primary-text);">
+        {{ (current_user.first_name[0] if current_user.first_name else '?')|upper }}{{ (current_user.last_name[0] if current_user.last_name else '?')|upper }}
+      </div>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-medium truncate" style="color: var(--color-sidebar-text);">{{ current_user.full_name }}</p>
+        <p class="text-xs truncate" style="color: var(--color-sidebar-muted);">{{ current_user.role.value }}</p>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <select onchange="__applyTheme(this.value)" class="text-xs rounded px-2 py-1 flex-1"
+              style="background-color: var(--color-bg-subtle); color: var(--color-text); border: 1px solid var(--color-border);">
+        {% for t in themes %}
+        <option value="{{ t.slug }}" {% if t.slug == active_theme %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
+      </select>
+      <form action="{{ url_for('auth.logout') }}" method="post" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="text-xs rounded px-2 py-1" style="background-color: var(--color-danger); color: #fff; border: none;">
+          Sign out
+        </button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>

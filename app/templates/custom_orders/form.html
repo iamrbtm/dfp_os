@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}{{ mode|title }} Custom Request | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-5xl space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin / Custom Requests</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ mode|title }} Custom Request</h1>
+  </div>
+
+  <form method="post" class="space-y-6">
+    {{ form.hidden_tag() }}
+
+    <div class="grid gap-6 lg:grid-cols-3">
+      <div class="lg:col-span-2 space-y-6">
+        <article class="app-card p-6">
+          <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Customer Info</h2>
+          <div class="grid gap-5 md:grid-cols-2">
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.name.label.text }}</label>
+              {{ form.name(class="app-input") }}
+              {% for error in form.name.errors %}
+              <p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>
+              {% endfor %}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.email.label.text }}</label>
+              {{ form.email(class="app-input") }}
+              {% for error in form.email.errors %}
+              <p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>
+              {% endfor %}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.phone.label.text }}</label>
+              {{ form.phone(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.estimated_budget.label.text }}</label>
+              {{ form.estimated_budget(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.deadline.label.text }}</label>
+              {{ form.deadline(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.status.label.text }}</label>
+              {{ form.status(class="app-input") }}
+              {% for error in form.status.errors %}
+              <p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>
+              {% endfor %}
+            </div>
+          </div>
+        </article>
+
+        <article class="app-card p-6">
+          <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Request Details</h2>
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.description.label.text }}</label>
+            {{ form.description(class="app-input", rows=5) }}
+            {% for error in form.description.errors %}
+            <p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>
+            {% endfor %}
+          </div>
+        </article>
+
+        <article class="app-card p-6">
+          <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Notes</h2>
+          <div class="space-y-4">
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.admin_notes.label.text }}</label>
+              {{ form.admin_notes(class="app-input", rows=3) }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.internal_notes.label.text }}</label>
+              {{ form.internal_notes(class="app-input", rows=3) }}
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <div class="space-y-6">
+        <article class="app-card p-6">
+          <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Invoice</h2>
+          <div class="space-y-4" x-data="invoiceCalc()">
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.subtotal.label.text }}</label>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color: var(--color-text-muted);">$</span>
+                {{ form.subtotal(class="app-input pl-7", x-model="subtotal", @input="calc()") }}
+              </div>
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.tax.label.text }}</label>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color: var(--color-text-muted);">$</span>
+                {{ form.tax(class="app-input pl-7", x-model="tax", @input="calc()") }}
+              </div>
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.discount.label.text }}</label>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color: var(--color-text-muted);">$</span>
+                {{ form.discount(class="app-input pl-7", x-model="discount", @input="calc()") }}
+              </div>
+            </div>
+            <hr style="border-color: var(--color-border);">
+            <div class="flex justify-between items-center">
+              <span class="font-semibold" style="color: var(--color-text);">Total</span>
+              <span class="text-xl font-bold" x-text="'$' + total" style="color: var(--color-text);">$0.00</span>
+            </div>
+            {{ form.total(type="hidden", x-bind:value="totalRaw") }}
+            <hr style="border-color: var(--color-border);">
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.amount_paid.label.text }}</label>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color: var(--color-text-muted);">$</span>
+                {{ form.amount_paid(class="app-input pl-7", x-model="amountPaid", @input="calc()") }}
+              </div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm" style="color: var(--color-text-muted);">Balance Due</span>
+              <span class="font-semibold" x-text="'$' + balance" x-bind:style="balanceRaw > 0 ? 'color: var(--color-danger)' : 'color: var(--color-success)'" style="color: var(--color-text);">$0.00</span>
+            </div>
+          </div>
+        </article>
+
+        <div class="flex flex-wrap gap-3">
+          {{ form.submit(class="app-btn app-btn-primary w-full") }}
+          <a href="{{ url_for('custom_orders.list_resource', resource_key='requests') }}" class="app-btn app-btn-secondary w-full text-center">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function invoiceCalc() {
+  return {
+    subtotal: '{{ form.subtotal.data or "0.00" }}',
+    tax: '{{ form.tax.data or "0.00" }}',
+    discount: '{{ form.discount.data or "0.00" }}',
+    amountPaid: '{{ form.amount_paid.data or "0.00" }}',
+    totalRaw: '{{ form.total.data or "0.00" }}',
+    get total() {
+      const s = parseFloat(this.subtotal) || 0;
+      const t = parseFloat(this.tax) || 0;
+      const d = parseFloat(this.discount) || 0;
+      const raw = s + t - d;
+      this.totalRaw = raw.toFixed(2);
+      return raw.toFixed(2);
+    },
+    get balance() {
+      const raw = (parseFloat(this.totalRaw) || 0) - (parseFloat(this.amountPaid) || 0);
+      return raw > 0 ? raw.toFixed(2) : '0.00';
+    },
+    get balanceRaw() {
+      return (parseFloat(this.totalRaw) || 0) - (parseFloat(this.amountPaid) || 0);
+    },
+    calc() {
+      this.total;
+      this.balance;
+    }
+  };
+}
+</script>
+{% endblock %}

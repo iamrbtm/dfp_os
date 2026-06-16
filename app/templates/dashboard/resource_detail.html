@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ resource.singular }} | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+        <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ resource.singular }} details</h1>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="{{ url_for(request.endpoint.replace('detail_resource', 'edit_resource'), resource_key=resource.key, resource_id=instance.id) }}" class="app-btn app-btn-primary">
+          Edit
+        </a>
+        <a href="{{ url_for(request.endpoint.replace('detail_resource', 'list_resource'), resource_key=resource.key) }}" class="app-btn app-btn-secondary">
+          Back to {{ resource.plural }}
+        </a>
+      </div>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+      {% for detail in details %}
+        <article class="app-card p-5">
+          <p class="text-sm" style="color: var(--color-text-muted);">{{ detail.label }}</p>
+          <p class="mt-2 text-lg font-medium" style="color: var(--color-text);">{{ detail.value }}</p>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}
