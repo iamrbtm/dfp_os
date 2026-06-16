@@ -12,7 +12,9 @@ from app.forms.pos import PosCloseSessionForm, PosSessionForm
 from app.models import (
     Category,
     Customer,
+    PaymentMethod,
     PosSale,
+    PosSaleStatus,
     PosSession,
     PosSessionStatus,
     Product,
@@ -62,7 +64,7 @@ def session_new():
         session = open_session(
             user_id=current_user.id,
             opening_cash=form.opening_cash.data or Decimal("0"),
-            market_id=int(form.market_id.data) if form.market_id.data else None,
+            market_id=form.market_id.data if form.market_id.data and form.market_id.data > 0 else None,
             inventory_location_id=form.inventory_location_id.data if form.inventory_location_id.data and form.inventory_location_id.data > 0 else None,
             notes=form.notes.data,
         )
@@ -90,17 +92,40 @@ def session_close(session_id):
         flash("Session is not open.", "error")
         return redirect(url_for("pos.session_list"))
 
+    cash_sales_total = (
+        db.session.query(db.func.coalesce(db.func.sum(PosSale.total), 0))
+        .filter(
+            PosSale.pos_session_id == session_id,
+            PosSale.status == PosSaleStatus.COMPLETED,
+            PosSale.payment_method == PaymentMethod.CASH.value,
+        )
+        .scalar()
+    )
+    expected_cash = session.opening_cash + Decimal(str(cash_sales_total))
+
     form = PosCloseSessionForm()
     if form.validate_on_submit():
+        closing_cash = (
+            (form.hundreds.data or Decimal("0")) * 100
+            + (form.fifties.data or Decimal("0")) * 50
+            + (form.twenties.data or Decimal("0")) * 20
+            + (form.tens.data or Decimal("0")) * 10
+            + (form.fives.data or Decimal("0")) * 5
+            + (form.ones.data or Decimal("0")) * 1
+            + (form.quarters.data or Decimal("0")) * Decimal("0.25")
+            + (form.dimes.data or Decimal("0")) * Decimal("0.10")
+            + (form.nickels.data or Decimal("0")) * Decimal("0.05")
+            + (form.pennies.data or Decimal("0")) * Decimal("0.01")
+        )
         close_session(
             session_id=session_id,
             closed_by_user_id=current_user.id,
-            closing_cash=form.closing_cash.data or Decimal("0"),
+            closing_cash=closing_cash,
             notes=form.notes.data,
         )
         flash(f"Session {session.session_number} closed.")
         return redirect(url_for("pos.session_detail", session_id=session_id))
-    return render_template("pos/session_close.html", form=form, session=session)
+    return render_template("pos/session_close.html", form=form, session=session, expected_cash=expected_cash)
 
 
 @bp.route("/sessions/<int:session_id>/void", methods=["POST"])

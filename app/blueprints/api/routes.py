@@ -18,11 +18,16 @@ from app.models import (
     CustomRequest,
     CustomRequestStatus,
     Customer,
+    Expense,
+    ExpenseCategory,
     FilamentSpool,
     FilamentStatus,
     InventoryLocation,
     InventoryRecord,
     LicenseStatus,
+    Market,
+    MarketPackingList,
+    MarketStatus,
     ModelAsset,
     ModelSourceType,
     Order,
@@ -49,9 +54,12 @@ from app.schemas import (
     CollectionSchema,
     CustomRequestSchema,
     CustomerSchema,
+    ExpenseSchema,
     FilamentSpoolSchema,
     InventoryLocationSchema,
     InventoryRecordSchema,
+    MarketPackingListSchema,
+    MarketSchema,
     ModelAssetSchema,
     OrderItemSchema,
     OrderSchema,
@@ -328,6 +336,49 @@ def _apply_pos_sale(instance: PosSale, data: dict):
         instance.status = PosSaleStatus(data["status"])
 
 
+def _apply_market(instance: Market, data: dict):
+    instance.name = data["name"].strip()
+    instance.location_name = data.get("location_name")
+    instance.address = data.get("address")
+    instance.city = data.get("city")
+    instance.state = data.get("state")
+    instance.event_date = data.get("event_date")
+    instance.start_time = data.get("start_time")
+    instance.end_time = data.get("end_time")
+    instance.booth_fee = data.get("booth_fee", 0) or 0
+    instance.application_fee = data.get("application_fee", 0) or 0
+    instance.status = MarketStatus(data["status"])
+    instance.expected_traffic = data.get("expected_traffic")
+    instance.actual_revenue = data.get("actual_revenue")
+    instance.actual_profit = data.get("actual_profit")
+    instance.notes = data.get("notes")
+
+
+def _apply_market_packing_list(instance: MarketPackingList, data: dict):
+    instance.market_id = data["market_id"]
+    instance.product_id = data["product_id"]
+    instance.variant_id = data.get("variant_id")
+    instance.planned_quantity = data.get("planned_quantity", 0) or 0
+    instance.packed_quantity = data.get("packed_quantity", 0) or 0
+    instance.sold_quantity = data.get("sold_quantity", 0) or 0
+    instance.returned_quantity = data.get("returned_quantity", 0) or 0
+    instance.notes = data.get("notes")
+
+
+def _apply_expense(instance: Expense, data: dict):
+    instance.date = data["date"]
+    instance.vendor = data["vendor"].strip()
+    instance.category = ExpenseCategory(data["category"])
+    instance.description = data.get("description")
+    instance.amount = data.get("amount", 0) or 0
+    instance.payment_method = data.get("payment_method")
+    instance.related_market_id = data.get("related_market_id")
+    instance.related_order_id = data.get("related_order_id")
+    instance.receipt_file_path = data.get("receipt_file_path")
+    instance.tax_deductible = data.get("tax_deductible", False)
+    instance.notes = data.get("notes")
+
+
 API_RESOURCES = {
     "categories": ApiResourceConfig(
         "categories", Category, CategorySchema, ["name", "slug"], _apply_category
@@ -420,6 +471,27 @@ API_RESOURCES = {
         ["sale_number", "payment_method"],
         _apply_pos_sale,
         list_filters=lambda stmt: stmt.order_by(PosSale.id.desc()),
+    ),
+    "markets": ApiResourceConfig(
+        "markets",
+        Market,
+        MarketSchema,
+        ["name", "location_name", "city"],
+        _apply_market,
+    ),
+    "market-packing-lists": ApiResourceConfig(
+        "market-packing-lists",
+        MarketPackingList,
+        MarketPackingListSchema,
+        [],
+        _apply_market_packing_list,
+    ),
+    "expenses": ApiResourceConfig(
+        "expenses",
+        Expense,
+        ExpenseSchema,
+        ["vendor", "description", "category"],
+        _apply_expense,
     ),
 }
 
@@ -543,6 +615,208 @@ def _register_resource(config: ApiResourceConfig):
 
 for resource_config in API_RESOURCES.values():
     _register_resource(resource_config)
+
+
+@catalog_blp.route("/themes")
+class ThemeCollection(MethodView):
+    @api_token_required
+    def get(self):
+        from app.theme_registry import ALL_THEMES
+        return jsonify([
+            {"slug": t.slug, "name": t.name, "mode": t.mode, "description": t.description}
+            for t in ALL_THEMES
+        ])
+
+
+@catalog_blp.route("/themes/current")
+class ThemeCurrent(MethodView):
+    @api_token_required
+    def get(self):
+        from flask_login import current_user
+        from app.theme_registry import THEME_MAP, DEFAULT_THEME
+        slug = getattr(current_user, "theme_slug", DEFAULT_THEME)
+        theme = THEME_MAP.get(slug)
+        return jsonify({
+            "slug": slug,
+            "name": theme.name if theme else DEFAULT_THEME,
+            "mode": theme.mode if theme else "light",
+        })
+
+
+@catalog_blp.route("/exports/markets.csv")
+class MarketsExport(MethodView):
+    @api_token_required
+    def get(self):
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "name", "location_name", "address", "city", "state", "event_date", "booth_fee", "application_fee", "status", "actual_revenue", "actual_profit", "notes"])
+        markets = Market.query.order_by(Market.event_date.desc()).all()
+        for m in markets:
+            writer.writerow([
+                m.id, m.name, m.location_name or "", m.address or "", m.city or "", m.state or "",
+                m.event_date.isoformat() if m.event_date else "", m.booth_fee or 0, m.application_fee or 0,
+                m.status.value, m.actual_revenue or 0, m.actual_profit or 0, m.notes or ""
+            ])
+        from flask import Response
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment;filename=markets.csv"},
+        )
+
+
+@catalog_blp.route("/exports/expenses.csv")
+class ExpensesExport(MethodView):
+    @api_token_required
+    def get(self):
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "date", "vendor", "category", "description", "amount", "payment_method", "related_market_id", "tax_deductible"])
+        expenses = Expense.query.order_by(Expense.date.desc()).all()
+        for e in expenses:
+            writer.writerow([
+                e.id, e.date.isoformat() if e.date else "", e.vendor, e.category.value,
+                e.description or "", e.amount, e.payment_method or "", e.related_market_id or "",
+                "yes" if e.tax_deductible else "no"
+            ])
+        from flask import Response
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment;filename=expenses.csv"},
+        )
+
+
+@catalog_blp.route("/exports/market-packing-lists.csv")
+class MarketPackingListsExport(MethodView):
+    @api_token_required
+    def get(self):
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "market_id", "product_id", "variant_id", "planned_quantity", "packed_quantity", "sold_quantity", "returned_quantity"])
+        items = MarketPackingList.query.order_by(MarketPackingList.market_id).all()
+        for i in items:
+            writer.writerow([
+                i.id, i.market_id, i.product_id, i.variant_id or "",
+                i.planned_quantity or 0, i.packed_quantity or 0, i.sold_quantity or 0, i.returned_quantity or 0
+            ])
+        from flask import Response
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment;filename=market-packing-lists.csv"},
+        )
+
+
+@catalog_blp.route("/analytics/summary")
+class AnalyticsSummary(MethodView):
+    @api_token_required
+    def get(self):
+        from app.services.analytics import executive_summary
+        s = executive_summary()
+        return jsonify({
+            "today_revenue": float(s["today_revenue"]),
+            "month_revenue": float(s["month_revenue"]),
+            "month_pos_revenue": float(s["month_pos_revenue"]),
+            "month_expenses": float(s["month_expenses"]),
+            "estimated_month_profit": float(s["estimated_month_profit"]),
+            "open_orders_count": s["open_orders_count"],
+            "open_custom_requests": s["open_custom_requests"],
+            "print_jobs_queued": s["print_jobs_queued"],
+            "low_inventory_count": s["low_inventory_count"],
+            "low_filament_count": s["low_filament_count"],
+        })
+
+
+@catalog_blp.route("/analytics/products")
+class AnalyticsProducts(MethodView):
+    @api_token_required
+    def get(self):
+        from app.services.analytics import product_analytics
+        products = product_analytics()
+        return jsonify([{
+            "id": p["id"],
+            "name": p["name"],
+            "sku": p["sku"],
+            "units_sold": p["units_sold"],
+            "revenue": float(p["revenue"]),
+            "avg_price": float(p["avg_price"]),
+            "inventory_on_hand": p["inventory_on_hand"],
+            "failure_count": p["failure_count"],
+        } for p in products])
+
+
+@catalog_blp.route("/analytics/markets")
+class AnalyticsMarkets(MethodView):
+    @api_token_required
+    def get(self):
+        from app.services.analytics import market_analytics
+        markets = market_analytics()
+        return jsonify([{
+            "id": m["id"],
+            "name": m["name"],
+            "date": str(m["date"]) if m["date"] else None,
+            "total_sales": float(m["total_sales"]),
+            "total_expenses": float(m["total_expenses"]),
+            "booth_cost": float(m["booth_cost"]),
+            "profit": float(m["profit"]),
+            "units_sold": m["units_sold"],
+        } for m in markets])
+
+
+@catalog_blp.route("/analytics/printing")
+class AnalyticsPrinting(MethodView):
+    @api_token_required
+    def get(self):
+        from app.services.analytics import printing_analytics
+        return jsonify(printing_analytics())
+
+
+@catalog_blp.route("/analytics/inventory")
+class AnalyticsInventory(MethodView):
+    @api_token_required
+    def get(self):
+        from app.services.analytics import inventory_analytics
+        inv = inventory_analytics()
+        return jsonify({
+            "low_stock_count": inv["low_stock_count"],
+            "total_inventory_value": float(inv["total_inventory_value"]),
+            "filament_low": inv["filament_low"],
+            "filament_empty": inv["filament_empty"],
+        })
+
+
+@catalog_blp.route("/analytics/pos")
+class AnalyticsPos(MethodView):
+    @api_token_required
+    def get(self):
+        from app.services.analytics import pos_analytics
+        p = pos_analytics()
+        return jsonify({
+            "total_revenue": float(p["total_revenue"]),
+            "total_sales": p["total_sales"],
+            "avg_ticket": float(p["avg_ticket"]),
+            "payment_totals": {k: float(v) for k, v in p["payment_totals"].items()},
+            "open_sessions": p["open_sessions"],
+        })
+
+
+@catalog_blp.route("/analytics/expenses")
+class AnalyticsExpenses(MethodView):
+    @api_token_required
+    def get(self):
+        from app.services.analytics import expense_analytics
+        e = expense_analytics()
+        return jsonify({
+            "total_expenses": float(e["total_expenses"]),
+            "by_category": [{"category": c["category"], "total": float(c["total"]), "count": c["count"]} for c in e["by_category"]],
+        })
 
 
 def register_api_blueprints(api):

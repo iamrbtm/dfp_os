@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Contact Us | Dude Fish Printing{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-8">
+  <div>
+    <h1 class="text-4xl font-semibold tracking-tight" style="color: var(--color-text);">Contact Us</h1>
+    <p class="mt-4 text-lg" style="color: var(--color-text-muted);">Have a question, idea, or custom request? We'd love to hear from you.</p>
+  </div>
+
+  {% if submitted %}
+  <div class="app-card p-6" style="background-color: var(--color-success-bg);">
+    <p style="color: var(--color-success);">Thanks for reaching out! We'll get back to you as soon as possible.</p>
+  </div>
+  {% else %}
+  <form method="post" class="app-card p-6 space-y-5">
+    {{ form.hidden_tag() }}
+    <div>
+      <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.name.label }}</label>
+      {{ form.name(class="app-input w-full") }}
+      {% for error in form.name.errors %}<p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+    </div>
+    <div>
+      <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.email.label }}</label>
+      {{ form.email(class="app-input w-full") }}
+      {% for error in form.email.errors %}<p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+    </div>
+    <div>
+      <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.phone.label }}</label>
+      {{ form.phone(class="app-input w-full") }}
+    </div>
+    <div>
+      <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.description.label }}</label>
+      {{ form.description(class="app-input w-full", rows=5) }}
+      {% for error in form.description.errors %}<p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+    </div>
+    <div>
+      <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.estimated_budget.label }}</label>
+      {{ form.estimated_budget(class="app-input w-full") }}
+    </div>
+    <div>
+      {{ form.submit(class="app-btn app-btn-primary") }}
+    </div>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Small Business Products | Dude Fish Printing{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-8">
+  <div>
+    <h1 class="text-4xl font-semibold tracking-tight" style="color: var(--color-text);">Small Business Products</h1>
+    <p class="mt-4 text-lg" style="color: var(--color-text-muted);">Help your business stand out with custom 3D-printed displays, signs, and accessories.</p>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2">
+    <article class="app-card p-5">
+      <h2 class="font-semibold" style="color: var(--color-text);">QR Code Counter Signs</h2>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Custom QR code signs for your counter or table. Perfect for menus, payment links, social media, or reviews.</p>
+    </article>
+    <article class="app-card p-5">
+      <h2 class="font-semibold" style="color: var(--color-text);">Business Card Holders</h2>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Sleek, durable holders to display your business cards at checkout or on your desk.</p>
+    </article>
+    <article class="app-card p-5">
+      <h2 class="font-semibold" style="color: var(--color-text);">Vendor Price Tag Stands</h2>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Clear, angled stands to display prices at markets and events. Available in multiple sizes.</p>
+    </article>
+    <article class="app-card p-5">
+      <h2 class="font-semibold" style="color: var(--color-text);">Vendor Booth Signs</h2>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Custom signs for your booth, table, or event space. Let customers know who you are and what you offer.</p>
+    </article>
+    <article class="app-card p-5">
+      <h2 class="font-semibold" style="color: var(--color-text);">Product Displays</h2>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Custom risers, stands, and shelving designed to showcase your products effectively.</p>
+    </article>
+    <article class="app-card p-5">
+      <h2 class="font-semibold" style="color: var(--color-text);">Bulk Keychains & Favors</h2>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Custom keychains, bag tags, and promotional items for events, giveaways, and corporate gifts.</p>
+    </article>
+  </div>
+
+  <div class="app-card p-6">
+    <h2 class="text-xl font-semibold" style="color: var(--color-text);">Have a Specific Need?</h2>
+    <p class="mt-2 text-sm" style="color: var(--color-text-muted);">We can design and print custom display products for your business. Contact us with your requirements and we'll provide a quote.</p>
+    <a href="{{ url_for('public.custom_orders') }}" class="app-btn app-btn-primary mt-4 inline-block">Request a Quote</a>
+  </div>
+</section>
+{% endblock %}

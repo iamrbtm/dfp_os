@@ -33,7 +33,7 @@ def test_404_page_renders(client):
     response = client.get("/missing-page")
 
     assert response.status_code == 404
-    assert b"We couldn\xe2\x80\x99t find that page." in response.data
+    assert b"couldn" in response.data and b"find that page" in response.data
 
 
 def test_testing_config_overrides_apply(app, tmp_path):

@@ -1,52 +1,93 @@
 {% extends "base.html" %}
-
-{% block title %}Dude Fish OS | Warm, practical shop software{% endblock %}
-
+{% block title %}Dude Fish Printing — Custom 3D Printing in Clarksville, TN{% endblock %}
+{% block head %}
+<meta name="description" content="Dude Fish Printing is a family-run 3D printing business in Clarksville, Tennessee. Custom dragons, fidgets, flexi animals, personalized gifts, and small business products.">
+{% endblock %}
 {% block content %}
-  <section class="grid gap-8 lg:grid-cols-[1.3fr_0.7fr] lg:items-center">
-    <div class="space-y-6">
-      <span class="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-sm font-medium text-cyan-200">
-        Fresh rebuild foundation
-      </span>
-      <div class="space-y-4">
-        <h1 class="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-          Warm, practical software for a growing 3D printing business.
-        </h1>
-        <p class="max-w-2xl text-lg text-slate-300">
-          Dude Fish OS brings together the public website, shop operations, and future POS workflow in one clean Flask foundation.
-        </p>
-      </div>
-      <div class="flex flex-wrap gap-3">
-        <a href="{{ url_for('auth.login') }}" class="rounded-full bg-cyan-400 px-5 py-3 font-medium text-slate-950 hover:bg-cyan-300">
-          Open the dashboard
-        </a>
-        <a href="#highlights" class="rounded-full border border-slate-700 px-5 py-3 font-medium text-slate-100 hover:border-slate-500 hover:bg-slate-900">
-          See what’s included
-        </a>
-      </div>
+<section class="grid gap-8 lg:grid-cols-[1.3fr_0.7fr] lg:items-center">
+  <div class="space-y-6">
+    <span class="inline-flex rounded-full px-3 py-1 text-sm font-medium"
+          style="background-color: var(--color-info-bg); color: var(--color-info);">
+      Family-Run 3D Printing in Clarksville, TN
+    </span>
+    <div class="space-y-4">
+      <h1 class="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl"
+          style="color: var(--color-text);">
+        Bringing creativity to life, one layer at a time.
+      </h1>
+      <p class="max-w-2xl text-lg" style="color: var(--color-text-muted);">
+        Dude Fish Printing makes custom 3D-printed dragons, fidgets, flexi animals, personalized gifts, and small business products. Based in Clarksville, Tennessee — serving local markets, online customers, and military families.
+      </p>
     </div>
-
-    <div class="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-cyan-950/20">
-      <h2 class="text-lg font-semibold text-white">Phase 1 highlights</h2>
-      <ul class="mt-4 space-y-3 text-sm text-slate-300">
-        <li>• Flask app factory and clean blueprint setup</li>
-        <li>• Login/logout with roles and CSRF protection</li>
-        <li>• Dashboard shell for the future business toolkit</li>
-        <li>• Docker, Postgres wiring, and test-ready foundation</li>
-      </ul>
+    <div class="flex flex-wrap gap-3">
+      <a href="{{ url_for('public.shop') }}" class="app-btn app-btn-primary">Shop Our Products</a>
+      <a href="{{ url_for('public.custom_orders') }}" class="app-btn app-btn-secondary">Request a Custom Print</a>
     </div>
-  </section>
+  </div>
 
-  <section id="highlights" class="mt-12 grid gap-4 md:grid-cols-3">
-    {% for item in [
-      ('Public Site', 'A branded landing page is in place so the project starts feeling real right away.'),
-      ('Auth Foundation', 'Admin access is protected with hashed passwords, safe redirects, and a reusable login form.'),
-      ('Future-Ready Shape', 'Blueprints, services, schemas, and migrations are scaffolded for the next phases.')
-    ] %}
-      <article class="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-        <h3 class="text-lg font-semibold text-white">{{ item[0] }}</h3>
-        <p class="mt-2 text-sm leading-6 text-slate-300">{{ item[1] }}</p>
-      </article>
+  <div class="app-card p-6" style="box-shadow: var(--shadow-popover);">
+    <h2 class="text-lg font-semibold" style="color: var(--color-text);">Why Dude Fish Printing?</h2>
+    <ul class="mt-4 space-y-3 text-sm" style="color: var(--color-text-muted);">
+      <li>• Family-run business in Clarksville, TN</li>
+      <li>• Custom orders for every occasion</li>
+      <li>• Military-family-safe gifts available</li>
+      <li>• Small business display products</li>
+      <li>• Vendor market regular</li>
+    </ul>
+  </div>
+</section>
+
+{% if featured %}
+<section class="mt-12">
+  <h2 class="text-2xl font-semibold mb-6" style="color: var(--color-text);">Featured Products</h2>
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {% for product in featured %}
+    <a href="{{ url_for('public.product_detail', slug=product.slug) }}" class="app-card p-5 block hover:opacity-90">
+      <h3 class="font-semibold" style="color: var(--color-text);">{{ product.name }}</h3>
+      {% if product.short_description %}
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">{{ product.short_description[:120] }}</p>
+      {% endif %}
+      <p class="mt-3 text-lg font-bold" style="color: var(--color-primary);">
+        {% if product.base_price %}Starting at ${{ "{:,.2f}".format(product.base_price) }}{% endif %}
+      </p>
+    </a>
     {% endfor %}
-  </section>
+  </div>
+</section>
+{% endif %}
+
+{% if upcoming_markets %}
+<section class="mt-12">
+  <h2 class="text-2xl font-semibold mb-6" style="color: var(--color-text);">Upcoming Markets</h2>
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {% for market in upcoming_markets %}
+    <article class="app-card p-5">
+      <h3 class="font-semibold" style="color: var(--color-text);">{{ market.name }}</h3>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">
+        {{ market.event_date or "TBD" }}{% if market.location_name %} &middot; {{ market.location_name }}{% endif %}
+      </p>
+    </article>
+    {% endfor %}
+  </div>
+  <a href="{{ url_for('public.market_schedule') }}" class="app-btn app-btn-secondary mt-4 inline-block">Full Schedule</a>
+</section>
+{% endif %}
+
+<section class="mt-12 grid gap-4 md:grid-cols-3">
+  <article class="app-card p-6">
+    <h3 class="text-lg font-semibold" style="color: var(--color-text);">Custom Orders</h3>
+    <p class="mt-2 text-sm leading-6" style="color: var(--color-text-muted);">Have something specific in mind? We love bringing ideas to life. Tell us what you need and we'll make it happen.</p>
+    <a href="{{ url_for('public.custom_orders') }}" class="app-btn app-btn-secondary mt-4 inline-block">Get Started</a>
+  </article>
+  <article class="app-card p-6">
+    <h3 class="text-lg font-semibold" style="color: var(--color-text);">Small Business Products</h3>
+    <p class="mt-2 text-sm leading-6" style="color: var(--color-text-muted);">QR code counter signs, business card holders, price tag stands, and vendor booth displays to help your business stand out.</p>
+    <a href="{{ url_for('public.small_business_products') }}" class="app-btn app-btn-secondary mt-4 inline-block">Learn More</a>
+  </article>
+  <article class="app-card p-6">
+    <h3 class="text-lg font-semibold" style="color: var(--color-text);">Military-Family-Safe Gifts</h3>
+    <p class="mt-2 text-sm leading-6" style="color: var(--color-text-muted);">Welcome home signs, deployment countdowns, PCS keepsakes, and more — designed with care for military families.</p>
+    <a href="{{ url_for('public.military_family_gifts') }}" class="app-btn app-btn-secondary mt-4 inline-block">Browse Gifts</a>
+  </article>
+</section>
 {% endblock %}

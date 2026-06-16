@@ -7,6 +7,8 @@ from app.forms.catalog import (
     ProductVariantForm,
 )
 from app.forms.custom_request import CustomRequestForm, PublicCustomRequestForm
+from app.forms.expense import ExpenseForm
+from app.forms.market import MarketForm, MarketPackingListForm
 from app.forms.customer import CustomerForm
 from app.forms.fleet import AMSUnitForm, PrinterForm
 from app.forms.inventory import FilamentSpoolForm, InventoryLocationForm, InventoryRecordForm
@@ -21,9 +23,12 @@ __all__ = [
     "CustomerForm",
     "CustomRequestForm",
     "FilamentSpoolForm",
+    "ExpenseForm",
     "InventoryLocationForm",
     "InventoryRecordForm",
     "LoginForm",
+    "MarketForm",
+    "MarketPackingListForm",
     "ModelAssetForm",
     "OrderForm",
     "OrderItemForm",

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Vendor Market Schedule | Dude Fish Printing{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-8">
+  <div>
+    <h1 class="text-4xl font-semibold tracking-tight" style="color: var(--color-text);">Vendor Market Schedule</h1>
+    <p class="mt-4 text-lg" style="color: var(--color-text-muted);">Find us at markets and events around Clarksville, Tennessee.</p>
+  </div>
+
+  {% if markets %}
+  <div class="space-y-4">
+    {% for market in markets %}
+    <article class="app-card p-5">
+      <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 class="text-lg font-semibold" style="color: var(--color-text);">{{ market.name }}</h2>
+          <p class="text-sm" style="color: var(--color-text-muted);">
+            {% if market.event_date %}{{ market.event_date }}{% endif %}
+            {% if market.start_time %}{{ market.start_time.strftime("%I:%M %p") if market.start_time }}{% endif %}
+            {% if market.end_time %} — {{ market.end_time.strftime("%I:%M %p") if market.end_time }}{% endif %}
+          </p>
+          {% if market.location_name %}
+          <p class="text-sm" style="color: var(--color-text-muted);">{{ market.location_name }}{% if market.city %}, {{ market.city }}{% endif %}{% if market.state %} {{ market.state }}{% endif %}</p>
+          {% endif %}
+        </div>
+        <span class="app-badge app-badge-info text-xs">{{ market.status.value.replace("_", " ").title() }}</span>
+      </div>
+      {% if market.notes %}
+      <p class="mt-3 text-sm" style="color: var(--color-text-muted);">{{ market.notes }}</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="app-card p-6">
+    <p style="color: var(--color-text-muted);">No upcoming markets scheduled yet. Check back soon or follow us on social media for updates.</p>
+  </div>
+  {% endif %}
+
+  <div class="app-card p-6">
+    <h2 class="text-xl font-semibold" style="color: var(--color-text);">Want Us at Your Event?</h2>
+    <p class="mt-2 text-sm" style="color: var(--color-text-muted);">We're always looking for new vendor opportunities in the Clarksville area. Get in touch if you'd like us to participate in your market or event.</p>
+    <a href="{{ url_for('public.contact') }}" class="app-btn app-btn-secondary mt-4 inline-block">Contact Us</a>
+  </div>
+</section>
+{% endblock %}

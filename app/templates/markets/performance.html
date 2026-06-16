@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}{{ market.name }} Performance | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+        <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ market.name }} — Performance</h1>
+        <p class="mt-2" style="color: var(--color-text-muted);">{{ market.event_date }} &middot; {{ market.location_name }}</p>
+      </div>
+      <a href="{{ url_for('markets.detail_resource', resource_key='markets', resource_id=market.id) }}" class="app-btn app-btn-secondary">Back to Market</a>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <article class="app-card p-5">
+        <p class="text-sm" style="color: var(--color-text-muted);">Total Sales</p>
+        <p class="mt-2 text-2xl font-bold" style="color: var(--color-success);">${{ "{:,.2f}".format(performance.total_sales) }}</p>
+      </article>
+      <article class="app-card p-5">
+        <p class="text-sm" style="color: var(--color-text-muted);">Total Expenses</p>
+        <p class="mt-2 text-2xl font-bold" style="color: var(--color-danger);">${{ "{:,.2f}".format(performance.total_expenses) }}</p>
+      </article>
+      <article class="app-card p-5">
+        <p class="text-sm" style="color: var(--color-text-muted);">Booth Cost</p>
+        <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">${{ "{:,.2f}".format(performance.booth_cost) }}</p>
+      </article>
+      <article class="app-card p-5">
+        <p class="text-sm" style="color: var(--color-text-muted);">Estimated Profit</p>
+        <p class="mt-2 text-2xl font-bold" style="{% if performance.estimated_profit >= 0 %}color: var(--color-success){% else %}color: var(--color-danger){% endif %}">${{ "{:,.2f}".format(performance.estimated_profit) }}</p>
+      </article>
+      <article class="app-card p-5">
+        <p class="text-sm" style="color: var(--color-text-muted);">Booth Fee % of Sales</p>
+        <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">{{ "%.1f" % performance.booth_fee_pct if performance.booth_fee_pct is not none else "—" }}%</p>
+      </article>
+      <article class="app-card p-5">
+        <p class="text-sm" style="color: var(--color-text-muted);">Units Sold</p>
+        <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">{{ performance.units_sold }}</p>
+      </article>
+    </div>
+
+    {% if performance.top_products %}
+    <section>
+      <h2 class="text-2xl font-semibold mb-4" style="color: var(--color-text);">Top Products</h2>
+      <div class="app-card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="app-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in performance.top_products %}
+              <tr>
+                <td>{{ p.name }}</td>
+                <td>{{ p.quantity }}</td>
+                <td>${{ "{:,.2f}".format(p.revenue) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if performance.payment_methods %}
+    <section>
+      <h2 class="text-2xl font-semibold mb-4" style="color: var(--color-text);">Payment Methods</h2>
+      <div class="app-card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="app-table">
+            <thead>
+              <tr>
+                <th>Method</th>
+                <th>Transactions</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for pm in performance.payment_methods %}
+              <tr>
+                <td>{{ pm.method|title }}</td>
+                <td>{{ pm.count }}</td>
+                <td>${{ "{:,.2f}".format(pm.total) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+  </section>
+{% endblock %}

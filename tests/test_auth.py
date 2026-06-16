@@ -14,7 +14,7 @@ def test_admin_user_can_log_in(client, admin_user):
     )
 
     assert response.status_code == 200
-    assert b"Phase 1 control center" in response.data
+    assert b"Dashboard" in response.data
 
 
 def test_logout_clears_session(client, admin_user):

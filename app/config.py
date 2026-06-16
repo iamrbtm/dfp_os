@@ -42,6 +42,7 @@ class Config:
     OPENAPI_SWAGGER_UI_PATH = "/docs"
     OPENAPI_SWAGGER_UI_URL = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
     MIGRATIONS_DIR = str(BASE_DIR / "migrations")
+    DEFAULT_THEME = "dfp-github-light"
 
 
 class DevelopmentConfig(Config):

@@ -7,10 +7,13 @@ from dotenv import load_dotenv
 from flask import Flask, render_template
 
 from app.blueprints.auth import bp as auth_bp
+from app.blueprints.analytics import bp as analytics_bp
 from app.blueprints.api import register_api_blueprints
 from app.blueprints.customers import bp as customers_bp
+from app.blueprints.expenses import bp as expenses_bp
 from app.blueprints.custom_orders import bp as custom_orders_bp
 from app.blueprints.dashboard import bp as dashboard_bp
+from app.blueprints.markets import bp as markets_bp
 from app.blueprints.inventory import bp as inventory_bp
 from app.blueprints.orders import bp as orders_bp
 from app.blueprints.pos import bp as pos_bp
@@ -18,6 +21,7 @@ from app.blueprints.print_jobs import bp as print_jobs_bp
 from app.blueprints.printers import bp as printers_bp
 from app.blueprints.products import bp as products_bp
 from app.blueprints.public import bp as public_bp
+from app.blueprints.settings import bp as settings_bp
 from app.cli import seed_group
 from app.extensions import api, csrf, db, login_manager, migrate
 from app.models import User
@@ -75,6 +79,7 @@ def register_extensions(app: Flask) -> None:
 def register_blueprints(app: Flask) -> None:
     app.register_blueprint(public_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(settings_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(products_bp)
     app.register_blueprint(inventory_bp)
@@ -84,6 +89,9 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(orders_bp)
     app.register_blueprint(pos_bp)
     app.register_blueprint(print_jobs_bp)
+    app.register_blueprint(markets_bp)
+    app.register_blueprint(analytics_bp)
+    app.register_blueprint(expenses_bp)
     register_api_blueprints(api)
 
 
@@ -108,7 +116,96 @@ def register_error_handlers(app: Flask) -> None:
 
 def register_context_processors(app: Flask) -> None:
     @app.context_processor
-    def inject_brand_context() -> dict[str, str]:
-        return {
-            "app_name": app.config["APP_NAME"],
+    def inject_brand_context() -> dict[str, object]:
+        from flask_login import current_user
+        from flask import request, url_for
+        from app.theme_registry import ALL_THEMES
+
+        BLUEPRINT_SECTION_MAP: dict[str, str | None] = {
+            "dashboard": "dashboard",
+            "pos": "pos",
+            "analytics": "analytics",
+            "products": "products",
+            "customers": "customers",
+            "orders": "orders",
+            "custom_orders": "custom_orders",
+            "printers": "printers",
+            "print_jobs": "print_jobs",
+            "inventory": "inventory",
+            "markets": "markets",
+            "expenses": "expenses",
+            "settings": "settings",
+            "auth": None,
+            "public": None,
+            "api": None,
         }
+
+        SECTION_TITLES: dict[str, str] = {
+            "pos": "POS",
+            "custom_orders": "Custom Orders",
+            "print_jobs": "Print Jobs",
+        }
+
+        CONTEXT_NAV_ITEMS: dict[str, list[tuple[str, str]]] = {
+            "analytics": [
+                ("Overview", url_for("analytics.index")),
+            ],
+            "pos": [
+                ("Sessions", url_for("pos.session_list")),
+                ("New Session", url_for("pos.session_new")),
+            ],
+            "products": [
+                ("Products", url_for("products.list_resource", resource_key="products")),
+                ("Categories", url_for("products.list_resource", resource_key="categories")),
+                ("Collections", url_for("products.list_resource", resource_key="collections")),
+                ("Variants", url_for("products.list_resource", resource_key="variants")),
+                ("Model Assets", url_for("products.list_resource", resource_key="model-assets")),
+            ],
+            "inventory": [
+                ("Records", url_for("inventory.list_resource", resource_key="records")),
+                ("Filament", url_for("inventory.list_resource", resource_key="filament-spools")),
+                ("Locations", url_for("inventory.list_resource", resource_key="locations")),
+            ],
+            "printers": [
+                ("Printers", url_for("printers.list_resource", resource_key="printers")),
+                ("AMS Units", url_for("printers.list_resource", resource_key="ams-units")),
+            ],
+            "orders": [
+                ("Orders", url_for("orders.list_resource", resource_key="orders")),
+                ("Items", url_for("orders.list_resource", resource_key="items")),
+                ("Payments", url_for("orders.list_resource", resource_key="payments")),
+            ],
+            "markets": [
+                ("Markets", url_for("markets.list_resource", resource_key="markets")),
+                ("New Market", url_for("markets.create_resource", resource_key="markets")),
+                ("Packing List", url_for("markets.list_resource", resource_key="packing-lists")),
+            ],
+            "expenses": [
+                ("Expenses", url_for("expenses.list_resource", resource_key="expenses")),
+                ("New Expense", url_for("expenses.create_resource", resource_key="expenses")),
+            ],
+            "settings": [
+                ("Themes", url_for("settings.themes")),
+            ],
+        }
+
+        active_section: str | None = None
+        bp_name: str | None = request.blueprint
+        if bp_name:
+            active_section = BLUEPRINT_SECTION_MAP.get(bp_name)
+
+        context_title = SECTION_TITLES.get(active_section) if active_section else None
+        context_nav_items = CONTEXT_NAV_ITEMS.get(active_section) if active_section else None
+
+        ctx: dict[str, object] = {
+            "app_name": app.config["APP_NAME"],
+            "themes": ALL_THEMES,
+            "active_section": active_section,
+            "context_title": context_title,
+            "context_nav_items": context_nav_items,
+        }
+        if current_user and current_user.is_authenticated and hasattr(current_user, "theme_slug"):
+            ctx["active_theme"] = current_user.theme_slug
+        else:
+            ctx["active_theme"] = app.config.get("DEFAULT_THEME", "dfp-github-light")
+        return ctx

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from app.extensions import db
@@ -12,11 +13,16 @@ from app.models import (
     CustomRequest,
     CustomRequestStatus,
     Customer,
+    Expense,
+    ExpenseCategory,
     FilamentSpool,
     FilamentStatus,
     InventoryLocation,
     InventoryRecord,
     LicenseStatus,
+    Market,
+    MarketPackingList,
+    MarketStatus,
     ModelAsset,
     ModelSourceType,
     Order,
@@ -731,6 +737,67 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
             },
         )
 
+    _upsert(
+        Market,
+        {"name": "Clarksville Saturday Market"},
+        {
+            "name": "Clarksville Saturday Market",
+            "location_name": "Downtown Clarksville",
+            "address": "100 Public Square",
+            "city": "Clarksville",
+            "state": "TN",
+            "event_date": date(2026, 5, 10),
+            "booth_fee": Decimal("75.00"),
+            "application_fee": Decimal("10.00"),
+            "status": MarketStatus.COMPLETED,
+            "expected_traffic": "High",
+            "actual_revenue": Decimal("450.00"),
+            "actual_profit": Decimal("320.00"),
+            "notes": "Great first market. Sold lots of dragons and fidgets.",
+        },
+    )
+    _upsert(
+        Market,
+        {"name": "Riverside Craft Fair"},
+        {
+            "name": "Riverside Craft Fair",
+            "location_name": "Riverside Park",
+            "address": "200 River Road",
+            "city": "Clarksville",
+            "state": "TN",
+            "event_date": date(2026, 6, 21),
+            "booth_fee": Decimal("100.00"),
+            "status": MarketStatus.SCHEDULED,
+            "expected_traffic": "Medium",
+            "notes": "Outdoor event. Need tent and weights.",
+        },
+    )
+
+    _upsert(
+        MarketPackingList,
+        {"market_id": 1, "product_id": products["rainbow-dragon"].id},
+        {
+            "market_id": 1,
+            "product_id": products["rainbow-dragon"].id,
+            "planned_quantity": 10,
+            "packed_quantity": 8,
+            "sold_quantity": 6,
+            "returned_quantity": 2,
+        },
+    )
+    _upsert(
+        MarketPackingList,
+        {"market_id": 1, "product_id": products["fidget-slider"].id},
+        {
+            "market_id": 1,
+            "product_id": products["fidget-slider"].id,
+            "planned_quantity": 20,
+            "packed_quantity": 18,
+            "sold_quantity": 15,
+            "returned_quantity": 3,
+        },
+    )
+
     customers = {
         item.email: item
         for item in [
@@ -892,6 +959,48 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         )
         db.session.add(demo_sale)
 
+    _upsert(
+        Expense,
+        {"date": date(2026, 5, 8), "vendor": "ProtoPasta", "amount": Decimal("45.00")},
+        {
+            "date": date(2026, 5, 8),
+            "vendor": "ProtoPasta",
+            "category": ExpenseCategory.FILAMENT,
+            "description": "Rainbow silk PLA filament 1kg",
+            "amount": Decimal("45.00"),
+            "payment_method": "credit_card",
+            "related_market_id": 1,
+            "tax_deductible": True,
+        },
+    )
+    _upsert(
+        Expense,
+        {"date": date(2026, 5, 10), "vendor": "Clarksville Market", "amount": Decimal("85.00")},
+        {
+            "date": date(2026, 5, 10),
+            "vendor": "Clarksville Market",
+            "category": ExpenseCategory.BOOTH_FEES,
+            "description": "Booth fee plus application fee for Saturday Market",
+            "amount": Decimal("85.00"),
+            "payment_method": "cash",
+            "related_market_id": 1,
+            "tax_deductible": True,
+        },
+    )
+    _upsert(
+        Expense,
+        {"date": date(2026, 5, 12), "vendor": "Uline", "amount": Decimal("22.50")},
+        {
+            "date": date(2026, 5, 12),
+            "vendor": "Uline",
+            "category": ExpenseCategory.PACKAGING,
+            "description": "Poly bags and tissue paper for product packaging",
+            "amount": Decimal("22.50"),
+            "payment_method": "credit_card",
+            "tax_deductible": True,
+        },
+    )
+
     db.session.commit()
     return {
         "categories": Category.query.count(),
@@ -909,6 +1018,9 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         "orders": Order.query.count(),
         "order_items": OrderItem.query.count(),
         "payments": Payment.query.count(),
+        "expenses": Expense.query.count(),
+        "markets": Market.query.count(),
+        "market_packing_lists": MarketPackingList.query.count(),
         "print_jobs": PrintJob.query.count(),
         "pos_sessions": PosSession.query.count(),
         "pos_sales": PosSale.query.count(),

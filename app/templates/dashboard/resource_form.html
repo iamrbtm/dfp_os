@@ -1,37 +1,35 @@
 {% extends "base.html" %}
-
 {% block title %}{{ mode|title }} {{ resource.singular }} | {{ app_name }}{% endblock %}
-
 {% block content %}
   <section class="mx-auto max-w-4xl space-y-6">
     <div>
-      <p class="text-sm uppercase tracking-[0.2em] text-cyan-300">Phase 2 admin</p>
-      <h1 class="mt-2 text-3xl font-semibold text-white">{{ mode|title }} {{ resource.singular }}</h1>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ mode|title }} {{ resource.singular }}</h1>
     </div>
 
-    <form method="post" class="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-xl shadow-slate-950/20">
+    <form method="post" class="app-card p-6 shadow-xl">
       {{ form.hidden_tag() }}
       <div class="grid gap-5 md:grid-cols-2">
         {% for field in form if field.name not in ['csrf_token', 'submit'] %}
           <div class="{% if field.type == 'TextAreaField' %}md:col-span-2{% endif %}">
             {% if field.type == 'BooleanField' %}
-              <label class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-200">
-                {{ field(class="h-4 w-4 rounded border-slate-700 bg-slate-950 text-cyan-400 focus:ring-cyan-400") }}
+              <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
+                {{ field(class="app-checkbox") }}
                 <span>{{ field.label.text }}</span>
               </label>
             {% else %}
-              <label class="mb-2 block text-sm font-medium text-slate-200">{{ field.label.text }}</label>
-              {{ field(class="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30") }}
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ field.label.text }}</label>
+              {{ field(class="app-input") }}
             {% endif %}
             {% for error in field.errors %}
-              <p class="mt-2 text-sm text-rose-300">{{ error }}</p>
+              <p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>
             {% endfor %}
           </div>
         {% endfor %}
       </div>
       <div class="mt-6 flex flex-wrap gap-3">
-        {{ form.submit(class="rounded-2xl bg-cyan-400 px-5 py-3 font-medium text-slate-950 hover:bg-cyan-300") }}
-        <a href="{{ request.referrer or url_for(request.endpoint.replace('create_resource', 'list_resource').replace('edit_resource', 'detail_resource'), resource_key=resource.key, resource_id=request.view_args.get('resource_id', 0)) if mode == 'edit' else url_for(request.endpoint.replace('create_resource', 'list_resource'), resource_key=resource.key) }}" class="rounded-2xl border border-slate-700 px-5 py-3 font-medium text-slate-100 hover:bg-slate-800">
+        {{ form.submit(class="app-btn app-btn-primary") }}
+        <a href="{{ request.referrer or url_for(request.endpoint.replace('create_resource', 'list_resource').replace('edit_resource', 'detail_resource'), resource_key=resource.key, resource_id=request.view_args.get('resource_id', 0)) if mode == 'edit' else url_for(request.endpoint.replace('create_resource', 'list_resource'), resource_key=resource.key) }}" class="app-btn app-btn-secondary">
           Cancel
         </a>
       </div>

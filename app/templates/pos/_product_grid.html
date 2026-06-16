@@ -3,16 +3,16 @@
   {% set variant = p.variants|selectattr("active")|first %}
   {% set price = variant.price if variant else p.base_price %}
   <button type="button" @click="addToCart({{ p.id }}, '{{ p.name|e|replace("'", "\\'") }}', {{ price }}, {{ variant.id if variant else 'null' }})"
-          class="bg-slate-800 border border-slate-700 rounded-lg p-2 text-center hover:bg-slate-700 hover:border-cyan-600 transition cursor-pointer flex flex-col items-center">
+          class="pos-product-tile">
     {% if p.default_image_path %}
     <img src="{{ url_for('static', filename=p.default_image_path) }}" alt="{{ p.name }}" class="w-full h-16 object-cover rounded mb-1">
     {% else %}
-    <div class="w-full h-16 bg-slate-700 rounded mb-1 flex items-center justify-center text-slate-500 text-xs">No img</div>
+    <div class="w-full h-16 rounded mb-1 flex items-center justify-center text-xs" style="background-color: var(--color-bg-subtle); color: var(--color-text-muted);">No img</div>
     {% endif %}
-    <span class="font-semibold text-xs leading-tight text-slate-100 line-clamp-2">{{ p.name }}</span>
-    <span class="text-cyan-400 font-bold text-sm mt-0.5">${{ "%.2f"|format(price) }}</span>
+    <span class="font-semibold text-xs leading-tight line-clamp-2" style="color: var(--color-text);">{{ p.name }}</span>
+    <span class="font-bold text-sm mt-0.5" style="color: var(--color-primary);">${{ "%.2f"|format(price) }}</span>
   </button>
   {% else %}
-  <div class="col-span-full text-center py-8 text-slate-500">No products found.</div>
+  <div class="col-span-full app-empty">No products found.</div>
   {% endfor %}
 </div>

@@ -1,13 +1,11 @@
 {% extends "base.html" %}
-
 {% block title %}Page Not Found | {{ app_name }}{% endblock %}
-
 {% block content %}
-  <div class="mx-auto max-w-2xl rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center">
-    <p class="text-sm uppercase tracking-[0.2em] text-cyan-300">404</p>
-    <h1 class="mt-3 text-3xl font-semibold text-white">We couldn’t find that page.</h1>
-    <p class="mt-3 text-slate-300">Try heading back home or signing in to the dashboard.</p>
-    <a href="{{ url_for('public.home') }}" class="mt-6 inline-flex rounded-full bg-cyan-400 px-5 py-3 font-medium text-slate-950 hover:bg-cyan-300">
+  <div class="mx-auto max-w-2xl app-card p-8 text-center">
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">404</p>
+    <h1 class="mt-3 text-3xl font-semibold" style="color: var(--color-text);">We couldn't find that page.</h1>
+    <p class="mt-3" style="color: var(--color-text-muted);">Try heading back home or signing in to the dashboard.</p>
+    <a href="{{ url_for('public.home') }}" class="mt-6 inline-flex app-btn app-btn-primary">
       Back home
     </a>
   </div>

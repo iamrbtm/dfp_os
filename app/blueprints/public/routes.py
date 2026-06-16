@@ -6,13 +6,51 @@ from sqlalchemy import select
 from app.blueprints.public import bp
 from app.extensions import db
 from app.forms import PublicCustomRequestForm
-from app.models import Category, Collection, CustomRequest, Product, ProductStatus
+from app.models import Category, Collection, CustomRequest, Market, MarketStatus, Product, ProductStatus
 from app.services.crud import save_instance
 
 
 @bp.get("/")
 def home():
-    return render_template("public/home.html")
+    featured = (
+        Product.query.filter_by(is_public=True, is_featured=True)
+        .filter(Product.deleted_at.is_(None), Product.status == ProductStatus.ACTIVE)
+        .order_by(Product.name)
+        .limit(6)
+        .all()
+    )
+    upcoming = Market.query.filter(
+        Market.status.in_([MarketStatus.SCHEDULED, MarketStatus.ACCEPTED])
+    ).order_by(Market.event_date.asc()).limit(3).all()
+    return render_template("public/home.html", featured=featured, upcoming_markets=upcoming)
+
+
+@bp.get("/about")
+def about():
+    return render_template("public/about.html")
+
+
+@bp.get("/faq")
+def faq():
+    return render_template("public/faq.html")
+
+
+@bp.route("/contact", methods=["GET", "POST"])
+def contact():
+    form = PublicCustomRequestForm()
+    if form.validate_on_submit():
+        custom_req = CustomRequest(
+            name=form.name.data.strip(),
+            email=form.email.data.strip(),
+            phone=form.phone.data.strip() if form.phone.data else None,
+            description=form.description.data,
+            estimated_budget=form.estimated_budget.data.strip() if form.estimated_budget.data else None,
+            source="website",
+        )
+        save_instance(custom_req)
+        flash("Thanks for reaching out! We'll get back to you soon.", "success")
+        return render_template("public/contact.html", form=PublicCustomRequestForm(), submitted=True)
+    return render_template("public/contact.html", form=form, submitted=False)
 
 
 @bp.get("/shop")
@@ -78,6 +116,34 @@ def custom_orders():
         flash("Thanks! We'll review your request and get back to you soon.", "success")
         return render_template("public/custom_orders.html", form=PublicCustomRequestForm(), submitted=True)
     return render_template("public/custom_orders.html", form=form, submitted=False)
+
+
+@bp.get("/small-business-products")
+def small_business_products():
+    return render_template("public/small_business_products.html")
+
+
+@bp.get("/military-family-gifts")
+def military_family_gifts():
+    return render_template("public/military_family_gifts.html")
+
+
+@bp.get("/market-schedule")
+def market_schedule():
+    markets = Market.query.filter(
+        Market.status.in_([MarketStatus.SCHEDULED, MarketStatus.ACCEPTED, MarketStatus.INTERESTED])
+    ).order_by(Market.event_date.asc()).all()
+    return render_template("public/market_schedule.html", markets=markets)
+
+
+@bp.get("/privacy")
+def privacy():
+    return render_template("public/privacy.html")
+
+
+@bp.get("/terms")
+def terms():
+    return render_template("public/terms.html")
 
 
 @bp.get("/collections/<slug>")
