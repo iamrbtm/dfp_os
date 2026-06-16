@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from flask_wtf import FlaskForm
-from wtforms import SelectField, StringField, SubmitField, TextAreaField
+from wtforms import DecimalField, SelectField, StringField, SubmitField, TextAreaField
 from wtforms.fields.datetime import DateTimeLocalField
 from wtforms.validators import DataRequired, Length, Optional
 
@@ -21,6 +23,11 @@ class CustomRequestForm(FlaskForm):
     status = SelectField(
         "Status", choices=enum_choices(CustomRequestStatus), validators=[DataRequired()]
     )
+    subtotal = DecimalField("Subtotal", validators=[Optional()], places=2, default=0)
+    tax = DecimalField("Tax", validators=[Optional()], places=2, default=0)
+    discount = DecimalField("Discount", validators=[Optional()], places=2, default=0)
+    total = DecimalField("Total", validators=[Optional()], places=2, default=0)
+    amount_paid = DecimalField("Amount Paid", validators=[Optional()], places=2, default=0)
     admin_notes = TextAreaField("Admin Notes", validators=[Optional()])
     internal_notes = TextAreaField("Internal Notes", validators=[Optional()])
     submit = SubmitField("Save custom request")
@@ -33,6 +40,11 @@ class CustomRequestForm(FlaskForm):
         request.estimated_budget = self.estimated_budget.data
         request.deadline = self.deadline.data
         request.status = CustomRequestStatus(self.status.data)
+        request.subtotal = self.subtotal.data
+        request.tax = self.tax.data or Decimal(0)
+        request.discount = self.discount.data or Decimal(0)
+        request.total = self.total.data
+        request.amount_paid = self.amount_paid.data or Decimal(0)
         request.admin_notes = self.admin_notes.data
         request.internal_notes = self.internal_notes.data
         return request

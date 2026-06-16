@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
+from datetime import datetime, timezone
 
 from flask import flash, redirect, render_template, request, url_for
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.custom_orders import bp
+from app.extensions import db
 from app.forms import CustomRequestForm
-from app.models import CustomRequest, CustomRequestStatus, UserRole
+from app.models import CustomRequest, CustomRequestStatus, UserRole, Order, Market
 from app.services.crud import (
     apply_search,
     get_by_id,
@@ -39,6 +42,27 @@ def _display_value(value):
     return str(value)
 
 
+def _payment_tags(instance: CustomRequest):
+    tags = []
+    if instance.amount_paid and instance.total and instance.total > 0:
+        ratio = instance.amount_paid / instance.total
+        if ratio >= 1:
+            tags.append(("paid", "Paid", "var(--color-success)"))
+        elif ratio >= 0.25:
+            tags.append(("deposit", "Deposit Met", "var(--color-warning)"))
+        else:
+            tags.append(("needs_payment", "Needs Payment", "var(--color-danger)"))
+    elif instance.total and instance.total > 0:
+        tags.append(("needs_payment", "Needs Payment", "var(--color-danger)"))
+    else:
+        tags.append(("pricing_pending", "Pricing Pending", "var(--color-text-muted)"))
+
+    if instance.deadline and instance.deadline < datetime.now(timezone.utc) and instance.status not in (CustomRequestStatus.COMPLETED, CustomRequestStatus.CANCELLED, CustomRequestStatus.ARCHIVED):
+        tags.append(("overdue", "Overdue", "var(--color-danger)"))
+
+    return tags
+
+
 CUSTOM_REQUEST_RESOURCES: dict[str, ResourceConfig] = {
     "requests": ResourceConfig(
         key="requests",
@@ -52,6 +76,8 @@ CUSTOM_REQUEST_RESOURCES: dict[str, ResourceConfig] = {
             ("Email", lambda item: item.email),
             ("Status", lambda item: item.status),
             ("Budget", lambda item: item.estimated_budget),
+            ("Total", lambda item: f"${item.total:,.2f}" if item.total else "\u2014"),
+            ("Paid", lambda item: f"${item.amount_paid:,.2f}" if item.amount_paid else "\u2014"),
             ("Deadline", lambda item: item.deadline.strftime("%Y-%m-%d") if item.deadline else "\u2014"),
         ],
     ),
@@ -124,7 +150,7 @@ def create_resource(resource_key: str = "requests"):
             flash(f"Unable to save that {config.singular.lower()}.", "danger")
             return (
                 render_template(
-                    "dashboard/resource_form.html", resource=config, form=form, mode="create"
+                    "custom_orders/form.html", resource=config, form=form, mode="create"
                 ),
                 400,
             )
@@ -137,7 +163,7 @@ def create_resource(resource_key: str = "requests"):
             )
         )
     return render_template(
-        "dashboard/resource_form.html", resource=config, form=form, mode="create"
+        "custom_orders/form.html", resource=config, form=form, mode="create"
     )
 
 
@@ -151,12 +177,23 @@ def detail_resource(resource_id: int, resource_key: str = "requests"):
     instance = get_by_id(config.model, resource_id)
     if instance is None:
         return render_template("errors/404.html"), 404
-    details = [
-        {"label": label, "value": _display_value(getter(instance))}
-        for label, getter in config.columns
-    ]
+
+    order = None
+    market = None
+    if instance.converted_to_order_id:
+        order = db.session.get(Order, instance.converted_to_order_id)
+        if order and order.market_id:
+            market = db.session.get(Market, order.market_id)
+
+    tags = _payment_tags(instance)
+
     return render_template(
-        "dashboard/resource_detail.html", resource=config, instance=instance, details=details
+        "custom_orders/detail.html",
+        resource=config,
+        instance=instance,
+        order=order,
+        market=market,
+        tags=tags,
     )
 
 
@@ -179,7 +216,7 @@ def edit_resource(resource_id: int, resource_key: str = "requests"):
             flash(f"Unable to update that {config.singular.lower()}.", "danger")
             return (
                 render_template(
-                    "dashboard/resource_form.html", resource=config, form=form, mode="edit"
+                    "custom_orders/form.html", resource=config, form=form, mode="edit"
                 ),
                 400,
             )
@@ -191,7 +228,7 @@ def edit_resource(resource_id: int, resource_key: str = "requests"):
                 resource_id=instance.id,
             )
         )
-    return render_template("dashboard/resource_form.html", resource=config, form=form, mode="edit")
+    return render_template("custom_orders/form.html", resource=config, form=form, mode="edit")
 
 
 @bp.post("/<int:resource_id>/archive")

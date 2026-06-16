@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}#{{ instance.id }} {{ instance.name }} | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin / Custom Requests</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Custom Request #{{ instance.id }}</h1>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <a href="{{ url_for('custom_orders.edit_resource', resource_key='requests', resource_id=instance.id) }}" class="app-btn app-btn-primary">Edit</a>
+      <form method="post" action="{{ url_for('custom_orders.archive_resource_view', resource_key='requests', resource_id=instance.id) }}" class="inline" onsubmit="return confirm('Archive this request?');">
+        <button type="submit" class="app-btn app-btn-danger">Archive</button>
+      </form>
+      <a href="{{ url_for('custom_orders.list_resource', resource_key='requests') }}" class="app-btn app-btn-secondary">Back to List</a>
+    </div>
+  </div>
+
+  <div class="flex flex-wrap gap-2 mb-4">
+    {% set tag_class = "px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider" %}
+    {% for _, label, color in tags %}
+    <span class="{{ tag_class }}" style="background-color: {{ color }}1a; color: {{ color }}; border: 1px solid {{ color }}40;">{{ label }}</span>
+    {% endfor %}
+    <span class="{{ tag_class }}" style="background-color: var(--color-text-muted)1a; color: var(--color-text-muted); border: 1px solid var(--color-text-muted)40;">{{ instance.status.value.replace('_', ' ').title() }}</span>
+    {% if instance.source %}
+    <span class="{{ tag_class }}" style="background-color: var(--color-primary)1a; color: var(--color-primary); border: 1px solid var(--color-primary)40;">{{ instance.source }}</span>
+    {% endif %}
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-3">
+    <div class="lg:col-span-2 space-y-6">
+      <article class="app-card p-6">
+        <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Customer Information</h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Name</p>
+            <p class="mt-1 font-medium" style="color: var(--color-text);">{{ instance.name }}</p>
+          </div>
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Email</p>
+            <p class="mt-1 font-medium" style="color: var(--color-text);">{{ instance.email }}</p>
+          </div>
+          {% if instance.phone %}
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Phone</p>
+            <p class="mt-1 font-medium" style="color: var(--color-text);">{{ instance.phone }}</p>
+          </div>
+          {% endif %}
+          {% if instance.customer %}
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Customer Account</p>
+            <a href="{{ url_for('customers.detail_resource', resource_key='customers', resource_id=instance.customer.id) }}" class="mt-1 font-medium" style="color: var(--color-link);">{{ instance.customer.name }}</a>
+          </div>
+          {% endif %}
+          {% if instance.deadline %}
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Deadline</p>
+            <p class="mt-1 font-medium" style="color: var(--color-text);">{{ instance.deadline.strftime('%B %d, %Y') }}</p>
+          </div>
+          {% endif %}
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Created</p>
+            <p class="mt-1 font-medium" style="color: var(--color-text);">{{ instance.created_at.strftime('%B %d, %Y') }}</p>
+          </div>
+        </div>
+      </article>
+
+      {% if instance.description %}
+      <article class="app-card p-6">
+        <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Description</h2>
+        <p class="whitespace-pre-wrap" style="color: var(--color-text);">{{ instance.description }}</p>
+      </article>
+      {% endif %}
+
+      {% if order %}
+      <article class="app-card p-6">
+        <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Order Items</h2>
+        {% if market %}
+        <div class="mb-4 p-3 rounded" style="background-color: var(--color-bg-muted);">
+          <p class="text-sm" style="color: var(--color-text-muted);">Market / Event</p>
+          <a href="{{ url_for('markets.detail_resource', resource_key='markets', resource_id=market.id) }}" class="font-medium" style="color: var(--color-link);">{{ market.name }}</a>
+          {% if market.event_date %}<span class="text-sm" style="color: var(--color-text-muted);"> — {{ market.event_date.strftime('%B %d, %Y') }}</span>{% endif %}
+        </div>
+        {% endif %}
+
+        {% if order.items %}
+        <div class="overflow-x-auto">
+          <table class="app-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in order.items %}
+              <tr>
+                <td>{{ item.product.name if item.product else item.custom_description or 'Custom Item' }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>${{ "{:,.2f}".format(item.unit_price) }}</td>
+                <td>${{ "{:,.2f}".format(item.line_total) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-sm" style="color: var(--color-text-muted);">No items on the linked order.</p>
+        {% endif %}
+      </article>
+      {% endif %}
+
+      {% if instance.admin_notes or instance.internal_notes %}
+      <article class="app-card p-6">
+        <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Notes</h2>
+        {% if instance.admin_notes %}
+        <div class="mb-4">
+          <p class="text-sm font-medium mb-1" style="color: var(--color-text-muted);">Admin Notes</p>
+          <p class="whitespace-pre-wrap" style="color: var(--color-text);">{{ instance.admin_notes }}</p>
+        </div>
+        {% endif %}
+        {% if instance.internal_notes %}
+        <div>
+          <p class="text-sm font-medium mb-1" style="color: var(--color-text-muted);">Internal Notes</p>
+          <p class="whitespace-pre-wrap" style="color: var(--color-text);">{{ instance.internal_notes }}</p>
+        </div>
+        {% endif %}
+      </article>
+      {% endif %}
+    </div>
+
+    <div class="space-y-6">
+      <article class="app-card p-6">
+        <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Invoice</h2>
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm" style="color: var(--color-text-muted);">Subtotal</span>
+            <span class="font-medium" style="color: var(--color-text);">${{ "{:,.2f}".format(instance.subtotal or 0) }}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm" style="color: var(--color-text-muted);">Tax</span>
+            <span class="font-medium" style="color: var(--color-text);">${{ "{:,.2f}".format(instance.tax or 0) }}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm" style="color: var(--color-text-muted);">Discount</span>
+            <span class="font-medium" style="color: var(--color-danger);">-${{ "{:,.2f}".format(instance.discount or 0) }}</span>
+          </div>
+          <hr style="border-color: var(--color-border);">
+          <div class="flex justify-between items-center">
+            <span class="font-semibold" style="color: var(--color-text);">Total</span>
+            <span class="text-xl font-bold" style="color: var(--color-text);">${{ "{:,.2f}".format(instance.total or 0) }}</span>
+          </div>
+          <hr style="border-color: var(--color-border);">
+          <div class="flex justify-between items-center">
+            <span class="text-sm" style="color: var(--color-text-muted);">Amount Paid</span>
+            <span class="font-semibold" style="color: var(--color-success);">${{ "{:,.2f}".format(instance.amount_paid or 0) }}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm" style="color: var(--color-text-muted);">Balance Due</span>
+            <span class="font-semibold" style="{% if (instance.total or 0) - (instance.amount_paid or 0) > 0 %}color: var(--color-danger){% else %}color: var(--color-success){% endif %};">
+              ${{ "{:,.2f}".format((instance.total or 0) - (instance.amount_paid or 0)) }}
+            </span>
+          </div>
+        </div>
+      </article>
+
+      {% if instance.estimated_budget %}
+      <article class="app-card p-6">
+        <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Budget</h2>
+        <p class="text-2xl font-bold" style="color: var(--color-text);">${{ "{:,.2f}".format(instance.estimated_budget) }}</p>
+        <p class="text-xs mt-1" style="color: var(--color-text-muted);">Customer's estimated budget</p>
+      </article>
+      {% endif %}
+
+      {% if order %}
+      <article class="app-card p-6">
+        <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Linked Order</h2>
+        <div class="space-y-3">
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Order #</p>
+            <a href="{{ url_for('orders.detail_resource', resource_key='orders', resource_id=order.id) }}" class="font-medium" style="color: var(--color-link);">{{ order.order_number }}</a>
+          </div>
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Status</p>
+            <p class="font-medium" style="color: var(--color-text);">{{ order.status.value.replace('_', ' ').title() }}</p>
+          </div>
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Source</p>
+            <p class="font-medium" style="color: var(--color-text);">{{ order.source.value.title() }}</p>
+          </div>
+          {% if order.balance_due > 0 %}
+          <div>
+            <p class="text-sm" style="color: var(--color-text-muted);">Order Balance</p>
+            <p class="font-semibold" style="color: var(--color-danger);">${{ "{:,.2f}".format(order.balance_due) }}</p>
+          </div>
+          {% endif %}
+        </div>
+      </article>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

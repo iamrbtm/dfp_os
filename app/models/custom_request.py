@@ -50,5 +50,11 @@ class CustomRequest(PrimaryKeyMixin, TimestampMixin, db.Model):
     )
     source: Mapped[str | None] = mapped_column(String(40), default="website", nullable=True)
 
+    subtotal: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    tax: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))
+    discount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))
+    total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    amount_paid: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))
+
     converted_to_order = relationship("Order", foreign_keys=[converted_to_order_id])
     customer = relationship("Customer", back_populates="custom_requests")

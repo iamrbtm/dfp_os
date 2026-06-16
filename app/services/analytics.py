@@ -91,6 +91,17 @@ def executive_summary() -> dict:
         .scalar() or Decimal(0)
     )
 
+    paid_requests = (
+        db.session.query(func.count(CustomRequest.id))
+        .filter(
+            CustomRequest.status.in_([CustomRequestStatus.COMPLETED]),
+            CustomRequest.amount_paid.isnot(None),
+            CustomRequest.total.isnot(None),
+            CustomRequest.amount_paid >= CustomRequest.total,
+        )
+        .scalar() or 0
+    )
+
     return {
         "today_revenue": today_revenue,
         "month_revenue": month_revenue,
@@ -99,6 +110,8 @@ def executive_summary() -> dict:
         "estimated_month_profit": month_revenue - month_expenses,
         "open_orders_count": open_orders_count,
         "open_custom_requests": custom_count,
+        "custom_requests_paid": paid_requests,
+        "custom_requests_open": custom_count - paid_requests,
         "print_jobs_queued": print_jobs_queued,
         "low_inventory_count": low_inv,
         "low_filament_count": low_filament,

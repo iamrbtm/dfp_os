@@ -1,6 +1,7 @@
 .idea/
 .env
 .venv/
+*.egg-info/
 services/audit-log/.env
 DFP OS Audit Log Microservice.md
 __pycache__/

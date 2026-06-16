@@ -837,9 +837,14 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         {"name": "Emily Davis", "email": "emily@example.com"},
         {
             "description": "I'd like a custom articulated dragon in purple and teal, about 12 inches long.",
-            "estimated_budget": "35.00",
+            "estimated_budget": Decimal("35.00"),
+            "subtotal": Decimal("45.00"),
+            "tax": Decimal("3.60"),
+            "discount": Decimal("0"),
+            "total": Decimal("48.60"),
+            "amount_paid": Decimal("25.00"),
             "source": "website",
-            "status": CustomRequestStatus.NEW,
+            "status": CustomRequestStatus.APPROVED,
         },
     )
     _upsert(
@@ -847,9 +852,14 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         {"name": "Tom Wilson", "email": "tom@example.com"},
         {
             "description": "Need a custom business card holder that fits thicker cards, in matte black.",
-            "estimated_budget": "18.00",
+            "estimated_budget": Decimal("18.00"),
+            "subtotal": Decimal("25.00"),
+            "tax": Decimal("2.00"),
+            "discount": Decimal("0"),
+            "total": Decimal("27.00"),
+            "amount_paid": Decimal("27.00"),
             "source": "website",
-            "status": CustomRequestStatus.NEW,
+            "status": CustomRequestStatus.COMPLETED,
         },
     )
 
