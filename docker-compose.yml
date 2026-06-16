@@ -33,7 +33,56 @@ services:
       timeout: 5s
       retries: 5
 
+  audit-postgres:
+    image: postgres:17
+    profiles: ["audit"]
+    environment:
+      POSTGRES_DB: dfp_audit
+      POSTGRES_USER: dfp_audit
+      POSTGRES_PASSWORD: dfp_audit_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - audit_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dfp_audit"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  audit-redis:
+    image: redis:7-alpine
+    profiles: ["audit"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - audit_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  audit-log:
+    build: services/audit-log
+    profiles: ["audit"]
+    env_file:
+      - services/audit-log/.env
+    ports:
+      - "8090:8090"
+    depends_on:
+      audit-postgres:
+        condition: service_healthy
+      audit-redis:
+        condition: service_healthy
+    command: >
+      /bin/sh -c
+      "uv run alembic upgrade head &&
+      uv run uvicorn app.main:app --host 0.0.0.0 --port 8090"
+
 volumes:
   mariadb_data:
   web_venv:
   web_node_modules:
+  audit_postgres_data:
+  audit_redis_data:
