@@ -1,5 +1,3 @@
-from app.extensions import db
-from app.models import Setting, User, UserRole
 from app.services.settings import (
     DEFAULT_SETTINGS,
     get_all_settings,

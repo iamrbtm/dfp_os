@@ -193,6 +193,9 @@ UPLOAD_FOLDER=uploads
 MAX_CONTENT_LENGTH_MB=16
 POS_CARD_PROCESSING_ENABLED=false
 POS_CARD_PROCESSOR=placeholder
+AUDIT_LOG_BASE_URL=http://localhost:8090
+AUDIT_LOG_TOKEN=change-me-in-production
+AUDIT_LOG_ENABLED=true
 ```
 
 The repository may include a local starter `.env` only when the user explicitly requests it. If present, `.env` must be listed in `.gitignore` and treated as local machine configuration, not project documentation.
@@ -208,9 +211,109 @@ Implement:
 - Safe filenames
 - Upload size limits
 - Friendly 403/404/500 pages
-- Audit logs for important create/update/delete/admin actions
+- Audit logs for important create/update/delete/admin actions (see Audit Logging section below)
 
-The POS must not process real cards in this version. Do not store card numbers, CVV, track data, or sensitive payment details. Card processing is a placeholder only. Cash payments are supported now. External card/Apple Pay/Venmo/Cash App can be recorded as external/manual methods only.
+## Audit Logging
+
+All important create, update, delete, and admin actions must be recorded through the audit-log microservice. Do not write audit events directly to the Flask app's database. All logging goes through the dedicated service.
+
+### Microservice Location
+
+```text
+services/audit-log/
+```
+
+- **Stack**: FastAPI + PostgreSQL 17 + SQLAlchemy 2.x async + Redis streams (optional)
+- **Port**: `8090`
+- **API base**: `/api/v1/`
+- **Auth**: Bearer token via `Authorization` header
+
+### Setup
+
+```bash
+cd services/audit-log
+cp .env.example .env
+# Edit .env with real secrets
+uv sync
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8090
+```
+
+Required `.env` vars for the microservice:
+
+```env
+AUDIT_DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/audit_log
+AUDIT_INTERNAL_API_TOKEN=generate-a-secure-token
+AUDIT_HASH_SECRET=generate-a-secure-hmac-key
+```
+
+### Flask App Configuration
+
+Add these to `.env` and `config.py` (already wired in `app/config.py`):
+
+```env
+AUDIT_LOG_BASE_URL=http://localhost:8090
+AUDIT_LOG_TOKEN=the-same-token-from-above
+AUDIT_LOG_ENABLED=true
+```
+
+### Usage
+
+Import and use the client in any service or blueprint. The `AuditClient` is synchronous, safe to call from Flask routes and services.
+
+```python
+from app.services.audit_client import get_audit_client
+
+client = get_audit_client()
+client.record(
+    action="product.created",       # use past-tense dotted convention
+    entity_type="product",
+    entity_id=str(product.id),
+    actor_id=str(current_user.id),
+    actor_type="user",
+    actor_display_name=current_user.display_name,
+    source_module=__name__,
+    before_state=None,              # None for create actions
+    after_state={"name": product.name, "price": str(product.price)},
+    metadata={"request_id": g.request_id},
+)
+```
+
+Key conventions:
+
+- `action` — past-tense dotted string: `entity.verb` (e.g. `product.created`, `order.archived`, `user.login_failed`).
+- `entity_type` — singular noun matching the model/table name.
+- `entity_id` — string representation of the primary key.
+- `actor_id` / `actor_type` / `actor_display_name` — who performed the action. `actor_type` is usually `"user"`, `"api_token"`, or `"system"`.
+- `before_state` / `after_state` — snapshots for change tracking. Omit `before_state` for creates, `after_state` for deletes.
+- `metadata` — free-form dict for extra context (request ID, IP, user agent, etc).
+- Always log in the service layer, not in templates or views. Wrap calls in try/except only when non-blocking is critical; the client already logs warnings on failure.
+
+### Required: Always Dispatch to Audit Log
+
+Every route in a blueprint that creates, updates, deletes, archives, restores, or performs admin actions must call `client.record()`. This includes:
+
+- All CRUD admin pages
+- All API endpoints (create/update/delete)
+- Auth events (login, logout, failed login, password change, role change)
+- POS session open/close
+- Order status changes
+- Print job creation/status changes
+- Payment recording
+- Expense creation/edits
+- Settings changes
+- API token creation/revocation
+- User creation/deactivation/role changes
+
+### Docker
+
+The audit-log microservice is included in the Docker Compose setup:
+
+```bash
+docker compose --profile audit up --build
+```
+
+This starts the audit-log service on port `8090` along with PostgreSQL and optional Redis.
 
 ## Database Rules
 

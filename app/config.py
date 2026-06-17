@@ -42,6 +42,33 @@ class Config:
     OPENAPI_SWAGGER_UI_PATH = "/docs"
     OPENAPI_SWAGGER_UI_URL = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
     MIGRATIONS_DIR = str(BASE_DIR / "migrations")
+    RECEIPT_STORAGE_DRIVER = os.getenv("RECEIPT_STORAGE_DRIVER", "local")
+    RECEIPT_STORAGE_PATH = os.getenv(
+        "RECEIPT_STORAGE_PATH",
+        str(BASE_DIR / "uploads" / "receipts"),
+    )
+    RECEIPT_MAX_UPLOAD_MB = int(os.getenv("RECEIPT_MAX_UPLOAD_MB", "25"))
+    RECEIPT_ALLOWED_TYPES = os.getenv(
+        "RECEIPT_ALLOWED_TYPES",
+        "image/jpeg,image/png,image/heic,image/heif,application/pdf",
+    )
+    RECEIPT_OCR_PROVIDER = os.getenv("RECEIPT_OCR_PROVIDER", "paddleocr")
+    RECEIPT_AI_PROVIDER = os.getenv("RECEIPT_AI_PROVIDER", "ollama")
+    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_RECEIPT_MODEL = os.getenv("OLLAMA_RECEIPT_MODEL", "qwen2.5vl:7b")
+    RECEIPT_ENABLE_API_FALLBACK = _as_bool(os.getenv("RECEIPT_ENABLE_API_FALLBACK"), False)
+    RECEIPT_API_PROVIDER = os.getenv("RECEIPT_API_PROVIDER", "")
+    TAGGUN_API_KEY = os.getenv("TAGGUN_API_KEY", "")
+    MINDEE_API_KEY = os.getenv("MINDEE_API_KEY", "")
+    VERYFI_CLIENT_ID = os.getenv("VERYFI_CLIENT_ID", "")
+    VERYFI_CLIENT_SECRET = os.getenv("VERYFI_CLIENT_SECRET", "")
+    RECEIPT_DUPLICATE_STRICTNESS = os.getenv("RECEIPT_DUPLICATE_STRICTNESS", "normal")
+    RECEIPT_LOW_CONFIDENCE_THRESHOLD = float(os.getenv("RECEIPT_LOW_CONFIDENCE_THRESHOLD", "0.80"))
+
+    AUDIT_LOG_BASE_URL = os.getenv("AUDIT_LOG_BASE_URL", "http://audit-log-service:8090")
+    AUDIT_LOG_TOKEN = os.getenv("AUDIT_LOG_TOKEN", "")
+    AUDIT_LOG_ENABLED = _as_bool(os.getenv("AUDIT_LOG_ENABLED"), False)
+
     DEFAULT_THEME = "dfp-github-light"
 
 

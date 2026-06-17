@@ -22,6 +22,7 @@ from app.blueprints.print_jobs import bp as print_jobs_bp
 from app.blueprints.printers import bp as printers_bp
 from app.blueprints.products import bp as products_bp
 from app.blueprints.public import bp as public_bp
+from app.blueprints.receipts import bp as receipts_bp
 from app.blueprints.settings import bp as settings_bp
 from app.cli import seed_group
 from app.extensions import api, csrf, db, login_manager, migrate
@@ -79,6 +80,7 @@ def register_extensions(app: Flask) -> None:
 
 def register_blueprints(app: Flask) -> None:
     app.register_blueprint(public_bp)
+    app.register_blueprint(receipts_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(dashboard_bp)
@@ -135,6 +137,7 @@ def register_context_processors(app: Flask) -> None:
             "print_jobs": "print_jobs",
             "inventory": "inventory",
             "markets": "markets",
+            "receipts": "expenses",
             "expenses": "expenses",
             "api_tokens": "api_tokens",
             "settings": "settings",
@@ -184,6 +187,9 @@ def register_context_processors(app: Flask) -> None:
                 ("Packing List", url_for("markets.list_resource", resource_key="packing-lists")),
             ],
             "expenses": [
+                ("Receipts", url_for("receipts.dashboard")),
+                ("Inbox", url_for("receipts.inbox")),
+                ("Upload", url_for("receipts.upload")),
                 ("Expenses", url_for("expenses.list_resource", resource_key="expenses")),
                 ("New Expense", url_for("expenses.create_resource", resource_key="expenses")),
             ],

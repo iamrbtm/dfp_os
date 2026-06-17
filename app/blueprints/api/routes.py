@@ -49,6 +49,11 @@ from app.models import (
     ProductType,
     ProductVariant,
 )
+from app.models.receipt import (
+    Receipt,
+    ReceiptLineItem,
+    ReceiptStatus,
+)
 from app.schemas import (
     AMSUnitSchema,
     ApiTokenSchema,
@@ -74,6 +79,7 @@ from app.schemas import (
     ProductSchema,
     ProductVariantSchema,
 )
+from app.schemas.receipt import ReceiptSchema, ReceiptLineItemSchema
 from app.services.crud import (
     apply_search,
     archive_instance,
@@ -369,6 +375,31 @@ def _apply_market_packing_list(instance: MarketPackingList, data: dict):
     instance.notes = data.get("notes")
 
 
+def _apply_receipt(instance: Receipt, data: dict):
+    instance.merchant_name = data.get("merchant_name", instance.merchant_name)
+    instance.store_name = data.get("store_name", instance.store_name)
+    instance.receipt_number = data.get("receipt_number", instance.receipt_number)
+    instance.date_time = data.get("date_time", instance.date_time)
+    instance.subtotal = data.get("subtotal", instance.subtotal)
+    instance.tax_total = data.get("tax_total", instance.tax_total)
+    instance.grand_total = data.get("grand_total", instance.grand_total)
+    instance.payment_method = data.get("payment_method", instance.payment_method)
+    instance.currency = data.get("currency", instance.currency)
+    instance.notes = data.get("notes", instance.notes)
+    if "status" in data:
+        instance.status = ReceiptStatus(data["status"])
+
+
+def _apply_receipt_line_item(instance: ReceiptLineItem, data: dict):
+    instance.description = data.get("description", instance.description)
+    instance.sku = data.get("sku", instance.sku)
+    instance.quantity = data.get("quantity", instance.quantity)
+    instance.unit_price = data.get("unit_price", instance.unit_price)
+    instance.line_total = data.get("line_total", instance.line_total)
+    instance.line_tax = data.get("line_tax", instance.line_tax)
+    instance.needs_review = data.get("needs_review", instance.needs_review)
+
+
 def _apply_expense(instance: Expense, data: dict):
     instance.date = data["date"]
     instance.vendor = data["vendor"].strip()
@@ -496,6 +527,21 @@ API_RESOURCES = {
         ExpenseSchema,
         ["vendor", "description", "category"],
         _apply_expense,
+    ),
+    "receipts": ApiResourceConfig(
+        "receipts",
+        Receipt,
+        ReceiptSchema,
+        ["merchant_name", "store_name", "receipt_number"],
+        _apply_receipt,
+        list_filters=lambda stmt: stmt.where(Receipt.deleted_at.is_(None)),
+    ),
+    "receipt-line-items": ApiResourceConfig(
+        "receipt-line-items",
+        ReceiptLineItem,
+        ReceiptLineItemSchema,
+        ["description", "sku"],
+        _apply_receipt_line_item,
     ),
 }
 

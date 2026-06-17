@@ -13,6 +13,18 @@ from app.models.catalog import (
 from app.models.custom_request import CustomRequest, CustomRequestStatus
 from app.models.customer import Customer
 from app.models.expense import Expense, ExpenseCategory
+from app.models.receipt import (
+    AdjustmentType,
+    AllocationMethod,
+    AllocationType,
+    Receipt,
+    ReceiptAdjustmentAllocation,
+    ReceiptAuditEvent,
+    ReceiptLineAllocation,
+    ReceiptLineItem,
+    ReceiptSourceType,
+    ReceiptStatus,
+)
 from app.models.fleet import AMSUnit, AMSUnitStatus, AMSUnitType, Printer, PrinterStatus
 from app.models.market import Market, MarketPackingList, MarketStatus
 from app.models.inventory import FilamentSpool, FilamentStatus, InventoryLocation, InventoryRecord
@@ -30,6 +42,16 @@ from app.models.setting import Setting
 from app.models.user import User, UserRole
 
 __all__ = [
+    "AdjustmentType",
+    "AllocationMethod",
+    "AllocationType",
+    "Receipt",
+    "ReceiptAdjustmentAllocation",
+    "ReceiptAuditEvent",
+    "ReceiptLineAllocation",
+    "ReceiptLineItem",
+    "ReceiptSourceType",
+    "ReceiptStatus",
     "AMSUnit",
     "AMSUnitStatus",
     "AMSUnitType",

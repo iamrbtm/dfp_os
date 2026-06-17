@@ -45,6 +45,7 @@ class Expense(PrimaryKeyMixin, TimestampMixin, db.Model):
     related_order_id: Mapped[int | None] = mapped_column(
         Integer, nullable=True, index=True
     )
+    receipt_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     receipt_file_path: Mapped[str | None] = mapped_column(String(300), nullable=True)
     tax_deductible: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

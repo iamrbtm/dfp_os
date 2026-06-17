@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Receipt Settings | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Expenses</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Receipt Settings</h1>
+    <p class="mt-2" style="color: var(--color-text-muted);">Configure receipt processing options. Edit values in Settings.</p>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2">
+    <div class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-3" style="color: var(--color-text);">Current Configuration</h2>
+      <dl class="space-y-2 text-sm">
+        <div class="flex justify-between"><dt>OCR Provider</dt><dd><code>{{ config.get('RECEIPT_OCR_PROVIDER', 'paddleocr') }}</code></dd></div>
+        <div class="flex justify-between"><dt>AI Provider</dt><dd><code>{{ config.get('RECEIPT_AI_PROVIDER', 'ollama') }}</code></dd></div>
+        <div class="flex justify-between"><dt>AI Model</dt><dd><code>{{ config.get('OLLAMA_RECEIPT_MODEL', 'qwen2.5vl:7b') }}</code></dd></div>
+        <div class="flex justify-between"><dt>Max Upload</dt><dd>{{ config.get('RECEIPT_MAX_UPLOAD_MB', 25) }} MB</dd></div>
+        <div class="flex justify-between"><dt>Confidence Threshold</dt><dd>{{ config.get('RECEIPT_LOW_CONFIDENCE_THRESHOLD', 0.8) }}</dd></div>
+      </dl>
+    </div>
+    <div class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-3" style="color: var(--color-text);">Help</h2>
+      <p class="text-sm" style="color: var(--color-text-muted);">Settings are managed through the global Settings page or environment variables.</p>
+      <a href="{{ url_for('settings.settings_list') }}" class="app-link mt-3 inline-block">Go to Settings</a>
+      <a href="{{ url_for('receipts.help_page') }}" class="app-link mt-2 inline-block">Receipt Workflow Help</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

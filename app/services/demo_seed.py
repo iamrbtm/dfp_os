@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from app.extensions import db
@@ -8,7 +8,6 @@ from app.models import (
     AMSUnit,
     AMSUnitStatus,
     AMSUnitType,
-    ApiToken,
     Category,
     Collection,
     CustomRequest,
@@ -50,6 +49,14 @@ from app.models import (
     User,
     UserRole,
 )
+from app.models.receipt import (
+    AllocationType,
+    Receipt,
+    ReceiptLineItem,
+    ReceiptSourceType,
+    ReceiptStatus,
+)
+from app.services.receipt_allocations import set_line_allocation
 from app.services.users import ensure_admin_user, ensure_user
 
 
@@ -1016,6 +1023,88 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
     from app.services.settings import seed_default_settings
     seed_default_settings()
 
+    def _seed_demo_receipts(admin_user):
+        if Receipt.query.filter_by(receipt_number="DEMO-RCP-001").first():
+            return
+
+        receipt = Receipt(
+            user_id=admin_user.id,
+            status=ReceiptStatus.APPROVED,
+            source_type=ReceiptSourceType.UPLOAD,
+            merchant_name="ProtoPasta",
+            store_name="ProtoPasta Store",
+            receipt_number="DEMO-RCP-001",
+            date_time=datetime(2026, 5, 8, 11, 30, tzinfo=timezone.utc),
+            subtotal=Decimal("45.00"),
+            tax_total=Decimal("3.60"),
+            grand_total=Decimal("48.60"),
+            payment_method="credit_card",
+            currency="USD",
+            file_hash="demo-hash-001",
+            confidence_overall=Decimal("0.95"),
+            approved_by_id=admin_user.id,
+            approved_at=datetime(2026, 5, 8, 12, 0, tzinfo=timezone.utc),
+            notes="Demo receipt for ProtoPasta filament purchase.",
+        )
+        db.session.add(receipt)
+        db.session.flush()
+
+        line_item = ReceiptLineItem(
+            receipt_id=receipt.id,
+            row_order=0,
+            description="Rainbow Silk PLA Filament 1kg",
+            sku="FIL-PLA-RNB",
+            quantity=Decimal("1"),
+            unit_price=Decimal("45.00"),
+            line_subtotal=Decimal("45.00"),
+            line_total=Decimal("45.00"),
+            line_tax=Decimal("3.60"),
+            taxable_status="taxable",
+            needs_review=False,
+        )
+        db.session.add(line_item)
+        db.session.flush()
+
+        set_line_allocation(line_item.id, AllocationType.INVENTORY, amount=Decimal("48.60"), percent=Decimal("100"))
+
+        receipt2 = Receipt(
+            user_id=admin_user.id,
+            status=ReceiptStatus.NEEDS_REVIEW,
+            source_type=ReceiptSourceType.UPLOAD,
+            merchant_name="Clarksville Market",
+            receipt_number="DEMO-RCP-002",
+            date_time=datetime(2026, 5, 10, 8, 0, tzinfo=timezone.utc),
+            subtotal=Decimal("85.00"),
+            tax_total=Decimal("0"),
+            grand_total=Decimal("85.00"),
+            payment_method="cash",
+            currency="USD",
+            file_hash="demo-hash-002",
+            confidence_overall=Decimal("0.85"),
+            notes="Demo receipt for booth fee payment.",
+        )
+        db.session.add(receipt2)
+        db.session.flush()
+
+        line_item2 = ReceiptLineItem(
+            receipt_id=receipt2.id,
+            row_order=0,
+            description="Booth Fee + Application Fee",
+            unit_price=Decimal("85.00"),
+            line_subtotal=Decimal("85.00"),
+            line_total=Decimal("85.00"),
+            taxable_status="non_taxable",
+            needs_review=True,
+        )
+        db.session.add(line_item2)
+        db.session.flush()
+
+        set_line_allocation(line_item2.id, AllocationType.MARKET, amount=Decimal("85.00"), percent=Decimal("100"), market_id=1)
+
+        db.session.flush()
+
+    _seed_demo_receipts(admin_user)
+
     db.session.commit()
     return {
         "categories": Category.query.count(),
@@ -1040,5 +1129,6 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         "pos_sessions": PosSession.query.count(),
         "pos_sales": PosSale.query.count(),
         "pos_sale_items": PosSaleItem.query.count(),
+        "receipts": Receipt.query.count(),
         "settings": Setting.query.count(),
     }
