@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 
 from flask import (
@@ -395,6 +396,19 @@ def help_download():
         mimetype="text/markdown",
         headers={"Content-Disposition": "attachment;filename=receipt-expense-workflow.md"},
     )
+
+
+@bp.route("/<int:receipt_id>/image")
+@login_required
+def receipt_image(receipt_id: int):
+    from flask import send_file
+    receipt = db.session.get(Receipt, receipt_id)
+    if not receipt or receipt.deleted_at:
+        abort(404)
+    file_path = receipt.preview_file_id or receipt.original_file_id
+    if not file_path or not os.path.exists(file_path):
+        abort(404)
+    return send_file(file_path)
 
 
 @bp.route("/api/dashboard")

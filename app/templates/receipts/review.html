@@ -136,10 +136,10 @@
         </div>
       </div>
 
-      {% if receipt.preview_file_id %}
+      {% if receipt.original_file_id %}
       <div class="app-card p-5">
         <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Receipt Image</h2>
-        <img src="{{ url_for('static', filename='../' ~ receipt.preview_file_id) }}"
+        <img src="{{ url_for('receipts.receipt_image', receipt_id=receipt.id) }}"
              alt="Receipt preview" class="w-full rounded border" style="max-height: 400px; object-fit: contain;">
       </div>
       {% endif %}
