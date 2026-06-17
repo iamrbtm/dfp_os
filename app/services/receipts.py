@@ -92,6 +92,9 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
     if not receipt:
         return {"success": False, "errors": ["Receipt not found."]}
 
+    if not receipt.original_file_id:
+        return {"success": False, "errors": ["No uploaded file to process."]}
+
     results = {"preprocessing": None, "ocr": None, "ai": None}
 
     # Step 1: Preprocess image
