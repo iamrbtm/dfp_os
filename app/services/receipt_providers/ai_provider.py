@@ -141,6 +141,9 @@ Receipt OCR text:
 %s"""
 
 
+OLLAMA_FALLBACK_URL = "http://localhost:11434"
+
+
 class AIExtractionProvider(BaseReceiptProvider):
     name = "ai_extraction"
 
@@ -161,14 +164,25 @@ class AIExtractionProvider(BaseReceiptProvider):
                 return ProviderResult(success=False, errors=["OpenAI API key is required for OpenAI provider."])
             return self._call_openai(raw_ocr_text, api_key)
 
-        base_url = kwargs.get("ollama_base_url", "http://localhost:11434")
+        primary_url = kwargs.get("ollama_base_url", "http://breath.local:11434")
+        fallback_url = kwargs.get("ollama_fallback_url", OLLAMA_FALLBACK_URL)
         model = kwargs.get("model", "qwen2.5vl:7b")
 
-        result = self._call_ollama(raw_ocr_text, base_url, model)
-        if result.success:
-            return result
+        urls = [primary_url]
+        if fallback_url != primary_url:
+            urls.append(fallback_url)
 
-        return self._retry_repair(raw_ocr_text, base_url, model)
+        last_error = None
+        for base_url in urls:
+            result = self._call_ollama(raw_ocr_text, base_url, model)
+            if result.success:
+                return result
+            last_error = result
+
+        if last_error:
+            return self._retry_repair(raw_ocr_text, fallback_url, model)
+
+        return ProviderResult(success=False, errors=["All Ollama endpoints failed."])
 
     def _mock_response(self) -> ProviderResult:
         import json as json_module

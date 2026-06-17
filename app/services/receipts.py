@@ -150,7 +150,8 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
     ai_result = ai_provider.process(
         receipt.original_file_id,
         raw_ocr_text=ocr_result.raw_text or "",
-        ollama_base_url=ocr_config.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+        ollama_base_url=ocr_config.get("OLLAMA_BASE_URL", "http://breath.local:11434"),
+        ollama_fallback_url=ocr_config.get("OLLAMA_FALLBACK_URL", "http://localhost:11434"),
         model=ocr_config.get("OLLAMA_RECEIPT_MODEL", "qwen2.5vl:7b"),
     )
     results["ai"] = ai_result
