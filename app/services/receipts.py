@@ -25,7 +25,7 @@ def _compute_file_hash(file_path: str) -> str:
     return sha256.hexdigest()
 
 
-def _get_upload_folder() -> str:
+def get_upload_folder() -> str:
     folder = current_app.config.get("RECEIPT_STORAGE_PATH") or os.path.join(
         current_app.config.get("UPLOAD_FOLDER", "uploads"), "receipts"
     )
@@ -62,7 +62,7 @@ def upload_receipt(file_obj, user_id: int, source_type: str = "upload") -> Recei
     if file_size > _max_upload_mb() * 1024 * 1024:
         raise ValueError(f"File exceeds maximum size of {_max_upload_mb()}MB")
 
-    upload_folder = _get_upload_folder()
+    upload_folder = get_upload_folder()
     filename = secure_filename(file_obj.filename)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     unique_name = f"{timestamp}_{filename}"

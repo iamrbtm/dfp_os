@@ -34,6 +34,7 @@ from app.services.receipt_allocations import (
 from app.services.receipt_audit import record_audit
 from app.services.receipt_duplicates import check_duplicates, resolve_duplicate
 from app.services.receipts import (
+    get_upload_folder,
     approve_receipt,
     get_receipt_dashboard,
     process_receipt,
@@ -406,9 +407,15 @@ def receipt_image(receipt_id: int):
     if not receipt or receipt.deleted_at:
         abort(404)
     file_path = receipt.preview_file_id or receipt.original_file_id
-    if not file_path or not os.path.exists(file_path):
+    if not file_path:
         abort(404)
-    return send_file(file_path)
+    if os.path.exists(file_path):
+        return send_file(file_path)
+    basename = os.path.basename(file_path)
+    alt = os.path.join(get_upload_folder(), basename)
+    if os.path.exists(alt):
+        return send_file(alt)
+    abort(404)
 
 
 @bp.route("/api/dashboard")
