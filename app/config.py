@@ -53,10 +53,12 @@ class Config:
         "image/jpeg,image/png,image/heic,image/heif,application/pdf",
     )
     RECEIPT_OCR_PROVIDER = os.getenv("RECEIPT_OCR_PROVIDER", "paddleocr")
-    RECEIPT_AI_PROVIDER = os.getenv("RECEIPT_AI_PROVIDER", "ollama")
-    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://breath.local:11434")
+    RECEIPT_AI_PROVIDER = os.getenv("RECEIPT_AI_PROVIDER", "openai")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_FALLBACK_URL = os.getenv("OLLAMA_FALLBACK_URL", "http://localhost:11434")
-    OLLAMA_RECEIPT_MODEL = os.getenv("OLLAMA_RECEIPT_MODEL", "qwen2.5vl:7b")
+    OLLAMA_RECEIPT_MODEL = os.getenv("OLLAMA_RECEIPT_MODEL", "llama3")
     RECEIPT_ENABLE_API_FALLBACK = _as_bool(os.getenv("RECEIPT_ENABLE_API_FALLBACK"), False)
     RECEIPT_API_PROVIDER = os.getenv("RECEIPT_API_PROVIDER", "")
     TAGGUN_API_KEY = os.getenv("TAGGUN_API_KEY", "")
@@ -69,6 +71,10 @@ class Config:
     AUDIT_LOG_BASE_URL = os.getenv("AUDIT_LOG_BASE_URL", "http://audit-log-service:8090")
     AUDIT_LOG_TOKEN = os.getenv("AUDIT_LOG_TOKEN", "")
     AUDIT_LOG_ENABLED = _as_bool(os.getenv("AUDIT_LOG_ENABLED"), False)
+    WEATHER_USER_AGENT = os.getenv(
+        "WEATHER_USER_AGENT",
+        f"{APP_NAME} ({ADMIN_EMAIL})",
+    )
 
     DEFAULT_THEME = "dfp-github-light"
 

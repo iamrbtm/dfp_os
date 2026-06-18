@@ -9,7 +9,7 @@ class OCRProvider(BaseReceiptProvider):
     name = "ocr"
 
     def process(self, file_path: str, **kwargs) -> ProviderResult:
-        enhanced_path = kwargs.get("enhanced_path", file_path)
+        enhanced_path = kwargs.get("enhanced_path") or file_path
         provider_name = kwargs.get("provider", "paddleocr")
         result = ProviderResult(success=False, errors=["OCR not available."])
 
@@ -65,7 +65,7 @@ class OCRProvider(BaseReceiptProvider):
         import json
         try:
             result = subprocess.run(
-                ["tesseract", file_path, "stdout", "-l", "eng", "--psm", "6", "tsv"],
+                ["tesseract", file_path, "stdout", "-l", "eng", "--psm", "4", "tsv"],
                 capture_output=True, text=True, timeout=60,
             )
             if result.returncode == 0:

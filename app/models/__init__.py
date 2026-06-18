@@ -26,7 +26,21 @@ from app.models.receipt import (
     ReceiptStatus,
 )
 from app.models.fleet import AMSUnit, AMSUnitStatus, AMSUnitType, Printer, PrinterStatus
-from app.models.market import Market, MarketPackingList, MarketStatus
+from app.models.market import (
+    Market,
+    MarketDocument,
+    MarketDocumentType,
+    MarketHotelBooking,
+    MarketHotelBookingStatus,
+    MarketPackingList,
+    MarketStatus,
+    MarketTask,
+    MarketTaskStatus,
+    MarketTaskType,
+    MarketTimelineEvent,
+    MarketTimelineEventType,
+    MarketWeatherSnapshot,
+)
 from app.models.inventory import FilamentSpool, FilamentStatus, InventoryLocation, InventoryRecord
 from app.models.order import Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod
 from app.models.pos import (
@@ -69,8 +83,18 @@ __all__ = [
     "InventoryRecord",
     "LicenseStatus",
     "Market",
+    "MarketDocument",
+    "MarketDocumentType",
+    "MarketHotelBooking",
+    "MarketHotelBookingStatus",
     "MarketPackingList",
     "MarketStatus",
+    "MarketTask",
+    "MarketTaskStatus",
+    "MarketTaskType",
+    "MarketTimelineEvent",
+    "MarketTimelineEventType",
+    "MarketWeatherSnapshot",
     "ModelAsset",
     "ModelSourceType",
     "Order",

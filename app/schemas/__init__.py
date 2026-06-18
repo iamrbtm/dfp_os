@@ -10,7 +10,15 @@ from app.schemas.catalog import (
 )
 from app.schemas.custom_request import CustomRequestSchema
 from app.schemas.expense import ExpenseSchema
-from app.schemas.market import MarketPackingListSchema, MarketSchema
+from app.schemas.market import (
+    MarketDocumentSchema,
+    MarketHotelBookingSchema,
+    MarketPackingListSchema,
+    MarketSchema,
+    MarketTaskSchema,
+    MarketTimelineEventSchema,
+    MarketWeatherSnapshotSchema,
+)
 from app.schemas.customer import CustomerSchema
 from app.schemas.fleet import AMSUnitSchema, PrinterSchema
 from app.schemas.inventory import (
@@ -39,8 +47,13 @@ __all__ = [
     "ExpenseSchema",
     "FilamentSpoolSchema",
     "InventoryLocationSchema",
+    "MarketDocumentSchema",
+    "MarketHotelBookingSchema",
     "MarketPackingListSchema",
     "MarketSchema",
+    "MarketTaskSchema",
+    "MarketTimelineEventSchema",
+    "MarketWeatherSnapshotSchema",
     "InventoryRecordSchema",
     "ModelAssetSchema",
     "OrderItemSchema",

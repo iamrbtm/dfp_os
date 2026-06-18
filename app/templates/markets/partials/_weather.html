@@ -1,0 +1,35 @@
+<section class="app-card overflow-hidden">
+  <div class="app-card-header flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <span class="flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold" style="border-color: var(--color-link); color: var(--color-link);">6</span>
+      <div>
+        <h2>Weather &amp; Conditions</h2>
+        <p class="text-xs font-normal" style="color: var(--color-text-muted);">Weather.gov forecast snapshot for planning booth setup and inventory.</p>
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('markets.fetch_weather', market_id=instance.id) }}" hx-post="{{ url_for('markets.fetch_weather', market_id=instance.id) }}" hx-target="#market-weather" hx-swap="innerHTML">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="app-btn app-btn-secondary" type="submit">Fetch Weather Data</button>
+    </form>
+  </div>
+  <div class="p-5">
+    {% if command.latest_weather %}
+      <div class="grid gap-4 md:grid-cols-[10rem_1fr]">
+        <div class="rounded-lg border p-4 text-center" style="border-color: var(--color-border);">
+          <p class="text-4xl font-semibold">{{ command.latest_weather.temperature or "—" }}{% if command.latest_weather.temperature is not none %}&deg;{% endif %}</p>
+          <p class="mt-2 text-sm" style="color: var(--color-text-muted);">{{ command.latest_weather.short_forecast or "Forecast" }}</p>
+        </div>
+        <div>
+          <p class="text-sm">{{ command.latest_weather.detailed_forecast or "No detailed forecast available." }}</p>
+          <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+            <div><dt style="color: var(--color-text-muted);">Precipitation</dt><dd>{{ command.latest_weather.precipitation_probability if command.latest_weather.precipitation_probability is not none else "—" }}{% if command.latest_weather.precipitation_probability is not none %}%{% endif %}</dd></div>
+            <div><dt style="color: var(--color-text-muted);">Wind</dt><dd>{{ command.latest_weather.wind_speed or "—" }}</dd></div>
+            <div><dt style="color: var(--color-text-muted);">Fetched</dt><dd>{{ command.latest_weather.fetched_at.strftime("%b %d, %-I:%M %p") if command.latest_weather.fetched_at else "—" }}</dd></div>
+          </dl>
+        </div>
+      </div>
+    {% else %}
+      <p class="text-sm" style="color: var(--color-text-muted);">No weather snapshot yet. Add a complete address and ZIP code in logistics, then fetch Weather.gov data.</p>
+    {% endif %}
+  </div>
+</section>

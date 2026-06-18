@@ -201,6 +201,112 @@ def review(receipt_id: int):
     )
 
 
+@bp.route("/<int:receipt_id>/line-items/<int:item_id>/inline-edit", methods=["GET", "PATCH"])
+@login_required
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def inline_edit_line_item(receipt_id: int, item_id: int):
+    from decimal import Decimal, InvalidOperation
+
+    item = db.session.get(ReceiptLineItem, item_id)
+    if not item or item.receipt_id != receipt_id:
+        abort(404)
+
+    field = request.args.get("field", "description")
+    allowed_fields = {"description", "sku", "quantity", "unit_price", "line_total", "line_tax"}
+    if field not in allowed_fields:
+        abort(400)
+
+    if request.method == "GET":
+        raw_value = getattr(item, field)
+        if field == "description":
+            value = raw_value or ""
+        elif field == "sku":
+            value = raw_value or ""
+        elif field in ("quantity", "unit_price", "line_total", "line_tax"):
+            value = float(raw_value) if raw_value is not None else ""
+
+        return render_template(
+            "receipts/partials/inline_edit_cell.html",
+            edit_mode=True,
+            field=field,
+            value=value,
+            receipt_id=receipt_id,
+            item_id=item_id,
+        )
+
+    # PATCH — save the value
+    from flask_wtf.csrf import validate_csrf
+    csrf_token = request.form.get("csrf_token", "")
+    try:
+        validate_csrf(csrf_token)
+    except Exception:
+        abort(400, "CSRF validation failed")
+
+    value = request.form.get("value", "").strip()
+
+    if field in ("description", "sku"):
+        setattr(item, field, value or None)
+    elif field in ("quantity", "unit_price", "line_total", "line_tax"):
+        try:
+            setattr(item, field, Decimal(value) if value else None)
+        except (InvalidOperation, ValueError, TypeError):
+            pass
+
+    # Recalculate line_total if quantity or unit_price changed
+    recalculated = False
+    if field in ("quantity", "unit_price") and item.quantity is not None and item.unit_price is not None:
+        new_total = item.quantity * item.unit_price
+        item.line_total = new_total
+        item.line_subtotal = new_total
+        recalculated = True
+
+    # Re-allocate taxes if this item has business allocations (market, custom_job, inventory)
+    from app.models.receipt import ReceiptAdjustmentAllocation
+    had_business_alloc = any(
+        a.allocation_type.value in ("market", "custom_job", "inventory", "general_expense")
+        for a in (item.allocations or [])
+    )
+    if had_business_alloc and (field in ("quantity", "unit_price") or recalculated):
+        ReceiptAdjustmentAllocation.query.filter_by(receipt_id=receipt_id).delete()
+        for li in ReceiptLineItem.query.filter_by(receipt_id=receipt_id).all():
+            li.line_tax = None
+            li.line_fee = None
+            li.line_discount = None
+            li.line_tip_allocation = None
+            li.line_deposit = None
+        db.session.flush()
+        allocate_taxes_and_fees(receipt_id)
+
+    item.needs_review = False
+    db.session.commit()
+    record_audit(receipt_id, f"line_item_{field}_edited", current_user.id)
+
+    # Build display value
+    if field == "description":
+        display_value = item.description or "\u2014"
+    elif field == "sku":
+        display_value = item.sku or "\u2014"
+    elif field == "quantity":
+        display_value = str(item.quantity) if item.quantity is not None else "\u2014"
+    elif field == "line_total":
+        display_value = f"${item.line_total:,.2f}" if item.line_total is not None else "\u2014"
+    elif field == "line_tax":
+        display_value = f"${item.line_tax:,.2f}" if item.line_tax is not None else "\u2014"
+    elif field == "unit_price":
+        display_value = f"${item.unit_price:,.2f}" if item.unit_price is not None else "\u2014"
+    else:
+        display_value = "\u2014"
+
+    return render_template(
+        "receipts/partials/inline_edit_cell.html",
+        edit_mode=False,
+        field=field,
+        display_value=display_value,
+        receipt_id=receipt_id,
+        item_id=item_id,
+    )
+
+
 @bp.route("/<int:receipt_id>/line-items/<int:item_id>/edit", methods=["POST"])
 @login_required
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
@@ -409,12 +515,13 @@ def receipt_image(receipt_id: int):
     file_path = receipt.preview_file_id or receipt.original_file_id
     if not file_path:
         abort(404)
-    if os.path.exists(file_path):
-        return send_file(file_path)
+    abs_path = os.path.abspath(file_path)
+    if os.path.exists(abs_path):
+        return send_file(abs_path)
     basename = os.path.basename(file_path)
     alt = os.path.join(get_upload_folder(), basename)
     if os.path.exists(alt):
-        return send_file(alt)
+        return send_file(os.path.abspath(alt))
     abort(404)
 
 

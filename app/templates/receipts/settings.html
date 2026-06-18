@@ -13,8 +13,9 @@
       <h2 class="text-lg font-semibold mb-3" style="color: var(--color-text);">Current Configuration</h2>
       <dl class="space-y-2 text-sm">
         <div class="flex justify-between"><dt>OCR Provider</dt><dd><code>{{ config.get('RECEIPT_OCR_PROVIDER', 'paddleocr') }}</code></dd></div>
-        <div class="flex justify-between"><dt>AI Provider</dt><dd><code>{{ config.get('RECEIPT_AI_PROVIDER', 'ollama') }}</code></dd></div>
-        <div class="flex justify-between"><dt>AI Model</dt><dd><code>{{ config.get('OLLAMA_RECEIPT_MODEL', 'qwen2.5vl:7b') }}</code></dd></div>
+        <div class="flex justify-between"><dt>AI Provider</dt><dd><code>{{ config.get('RECEIPT_AI_PROVIDER', 'openai') }}</code></dd></div>
+        <div class="flex justify-between"><dt>AI Model</dt><dd><code>{{ config.get('OPENAI_MODEL', 'gpt-4o-mini') }}</code></dd></div>
+        <div class="flex justify-between"><dt>API Key Set</dt><dd>{% if config.get('OPENAI_API_KEY') %}Yes{% else %}<span class="text-red-500">No</span>{% endif %}</dd></div>
         <div class="flex justify-between"><dt>Max Upload</dt><dd>{{ config.get('RECEIPT_MAX_UPLOAD_MB', 25) }} MB</dd></div>
         <div class="flex justify-between"><dt>Confidence Threshold</dt><dd>{{ config.get('RECEIPT_LOW_CONFIDENCE_THRESHOLD', 0.8) }}</dd></div>
       </dl>

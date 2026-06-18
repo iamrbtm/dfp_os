@@ -27,8 +27,18 @@ from app.models import (
     InventoryRecord,
     LicenseStatus,
     Market,
+    MarketDocument,
+    MarketDocumentType,
+    MarketHotelBooking,
+    MarketHotelBookingStatus,
     MarketPackingList,
     MarketStatus,
+    MarketTask,
+    MarketTaskStatus,
+    MarketTaskType,
+    MarketTimelineEvent,
+    MarketTimelineEventType,
+    MarketWeatherSnapshot,
     ModelAsset,
     ModelSourceType,
     Order,
@@ -66,8 +76,13 @@ from app.schemas import (
     FilamentSpoolSchema,
     InventoryLocationSchema,
     InventoryRecordSchema,
+    MarketDocumentSchema,
+    MarketHotelBookingSchema,
     MarketPackingListSchema,
     MarketSchema,
+    MarketTaskSchema,
+    MarketTimelineEventSchema,
+    MarketWeatherSnapshotSchema,
     ModelAssetSchema,
     OrderItemSchema,
     OrderSchema,
@@ -352,9 +367,24 @@ def _apply_market(instance: Market, data: dict):
     instance.address = data.get("address")
     instance.city = data.get("city")
     instance.state = data.get("state")
+    instance.zip_code = data.get("zip_code")
     instance.event_date = data.get("event_date")
     instance.start_time = data.get("start_time")
     instance.end_time = data.get("end_time")
+    instance.latitude = data.get("latitude")
+    instance.longitude = data.get("longitude")
+    instance.application_submitted_at = data.get("application_submitted_at")
+    instance.application_approved_at = data.get("application_approved_at")
+    instance.fee_paid_at = data.get("fee_paid_at")
+    instance.booth_location = data.get("booth_location")
+    instance.booth_size = data.get("booth_size")
+    instance.power_available = data.get("power_available", False) or False
+    instance.wifi_available = data.get("wifi_available", False) or False
+    instance.food_available = data.get("food_available", False) or False
+    instance.load_in_at = data.get("load_in_at")
+    instance.load_out_at = data.get("load_out_at")
+    instance.load_in_notes = data.get("load_in_notes")
+    instance.load_out_notes = data.get("load_out_notes")
     instance.booth_fee = data.get("booth_fee", 0) or 0
     instance.application_fee = data.get("application_fee", 0) or 0
     instance.status = MarketStatus(data["status"])
@@ -362,6 +392,9 @@ def _apply_market(instance: Market, data: dict):
     instance.actual_revenue = data.get("actual_revenue")
     instance.actual_profit = data.get("actual_profit")
     instance.notes = data.get("notes")
+    from app.services.markets import geocode_market_address
+
+    geocode_market_address(instance)
 
 
 def _apply_market_packing_list(instance: MarketPackingList, data: dict):
@@ -372,6 +405,66 @@ def _apply_market_packing_list(instance: MarketPackingList, data: dict):
     instance.packed_quantity = data.get("packed_quantity", 0) or 0
     instance.sold_quantity = data.get("sold_quantity", 0) or 0
     instance.returned_quantity = data.get("returned_quantity", 0) or 0
+    instance.notes = data.get("notes")
+
+
+def _apply_market_timeline_event(instance: MarketTimelineEvent, data: dict):
+    instance.market_id = data["market_id"]
+    instance.title = data["title"].strip()
+    instance.starts_at = data.get("starts_at")
+    instance.ends_at = data.get("ends_at")
+    instance.location = data.get("location")
+    instance.event_type = MarketTimelineEventType(data["event_type"])
+    instance.notes = data.get("notes")
+    instance.completed_at = data.get("completed_at")
+
+
+def _apply_market_task(instance: MarketTask, data: dict):
+    instance.market_id = data["market_id"]
+    instance.title = data["title"].strip()
+    instance.task_type = MarketTaskType(data["task_type"])
+    instance.status = MarketTaskStatus(data["status"])
+    instance.due_at = data.get("due_at")
+    instance.completed_at = data.get("completed_at")
+    instance.notes = data.get("notes")
+
+
+def _apply_market_weather_snapshot(instance: MarketWeatherSnapshot, data: dict):
+    from app.models.base import utc_now
+
+    instance.market_id = data["market_id"]
+    instance.provider = data.get("provider") or "weather.gov"
+    instance.fetched_at = data.get("fetched_at") or utc_now()
+    instance.forecast_for = data.get("forecast_for")
+    instance.temperature = data.get("temperature")
+    instance.short_forecast = data.get("short_forecast")
+    instance.detailed_forecast = data.get("detailed_forecast")
+    instance.precipitation_probability = data.get("precipitation_probability")
+    instance.wind_speed = data.get("wind_speed")
+    instance.wind_direction = data.get("wind_direction")
+    instance.alert_summary = data.get("alert_summary")
+    instance.raw_payload = data.get("raw_payload")
+
+
+def _apply_market_hotel_booking(instance: MarketHotelBooking, data: dict):
+    instance.market_id = data["market_id"]
+    instance.hotel_name = data["hotel_name"].strip()
+    instance.address = data.get("address")
+    instance.check_in_date = data.get("check_in_date")
+    instance.check_out_date = data.get("check_out_date")
+    instance.confirmation_number = data.get("confirmation_number")
+    instance.cost = data.get("cost")
+    instance.status = MarketHotelBookingStatus(data["status"])
+    instance.notes = data.get("notes")
+
+
+def _apply_market_document(instance: MarketDocument, data: dict):
+    instance.market_id = data["market_id"]
+    if not instance.original_filename:
+        instance.original_filename = "api-metadata-only"
+    if not instance.stored_filename:
+        instance.stored_filename = "api-metadata-only"
+    instance.document_type = MarketDocumentType(data["document_type"])
     instance.notes = data.get("notes")
 
 
@@ -520,6 +613,41 @@ API_RESOURCES = {
         MarketPackingListSchema,
         [],
         _apply_market_packing_list,
+    ),
+    "market-timeline-events": ApiResourceConfig(
+        "market-timeline-events",
+        MarketTimelineEvent,
+        MarketTimelineEventSchema,
+        ["title", "location", "notes"],
+        _apply_market_timeline_event,
+    ),
+    "market-tasks": ApiResourceConfig(
+        "market-tasks",
+        MarketTask,
+        MarketTaskSchema,
+        ["title", "notes"],
+        _apply_market_task,
+    ),
+    "market-weather-snapshots": ApiResourceConfig(
+        "market-weather-snapshots",
+        MarketWeatherSnapshot,
+        MarketWeatherSnapshotSchema,
+        ["short_forecast", "detailed_forecast", "alert_summary"],
+        _apply_market_weather_snapshot,
+    ),
+    "market-hotel-bookings": ApiResourceConfig(
+        "market-hotel-bookings",
+        MarketHotelBooking,
+        MarketHotelBookingSchema,
+        ["hotel_name", "address", "confirmation_number"],
+        _apply_market_hotel_booking,
+    ),
+    "market-documents": ApiResourceConfig(
+        "market-documents",
+        MarketDocument,
+        MarketDocumentSchema,
+        ["original_filename", "notes"],
+        _apply_market_document,
     ),
     "expenses": ApiResourceConfig(
         "expenses",
@@ -701,11 +829,11 @@ class MarketsExport(MethodView):
         import io
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["id", "name", "location_name", "address", "city", "state", "event_date", "booth_fee", "application_fee", "status", "actual_revenue", "actual_profit", "notes"])
+        writer.writerow(["id", "name", "location_name", "address", "city", "state", "zip_code", "event_date", "booth_fee", "application_fee", "status", "actual_revenue", "actual_profit", "notes"])
         markets = Market.query.order_by(Market.event_date.desc()).all()
         for m in markets:
             writer.writerow([
-                m.id, m.name, m.location_name or "", m.address or "", m.city or "", m.state or "",
+                m.id, m.name, m.location_name or "", m.address or "", m.city or "", m.state or "", m.zip_code or "",
                 m.event_date.isoformat() if m.event_date else "", m.booth_fee or 0, m.application_fee or 0,
                 m.status.value, m.actual_revenue or 0, m.actual_profit or 0, m.notes or ""
             ])

@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Review Receipt #{{ receipt.id }} | {{ app_name }}{% endblock %}
+{% block head %}
+<style>
+  .inline-edit-cell:hover { background: var(--color-bg-subtle, rgba(0,0,0,0.05)); outline: 1px dashed var(--color-border, #ccc); }
+  .inline-edit-cell input { min-height: 1.5rem; }
+</style>
+{% endblock %}
 {% block content %}
 <section class="space-y-6">
   <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -174,15 +180,54 @@
           <tr>
             <td>{{ item.row_order }}</td>
             <td>
-              <span {% if item.needs_review %}style="color: var(--color-warning);" title="Needs review"{% endif %}>
-                {{ item.description or '—' }}
-              </span>
+              {% set receipt_id = receipt.id %}
+              {% set item_id = item.id %}
+              {% set field = "description" %}
+              {% set display_value = item.description or '—' %}
+              {% set value = item.description or '' %}
+              {% if item.needs_review %}<span style="color: var(--color-warning);" title="Needs review">&#9888;</span>{% endif %}
+              {% include "receipts/partials/inline_edit_cell.html" with context %}
             </td>
-            <td>{{ item.sku or '—' }}</td>
-            <td>{{ item.quantity or '—' }}</td>
-            <td>${{ "{:,.2f}".format(item.unit_price|float) if item.unit_price else '—' }}</td>
-            <td>${{ "{:,.2f}".format(item.line_total|float) if item.line_total else '—' }}</td>
-            <td>${{ "{:,.2f}".format(item.line_tax|float) if item.line_tax else '—' }}</td>
+            <td>
+              {% set receipt_id = receipt.id %}
+              {% set item_id = item.id %}
+              {% set field = "sku" %}
+              {% set display_value = item.sku or '—' %}
+              {% set value = item.sku or '' %}
+              {% include "receipts/partials/inline_edit_cell.html" with context %}
+            </td>
+            <td>
+              {% set receipt_id = receipt.id %}
+              {% set item_id = item.id %}
+              {% set field = "quantity" %}
+              {% set display_value = item.quantity|string if item.quantity is not none else '—' %}
+              {% set value = item.quantity|string if item.quantity is not none else '' %}
+              {% include "receipts/partials/inline_edit_cell.html" with context %}
+            </td>
+            <td>
+              {% set receipt_id = receipt.id %}
+              {% set item_id = item.id %}
+              {% set field = "unit_price" %}
+              {% set display_value = "$%0.2f"|format(item.unit_price|float) if item.unit_price else '—' %}
+              {% set value = "%0.2f"|format(item.unit_price|float) if item.unit_price else '' %}
+              {% include "receipts/partials/inline_edit_cell.html" with context %}
+            </td>
+            <td>
+              {% set receipt_id = receipt.id %}
+              {% set item_id = item.id %}
+              {% set field = "line_total" %}
+              {% set display_value = "$%0.2f"|format(item.line_total|float) if item.line_total else '—' %}
+              {% set value = "%0.2f"|format(item.line_total|float) if item.line_total else '' %}
+              {% include "receipts/partials/inline_edit_cell.html" with context %}
+            </td>
+            <td>
+              {% set receipt_id = receipt.id %}
+              {% set item_id = item.id %}
+              {% set field = "line_tax" %}
+              {% set display_value = "$%0.2f"|format(item.line_tax|float) if item.line_tax else '—' %}
+              {% set value = "%0.2f"|format(item.line_tax|float) if item.line_tax else '' %}
+              {% include "receipts/partials/inline_edit_cell.html" with context %}
+            </td>
             <td>${{ "{:,.2f}".format(item.line_discount|float) if item.line_discount else '—' }}</td>
             <td>
               {% if item.allocations %}
@@ -194,7 +239,6 @@
               {% endif %}
             </td>
             <td>
-              {% if item.needs_review %}<span style="color: var(--color-warning);">&#9888;</span>{% endif %}
               {% if item.is_personal_or_excluded %}<span style="color: var(--color-text-muted);">&#128683;</span>{% endif %}
               {% if item.is_inventory_candidate %}<span title="Inventory candidate">&#128230;</span>{% endif %}
             </td>

@@ -1,11 +1,49 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
+from urllib.parse import urlencode
+from uuid import uuid4
 
+import httpx
+from flask import current_app
 from sqlalchemy import func
+from werkzeug.datastructures import FileStorage
+from werkzeug.utils import secure_filename
 
 from app.extensions import db
-from app.models import Market, MarketStatus, Expense, Order, PosSale, PosSession, PosSessionStatus
+from app.models import (
+    Expense,
+    Market,
+    MarketDocument,
+    MarketDocumentType,
+    MarketHotelBooking,
+    MarketPackingList,
+    MarketStatus,
+    MarketTask,
+    MarketTaskStatus,
+    MarketTaskType,
+    MarketTimelineEvent,
+    MarketWeatherSnapshot,
+    Order,
+    PosSale,
+    PosSession,
+    PosSessionStatus,
+)
+from app.models.base import utc_now
+from app.services.audit_client import get_audit_client
+
+
+ALLOWED_MARKET_DOCUMENT_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "text/plain",
+    "text/csv",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 
 def get_market_performance(market: Market) -> dict:
@@ -26,12 +64,325 @@ def get_market_performance(market: Market) -> dict:
     }
 
 
+def get_market_command_center(market: Market) -> dict:
+    performance = get_market_performance(market)
+    packing_list = MarketPackingList.query.filter_by(market_id=market.id).order_by(
+        MarketPackingList.product_id
+    ).all()
+    tasks = MarketTask.query.filter_by(market_id=market.id).order_by(
+        MarketTask.status.asc(), MarketTask.due_at.is_(None).asc(), MarketTask.due_at.asc(), MarketTask.created_at.desc()
+    ).all()
+    timeline_events = MarketTimelineEvent.query.filter_by(market_id=market.id).order_by(
+        MarketTimelineEvent.starts_at.is_(None).asc(), MarketTimelineEvent.starts_at.asc(), MarketTimelineEvent.created_at.desc()
+    ).all()
+    weather = MarketWeatherSnapshot.query.filter_by(market_id=market.id).order_by(
+        MarketWeatherSnapshot.fetched_at.desc()
+    ).first()
+    hotels = MarketHotelBooking.query.filter_by(market_id=market.id).order_by(
+        MarketHotelBooking.check_in_date.is_(None).asc(), MarketHotelBooking.check_in_date.asc(), MarketHotelBooking.created_at.desc()
+    ).all()
+    documents = MarketDocument.query.filter_by(market_id=market.id).order_by(
+        MarketDocument.created_at.desc()
+    ).all()
+    marketing_tasks = [task for task in tasks if task.task_type == MarketTaskType.MARKETING]
+    todo_tasks = [task for task in tasks if task.task_type != MarketTaskType.MARKETING]
+    return {
+        "performance": performance,
+        "packing_list": packing_list,
+        "tasks": tasks,
+        "marketing_tasks": marketing_tasks,
+        "todo_tasks": todo_tasks,
+        "timeline_events": timeline_events,
+        "latest_weather": weather,
+        "hotel_bookings": hotels,
+        "documents": documents,
+        "stats": _quick_stats(market, packing_list, tasks, timeline_events, documents, performance),
+        "recent_activity": _recent_activity(market, tasks, timeline_events, hotels, documents, packing_list),
+    }
+
+
+def geocode_market_address(market: Market, actor=None) -> bool:
+    """Populate latitude/longitude from the market address via the US Census geocoder."""
+    query = _market_address_query(market)
+    if not query:
+        return False
+
+    params = urlencode(
+        {
+            "address": query,
+            "benchmark": "Public_AR_Current",
+            "format": "json",
+        }
+    )
+    url = f"https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?{params}"
+    try:
+        with httpx.Client(timeout=8.0) as client:
+            response = client.get(url)
+            response.raise_for_status()
+            matches = response.json().get("result", {}).get("addressMatches", [])
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        current_app.logger.info("market geocoding failed for market %s: %s", market.id, exc)
+        return False
+
+    if not matches:
+        return False
+    coordinates = matches[0].get("coordinates") or {}
+    latitude = coordinates.get("y")
+    longitude = coordinates.get("x")
+    if latitude is None or longitude is None:
+        return False
+
+    before = {"latitude": market.latitude, "longitude": market.longitude}
+    market.latitude = float(latitude)
+    market.longitude = float(longitude)
+    record_market_audit(
+        "market.geocoded",
+        "market",
+        market.id,
+        actor=actor,
+        before_state=before,
+        after_state={"latitude": market.latitude, "longitude": market.longitude},
+        metadata={"address": query},
+    )
+    return True
+
+
+def complete_market_task(task: MarketTask, actor=None) -> MarketTask:
+    task.status = MarketTaskStatus.COMPLETED
+    task.completed_at = utc_now()
+    db.session.commit()
+    record_market_audit(
+        "market_task.completed",
+        "market_task",
+        task.id,
+        actor=actor,
+        after_state={"title": task.title, "market_id": task.market_id, "status": task.status.value},
+    )
+    return task
+
+
+def complete_timeline_event(event: MarketTimelineEvent, actor=None) -> MarketTimelineEvent:
+    event.completed_at = utc_now()
+    db.session.commit()
+    record_market_audit(
+        "market_timeline.completed",
+        "market_timeline_event",
+        event.id,
+        actor=actor,
+        after_state={"title": event.title, "market_id": event.market_id},
+    )
+    return event
+
+
+def fetch_weather_snapshot(market: Market, actor=None) -> MarketWeatherSnapshot:
+    if market.latitude is None or market.longitude is None:
+        if not geocode_market_address(market, actor=actor):
+            raise ValueError("Add a complete address and ZIP code before fetching Weather.gov data.")
+
+    user_agent = current_app.config.get("WEATHER_USER_AGENT")
+    headers = {"User-Agent": user_agent, "Accept": "application/geo+json"}
+    with httpx.Client(headers=headers, timeout=10.0) as client:
+        points_resp = client.get(
+            f"https://api.weather.gov/points/{market.latitude:.4f},{market.longitude:.4f}"
+        )
+        points_resp.raise_for_status()
+        forecast_url = points_resp.json()["properties"]["forecast"]
+        forecast_resp = client.get(forecast_url)
+        forecast_resp.raise_for_status()
+        forecast_payload = forecast_resp.json()
+        forecast_properties = forecast_payload.get("properties", {})
+        if not forecast_properties.get("periods") and forecast_properties.get("forecast"):
+            fallback_resp = client.get("forecast")
+            fallback_resp.raise_for_status()
+            forecast_payload = fallback_resp.json()
+
+    period = _select_weather_period(market, forecast_payload.get("properties", {}).get("periods", []))
+    if period is None:
+        periods = forecast_payload.get("properties", {}).get("periods", [])
+        period = periods[0] if periods else {}
+
+    snapshot = MarketWeatherSnapshot(
+        market_id=market.id,
+        provider="weather.gov",
+        fetched_at=utc_now(),
+        forecast_for=_parse_iso_datetime(period.get("startTime")),
+        temperature=period.get("temperature"),
+        short_forecast=period.get("shortForecast"),
+        detailed_forecast=period.get("detailedForecast"),
+        precipitation_probability=(period.get("probabilityOfPrecipitation") or {}).get("value"),
+        wind_speed=period.get("windSpeed"),
+        wind_direction=period.get("windDirection"),
+        raw_payload=period,
+    )
+    db.session.add(snapshot)
+    db.session.commit()
+    record_market_audit(
+        "market_weather.fetched",
+        "market_weather_snapshot",
+        snapshot.id,
+        actor=actor,
+        after_state={"market_id": market.id, "short_forecast": snapshot.short_forecast},
+    )
+    return snapshot
+
+
+def save_market_document(
+    *,
+    market: Market,
+    file: FileStorage,
+    document_type: MarketDocumentType,
+    notes: str | None = None,
+    uploaded_by_user_id: int | None = None,
+    actor=None,
+) -> MarketDocument:
+    if not file or not file.filename:
+        raise ValueError("Choose a file to upload.")
+    original_filename = secure_filename(file.filename)
+    if not original_filename:
+        raise ValueError("The uploaded file needs a valid filename.")
+    content_type = file.mimetype or "application/octet-stream"
+    if content_type not in ALLOWED_MARKET_DOCUMENT_TYPES:
+        raise ValueError("That file type is not supported for market documents.")
+
+    upload_dir = Path(current_app.config["UPLOAD_FOLDER"]) / "markets" / str(market.id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    stored_filename = f"{uuid4().hex}_{original_filename}"
+    destination = upload_dir / stored_filename
+    file.save(destination)
+    document = MarketDocument(
+        market_id=market.id,
+        original_filename=original_filename,
+        stored_filename=stored_filename,
+        content_type=content_type,
+        file_size=destination.stat().st_size,
+        document_type=document_type,
+        notes=notes,
+        uploaded_by_user_id=uploaded_by_user_id,
+    )
+    db.session.add(document)
+    db.session.commit()
+    record_market_audit(
+        "market_document.uploaded",
+        "market_document",
+        document.id,
+        actor=actor,
+        after_state={
+            "market_id": market.id,
+            "filename": document.original_filename,
+            "document_type": document.document_type.value,
+        },
+    )
+    return document
+
+
+def market_document_path(document: MarketDocument) -> Path:
+    return Path(current_app.config["UPLOAD_FOLDER"]) / "markets" / str(document.market_id) / document.stored_filename
+
+
+def record_market_audit(
+    action: str,
+    entity_type: str,
+    entity_id: int | str | None,
+    *,
+    actor=None,
+    before_state: dict | None = None,
+    after_state: dict | None = None,
+    metadata: dict | None = None,
+) -> None:
+    get_audit_client().record(
+        action=action,
+        entity_type=entity_type,
+        entity_id=str(entity_id) if entity_id is not None else None,
+        actor_id=str(getattr(actor, "id", "")) if actor else None,
+        actor_type="user" if actor else "system",
+        actor_display_name=getattr(actor, "full_name", None) if actor else None,
+        source_module=__name__,
+        before_state=before_state,
+        after_state=after_state,
+        metadata=metadata,
+    )
+
+
 def _get_market_sales_total(market: Market) -> Decimal:
     result = db.session.query(func.sum(Order.total)).filter(
         Order.market_id == market.id,
         Order.deleted_at.is_(None),
     ).scalar()
     return result or Decimal(0)
+
+
+def _market_address_query(market: Market) -> str | None:
+    parts = [
+        market.address,
+        market.city,
+        market.state,
+        market.zip_code,
+    ]
+    query = ", ".join(part.strip() for part in parts if part and part.strip())
+    return query or None
+
+
+def _quick_stats(
+    market: Market,
+    packing_list: list[MarketPackingList],
+    tasks: list[MarketTask],
+    timeline_events: list[MarketTimelineEvent],
+    documents: list[MarketDocument],
+    performance: dict,
+) -> dict:
+    task_total = len(tasks)
+    task_done = len([task for task in tasks if task.status == MarketTaskStatus.COMPLETED])
+    marketing = [task for task in tasks if task.task_type == MarketTaskType.MARKETING]
+    marketing_done = len([task for task in marketing if task.status == MarketTaskStatus.COMPLETED])
+    planned = sum(item.planned_quantity or 0 for item in packing_list)
+    packed = sum(item.packed_quantity or 0 for item in packing_list)
+    sold = sum(item.sold_quantity or 0 for item in packing_list)
+    application_steps = [
+        market.application_submitted_at,
+        market.application_approved_at,
+        market.fee_paid_at,
+    ]
+    return {
+        "task_total": task_total,
+        "task_done": task_done,
+        "task_pct": _count_pct(task_done, task_total),
+        "marketing_total": len(marketing),
+        "marketing_done": marketing_done,
+        "marketing_pct": _count_pct(marketing_done, len(marketing)),
+        "application_pct": _count_pct(len([step for step in application_steps if step]), len(application_steps)),
+        "payment_pct": 100 if market.fee_paid_at else 0,
+        "packing_pct": _count_pct(packed, planned),
+        "planned_units": planned,
+        "packed_units": packed,
+        "sold_units": sold,
+        "timeline_count": len(timeline_events),
+        "document_count": len(documents),
+        "net_position": performance["estimated_profit"],
+    }
+
+
+def _recent_activity(
+    market: Market,
+    tasks: list[MarketTask],
+    timeline_events: list[MarketTimelineEvent],
+    hotels: list[MarketHotelBooking],
+    documents: list[MarketDocument],
+    packing_list: list[MarketPackingList],
+) -> list[dict]:
+    rows = [{"label": "Market updated", "timestamp": market.updated_at, "detail": market.name}]
+    rows.extend({"label": "Task updated", "timestamp": task.updated_at, "detail": task.title} for task in tasks)
+    rows.extend({"label": "Timeline updated", "timestamp": item.updated_at, "detail": item.title} for item in timeline_events)
+    rows.extend({"label": "Hotel updated", "timestamp": item.updated_at, "detail": item.hotel_name} for item in hotels)
+    rows.extend({"label": "Document uploaded", "timestamp": item.created_at, "detail": item.original_filename} for item in documents)
+    rows.extend(
+        {
+            "label": "Packing item updated",
+            "timestamp": item.updated_at,
+            "detail": item.product.name if item.product else f"Product #{item.product_id}",
+        }
+        for item in packing_list
+    )
+    return sorted(rows, key=lambda item: item["timestamp"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)[:8]
 
 
 def _get_market_expenses_total(market: Market) -> Decimal:
@@ -105,6 +456,31 @@ def _get_units_sold(market: Market) -> int:
 def _calc_pct(part: Decimal, total: Decimal) -> float | None:
     if total and total > 0:
         return float(part / total * 100)
+    return None
+
+
+def _count_pct(part: int, total: int) -> int:
+    if not total:
+        return 0
+    return int(round(part / total * 100))
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _select_weather_period(market: Market, periods: list[dict]) -> dict | None:
+    if not market.event_date:
+        return periods[0] if periods else None
+    for period in periods:
+        starts_at = _parse_iso_datetime(period.get("startTime"))
+        if starts_at and starts_at.date() == market.event_date:
+            return period
     return None
 
 

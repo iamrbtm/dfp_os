@@ -128,20 +128,23 @@ EXTRACTION_PROMPT = """You are a receipt parsing AI. Extract structured data fro
 Rules:
 1. Return ONLY valid JSON. No other text, markdown, or explanation.
 2. Use null for fields you cannot determine.
-3. Improve product titles: clarify incomplete names while keeping the original language.
-4. Categorize each item type where possible (Groceries, Household, Electronics, Office, Other).
-5. Include confidence scores from 0 to 1 for each extracted field.
-6. Flag fields needing human review in low_confidence_fields.
-7. Extract line items only from actual purchased items, not summary totals, payment lines, tax lines, or coupons unless they affect a line item.
+3. Improve product titles: clarify incomplete names.
+4. Extract EVERY line item you can find — line items are the actual products/services purchased.
+5. Use the EXACT field names shown in the schema below.
 
-Expected schema:
+Expected JSON schema:
 %s
 
 Receipt OCR text:
-%s"""
+%s
+
+Return ONLY valid JSON matching the schema above, with no additional text."""
 
 
 OLLAMA_FALLBACK_URL = "http://localhost:11434"
+
+
+OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
 
 
 class AIExtractionProvider(BaseReceiptProvider):
@@ -156,17 +159,19 @@ class AIExtractionProvider(BaseReceiptProvider):
         if mock_key and mock_key.lower().strip() == "test":
             return self._mock_response()
 
-        provider = kwargs.get("provider", "ollama")
+        provider = kwargs.get("provider", "openai")
 
         if provider == "openai":
             api_key = kwargs.get("openai_api_key", "")
             if not api_key:
-                return ProviderResult(success=False, errors=["OpenAI API key is required for OpenAI provider."])
-            return self._call_openai(raw_ocr_text, api_key)
+                return ProviderResult(success=False, errors=["OpenAI API key is required."])
+            model = kwargs.get("openai_model", OPENAI_DEFAULT_MODEL)
+            return self._call_openai(raw_ocr_text, api_key, model)
 
-        primary_url = kwargs.get("ollama_base_url", "http://breath.local:11434")
+        # Ollama fallback path
+        primary_url = kwargs.get("ollama_base_url", "http://localhost:11434")
         fallback_url = kwargs.get("ollama_fallback_url", OLLAMA_FALLBACK_URL)
-        model = kwargs.get("model", "qwen2.5vl:7b")
+        model = kwargs.get("model", "deepseek-r1:8b")
 
         urls = [primary_url]
         if fallback_url != primary_url:
@@ -180,7 +185,7 @@ class AIExtractionProvider(BaseReceiptProvider):
             last_error = result
 
         if last_error:
-            return self._retry_repair(raw_ocr_text, fallback_url, model)
+            return last_error
 
         return ProviderResult(success=False, errors=["All Ollama endpoints failed."])
 
@@ -195,76 +200,93 @@ class AIExtractionProvider(BaseReceiptProvider):
             diagnostics={"provider": "mock", "model": "test"},
         )
 
-    def _call_openai(self, ocr_text: str, api_key: str) -> ProviderResult:
+    def _call_openai(self, ocr_text: str, api_key: str, model: str = OPENAI_DEFAULT_MODEL) -> ProviderResult:
         try:
             from openai import OpenAI
             import json as json_module
         except ImportError:
             return ProviderResult(success=False, errors=["openai package is not installed."])
 
-        try:
-            client = OpenAI(api_key=api_key)
-            prompt = (
-                "Parse this receipt into JSON. Rules:\n"
-                "1. Improve product titles: clarify incomplete names while keeping the original language.\n"
-                "2. Categorize each item as: Groceries, Household, Personal Care, Electronics, Others.\n"
-                "3. Use decimal dollars for prices (e.g., 1.50).\n"
-                "4. Calculate the total if missing.\n"
-                "Return ONLY valid JSON matching this schema:\n"
+        prompts = [
+            EXTRACTION_PROMPT % (json_module.dumps(AI_EXTRACTION_SCHEMA, indent=2), ocr_text),
+            (
+                "The previous response was not valid JSON. Return ONLY valid JSON matching this schema:\n"
                 f"{json_module.dumps(AI_EXTRACTION_SCHEMA, indent=2)}\n\n"
-                f"Receipt text:\n{ocr_text}"
-            )
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                response_format={"type": "json_object"},
-                messages=[{"role": "user", "content": prompt}],
-                timeout=60,
-            )
-            content = response.choices[0].message.content
-            parsed = json_module.loads(content)
-            return ProviderResult(
-                success=True,
-                raw_text=content,
-                raw_json=json_module.dumps(parsed),
-                data=parsed,
-                confidence=parsed.get("confidence_overall", 0.8),
-                diagnostics={"provider": "openai", "model": "gpt-4o-mini"},
-            )
-        except json_module.JSONDecodeError:
-            return ProviderResult(success=False, errors=["OpenAI returned invalid JSON."])
-        except Exception as e:
-            return ProviderResult(success=False, errors=[f"OpenAI error: {e}"])
+                f"Receipt OCR text:\n{ocr_text}"
+            ),
+        ]
+
+        last_error = None
+        for i, prompt in enumerate(prompts):
+            try:
+                client = OpenAI(api_key=api_key)
+                response = client.chat.completions.create(
+                    model=model,
+                    response_format={"type": "json_object"},
+                    messages=[{"role": "user", "content": prompt}],
+                    timeout=120,
+                )
+                content = response.choices[0].message.content
+                if not content or not content.strip():
+                    last_error = ProviderResult(success=False, errors=[f"Empty response (attempt {i+1})"])
+                    continue
+                parsed = json_module.loads(content)
+                return ProviderResult(
+                    success=True,
+                    raw_text=content,
+                    raw_json=json_module.dumps(parsed),
+                    data=parsed,
+                    confidence=parsed.get("confidence_overall", 0.8),
+                    diagnostics={"provider": "openai", "model": model, "retry": i > 0},
+                )
+            except json_module.JSONDecodeError:
+                last_error = ProviderResult(success=False, errors=[f"OpenAI returned invalid JSON (attempt {i+1})"])
+            except Exception as e:
+                last_error = ProviderResult(success=False, errors=[f"OpenAI error (attempt {i+1}): {e}"])
+
+        return last_error or ProviderResult(success=False, errors=["All OpenAI attempts failed."])
 
     def _call_ollama(self, ocr_text: str, base_url: str, model: str) -> ProviderResult:
-        try:
-            import json as json_module
-            repair_prompt = (
+        import json as json_module
+        prompts = [
+            EXTRACTION_PROMPT % (json_module.dumps(AI_EXTRACTION_SCHEMA, indent=2), ocr_text),
+            (
                 "The previous response was not valid JSON. Return ONLY valid JSON for this receipt data. "
-                "Use null for unknown fields. Include confidence scores.\n\n"
+                "Use null for unknown fields.\n\n"
                 f"Receipt OCR text:\n{ocr_text}"
-            )
-            response = requests.post(
-                f"{base_url}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": repair_prompt,
-                    "stream": False,
-                    "format": "json",
-                    "options": {"temperature": 0.1, "num_predict": 4096},
-                },
-                timeout=120,
-            )
-            response.raise_for_status()
-            body = response.json()
-            raw_text = body.get("response", "")
-            parsed = json_module.loads(raw_text)
-            return ProviderResult(
-                success=True,
-                raw_text=raw_text,
-                raw_json=json_module.dumps(parsed),
-                data=parsed,
-                confidence=parsed.get("confidence_overall", 0.0),
-                diagnostics={"provider": "ollama", "model": model, "retry": True},
-            )
-        except Exception as e:
-            return ProviderResult(success=False, errors=[f"Repair attempt failed: {e}"])
+            ),
+        ]
+        last_error = None
+        for i, prompt in enumerate(prompts):
+            try:
+                response = requests.post(
+                    f"{base_url}/api/generate",
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "format": "json",
+                        "options": {"temperature": 0.1, "num_predict": 4096},
+                    },
+                    timeout=120,
+                )
+                response.raise_for_status()
+                body = response.json()
+                raw_text = body.get("response", "")
+                if not raw_text.strip():
+                    last_error = ProviderResult(success=False, errors=[f"Empty response (attempt {i+1})"])
+                    continue
+                parsed = json_module.loads(raw_text)
+                return ProviderResult(
+                    success=True,
+                    raw_text=raw_text,
+                    raw_json=json_module.dumps(parsed),
+                    data=parsed,
+                    confidence=parsed.get("confidence_overall", 0.0),
+                    diagnostics={"provider": "ollama", "model": model, "retry": i > 0},
+                )
+            except json_module.JSONDecodeError:
+                last_error = ProviderResult(success=False, errors=[f"Invalid JSON from model (attempt {i+1})"])
+            except Exception as e:
+                last_error = ProviderResult(success=False, errors=[f"Ollama error (attempt {i+1}): {e}"])
+        return last_error or ProviderResult(success=False, errors=["All Ollama attempts failed."])

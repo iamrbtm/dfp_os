@@ -71,6 +71,8 @@ class AuditClient:
             current_app.logger.warning("audit-log unavailable: %s", e)
         except httpx.HTTPStatusError as e:
             current_app.logger.warning("audit-log error: %s", e)
+        except Exception as e:
+            current_app.logger.warning("audit-log client failed: %s", e)
         return None
 
     def record_batch(
@@ -92,6 +94,8 @@ class AuditClient:
             current_app.logger.warning("audit-log unavailable: %s", e)
         except httpx.HTTPStatusError as e:
             current_app.logger.warning("audit-log error: %s", e)
+        except Exception as e:
+            current_app.logger.warning("audit-log client failed: %s", e)
         return None
 
 

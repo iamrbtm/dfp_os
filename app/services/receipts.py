@@ -147,19 +147,32 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
     db.session.commit()
 
     ai_provider = AIExtractionProvider()
-    ai_result = ai_provider.process(
-        receipt.original_file_id,
-        raw_ocr_text=ocr_result.raw_text or "",
-        ollama_base_url=ocr_config.get("OLLAMA_BASE_URL", "http://breath.local:11434"),
-        ollama_fallback_url=ocr_config.get("OLLAMA_FALLBACK_URL", "http://localhost:11434"),
-        model=ocr_config.get("OLLAMA_RECEIPT_MODEL", "qwen2.5vl:7b"),
-    )
+    ai_kwargs = {
+        "raw_ocr_text": ocr_result.raw_text or "",
+        "provider": ocr_config.get("RECEIPT_AI_PROVIDER", "openai"),
+    }
+    if ai_kwargs["provider"] == "openai":
+        ai_kwargs["openai_api_key"] = ocr_config.get("OPENAI_API_KEY", "")
+        ai_kwargs["openai_model"] = ocr_config.get("OPENAI_MODEL", "gpt-4o-mini")
+    else:
+        ai_kwargs["ollama_base_url"] = ocr_config.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        ai_kwargs["ollama_fallback_url"] = ocr_config.get("OLLAMA_FALLBACK_URL", "http://localhost:11434")
+        ai_kwargs["model"] = ocr_config.get("OLLAMA_RECEIPT_MODEL", "deepseek-r1:8b")
+
+    ai_result = ai_provider.process(receipt.original_file_id, **ai_kwargs)
     results["ai"] = ai_result
 
     if ai_result.success and ai_result.data:
         receipt.ai_extracted_json = ai_result.raw_json
         receipt.parser_model = ai_result.diagnostics.get("model", "unknown")
-        _apply_ai_extraction(receipt, ai_result.data)
+        # Delete existing line items before re-extracting (prevents duplication on reprocess)
+        for item in list(receipt.line_items):
+            db.session.delete(item)
+        from app.models.receipt import ReceiptAdjustmentAllocation
+        ReceiptAdjustmentAllocation.query.filter_by(receipt_id=receipt_id).delete()
+        db.session.flush()
+        normalized = _normalize_ai_data(ai_result.data)
+        _apply_ai_extraction(receipt, normalized)
         receipt.status = ReceiptStatus.NEEDS_REVIEW
     else:
         receipt.status = ReceiptStatus.NEEDS_REVIEW
@@ -168,6 +181,76 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
 
     db.session.commit()
     return {"success": True, "results": results}
+
+
+AI_FIELD_ALIASES = {
+    "merchant_name": ("merchant_name", "merchant", "vendor", "retailer", "store_name"),
+    "store_name": ("store_name", "store", "retailer_name", "merchant_name"),
+    "store_number": ("store_number", "store_num", "store_id"),
+    "address_line_1": ("address_line_1", "address", "street", "address1"),
+    "city": ("city", "town"),
+    "state": ("state", "province", "region"),
+    "postal_code": ("postal_code", "zip", "zip_code", "postcode"),
+    "phone": ("phone", "telephone", "phone_number"),
+    "receipt_number": ("receipt_number", "receipt_no", "receipt_num", "receipt_id", "receipt"),
+    "transaction_number": ("transaction_number", "transaction_id", "txn_number", "trans_num"),
+    "date_time": ("date_time", "datetime", "date", "transaction_date", "purchase_date", "trans_date"),
+    "timezone": ("timezone", "tz", "time_zone"),
+    "subtotal": ("subtotal", "sub_total", "sub-total"),
+    "tax_total": ("tax_total", "total_tax", "tax", "tax_amount"),
+    "fee_total": ("fee_total", "total_fee", "fee", "fees"),
+    "discount_total": ("discount_total", "total_discount", "discount", "savings"),
+    "tip_total": ("tip_total", "total_tip", "tip", "gratuity"),
+    "deposit_total": ("deposit_total", "total_deposit", "deposit"),
+    "rounding_adjustment": ("rounding_adjustment", "rounding", "round_diff"),
+    "grand_total": ("grand_total", "total", "total_dollars", "amount", "total_amount", "total_paid"),
+    "payment_method": ("payment_method", "method", "payment", "payment_type", "tender"),
+    "payment_card_brand": ("payment_card_brand", "card_brand", "card_type", "cc_brand"),
+    "payment_card_last4": ("payment_card_last4", "card_last4", "last4", "cc_last4"),
+    "currency": ("currency", "curr", "money_type"),
+}
+
+
+def _get_first(d: dict, keys: tuple) -> Any:
+    for k in keys:
+        v = d.get(k)
+        if v is not None:
+            if isinstance(v, list) and len(v) > 0:
+                if isinstance(v[0], dict):
+                    return v[0].get("value") or v[0].get("name") or v[0].get("text") or str(v[0])
+                return v[0]
+            return v
+    return None
+
+
+def _normalize_ai_data(data: dict) -> dict:
+    normalized = {}
+    for standard_field, aliases in AI_FIELD_ALIASES.items():
+        normalized[standard_field] = _get_first(data, aliases)
+
+    line_items = data.get("line_items") or data.get("items") or data.get("products") or data.get("purchases") or []
+    if isinstance(line_items, list) and len(line_items) > 0:
+        normalized["line_items"] = []
+        for item in line_items:
+            if isinstance(item, dict):
+                normalized["line_items"].append(item)
+
+    low_conf = data.get("low_confidence_fields") or data.get("low_confidence") or data.get("flags") or []
+    if low_conf:
+        normalized["low_confidence_fields"] = low_conf if isinstance(low_conf, list) else [low_conf]
+
+    tax_amounts = data.get("tax_amounts") or data.get("taxes") or []
+    if isinstance(tax_amounts, list) and len(tax_amounts) > 0:
+        total_tax = 0.0
+        for t in tax_amounts:
+            if isinstance(t, dict):
+                total_tax += float(t.get("amount") or t.get("value") or t.get("tax") or 0)
+            elif isinstance(t, (int, float)):
+                total_tax += float(t)
+        if total_tax and normalized.get("tax_total") is None:
+            normalized["tax_total"] = total_tax
+
+    return normalized
 
 
 def _apply_ai_extraction(receipt: Receipt, data: dict):
@@ -208,19 +291,29 @@ def _apply_ai_extraction(receipt: Receipt, data: dict):
 
     line_items_data = data.get("line_items", [])
     for i, item_data in enumerate(line_items_data):
+        desc = (item_data.get("description") or item_data.get("name") or item_data.get("product") or item_data.get("item") or item_data.get("title") or "")
+        sku = item_data.get("sku") or item_data.get("SKU") or item_data.get("product_code") or ""
+        upc = item_data.get("upc") or item_data.get("UPC") or item_data.get("barcode") or ""
+        qty = _safe_decimal(item_data.get("quantity") or item_data.get("qty") or item_data.get("count") or 1)
+        unit_price = _safe_decimal(item_data.get("unit_price") or item_data.get("unitprice") or item_data.get("price") or item_data.get("unitPrice"))
+        line_total = _safe_decimal(item_data.get("line_total") or item_data.get("total") or item_data.get("amount") or item_data.get("lineTotal"))
+        line_discount = _safe_decimal(item_data.get("line_discount") or item_data.get("discount") or item_data.get("lineDiscount"))
+        line_tax = _safe_decimal(item_data.get("line_tax") or item_data.get("tax") or item_data.get("lineTax"))
+        taxable = item_data.get("taxable") or item_data.get("is_taxable") or False
+        confidence = item_data.get("confidence") or item_data.get("confidence_score") or item_data.get("conf") or 0.5
         line_item = ReceiptLineItem(
             receipt_id=receipt.id,
             row_order=i,
-            description=item_data.get("description"),
-            sku=item_data.get("sku"),
-            upc=item_data.get("upc"),
-            quantity=_safe_decimal(item_data.get("quantity")),
-            unit_price=_safe_decimal(item_data.get("unit_price")),
-            line_total=_safe_decimal(item_data.get("line_total")),
-            line_discount=_safe_decimal(item_data.get("line_discount")),
-            line_tax=_safe_decimal(item_data.get("line_tax")),
-            taxable_status="taxable" if item_data.get("taxable") else "unknown",
-            confidence_description=Decimal(str(item_data.get("confidence", 0.5))) if item_data.get("confidence") else None,
+            description=desc.strip() if desc else None,
+            sku=sku,
+            upc=upc,
+            quantity=qty,
+            unit_price=unit_price,
+            line_total=line_total,
+            line_discount=line_discount,
+            line_tax=line_tax,
+            taxable_status="taxable" if taxable else "unknown",
+            confidence_description=Decimal(str(confidence)) if confidence else None,
             needs_review=True,
         )
         db.session.add(line_item)
