@@ -1,4 +1,5 @@
 from app.models.api_token import ApiToken
+from app.models.business import Business, FeatureFlag
 from app.models.catalog import (
     Category,
     Collection,
@@ -42,6 +43,7 @@ from app.models.market import (
     MarketWeatherSnapshot,
 )
 from app.models.inventory import FilamentSpool, FilamentStatus, InventoryLocation, InventoryRecord
+from app.models.inventory_movement import InventoryMovement, InventoryMovementType
 from app.models.order import Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod
 from app.models.pos import (
     PosSale,
@@ -51,6 +53,7 @@ from app.models.pos import (
     PosSession,
     PosSessionStatus,
 )
+from app.models.prep_task import PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_job import PrintJob, PrintJobStatus
 from app.models.setting import Setting
 from app.models.user import User, UserRole
@@ -70,6 +73,7 @@ __all__ = [
     "AMSUnitStatus",
     "AMSUnitType",
     "ApiToken",
+    "Business",
     "Category",
     "Collection",
     "CustomRequest",
@@ -79,6 +83,9 @@ __all__ = [
     "ExpenseCategory",
     "FilamentSpool",
     "FilamentStatus",
+    "FeatureFlag",
+    "InventoryMovement",
+    "InventoryMovementType",
     "InventoryLocation",
     "InventoryRecord",
     "LicenseStatus",
@@ -109,6 +116,10 @@ __all__ = [
     "PosSaleStatus",
     "PosSession",
     "PosSessionStatus",
+    "PrepTask",
+    "PrepTaskCategory",
+    "PrepTaskStatus",
+    "PrepTaskTemplate",
     "Printer",
     "PrinterStatus",
     "PrintJob",

@@ -15,6 +15,7 @@ from app.extensions import db
 from app.models import Receipt, ReceiptLineItem, ReceiptLineAllocation, ReceiptStatus, Expense
 from app.models.base import utc_now
 from app.services.receipt_providers import ImagePreprocessorProvider, OCRProvider, AIExtractionProvider
+from app.services.audit import record_audit_event
 
 
 def _compute_file_hash(file_path: str) -> str:
@@ -84,6 +85,14 @@ def upload_receipt(file_obj, user_id: int, source_type: str = "upload") -> Recei
     )
     db.session.add(receipt)
     db.session.commit()
+    record_audit_event(
+        action="receipt.uploaded",
+        entity_type="receipt",
+        entity_id=receipt.id,
+        after_state={"status": receipt.status.value, "file_hash": receipt.file_hash},
+        source_module=__name__,
+        actor_id=user_id,
+    )
     return receipt
 
 
@@ -142,42 +151,48 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
     receipt.parser_provider = ocr_result.diagnostics.get("provider", "unknown")
     receipt.parser_version = ocr_result.diagnostics.get("provider", "unknown")
 
-    # Step 3: AI extraction
-    receipt.status = ReceiptStatus.AI_EXTRACTING
-    db.session.commit()
+    ai_enabled = bool(ocr_config.get("AI_RECEIPT_PARSING_ENABLED", False))
+    if ai_enabled:
+        receipt.status = ReceiptStatus.AI_EXTRACTING
+        db.session.commit()
 
-    ai_provider = AIExtractionProvider()
-    ai_kwargs = {
-        "raw_ocr_text": ocr_result.raw_text or "",
-        "provider": ocr_config.get("RECEIPT_AI_PROVIDER", "openai"),
-    }
-    if ai_kwargs["provider"] == "openai":
-        ai_kwargs["openai_api_key"] = ocr_config.get("OPENAI_API_KEY", "")
-        ai_kwargs["openai_model"] = ocr_config.get("OPENAI_MODEL", "gpt-4o-mini")
-    else:
-        ai_kwargs["ollama_base_url"] = ocr_config.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        ai_kwargs["ollama_fallback_url"] = ocr_config.get("OLLAMA_FALLBACK_URL", "http://localhost:11434")
-        ai_kwargs["model"] = ocr_config.get("OLLAMA_RECEIPT_MODEL", "deepseek-r1:8b")
+        ai_provider = AIExtractionProvider()
+        ai_kwargs = {
+            "raw_ocr_text": ocr_result.raw_text or "",
+            "provider": ocr_config.get("RECEIPT_AI_PROVIDER", "openai"),
+        }
+        if ai_kwargs["provider"] == "openai":
+            ai_kwargs["openai_api_key"] = ocr_config.get("OPENAI_API_KEY", "")
+            ai_kwargs["openai_model"] = ocr_config.get("OPENAI_MODEL_RECEIPTS", "gpt-4o-mini")
+        else:
+            ai_kwargs["ollama_base_url"] = ocr_config.get("OLLAMA_BASE_URL", "http://localhost:11434")
+            ai_kwargs["ollama_fallback_url"] = ocr_config.get("OLLAMA_FALLBACK_URL", "http://localhost:11434")
+            ai_kwargs["model"] = ocr_config.get("OLLAMA_RECEIPT_MODEL", "deepseek-r1:8b")
 
-    ai_result = ai_provider.process(receipt.original_file_id, **ai_kwargs)
-    results["ai"] = ai_result
+        ai_result = ai_provider.process(receipt.original_file_id, **ai_kwargs)
+        results["ai"] = ai_result
 
-    if ai_result.success and ai_result.data:
-        receipt.ai_extracted_json = ai_result.raw_json
-        receipt.parser_model = ai_result.diagnostics.get("model", "unknown")
-        # Delete existing line items before re-extracting (prevents duplication on reprocess)
-        for item in list(receipt.line_items):
-            db.session.delete(item)
-        from app.models.receipt import ReceiptAdjustmentAllocation
-        ReceiptAdjustmentAllocation.query.filter_by(receipt_id=receipt_id).delete()
-        db.session.flush()
-        normalized = _normalize_ai_data(ai_result.data)
-        _apply_ai_extraction(receipt, normalized)
-        receipt.status = ReceiptStatus.NEEDS_REVIEW
-    else:
-        receipt.status = ReceiptStatus.NEEDS_REVIEW
+        if ai_result.success and ai_result.data:
+            receipt.ai_extracted_json = ai_result.raw_json
+            receipt.parser_model = ai_result.diagnostics.get("model", "unknown")
+            # Delete existing line items before re-extracting (prevents duplication on reprocess)
+            for item in list(receipt.line_items):
+                db.session.delete(item)
+            from app.models.receipt import ReceiptAdjustmentAllocation
+            ReceiptAdjustmentAllocation.query.filter_by(receipt_id=receipt_id).delete()
+            db.session.flush()
+            normalized = _normalize_ai_data(ai_result.data)
+            _apply_ai_extraction(receipt, normalized)
+            record_audit_event(
+                action="receipt.ai_parsed",
+                entity_type="receipt",
+                entity_id=receipt.id,
+                after_state={"parser_model": receipt.parser_model, "confidence": str(ai_result.confidence)},
+                source_module=__name__,
+            )
+        receipt.confidence_overall = Decimal(str(ai_result.confidence)) if ai_result.confidence is not None else None
 
-    receipt.confidence_overall = Decimal(str(ai_result.confidence)) if ai_result.confidence is not None else None
+    receipt.status = ReceiptStatus.NEEDS_REVIEW
 
     db.session.commit()
     return {"success": True, "results": results}
@@ -343,12 +358,22 @@ def approve_receipt(receipt_id: int, approved_by_id: int) -> dict[str, Any]:
     if receipt.status == ReceiptStatus.APPROVED:
         return {"success": False, "errors": ["Receipt already approved."]}
 
+    before = {"status": receipt.status.value, "grand_total": str(receipt.grand_total or "")}
     receipt.status = ReceiptStatus.APPROVED
     receipt.approved_at = utc_now()
     receipt.approved_by_id = approved_by_id
     db.session.commit()
 
     _create_expense_records(receipt)
+    record_audit_event(
+        action="receipt.approved",
+        entity_type="receipt",
+        entity_id=receipt.id,
+        before_state=before,
+        after_state={"status": receipt.status.value, "approved_by_id": approved_by_id},
+        source_module=__name__,
+        actor_id=approved_by_id,
+    )
 
     return {"success": True}
 
@@ -381,6 +406,14 @@ def _create_expense_records(receipt: Receipt):
                 elif alloc.allocation_type == "custom_job":
                     expense.related_order_id = alloc.custom_job_id
                 db.session.add(expense)
+                db.session.flush()
+                record_audit_event(
+                    action="expense_ledger_entry.created",
+                    entity_type="expense",
+                    entity_id=expense.id,
+                    after_state={"amount": str(expense.amount), "receipt_id": receipt.id},
+                    source_module=__name__,
+                )
         else:
             expense = Expense(
                 date=receipt.date_time.date() if receipt.date_time else utc_now().date(),
@@ -395,6 +428,14 @@ def _create_expense_records(receipt: Receipt):
                 notes=f"From receipt #{receipt.id} line item #{item.id} (unallocated)",
             )
             db.session.add(expense)
+            db.session.flush()
+            record_audit_event(
+                action="expense_ledger_entry.created",
+                entity_type="expense",
+                entity_id=expense.id,
+                after_state={"amount": str(expense.amount), "receipt_id": receipt.id},
+                source_module=__name__,
+            )
 
     db.session.commit()
 
@@ -416,12 +457,22 @@ def reject_receipt(receipt_id: int, rejected_by_id: int, reason: str = "") -> di
     if not receipt:
         return {"success": False, "errors": ["Receipt not found."]}
 
+    before = {"status": receipt.status.value}
     receipt.status = ReceiptStatus.REJECTED
     receipt.rejected_at = utc_now()
     receipt.rejected_by_id = rejected_by_id
     if reason:
         receipt.notes = (receipt.notes or "") + f"\nRejected: {reason}"
     db.session.commit()
+    record_audit_event(
+        action="receipt.rejected",
+        entity_type="receipt",
+        entity_id=receipt.id,
+        before_state=before,
+        after_state={"status": receipt.status.value, "reason": reason},
+        source_module=__name__,
+        actor_id=rejected_by_id,
+    )
     return {"success": True}
 
 

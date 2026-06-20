@@ -4,14 +4,28 @@
 <div class="max-w-lg mx-auto">
   <h1 class="text-2xl font-bold mb-6" style="color: var(--color-text);">Create API Token</h1>
   <form method="post" class="app-card p-6 space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div>
       <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Token Name</label>
       <input type="text" name="name" required class="app-input" placeholder="e.g. Development, CI/CD, Integration">
     </div>
     <div>
       <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Scopes</label>
-      <input type="text" name="scopes" class="app-input" placeholder="Leave blank for full access">
-      <p class="text-xs mt-1" style="color: var(--color-text-muted);">Comma-separated. Not yet enforced — reserved for future use.</p>
+      <details class="rounded-lg border p-3" style="border-color: var(--color-border);">
+        <summary class="cursor-pointer text-sm font-medium" style="color: var(--color-text);">Choose scopes</summary>
+        <div class="mt-3 space-y-2">
+          {% for value, label in available_scopes %}
+            <label class="flex items-start gap-2 text-sm" style="color: var(--color-text);">
+              <input type="checkbox" name="scopes" value="{{ value }}" class="mt-1">
+              <span>
+                <span class="font-medium">{{ value }}</span>
+                <span class="block text-xs" style="color: var(--color-text-muted);">{{ label }}</span>
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+      </details>
+      <p class="text-xs mt-1" style="color: var(--color-text-muted);">Leave all unchecked for full access. Scope enforcement is reserved for API permission hardening.</p>
     </div>
     <div>
       <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Expires At</label>

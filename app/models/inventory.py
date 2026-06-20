@@ -33,6 +33,9 @@ class FilamentSpool(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "filament_spools"
 
     brand: Mapped[str] = mapped_column(String(160), nullable=False)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     material_type: Mapped[str] = mapped_column(String(120), nullable=False)
     color_name: Mapped[str] = mapped_column(String(120), nullable=False)
     color_hex: Mapped[str | None] = mapped_column(String(7), nullable=True)
@@ -56,6 +59,9 @@ class InventoryLocation(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "inventory_locations"
 
     name: Mapped[str] = mapped_column(String(160), nullable=False, unique=True, index=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     type: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -75,6 +81,9 @@ class InventoryRecord(PrimaryKeyMixin, TimestampMixin, db.Model):
     )
 
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     variant_id: Mapped[int | None] = mapped_column(
         ForeignKey("product_variants.id"), nullable=True, index=True
     )

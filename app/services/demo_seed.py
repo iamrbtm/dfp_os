@@ -58,6 +58,8 @@ from app.models.receipt import (
 )
 from app.services.receipt_allocations import set_line_allocation
 from app.services.users import ensure_admin_user, ensure_user
+from app.services.business import ensure_default_business
+from app.services.prep_tasks import seed_default_prep_templates
 
 
 def _upsert(model, lookup: dict, values: dict):
@@ -73,6 +75,8 @@ def _upsert(model, lookup: dict, values: dict):
 
 
 def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
+    business = ensure_default_business()
+    seed_default_prep_templates()
     ensure_admin_user(admin_email, admin_password, "Admin", "User")
     ensure_user("staff@example.com", "change-me-now", "Market", "Helper", UserRole.STAFF)
 
@@ -353,6 +357,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
             {"slug": definition["slug"]},
             {
                 "name": definition["name"],
+                "business_id": business.id,
                 "category": categories[definition["category"]],
                 "collection": collections[definition["collection"]],
                 "sku_base": definition["sku_base"],
@@ -506,6 +511,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
             {"sku": sku},
             {
                 "product": products[product_slug],
+                "business_id": business.id,
                 "name": name,
                 "colorway": colorway,
                 "size": size,
@@ -593,17 +599,18 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
             _upsert(
                 InventoryLocation,
                 {"name": "Home Inventory"},
-                {"type": "Storage", "description": "Primary home stock.", "active": True},
+                {"business_id": business.id, "type": "Storage", "description": "Primary home stock.", "active": True},
             ),
             _upsert(
                 InventoryLocation,
                 {"name": "Market Bin"},
-                {"type": "Travel", "description": "Packed for vendor markets.", "active": True},
+                {"business_id": business.id, "type": "Travel", "description": "Packed for vendor markets.", "active": True},
             ),
             _upsert(
                 InventoryLocation,
                 {"name": "Website Stock"},
                 {
+                    "business_id": business.id,
                     "type": "Fulfillment",
                     "description": "Ready for online requests.",
                     "active": True,
@@ -613,6 +620,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
                 InventoryLocation,
                 {"name": "Finished Goods Shelf"},
                 {
+                    "business_id": business.id,
                     "type": "Storage",
                     "description": "Finished display-ready products.",
                     "active": True,
@@ -621,12 +629,12 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
             _upsert(
                 InventoryLocation,
                 {"name": "Custom Order Hold"},
-                {"type": "Reserved", "description": "Customer-specific holds.", "active": True},
+                {"business_id": business.id, "type": "Reserved", "description": "Customer-specific holds.", "active": True},
             ),
             _upsert(
                 InventoryLocation,
                 {"name": "Damaged/Seconds"},
-                {"type": "Exception", "description": "Seconds and damaged items.", "active": True},
+                {"business_id": business.id, "type": "Exception", "description": "Seconds and damaged items.", "active": True},
             ),
         ]
     }
@@ -692,6 +700,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
             FilamentSpool,
             {"brand": brand, "material_type": material, "color_name": color_name},
             {
+                "business_id": business.id,
                 "color_hex": color_hex,
                 "spool_weight_grams": spool_weight,
                 "remaining_weight_grams": remaining,
@@ -739,6 +748,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
                 "location": locations[location_name],
             },
             {
+                "business_id": business.id,
                 "quantity_on_hand": on_hand,
                 "quantity_reserved": reserved,
                 "reorder_threshold": threshold,
@@ -751,6 +761,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         {"name": "Clarksville Saturday Market"},
         {
             "name": "Clarksville Saturday Market",
+            "business_id": business.id,
             "location_name": "Downtown Clarksville",
             "address": "100 Public Square",
             "city": "Clarksville",
@@ -770,6 +781,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         {"name": "Riverside Craft Fair"},
         {
             "name": "Riverside Craft Fair",
+            "business_id": business.id,
             "location_name": "Riverside Park",
             "address": "200 River Road",
             "city": "Clarksville",
@@ -983,6 +995,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         {"date": date(2026, 5, 8), "vendor": "ProtoPasta", "amount": Decimal("45.00")},
         {
             "date": date(2026, 5, 8),
+            "business_id": business.id,
             "vendor": "ProtoPasta",
             "category": ExpenseCategory.FILAMENT,
             "description": "Rainbow silk PLA filament 1kg",
@@ -997,6 +1010,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         {"date": date(2026, 5, 10), "vendor": "Clarksville Market", "amount": Decimal("85.00")},
         {
             "date": date(2026, 5, 10),
+            "business_id": business.id,
             "vendor": "Clarksville Market",
             "category": ExpenseCategory.BOOTH_FEES,
             "description": "Booth fee plus application fee for Saturday Market",
@@ -1011,6 +1025,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
         {"date": date(2026, 5, 12), "vendor": "Uline", "amount": Decimal("22.50")},
         {
             "date": date(2026, 5, 12),
+            "business_id": business.id,
             "vendor": "Uline",
             "category": ExpenseCategory.PACKAGING,
             "description": "Poly bags and tissue paper for product packaging",
@@ -1029,6 +1044,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
 
         receipt = Receipt(
             user_id=admin_user.id,
+            business_id=business.id,
             status=ReceiptStatus.APPROVED,
             source_type=ReceiptSourceType.UPLOAD,
             merchant_name="ProtoPasta",
@@ -1069,6 +1085,7 @@ def seed_demo_data(admin_email: str, admin_password: str) -> dict[str, int]:
 
         receipt2 = Receipt(
             user_id=admin_user.id,
+            business_id=business.id,
             status=ReceiptStatus.NEEDS_REVIEW,
             source_type=ReceiptSourceType.UPLOAD,
             merchant_name="Clarksville Market",

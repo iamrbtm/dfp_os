@@ -72,6 +72,9 @@ class Receipt(PrimaryKeyMixin, TimestampMixin, db.Model):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False, index=True
     )
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     status: Mapped[ReceiptStatus] = mapped_column(
         Enum(ReceiptStatus, native_enum=False, length=40),
         default=ReceiptStatus.UPLOADED,

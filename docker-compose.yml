@@ -97,6 +97,21 @@ services:
       "uv run alembic upgrade head &&
       uv run uvicorn app.main:app --host 0.0.0.0 --port 8090"
 
+  api-docs:
+    profiles:
+      - docs
+    build: services/dfpos-api-docs
+    env_file:
+      - services/dfpos-api-docs/.env
+    environment:
+      DFPOS_OPENAPI_URL: http://web:5000/api/openapi.json
+      APP_NAME: Dude Fish OS API Reference
+      REDOC_THEME: light
+    ports:
+      - "8080:8080"
+    depends_on:
+      - web
+
 volumes:
   mariadb_data:
   web_venv:

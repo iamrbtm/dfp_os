@@ -1,9 +1,11 @@
 from flask import flash, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app.blueprints.settings import bp
 from app.models import UserRole
 from app.services.settings import get_all_settings, set_setting
+from app.module_registry import module_statuses
+from app.services.audit import record_audit_event
 from app.utils.auth import roles_required
 
 
@@ -23,10 +25,27 @@ def settings_update():
     for key, value in request.form.items():
         if key in ("csrf_token",):
             continue
+        before = None
         set_setting(key, value)
+        record_audit_event(
+            action="settings.changed",
+            entity_type="setting",
+            entity_id=key,
+            before_state=before,
+            after_state={"key": key, "value": value},
+            source_module=__name__,
+            actor_id=current_user.id,
+        )
         keys_updated += 1
     flash(f"{keys_updated} settings updated.", "success")
     return redirect(url_for("settings.settings_list"))
+
+
+@bp.route("/modules")
+@login_required
+@roles_required(UserRole.ADMIN)
+def module_status():
+    return render_template("settings/modules.html", modules=module_statuses())
 
 
 def _group_settings(settings: list) -> dict[str, list]:

@@ -71,6 +71,9 @@ class Market(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "markets"
 
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     location_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     address: Mapped[str | None] = mapped_column(String(300), nullable=True)
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)

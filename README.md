@@ -79,6 +79,19 @@ uv run ruff check .
 uv run black --check .
 ```
 
+## Production Foundation Notes
+
+This branch includes the modular-monolith foundation:
+
+- `app/module_registry.py` declares module keys, feature flags, dependencies, nav/API resources, permissions, health checks, and docs locations.
+- Feature flags can be stored as `FeatureFlag` records or `Setting` keys such as `module.pos.enabled`; disabled modules are blocked server-side for routes and `/api/v1` resources.
+- `Business` provides a single default Dude Fish Printing account now, with nullable `business_id` fields on major business records for SaaS-later readiness.
+- POS product sales deduct inventory from the active POS session location and record `InventoryMovement` rows.
+- Receipts require manual approval before creating expense ledger entries; AI receipt parsing and analytics insights are disabled unless explicitly enabled.
+- Cost Engine and Prep Tasks are service modules with token-protected API endpoints.
+
+Local `.env` files are ignored by git. Be careful with `docker compose config`: Docker expands local environment values into its rendered output, so do not paste that output publicly if your local `.env` contains real secrets. Rotate any secret that has been exposed.
+
 ## Docker
 
 ```bash
@@ -90,3 +103,145 @@ The web app runs at `http://localhost:5000`, backed by MariaDB in the `db` servi
 The container keeps its own virtualenv and `node_modules` in Docker volumes so it does not conflict with a local macOS or Linux `.venv`.
 On startup, the web container also builds `app/static/dist/app.css` so Tailwind styles are present in development.
 If you want to use the optional local MariaDB container instead of an external database, start it with `docker compose --profile localdb up --build`.
+
+## API Documentation
+
+DFP OS uses a **code-first OpenAPI** approach. The API documentation is generated automatically from the code and does not need to be hand-written.
+
+### How It Works
+
+1. API routes are defined using **Flask-Smorest** decorators in `app/blueprints/api/routes.py`.
+2. Request and response schemas are defined as **Marshmallow** classes in `app/schemas/`.
+3. Flask-Smorest generates an OpenAPI 3.0.3 spec automatically from the decorators and schemas.
+4. The spec is available at `/api/openapi.json`.
+5. Interactive documentation is available at:
+   - **Swagger UI**: `/api/docs` — for interactive endpoint testing
+   - **Redoc**: `/api/redoc` — for clean, searchable reference docs
+
+### Viewing Docs
+
+- **Development**: Navigate to `http://localhost:5000/api/docs` (Swagger UI) or `http://localhost:5000/api/redoc` (Redoc).
+- **Production**: A separate [API Docs microservice](services/dfpos-api-docs/) can be deployed alongside the main app for better isolation.
+
+### Documenting a New API Route
+
+When adding a new API endpoint, follow these steps:
+
+1. **Define the schema** in `app/schemas/` (if it doesn't already exist):
+   ```python
+   from marshmallow import Schema, fields
+
+   class WidgetSchema(Schema):
+       id = fields.Integer(dump_only=True)
+       name = fields.String(required=True)
+       color = fields.String()
+       created_at = fields.DateTime(dump_only=True)
+   ```
+   - Use `required=True` for fields that must be present in requests.
+   - Use `dump_only=True` for server-generated fields (id, timestamps).
+   - Use `allow_none=True` for optional fields.
+
+2. **Add the route** in `app/blueprints/api/routes.py` using Flask-Smorest decorators:
+   ```python
+   @catalog_blp.route("/widgets")
+   @catalog_blp.doc(tags=["Widgets"])
+   class WidgetCollection(MethodView):
+       @api_token_required
+       @catalog_blp.response(200, WidgetSchema(many=True))
+       def get(self):
+           widgets = Widget.query.all()
+           return WidgetSchema(many=True).dump(widgets)
+
+       @api_token_required
+       @catalog_blp.arguments(WidgetSchema)
+       @catalog_blp.response(201, WidgetSchema)
+       def post(self, body_data):
+           widget = Widget(**body_data)
+           db.session.add(widget)
+           db.session.commit()
+           return WidgetSchema().dump(widget), 201
+
+   @catalog_blp.route("/widgets/<int:widget_id>")
+   @catalog_blp.doc(tags=["Widgets"])
+   class WidgetItem(MethodView):
+       @api_token_required
+       @catalog_blp.response(200, WidgetSchema)
+       def get(self, widget_id):
+           widget = db.session.get(Widget, widget_id)
+           if widget is None:
+               return {"error": {"code": "not_found", "message": "Widget not found."}}, 404
+           return WidgetSchema().dump(widget)
+   ```
+
+3. **Register import** in `app/schemas/__init__.py` (and add the model import in `routes.py`).
+
+4. The OpenAPI spec updates **automatically**. No manual spec editing needed.
+
+### Decorator Reference
+
+| Decorator | Purpose | Required? |
+|-----------|---------|-----------|
+| `@catalog_blp.route("/path")` | Defines the URL route | Yes |
+| `@catalog_blp.doc(tags=[...])` | Adds tags for grouping in docs | Recommended |
+| `@catalog_blp.arguments(Schema)` | Documents and validates request body | Required for POST/PUT |
+| `@catalog_blp.response(200, Schema)` | Documents response schema | Recommended |
+| `@api_token_required` | Requires API token auth | Required for all API endpoints |
+
+### Response Format
+
+All list endpoints return a paginated envelope:
+```json
+{
+    "data": [...],
+    "pagination": {
+        "page": 1,
+        "per_page": 25,
+        "total": 100,
+        "pages": 4
+    }
+}
+```
+
+Error responses follow a consistent format:
+```json
+{
+    "error": {
+        "code": "not_found",
+        "message": "Resource not found.",
+        "details": {}
+    }
+}
+```
+
+HTTP status codes:
+- `200` — Success
+- `201` — Created
+- `400` — Validation error
+- `401` — Unauthorized (missing/invalid API token)
+- `404` — Not found
+- `422` — Schema validation error
+
+### API Docs Microservice
+
+A dedicated [API Docs microservice](services/dfpos-api-docs/) can be deployed alongside the main app:
+
+```bash
+# Start the main app and docs service
+docker compose --profile docs up --build
+
+# The docs site is available at http://localhost:8080
+```
+
+The docs microservice fetches the OpenAPI spec from `/api/openapi.json` on the main app and renders it using Redoc. It runs independently and does not require database access.
+
+See the [microservice README](services/dfpos-api-docs/README.md) for full documentation.
+
+### Validating the OpenAPI Spec
+
+```bash
+# From the docs microservice directory
+cd services/dfpos-api-docs
+uv run dfpos-docs-validate
+```
+
+This checks that the spec is valid OpenAPI 3.x, has an info block, has paths with responses, and has no obvious structural issues. CI pipelines should run this check after any API changes.

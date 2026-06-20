@@ -93,6 +93,7 @@ from app.schemas import (
     PrintJobSchema,
     ProductSchema,
     ProductVariantSchema,
+    ResourceListEnvelope,
 )
 from app.schemas.receipt import ReceiptSchema, ReceiptLineItemSchema
 from app.services.crud import (
@@ -112,6 +113,10 @@ class ListQuerySchema(Schema):
     page = fields.Integer(load_default=1)
     per_page = fields.Integer(load_default=25)
     q = fields.String(load_default="")
+
+
+class EmptyBodySchema(Schema):
+    pass
 
 
 @dataclass(frozen=True)
@@ -675,12 +680,15 @@ API_RESOURCES = {
 
 
 def _register_resource(config: ApiResourceConfig):
-    item_schema = config.schema()
+    schema_cls = config.schema
     query_schema = ListQuerySchema()
+    tag = config.endpoint.replace("-", " ").title()
 
     @catalog_blp.route(f"/{config.endpoint}")
     class ResourceCollection(MethodView):
         @api_token_required
+        @catalog_blp.doc(tags=[tag])
+        @catalog_blp.response(200, ResourceListEnvelope)
         def get(self):
             args = query_schema.load(request.args)
             statement = select(config.model)
@@ -692,103 +700,95 @@ def _register_resource(config: ApiResourceConfig):
                 args["page"],
                 args["per_page"],
             )
-            return jsonify(_list_response(pagination, config.schema))
+            return _list_response(pagination, config.schema)
 
         @api_token_required
-        def post(self):
-            payload = item_schema.load(request.get_json() or {})
+        @catalog_blp.doc(tags=[tag])
+        @catalog_blp.arguments(schema_cls)
+        @catalog_blp.response(201, schema_cls)
+        def post(self, body_data):
             instance = config.model()
-            config.apply_data(instance, payload)
+            config.apply_data(instance, body_data)
             try:
                 save_instance(instance)
             except IntegrityError:
-                return (
-                    jsonify(
-                        {
-                            "error": {
-                                "code": "validation_error",
-                                "message": "Validation failed.",
-                                "details": {"resource": f"Unable to save {config.endpoint}."},
-                            }
+                return jsonify(
+                    {
+                        "error": {
+                            "code": "validation_error",
+                            "message": "Validation failed.",
+                            "details": {"resource": f"Unable to save {config.endpoint}."},
                         }
-                    ),
-                    400,
-                )
-            return jsonify(item_schema.dump(instance)), 201
+                    },
+                ), 400
+            return instance, 201
 
     @catalog_blp.route(f"/{config.endpoint}/<int:resource_id>")
     class ResourceItem(MethodView):
         @api_token_required
+        @catalog_blp.doc(tags=[tag])
+        @catalog_blp.response(200, schema_cls)
         def get(self, resource_id: int):
             instance = get_by_id(config.model, resource_id)
             if instance is None:
-                return (
-                    jsonify(
-                        {
-                            "error": {
-                                "code": "not_found",
-                                "message": "Resource not found.",
-                                "details": {},
-                            }
+                return jsonify(
+                    {
+                        "error": {
+                            "code": "not_found",
+                            "message": "Resource not found.",
+                            "details": {},
                         }
-                    ),
-                    404,
-                )
-            return jsonify(item_schema.dump(instance))
+                    },
+                ), 404
+            return instance
 
         @api_token_required
-        def put(self, resource_id: int):
+        @catalog_blp.doc(tags=[tag])
+        @catalog_blp.arguments(schema_cls)
+        @catalog_blp.response(200, schema_cls)
+        def put(self, body_data, resource_id: int):
             instance = get_by_id(config.model, resource_id)
             if instance is None:
-                return (
-                    jsonify(
-                        {
-                            "error": {
-                                "code": "not_found",
-                                "message": "Resource not found.",
-                                "details": {},
-                            }
+                return jsonify(
+                    {
+                        "error": {
+                            "code": "not_found",
+                            "message": "Resource not found.",
+                            "details": {},
                         }
-                    ),
-                    404,
-                )
-            payload = item_schema.load(request.get_json() or {})
-            config.apply_data(instance, payload)
+                    },
+                ), 404
+            config.apply_data(instance, body_data)
             try:
                 save_instance(instance)
             except IntegrityError:
-                return (
-                    jsonify(
-                        {
-                            "error": {
-                                "code": "validation_error",
-                                "message": "Validation failed.",
-                                "details": {"resource": f"Unable to update {config.endpoint}."},
-                            }
+                return jsonify(
+                    {
+                        "error": {
+                            "code": "validation_error",
+                            "message": "Validation failed.",
+                            "details": {"resource": f"Unable to update {config.endpoint}."},
                         }
-                    ),
-                    400,
-                )
-            return jsonify(item_schema.dump(instance))
+                    },
+                ), 400
+            return instance
 
         @api_token_required
+        @catalog_blp.doc(tags=[tag])
         def delete(self, resource_id: int):
             instance = get_by_id(config.model, resource_id)
             if instance is None:
-                return (
-                    jsonify(
-                        {
-                            "error": {
-                                "code": "not_found",
-                                "message": "Resource not found.",
-                                "details": {},
-                            }
+                return jsonify(
+                    {
+                        "error": {
+                            "code": "not_found",
+                            "message": "Resource not found.",
+                            "details": {},
                         }
-                    ),
-                    404,
-                )
+                    },
+                ), 404
             archive_instance(instance)
-            return jsonify({"status": "archived"})
+            return {"status": "archived"}
 
 
 for resource_config in API_RESOURCES.values():
@@ -798,32 +798,37 @@ for resource_config in API_RESOURCES.values():
 @catalog_blp.route("/themes")
 class ThemeCollection(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Themes"])
+    @catalog_blp.response(200)
     def get(self):
         from app.theme_registry import ALL_THEMES
-        return jsonify([
+        return [
             {"slug": t.slug, "name": t.name, "mode": t.mode, "description": t.description}
             for t in ALL_THEMES
-        ])
+        ]
 
 
 @catalog_blp.route("/themes/current")
 class ThemeCurrent(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Themes"])
+    @catalog_blp.response(200)
     def get(self):
         from flask_login import current_user
         from app.theme_registry import THEME_MAP, DEFAULT_THEME
         slug = getattr(current_user, "theme_slug", DEFAULT_THEME)
         theme = THEME_MAP.get(slug)
-        return jsonify({
+        return {
             "slug": slug,
             "name": theme.name if theme else DEFAULT_THEME,
             "mode": theme.mode if theme else "light",
-        })
+        }
 
 
 @catalog_blp.route("/exports/markets.csv")
 class MarketsExport(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Exports"])
     def get(self):
         import csv
         import io
@@ -848,6 +853,7 @@ class MarketsExport(MethodView):
 @catalog_blp.route("/exports/expenses.csv")
 class ExpensesExport(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Exports"])
     def get(self):
         import csv
         import io
@@ -872,6 +878,7 @@ class ExpensesExport(MethodView):
 @catalog_blp.route("/exports/market-packing-lists.csv")
 class MarketPackingListsExport(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Exports"])
     def get(self):
         import csv
         import io
@@ -895,10 +902,12 @@ class MarketPackingListsExport(MethodView):
 @catalog_blp.route("/analytics/summary")
 class AnalyticsSummary(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Analytics"])
+    @catalog_blp.response(200)
     def get(self):
         from app.services.analytics import executive_summary
         s = executive_summary()
-        return jsonify({
+        return {
             "today_revenue": float(s["today_revenue"]),
             "month_revenue": float(s["month_revenue"]),
             "month_pos_revenue": float(s["month_pos_revenue"]),
@@ -909,16 +918,18 @@ class AnalyticsSummary(MethodView):
             "print_jobs_queued": s["print_jobs_queued"],
             "low_inventory_count": s["low_inventory_count"],
             "low_filament_count": s["low_filament_count"],
-        })
+        }
 
 
 @catalog_blp.route("/analytics/products")
 class AnalyticsProducts(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Analytics"])
+    @catalog_blp.response(200)
     def get(self):
         from app.services.analytics import product_analytics
         products = product_analytics()
-        return jsonify([{
+        return [{
             "id": p["id"],
             "name": p["name"],
             "sku": p["sku"],
@@ -927,16 +938,18 @@ class AnalyticsProducts(MethodView):
             "avg_price": float(p["avg_price"]),
             "inventory_on_hand": p["inventory_on_hand"],
             "failure_count": p["failure_count"],
-        } for p in products])
+        } for p in products]
 
 
 @catalog_blp.route("/analytics/markets")
 class AnalyticsMarkets(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Analytics"])
+    @catalog_blp.response(200)
     def get(self):
         from app.services.analytics import market_analytics
         markets = market_analytics()
-        return jsonify([{
+        return [{
             "id": m["id"],
             "name": m["name"],
             "date": str(m["date"]) if m["date"] else None,
@@ -945,74 +958,179 @@ class AnalyticsMarkets(MethodView):
             "booth_cost": float(m["booth_cost"]),
             "profit": float(m["profit"]),
             "units_sold": m["units_sold"],
-        } for m in markets])
+        } for m in markets]
 
 
 @catalog_blp.route("/analytics/printing")
 class AnalyticsPrinting(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Analytics"])
+    @catalog_blp.response(200)
     def get(self):
         from app.services.analytics import printing_analytics
-        return jsonify(printing_analytics())
+        return printing_analytics()
 
 
 @catalog_blp.route("/analytics/inventory")
 class AnalyticsInventory(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Analytics"])
+    @catalog_blp.response(200)
     def get(self):
         from app.services.analytics import inventory_analytics
         inv = inventory_analytics()
-        return jsonify({
+        return {
             "low_stock_count": inv["low_stock_count"],
             "total_inventory_value": float(inv["total_inventory_value"]),
             "filament_low": inv["filament_low"],
             "filament_empty": inv["filament_empty"],
-        })
+        }
 
 
 @catalog_blp.route("/analytics/pos")
 class AnalyticsPos(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Analytics"])
+    @catalog_blp.response(200)
     def get(self):
         from app.services.analytics import pos_analytics
         p = pos_analytics()
-        return jsonify({
+        return {
             "total_revenue": float(p["total_revenue"]),
             "total_sales": p["total_sales"],
             "avg_ticket": float(p["avg_ticket"]),
             "payment_totals": {k: float(v) for k, v in p["payment_totals"].items()},
             "open_sessions": p["open_sessions"],
-        })
+        }
 
 
 @catalog_blp.route("/analytics/expenses")
 class AnalyticsExpenses(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Analytics"])
+    @catalog_blp.response(200)
     def get(self):
         from app.services.analytics import expense_analytics
         e = expense_analytics()
-        return jsonify({
+        return {
             "total_expenses": float(e["total_expenses"]),
             "by_category": [{"category": c["category"], "total": float(c["total"]), "count": c["count"]} for c in e["by_category"]],
-        })
+        }
+
+
+@catalog_blp.route("/analytics/insights")
+class AnalyticsInsights(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Analytics"])
+    @catalog_blp.response(200)
+    def get(self):
+        from app.services.analytics import analytics_insights
+
+        return analytics_insights()
+
+
+@catalog_blp.route("/modules")
+class ModuleStatusCollection(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Modules"])
+    @catalog_blp.response(200)
+    def get(self):
+        from app.module_registry import module_statuses
+
+        return {"data": module_statuses()}
+
+
+@catalog_blp.route("/cost-engine/products/<int:product_id>")
+class CostEngineProduct(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Cost Engine"])
+    @catalog_blp.response(200)
+    def get(self, product_id: int):
+        from app.services.cost_engine import calculate_product_cost
+
+        product = db.session.get(Product, product_id)
+        if product is None:
+            return {"error": {"code": "not_found", "message": "Product not found.", "details": {}}}, 404
+        variant_id = request.args.get("variant_id", type=int)
+        variant = db.session.get(ProductVariant, variant_id) if variant_id else None
+        breakdown = calculate_product_cost(product=product, variant=variant)
+        return {"data": {key: str(value) for key, value in breakdown.as_dict().items()}}
+
+
+@catalog_blp.route("/cost-engine/orders/<int:order_id>")
+class CostEngineOrder(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Cost Engine"])
+    @catalog_blp.response(200)
+    def get(self, order_id: int):
+        from app.services.cost_engine import estimate_order_profit
+
+        try:
+            return {"data": {key: str(value) for key, value in estimate_order_profit(order_id).items()}}
+        except ValueError:
+            return {"error": {"code": "not_found", "message": "Order not found.", "details": {}}}, 404
+
+
+@catalog_blp.route("/cost-engine/markets/<int:market_id>")
+class CostEngineMarket(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Cost Engine"])
+    @catalog_blp.response(200)
+    def get(self, market_id: int):
+        from app.services.cost_engine import estimate_market_profit
+
+        return {"data": {key: str(value) for key, value in estimate_market_profit(market_id).items()}}
+
+
+@catalog_blp.route("/prep-tasks/markets/<int:market_id>/generate")
+class PrepTaskGenerate(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Prep Tasks"])
+    @catalog_blp.arguments(EmptyBodySchema)
+    @catalog_blp.response(201)
+    def post(self, _body_data, market_id: int):
+        from app.services.prep_tasks import generate_market_prep_tasks
+
+        try:
+            tasks = generate_market_prep_tasks(market_id, actor_id=g.api_user.id)
+        except ValueError:
+            return {"error": {"code": "not_found", "message": "Market not found.", "details": {}}}, 404
+        return {"data": [{"id": task.id, "title": task.title, "status": task.status.value} for task in tasks]}, 201
+
+
+@catalog_blp.route("/prep-tasks/markets/<int:market_id>/readiness")
+class PrepTaskReadiness(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Prep Tasks"])
+    @catalog_blp.response(200)
+    def get(self, market_id: int):
+        from app.services.prep_tasks import market_readiness_score
+
+        data = market_readiness_score(market_id)
+        data["score"] = str(data["score"])
+        return {"data": data}
 
 
 @catalog_blp.route("/api-tokens")
 class ApiTokenCollection(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["API Tokens"])
+    @catalog_blp.response(200)
     def get(self):
         from app.models import ApiToken
         tokens = ApiToken.query.filter_by(user_id=g.api_user.id).order_by(ApiToken.created_at.desc()).all()
         schema = ApiTokenSchema(many=True)
-        return jsonify({"data": schema.dump(tokens)})
+        return {"data": schema.dump(tokens)}
 
     @api_token_required
+    @catalog_blp.doc(tags=["API Tokens"])
+    @catalog_blp.response(201)
     def post(self):
         from app.services.api_tokens import create_api_token
         payload = request.get_json(silent=True) or {}
         name = payload.get("name", "").strip()
         if not name:
-            return jsonify({"error": {"code": "validation_error", "message": "Token name is required.", "details": {}}}), 400
+            return {"error": {"code": "validation_error", "message": "Token name is required.", "details": {}}}, 400
         scopes = payload.get("scopes", "")
         expires_at_str = payload.get("expires_at")
 
@@ -1022,7 +1140,7 @@ class ApiTokenCollection(MethodView):
                 from datetime import datetime, timezone
                 expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             except ValueError:
-                return jsonify({"error": {"code": "validation_error", "message": "Invalid expires_at format (use YYYY-MM-DD).", "details": {}}}), 400
+                return {"error": {"code": "validation_error", "message": "Invalid expires_at format (use YYYY-MM-DD).", "details": {}}}, 400
 
         token, raw_token = create_api_token(
             user=g.api_user,
@@ -1033,62 +1151,91 @@ class ApiTokenCollection(MethodView):
         schema = ApiTokenSchema()
         result = schema.dump(token)
         result["raw_token"] = raw_token
-        return jsonify({"data": result}), 201
+        return {"data": result}, 201
 
 
 @catalog_blp.route("/api-tokens/<int:token_id>")
 class ApiTokenItem(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["API Tokens"])
+    @catalog_blp.response(200)
     def get(self, token_id: int):
         token = db.session.get(ApiToken, token_id)
         if token is None or token.user_id != g.api_user.id:
-            return jsonify({"error": {"code": "not_found", "message": "API token not found.", "details": {}}}), 404
-        return jsonify({"data": ApiTokenSchema().dump(token)})
+            return {"error": {"code": "not_found", "message": "API token not found.", "details": {}}}, 404
+        return {"data": ApiTokenSchema().dump(token)}
 
     @api_token_required
+    @catalog_blp.doc(tags=["API Tokens"])
     def delete(self, token_id: int):
         token = db.session.get(ApiToken, token_id)
         if token is None or token.user_id != g.api_user.id:
-            return jsonify({"error": {"code": "not_found", "message": "API token not found.", "details": {}}}), 404
+            return {"error": {"code": "not_found", "message": "API token not found.", "details": {}}}, 404
         from app.models.base import utc_now
+        from app.services.audit import record_audit_event
         token.revoked_at = utc_now()
         db.session.commit()
-        return jsonify({"status": "revoked"})
+        record_audit_event(
+            action="api_token.revoked",
+            entity_type="api_token",
+            entity_id=token.id,
+            after_state={"revoked_at": token.revoked_at.isoformat()},
+            source_module=__name__,
+        )
+        return {"status": "revoked"}
 
 
 @catalog_blp.route("/settings")
 class SettingCollection(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Settings"])
+    @catalog_blp.response(200)
     def get(self):
         from app.services.settings import get_all_settings
         settings = get_all_settings()
-        return jsonify({"data": SettingSchema(many=True).dump(settings)})
+        return {"data": SettingSchema(many=True).dump(settings)}
 
 
 @catalog_blp.route("/settings/<string:key>")
 class SettingItem(MethodView):
     @api_token_required
+    @catalog_blp.doc(tags=["Settings"])
+    @catalog_blp.response(200)
     def get(self, key: str):
         from app.models import Setting
         from sqlalchemy import select
         setting = db.session.scalar(select(Setting).where(Setting.key == key))
         if setting is None:
-            return jsonify({"error": {"code": "not_found", "message": "Setting not found.", "details": {}}}), 404
-        return jsonify({"data": SettingSchema().dump(setting)})
+            return {"error": {"code": "not_found", "message": "Setting not found.", "details": {}}}, 404
+        return {"data": SettingSchema().dump(setting)}
 
     @api_token_required
+    @catalog_blp.doc(tags=["Settings"])
+    @catalog_blp.response(200)
     def put(self, key: str):
         from app.services.settings import set_setting
+        from app.services.audit import record_audit_event
+        from app.models import Setting
         payload = request.get_json(silent=True) or {}
         if "value" not in payload:
-            return jsonify({"error": {"code": "validation_error", "message": "value is required.", "details": {}}}), 400
+            return {"error": {"code": "validation_error", "message": "value is required.", "details": {}}}, 400
+        before = db.session.scalar(select(Setting).where(Setting.key == key))
+        before_state = {"value": before.value, "type": before.type} if before else None
         setting = set_setting(
             key=key,
             value=payload["value"],
             description=payload.get("description"),
             type=payload.get("type", "string"),
         )
-        return jsonify({"data": SettingSchema().dump(setting)})
+        record_audit_event(
+            action="settings.changed",
+            entity_type="setting",
+            entity_id=key,
+            before_state=before_state,
+            after_state={"value": setting.value, "type": setting.type},
+            source_module=__name__,
+        )
+        return {"data": SettingSchema().dump(setting)}
 
 
 def register_api_blueprints(api):

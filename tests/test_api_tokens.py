@@ -119,6 +119,8 @@ def test_api_token_create_page_logged_in(client):
     response = client.get("/settings/api-tokens/new")
     assert response.status_code == 200
     assert b"Create API Token" in response.data
+    assert b'name="csrf_token"' in response.data
+    assert b'value="catalog"' in response.data
 
 
 def test_api_token_create_post(client):
@@ -127,6 +129,19 @@ def test_api_token_create_post(client):
     response = client.post("/settings/api-tokens/new", data={"name": "New Token"})
     assert response.status_code == 200
     assert b"Copy this token" in response.data
+
+
+def test_api_token_create_post_with_checkbox_scopes(client):
+    _make_user_and_token(client)
+    _login(client)
+    response = client.post(
+        "/settings/api-tokens/new",
+        data={"name": "Scoped Token", "scopes": ["catalog", "analytics"]},
+    )
+    assert response.status_code == 200
+    with client.application.app_context():
+        token = ApiToken.query.filter_by(name="Scoped Token").first()
+        assert token.scopes == "catalog,analytics"
 
 
 def test_api_token_create_requires_name(client):

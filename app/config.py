@@ -41,6 +41,8 @@ class Config:
     OPENAPI_JSON_PATH = "openapi.json"
     OPENAPI_SWAGGER_UI_PATH = "/docs"
     OPENAPI_SWAGGER_UI_URL = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
+    OPENAPI_REDOC_PATH = "/redoc"
+    OPENAPI_REDOC_URL = "https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"
     MIGRATIONS_DIR = str(BASE_DIR / "migrations")
     RECEIPT_STORAGE_DRIVER = os.getenv("RECEIPT_STORAGE_DRIVER", "local")
     RECEIPT_STORAGE_PATH = os.getenv(
@@ -56,6 +58,10 @@ class Config:
     RECEIPT_AI_PROVIDER = os.getenv("RECEIPT_AI_PROVIDER", "openai")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_MODEL_RECEIPTS = os.getenv("OPENAI_MODEL_RECEIPTS", OPENAI_MODEL)
+    OPENAI_MODEL_ANALYTICS = os.getenv("OPENAI_MODEL_ANALYTICS", OPENAI_MODEL)
+    AI_RECEIPT_PARSING_ENABLED = _as_bool(os.getenv("AI_RECEIPT_PARSING_ENABLED"), False)
+    AI_ANALYTICS_INSIGHTS_ENABLED = _as_bool(os.getenv("AI_ANALYTICS_INSIGHTS_ENABLED"), False)
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_FALLBACK_URL = os.getenv("OLLAMA_FALLBACK_URL", "http://localhost:11434")
     OLLAMA_RECEIPT_MODEL = os.getenv("OLLAMA_RECEIPT_MODEL", "llama3")
@@ -71,6 +77,8 @@ class Config:
     AUDIT_LOG_BASE_URL = os.getenv("AUDIT_LOG_BASE_URL", "http://audit-log-service:8090")
     AUDIT_LOG_TOKEN = os.getenv("AUDIT_LOG_TOKEN", "")
     AUDIT_LOG_ENABLED = _as_bool(os.getenv("AUDIT_LOG_ENABLED"), False)
+    AUDIT_LOG_FAIL_CLOSED = _as_bool(os.getenv("AUDIT_LOG_FAIL_CLOSED"), False)
+    ALLOW_NEGATIVE_INVENTORY = _as_bool(os.getenv("ALLOW_NEGATIVE_INVENTORY"), False)
     WEATHER_USER_AGENT = os.getenv(
         "WEATHER_USER_AGENT",
         f"{APP_NAME} ({ADMIN_EMAIL})",

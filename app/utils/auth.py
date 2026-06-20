@@ -8,6 +8,7 @@ from flask_login import current_user
 
 from app.models import UserRole
 from app.services.api_tokens import authenticate_api_token
+from app.services.audit import record_audit_event
 
 
 def roles_required(*allowed_roles: UserRole):
@@ -18,6 +19,16 @@ def roles_required(*allowed_roles: UserRole):
                 return redirect(url_for("auth.login", next=request.full_path))
 
             if current_user.role not in allowed_roles:
+                record_audit_event(
+                    action="authorization.failed",
+                    entity_type="route",
+                    entity_id=request.endpoint,
+                    metadata={
+                        "required_roles": [role.value for role in allowed_roles],
+                        "user_role": current_user.role.value,
+                    },
+                    source_module=__name__,
+                )
                 flash("You do not have permission to access that page.", "danger")
                 return redirect(url_for("dashboard.index"))
 
@@ -38,6 +49,13 @@ def api_token_required(view: Callable):
             raw_token = auth_header.split(" ", 1)[1].strip()
 
         if not raw_token:
+            record_audit_event(
+                action="api_token.missing",
+                entity_type="api_request",
+                entity_id=request.path,
+                source_module=__name__,
+                actor_type="anonymous",
+            )
             return (
                 jsonify(
                     {
@@ -53,6 +71,13 @@ def api_token_required(view: Callable):
 
         token = authenticate_api_token(raw_token)
         if token is None:
+            record_audit_event(
+                action="api_token.invalid",
+                entity_type="api_request",
+                entity_id=request.path,
+                source_module=__name__,
+                actor_type="anonymous",
+            )
             return (
                 jsonify(
                     {

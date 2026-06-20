@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, Enum, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.extensions import db
@@ -30,6 +30,9 @@ class Expense(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "expenses"
 
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     vendor: Mapped[str] = mapped_column(String(200), nullable=False)
     category: Mapped[ExpenseCategory] = mapped_column(
         Enum(ExpenseCategory, native_enum=False, length=40),

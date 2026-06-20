@@ -4,7 +4,10 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, render_template
+import uuid
+
+from flask import Flask, abort, g, jsonify, render_template, request
+from flask_login import current_user
 
 from app.blueprints.auth import bp as auth_bp
 from app.blueprints.analytics import bp as analytics_bp
@@ -49,6 +52,7 @@ def create_app(config_name: str | None = None, test_config: dict | None = None) 
     register_extensions(app)
     register_blueprints(app)
     register_cli(app)
+    register_request_guards(app)
     register_error_handlers(app)
     register_context_processors(app)
 
@@ -97,6 +101,63 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(expenses_bp)
     app.register_blueprint(api_tokens_bp)
     register_api_blueprints(api)
+    _register_redoc_view(app)
+
+
+def _register_redoc_view(app: Flask) -> None:
+    @app.route("/api/redoc")
+    def redoc_ui():
+        return render_template("api/redoc.html")
+
+
+def register_request_guards(app: Flask) -> None:
+    @app.before_request
+    def assign_request_id_and_enforce_modules():
+        g.request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
+
+        from app.module_registry import API_RESOURCE_TO_MODULE, BLUEPRINT_TO_MODULE, is_module_enabled
+        from app.services.audit import record_audit_event
+
+        module_key: str | None = None
+        if request.path.startswith("/api/v1/"):
+            parts = [part for part in request.path.removeprefix("/api/v1/").split("/") if part]
+            if parts:
+                resource = parts[0]
+                if resource == "analytics" and len(parts) > 1:
+                    resource = "analytics"
+                elif resource == "exports" and len(parts) > 1:
+                    export_name = parts[1].removesuffix(".csv")
+                    resource = export_name
+                module_key = API_RESOURCE_TO_MODULE.get(resource)
+                module_key = module_key or "api"
+        elif request.blueprint:
+            module_key = BLUEPRINT_TO_MODULE.get(request.blueprint)
+
+        if module_key and not is_module_enabled(module_key):
+            record_audit_event(
+                action="module.disabled_access_attempted",
+                entity_type="module",
+                entity_id=module_key,
+                metadata={"path": request.path, "blueprint": request.blueprint},
+                source_module=__name__,
+            )
+            if request.path.startswith("/api/"):
+                return (
+                    jsonify(
+                        {
+                            "error": {
+                                "code": "module_disabled",
+                                "message": f"The {module_key} module is disabled.",
+                                "details": {"module": module_key},
+                            }
+                        }
+                    ),
+                    403,
+                )
+            abort(403)
+
+        if current_user and current_user.is_authenticated and module_key:
+            g.active_module_key = module_key
 
 
 def register_cli(app: Flask) -> None:

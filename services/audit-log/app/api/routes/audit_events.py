@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -181,7 +180,10 @@ async def get_audit_events(
 async def get_audit_event(event_id: str) -> AuditEventResponse:
     event = await get_audit_event_by_id(event_id)
     if event is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "not_found", "message": "Audit event not found."})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "not_found", "message": "Audit event not found."},
+        )
     return _event_to_response(event)
 
 
