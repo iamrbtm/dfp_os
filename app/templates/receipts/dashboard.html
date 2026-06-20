@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Receipts Dashboard | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Expenses</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Receipts Dashboard</h1>
+    <p class="mt-2" style="color: var(--color-text-muted);">Overview of receipt activity and pending items.</p>
+  </div>
+
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Receipts This Month</p>
+      <p class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ data.total_this_month }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Needs Review</p>
+      <p class="mt-2 text-3xl font-semibold" style="color: var(--color-danger);">{{ data.needs_review }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Possible Duplicates</p>
+      <p class="mt-2 text-3xl font-semibold" style="color: var(--color-warning);">{{ data.possible_duplicates }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Approved Total</p>
+      <p class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">${{ "{:,.2f}".format(data.approved_total|float) }}</p>
+    </article>
+  </div>
+
+  <div class="flex flex-wrap gap-3">
+    <a href="{{ url_for('receipts.upload') }}" class="app-btn app-btn-primary">Upload Receipt</a>
+    <a href="{{ url_for('receipts.inbox') }}" class="app-btn app-btn-secondary">Receipt Inbox</a>
+    <a href="{{ url_for('receipts.duplicates') }}" class="app-btn app-btn-secondary">Duplicate Warnings</a>
+    <a href="{{ url_for('receipts.help_page') }}" class="app-btn app-btn-secondary">Receipt Workflow Help</a>
+  </div>
+
+  <div class="app-card p-5">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Recent Receipts</h2>
+    {% if data.recent %}
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Merchant</th>
+            <th>Date</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in data.recent %}
+          <tr>
+            <td>#{{ r.id }}</td>
+            <td>{{ r.merchant_name or '—' }}</td>
+            <td>{{ r.date_time.strftime('%Y-%m-%d') if r.date_time else '—' }}</td>
+            <td>${{ "{:,.2f}".format(r.grand_total|float) if r.grand_total else '—' }}</td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-medium" style="background: var(--color-bg-subtle);">{{ r.status.value.replace('_', ' ').title() }}</span></td>
+            <td><a href="{{ url_for('receipts.review', receipt_id=r.id) }}" class="app-link">Review</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color: var(--color-text-muted);">No receipts yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2">
+    <div class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Top Vendors</h2>
+      {% if data.vendors %}
+      <div class="space-y-3">
+        {% for v in data.vendors %}
+        <div class="flex justify-between items-center">
+          <span>{{ v.name }}</span>
+          <span class="text-sm" style="color: var(--color-text-muted);">{{ v.count }} receipts · ${{ "{:,.2f}".format(v.total|float) }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color: var(--color-text-muted);">No vendor data yet.</p>
+      {% endif %}
+    </div>
+    <div class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Quick Links</h2>
+      <div class="space-y-2">
+        <a href="{{ url_for('expenses.list_resource', resource_key='expenses') }}" class="block app-link">View All Expenses</a>
+        <a href="{{ url_for('receipts.settings') }}" class="block app-link">Receipt Settings</a>
+        <a href="{{ url_for('receipts.help_page') }}" class="block app-link">Receipt Workflow Help</a>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

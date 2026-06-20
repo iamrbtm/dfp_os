@@ -1,0 +1,48 @@
+[project]
+name = "dfpos-api-docs"
+version = "0.1.0"
+description = "API documentation microservice for Dude Fish OS"
+requires-python = ">=3.14"
+dependencies = [
+    "flask>=3.1",
+    "gunicorn>=23.0",
+    "click>=8.1",
+    "python-dotenv>=1.1",
+    "httpx>=0.28",
+    "rich>=14.0",
+    "requests>=2.34",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.9",
+]
+
+[project.scripts]
+dfpos-docs-fetch = "app.cli:fetch_spec"
+dfpos-docs-validate = "app.cli:validate_spec"
+dfpos-docs-build = "app.cli:build_docs"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".."]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.0",
+]

@@ -1,14 +1,18 @@
-Copilot Prompt: Expand DFP OS Expenses into Receipt-Centered Expense Management
+# Expand DFP OS Expenses into Receipt-Centered Expense Management
 
 You are working inside the main DFP OS application, not the audit-log microservice. Treat the existing DFP OS app as the source of truth for architecture, UI conventions, naming, database patterns, auth, routing, analytics, inventory, markets, jobs, and app-wide styling. Before coding, inspect the current repository and align with the existing stack, patterns, linting, tests, and database migration workflow.
 
-Goal
+Make a new git branch titled expenses-receipt and put everything from this prompt in that branch.
+
+Ensure you are committing and pushing often and throughout the coding process.
+
+## Goal
 
 Replace the current manual-first Expenses experience with a receipt-centered expense workflow. The new feature should live under the Expenses area as a Receipts submenu/page, but it should become the primary intake path for expenses. Keep the underlying expense ledger/reporting concepts intact. Do not simply delete the existing expense model unless the repo clearly shows it is safe to do so. Instead, evolve expenses so receipts, receipt line items, allocations, taxes, fees, and audit history flow into expense reporting, market profitability, custom job profitability, inventory, and analytics.
 
 This is an all-at-once implementation. You may internally organize the work into phases, but do not build a tiny V1 that leaves the hard pieces for later. Implement the full architecture now in a maintainable way.
 
-Current DFP OS Context
+## Current DFP OS Context
 
 Use the main DFP OS context from the repo and prior project direction:
 
@@ -18,7 +22,7 @@ Use the main DFP OS context from the repo and prior project direction:
 * Do not use the audit-log microservice stack as the base for this feature.
 * If the repo uses a different frontend/backend/database than expected, follow the actual repo.
 
-Feature Summary
+### Feature Summary
 
 Create a receipt management system where users can:
 
@@ -38,7 +42,7 @@ Create a receipt management system where users can:
 14. Track confidence scores and highlight low-confidence fields.
 15. Include an in-app downloadable Markdown help/spec document linked from the receipt page.
 
-Architecture Decision
+### Architecture Decision
 
 Use a provider-based receipt parsing architecture.
 

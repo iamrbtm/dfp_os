@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Receipt Inbox | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Expenses</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Receipt Inbox</h1>
+      <p class="mt-2" style="color: var(--color-text-muted);">All uploaded receipts.</p>
+    </div>
+    <a href="{{ url_for('receipts.upload') }}" class="app-btn app-btn-primary">Upload Receipt</a>
+  </div>
+
+  <form method="get" class="app-card p-4">
+    <div class="flex flex-col gap-3 sm:flex-row">
+      {{ search_form.q(class="app-input", placeholder="Search merchant, store, or receipt #") }}
+      {{ search_form.status(class="app-input") }}
+      <button type="submit" class="app-btn app-btn-secondary">Filter</button>
+      <a href="{{ url_for('receipts.inbox') }}" class="app-btn app-btn-secondary">Clear</a>
+    </div>
+  </form>
+
+  {% if receipts %}
+  <div class="app-card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Merchant</th>
+            <th>Date</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Uploaded</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in receipts %}
+          <tr>
+            <td>#{{ r.id }}</td>
+            <td>{{ r.merchant_name or '—' }}</td>
+            <td>{{ r.date_time.strftime('%Y-%m-%d') if r.date_time else '—' }}</td>
+            <td>${{ "{:,.2f}".format(r.grand_total|float) if r.grand_total else '—' }}</td>
+            <td>
+              <span class="px-2 py-0.5 rounded text-xs font-medium"
+                    style="background: {% if r.status == ReceiptStatus.APPROVED %}var(--color-success){% elif r.status == ReceiptStatus.REJECTED %}var(--color-danger){% elif r.status == ReceiptStatus.POSSIBLE_DUPLICATE %}var(--color-warning){% else %}var(--color-bg-subtle){% endif %};
+                           color: {% if r.status in (ReceiptStatus.APPROVED, ReceiptStatus.REJECTED) %}white{% else %}var(--color-text){% endif %};">
+                {{ r.status.value.replace('_', ' ').title() }}
+              </span>
+            </td>
+            <td>{{ r.created_at.strftime('%Y-%m-%d') }}</td>
+            <td>
+              <div class="flex gap-2">
+                <a href="{{ url_for('receipts.review', receipt_id=r.id) }}" class="app-link">Review</a>
+                {% if r.status == ReceiptStatus.POSSIBLE_DUPLICATE %}
+                <span class="text-xs" style="color: var(--color-warning);">Duplicate</span>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="app-empty">No receipts found.</div>
+  {% endif %}
+</section>
+{% endblock %}

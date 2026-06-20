@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.extensions import db
-from app.models.inventory import InventoryRecord
 from app.models.order import Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod
 from app.models.pos import (
     PosSale,
@@ -14,6 +13,8 @@ from app.models.pos import (
     PosSession,
     PosSessionStatus,
 )
+from app.services.audit import record_audit_event
+from app.services.inventory import deduct_finished_goods
 
 
 def open_session(
@@ -32,6 +33,18 @@ def open_session(
     )
     db.session.add(session)
     db.session.commit()
+    record_audit_event(
+        action="pos_session.opened",
+        entity_type="pos_session",
+        entity_id=session.id,
+        after_state={
+            "opening_cash": str(session.opening_cash),
+            "market_id": session.market_id,
+            "inventory_location_id": session.inventory_location_id,
+        },
+        source_module=__name__,
+        actor_id=user_id,
+    )
     return session
 
 
@@ -64,6 +77,18 @@ def close_session(
     if notes:
         session.notes = (session.notes or "") + f"\nClose notes: {notes}"
     db.session.commit()
+    record_audit_event(
+        action="pos_session.closed",
+        entity_type="pos_session",
+        entity_id=session.id,
+        after_state={
+            "closing_cash": str(session.closing_cash),
+            "expected_cash": str(session.expected_cash),
+            "cash_difference": str(session.cash_difference),
+        },
+        source_module=__name__,
+        actor_id=closed_by_user_id,
+    )
     return session
 
 
@@ -73,6 +98,12 @@ def void_session(session_id: int) -> PosSession:
         raise ValueError("Session not found")
     session.status = PosSessionStatus.VOIDED
     db.session.commit()
+    record_audit_event(
+        action="pos_session.voided",
+        entity_type="pos_session",
+        entity_id=session.id,
+        source_module=__name__,
+    )
     return session
 
 
@@ -173,30 +204,47 @@ def create_sale(
         items=pos_items,
     )
     db.session.add(sale)
-    db.session.commit()
 
-    _deduct_inventory_for_sale(sale)
+    db.session.flush()
+    _deduct_inventory_for_sale(sale, session.inventory_location_id, session.opened_by_user_id)
+
+    db.session.commit()
+    record_audit_event(
+        action="pos_sale.completed",
+        entity_type="pos_sale",
+        entity_id=sale.id,
+        after_state={
+            "sale_number": sale.sale_number,
+            "order_id": order.id,
+            "total": str(sale.total),
+            "payment_method": sale.payment_method,
+            "market_id": session.market_id,
+            "inventory_location_id": session.inventory_location_id,
+        },
+        source_module=__name__,
+        actor_id=session.opened_by_user_id,
+    )
 
     return sale, order
 
 
-def _deduct_inventory_for_sale(sale: PosSale) -> None:
+def _deduct_inventory_for_sale(
+    sale: PosSale,
+    inventory_location_id: int | None,
+    actor_id: int | None,
+) -> None:
     for item in sale.items:
         if item.item_type != PosSaleItemType.PRODUCT or item.product_id is None:
             continue
-        records = InventoryRecord.query.filter(
-            InventoryRecord.variant_id == item.variant_id,
-            InventoryRecord.product_id == item.product_id,
-            InventoryRecord.quantity_on_hand > 0,
-        ).order_by(InventoryRecord.id).all()
-
-        remaining = item.quantity
-        for rec in records:
-            if remaining <= 0:
-                break
-            deduct = min(remaining, rec.quantity_on_hand)
-            rec.quantity_on_hand -= deduct
-            remaining -= deduct
+        deduct_finished_goods(
+            product_id=item.product_id,
+            variant_id=item.variant_id,
+            quantity=item.quantity,
+            location_id=inventory_location_id,
+            reference_type="pos_sale",
+            reference_id=sale.id,
+            actor_id=actor_id,
+        )
 
 
 def get_session_summary(session_id: int) -> dict:

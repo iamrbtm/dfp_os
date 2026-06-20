@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Upload Receipt | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Expenses</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Upload Receipts</h1>
+    <p class="mt-2" style="color: var(--color-text-muted);">Upload receipt images or PDFs for processing.</p>
+  </div>
+
+  <div class="app-card p-6">
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+      {{ form.hidden_tag() }}
+
+      <div class="border-2 border-dashed rounded-lg p-8 text-center" style="border-color: var(--color-border);"
+           x-data="{ dragging: false }"
+           x-on:dragover.prevent="dragging = true"
+           x-on:dragleave.prevent="dragging = false"
+           x-on:drop.prevent="dragging = false">
+        <div class="flex flex-col items-center gap-3">
+          <svg class="w-12 h-12" style="color: var(--color-text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+          <p style="color: var(--color-text-muted);">Drag and drop files here, or click to browse</p>
+          <p class="text-xs" style="color: var(--color-text-muted);">JPG, PNG, HEIC, PDF up to 25MB</p>
+          {{ form.files(class="block w-full text-sm mt-2", style="color: var(--color-text);") }}
+          {% for error in form.files.errors %}
+          <p class="text-sm" style="color: var(--color-danger);">{{ error }}</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Source</label>
+        {{ form.source_type(class="app-input") }}
+      </div>
+
+      <div class="flex gap-3">
+        {{ form.submit(class="app-btn app-btn-primary") }}
+        <a href="{{ url_for('receipts.dashboard') }}" class="app-btn app-btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

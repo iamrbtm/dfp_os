@@ -1,0 +1,44 @@
+<section class="app-card overflow-hidden">
+  <div class="app-card-header flex items-center gap-3">
+    <span class="flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold" style="border-color: var(--color-link); color: var(--color-link);">3</span>
+    <div>
+      <h2>Products &amp; Inventory</h2>
+      <p class="text-xs font-normal" style="color: var(--color-text-muted);">Packing plan, packed counts, sold units, and returns.</p>
+    </div>
+  </div>
+  <div class="p-5">
+    <form method="post" action="{{ url_for('markets.packing_quick_add', market_id=instance.id) }}" hx-post="{{ url_for('markets.packing_quick_add', market_id=instance.id) }}" hx-target="#market-products-inventory" hx-swap="innerHTML" class="grid gap-3 md:grid-cols-[1fr_8rem_8rem_auto]">
+      {{ packing_form.hidden_tag() }}
+      {{ packing_form.product_id(class_="app-select") }}
+      {{ packing_form.planned_quantity(class_="app-input", placeholder="Planned") }}
+      {{ packing_form.packed_quantity(class_="app-input", placeholder="Packed") }}
+      <button type="submit" class="app-btn app-btn-primary">Add Item</button>
+    </form>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="app-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Planned</th>
+          <th>Packed</th>
+          <th>Sold</th>
+          <th>Returned</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in command.packing_list %}
+          <tr>
+            <td>{{ item.product.name if item.product else "Product #" ~ item.product_id }}</td>
+            <td>{{ item.planned_quantity or 0 }}</td>
+            <td>{{ item.packed_quantity or 0 }}</td>
+            <td>{{ item.sold_quantity or 0 }}</td>
+            <td>{{ item.returned_quantity or 0 }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" style="color: var(--color-text-muted);">No packing list items yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>

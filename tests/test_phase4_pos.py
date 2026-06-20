@@ -14,6 +14,7 @@ from app.models import (
     ProductVariant,
     User,
     UserRole,
+    InventoryRecord,
 )
 from app.services.pos import close_session, get_session_summary, open_session, create_sale, void_session
 
@@ -153,7 +154,18 @@ def test_pos_create_sale(app):
         _ensure_category()
         prod = _ensure_product(_ensure_category())
         variant = _ensure_variant(prod)
-        s = open_session(user_id=admin_id, opening_cash=Decimal("50.00"))
+        loc = _ensure_location()
+        db.session.add(
+            InventoryRecord(
+                product_id=prod.id,
+                variant_id=variant.id,
+                location_id=loc.id,
+                quantity_on_hand=3,
+                quantity_reserved=0,
+            )
+        )
+        db.session.commit()
+        s = open_session(user_id=admin_id, opening_cash=Decimal("50.00"), inventory_location_id=loc.id)
         sale, order = create_sale(
             session_id=s.id,
             payment_method="cash",
@@ -176,6 +188,8 @@ def test_pos_create_sale(app):
         assert order.total == Decimal("10.00")
         assert len(sale.items) == 1
         assert sale.status == PosSaleStatus.COMPLETED
+        inventory = InventoryRecord.query.filter_by(product_id=prod.id, variant_id=variant.id, location_id=loc.id).first()
+        assert inventory.quantity_on_hand == 2
 
 
 def test_pos_create_sale_custom_item(app):

@@ -78,6 +78,9 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "products"
 
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     slug: Mapped[str] = mapped_column(String(180), nullable=False, unique=True, index=True)
     sku_base: Mapped[str | None] = mapped_column(String(80), unique=True, index=True, nullable=True)
     short_description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -140,6 +143,9 @@ class ProductVariant(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "product_variants"
 
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     sku: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     colorway: Mapped[str | None] = mapped_column(String(120), nullable=True)

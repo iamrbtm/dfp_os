@@ -58,10 +58,18 @@
        style="{% if active_section == 'markets' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Markets
     </a>
-    <a href="{{ url_for('expenses.list_resource', resource_key='expenses') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'expenses' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Expenses
-    </a>
+    <div class="space-y-0.5">
+      <a href="{{ url_for('expenses.list_resource', resource_key='expenses') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+         style="{% if active_section == 'expenses' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+        Expenses
+      </a>
+      {% if active_section == 'expenses' %}
+      <a href="{{ url_for('receipts.dashboard') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">
+        Receipts
+      </a>
+      {% endif %}
+    </div>
     <a href="{{ url_for('analytics.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'analytics' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Analytics

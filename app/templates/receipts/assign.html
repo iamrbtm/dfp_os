@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Assign Line Items | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Expenses / Receipts</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Assign Line Items</h1>
+    <p class="mt-2" style="color: var(--color-text-muted);">Receipt #{{ receipt.id }} &mdash; {{ receipt.merchant_name or 'Unknown' }}</p>
+  </div>
+
+  <div class="app-card p-6">
+    <form method="post" class="space-y-4">
+      {{ form.hidden_tag() }}
+
+      <div>
+        <label class="block text-sm font-medium mb-2" style="color: var(--color-text);">Select Line Items</label>
+        <div class="space-y-2 max-h-60 overflow-y-auto border rounded p-3" style="border-color: var(--color-border);">
+          {% for item in line_items %}
+          <label class="flex items-center gap-3">
+            <input type="checkbox" name="line_item_ids" value="{{ item.id }}"
+                   class="rounded" style="border-color: var(--color-border);">
+            <span class="text-sm">{{ item.description or 'Item #' ~ item.id }} &mdash; ${{ "{:,.2f}".format(item.line_total|float) if item.line_total else '0.00' }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Assign To</label>
+        {{ form.allocation_type(class="app-input") }}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Market (optional)</label>
+        {{ form.market_id(class="app-input") }}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Custom Job (optional)</label>
+        {{ form.custom_job_id(class="app-input") }}
+      </div>
+
+      <div class="flex gap-3">
+        {{ form.submit(class="app-btn app-btn-primary") }}
+        <a href="{{ url_for('receipts.review', receipt_id=receipt.id) }}" class="app-btn app-btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="app-card p-5">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Current Assignments</h2>
+    {% if line_items %}
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Allocation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in line_items %}
+          <tr>
+            <td>{{ item.description or 'Item #' ~ item.id }}</td>
+            <td>
+              {% if item.allocations %}
+                {% for a in item.allocations %}
+                <span class="text-xs px-2 py-0.5 rounded mr-1" style="background: var(--color-bg-subtle);">
+                  {{ a.allocation_type.value.replace('_', ' ').title() }}
+                  {% if a.market_id %}(Market #{{ a.market_id }}){% endif %}
+                  {% if a.custom_job_id %}(Job #{{ a.custom_job_id }}){% endif %}
+                </span>
+                {% endfor %}
+              {% else %}
+              <span style="color: var(--color-text-muted);">Unassigned</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

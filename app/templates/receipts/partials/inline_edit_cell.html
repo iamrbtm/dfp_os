@@ -1,0 +1,60 @@
+{% if edit_mode %}
+  {% if field == "description" %}
+  <input type="text" name="value" value="{{ value }}"
+         autofocus
+         hx-patch="{{ url_for('receipts.inline_edit_line_item', receipt_id=receipt_id, item_id=item_id, field=field) }}"
+         hx-trigger="blur, keydown[key=='Enter']"
+         hx-swap="outerHTML"
+         hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
+         class="app-input text-sm w-full min-w-[120px]">
+  {% elif field == "quantity" %}
+  <input type="number" step="any" min="0" name="value" value="{{ value }}"
+         autofocus
+         hx-patch="{{ url_for('receipts.inline_edit_line_item', receipt_id=receipt_id, item_id=item_id, field=field) }}"
+         hx-trigger="blur, keydown[key=='Enter']"
+         hx-swap="outerHTML"
+         hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
+         class="app-input text-sm w-20 text-right">
+  {% elif field == "unit_price" %}
+  <input type="number" step="0.01" min="0" name="value" value="{{ value }}"
+         autofocus
+         hx-patch="{{ url_for('receipts.inline_edit_line_item', receipt_id=receipt_id, item_id=item_id, field=field) }}"
+         hx-trigger="blur, keydown[key=='Enter']"
+         hx-swap="outerHTML"
+         hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
+         class="app-input text-sm w-24 text-right">
+  {% elif field == "line_total" %}
+  <input type="number" step="0.01" min="0" name="value" value="{{ value }}"
+         autofocus
+         hx-patch="{{ url_for('receipts.inline_edit_line_item', receipt_id=receipt_id, item_id=item_id, field=field) }}"
+         hx-trigger="blur, keydown[key=='Enter']"
+         hx-swap="outerHTML"
+         hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
+         class="app-input text-sm w-24 text-right">
+  {% elif field == "line_tax" %}
+  <input type="number" step="0.01" min="0" name="value" value="{{ value }}"
+         autofocus
+         hx-patch="{{ url_for('receipts.inline_edit_line_item', receipt_id=receipt_id, item_id=item_id, field=field) }}"
+         hx-trigger="blur, keydown[key=='Enter']"
+         hx-swap="outerHTML"
+         hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
+         class="app-input text-sm w-24 text-right">
+  {% elif field == "sku" %}
+  <input type="text" name="value" value="{{ value }}"
+         autofocus
+         hx-patch="{{ url_for('receipts.inline_edit_line_item', receipt_id=receipt_id, item_id=item_id, field=field) }}"
+         hx-trigger="blur, keydown[key=='Enter']"
+         hx-swap="outerHTML"
+         hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
+         class="app-input text-sm w-full min-w-[80px]">
+  {% endif %}
+{% else %}
+  <span class="inline-edit-cell cursor-pointer rounded px-1 -mx-1"
+        hx-get="{{ url_for('receipts.inline_edit_line_item', receipt_id=receipt_id, item_id=item_id, field=field) }}"
+        hx-trigger="click"
+        hx-swap="outerHTML"
+        hx-target="this"
+        title="Click to edit">
+    {{ display_value }}
+  </span>
+{% endif %}

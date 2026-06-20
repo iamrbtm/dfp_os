@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ config.APP_NAME }} - API Documentation</title>
+  <style>
+    body { margin: 0; padding: 0; }
+  </style>
+</head>
+<body>
+  <div id="redoc-container"></div>
+  <script src="{{ config.OPENAPI_REDOC_URL }}"></script>
+  <script>
+    Redoc.init(
+      '{{ url_for("catalog_api.openapi_json", _external=False) }}',
+      {
+        scrollYOffset: 0,
+        hideDownloadButton: false,
+        expandResponses: "200,201",
+        sortPropsAlphabetically: true,
+        nativeScrollbars: true,
+      },
+      document.getElementById('redoc-container')
+    );
+  </script>
+</body>
+</html>

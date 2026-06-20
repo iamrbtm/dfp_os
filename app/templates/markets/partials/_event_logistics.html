@@ -1,0 +1,61 @@
+<section class="app-card overflow-hidden">
+  <div class="app-card-header flex items-center gap-3">
+    <span class="flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold" style="border-color: var(--color-link); color: var(--color-link);">1</span>
+    <div>
+      <h2>Event &amp; Logistics</h2>
+      <p class="text-xs font-normal" style="color: var(--color-text-muted);">Location, booth setup, application dates, and load-in notes.</p>
+    </div>
+  </div>
+  <div class="grid gap-5 p-5 lg:grid-cols-2">
+    <div class="space-y-3 text-sm">
+      <div><span style="color: var(--color-text-muted);">Location:</span> {{ instance.location_name or "TBD" }}</div>
+      <div>
+        <span style="color: var(--color-text-muted);">Address:</span>
+        {{ instance.address or "TBD" }}{% if instance.city %}, {{ instance.city }}{% endif %}{% if instance.state %} {{ instance.state }}{% endif %}{% if instance.zip_code %} {{ instance.zip_code }}{% endif %}
+        <p class="mt-1 text-xs" style="color: var(--color-text-muted);">
+          Coordinates:
+          {% if instance.latitude is not none and instance.longitude is not none %}
+            {{ "%.5f"|format(instance.latitude) }}, {{ "%.5f"|format(instance.longitude) }}
+          {% else %}
+            not geocoded yet
+          {% endif %}
+        </p>
+      </div>
+      <div><span style="color: var(--color-text-muted);">Booth:</span> {{ instance.booth_location or "Unassigned" }}{% if instance.booth_size %} &middot; {{ instance.booth_size }}{% endif %}</div>
+      <div class="flex flex-wrap gap-2">
+        <span class="app-badge {% if instance.power_available %}app-badge-success{% else %}app-badge-info{% endif %}">Power {{ "Yes" if instance.power_available else "No" }}</span>
+        <span class="app-badge {% if instance.wifi_available %}app-badge-success{% else %}app-badge-info{% endif %}">Wi-Fi {{ "Yes" if instance.wifi_available else "No" }}</span>
+        <span class="app-badge {% if instance.food_available %}app-badge-success{% else %}app-badge-info{% endif %}">Food {{ "Yes" if instance.food_available else "No" }}</span>
+      </div>
+      <div><span style="color: var(--color-text-muted);">Load in:</span> {{ instance.load_in_at.strftime("%b %d, %Y %-I:%M %p") if instance.load_in_at else "TBD" }}</div>
+      <div><span style="color: var(--color-text-muted);">Load out:</span> {{ instance.load_out_at.strftime("%b %d, %Y %-I:%M %p") if instance.load_out_at else "TBD" }}</div>
+      {% if instance.load_in_notes %}<p class="rounded-lg border p-3" style="border-color: var(--color-border);">{{ instance.load_in_notes }}</p>{% endif %}
+      {% if instance.load_out_notes %}<p class="rounded-lg border p-3" style="border-color: var(--color-border);">{{ instance.load_out_notes }}</p>{% endif %}
+    </div>
+    <form method="post" action="{{ url_for('markets.update_logistics', market_id=instance.id) }}" hx-post="{{ url_for('markets.update_logistics', market_id=instance.id) }}" hx-target="#market-event-logistics" hx-swap="innerHTML" class="grid gap-3 text-sm">
+      {{ logistics_form.hidden_tag() }}
+      <div class="grid gap-3 sm:grid-cols-2">
+        {{ logistics_form.location_name(class_="app-input", placeholder="Location name") }}
+        {{ logistics_form.booth_location(class_="app-input", placeholder="Booth location") }}
+        {{ logistics_form.address(class_="app-input sm:col-span-2", placeholder="Street address") }}
+        {{ logistics_form.city(class_="app-input", placeholder="City") }}
+        {{ logistics_form.state(class_="app-input", placeholder="State") }}
+        {{ logistics_form.zip_code(class_="app-input", placeholder="ZIP code") }}
+        {{ logistics_form.booth_size(class_="app-input", placeholder="Booth size") }}
+        {{ logistics_form.application_submitted_at(class_="app-input") }}
+        {{ logistics_form.application_approved_at(class_="app-input") }}
+        {{ logistics_form.fee_paid_at(class_="app-input") }}
+        {{ logistics_form.load_in_at(class_="app-input") }}
+        {{ logistics_form.load_out_at(class_="app-input") }}
+      </div>
+      <div class="flex flex-wrap gap-4">
+        <label class="inline-flex items-center gap-2">{{ logistics_form.power_available(class_="app-checkbox") }} Power</label>
+        <label class="inline-flex items-center gap-2">{{ logistics_form.wifi_available(class_="app-checkbox") }} Wi-Fi</label>
+        <label class="inline-flex items-center gap-2">{{ logistics_form.food_available(class_="app-checkbox") }} Food</label>
+      </div>
+      {{ logistics_form.load_in_notes(class_="app-textarea", rows="2", placeholder="Load-in notes") }}
+      {{ logistics_form.load_out_notes(class_="app-textarea", rows="2", placeholder="Load-out notes") }}
+      <button class="app-btn app-btn-primary" type="submit">Save Logistics</button>
+    </form>
+  </div>
+</section>

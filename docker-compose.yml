@@ -3,12 +3,29 @@ services:
     build: .
     env_file:
       - .env
+    environment:
+      AUDIT_LOG_BASE_URL: http://audit-log:8090
+      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:-change-me-audit-token}
+      AUDIT_LOG_ENABLED: ${AUDIT_LOG_ENABLED:-false}
+      RECEIPT_STORAGE_PATH: ${RECEIPT_STORAGE_PATH:-uploads/receipts}
+      RECEIPT_OCR_PROVIDER: ${RECEIPT_OCR_PROVIDER:-tesseract}
+      RECEIPT_AI_PROVIDER: ${RECEIPT_AI_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://localhost:11434}
+      OLLAMA_FALLBACK_URL: ${OLLAMA_FALLBACK_URL:-http://localhost:11434}
+      OLLAMA_RECEIPT_MODEL: ${OLLAMA_RECEIPT_MODEL:-llama3}
+      RECEIPT_DUPLICATE_STRICTNESS: ${RECEIPT_DUPLICATE_STRICTNESS:-normal}
     ports:
       - "5000:5000"
     volumes:
       - .:/app
       - web_venv:/opt/venv
       - web_node_modules:/app/node_modules
+      - receipt_uploads:/app/uploads/receipts
+    depends_on:
+      db:
+        condition: service_healthy
     command: >
       /bin/sh -c
       "npm install &&
@@ -21,7 +38,6 @@ services:
 
   db:
     image: mariadb:11
-    profiles: ["localdb"]
     environment:
       MARIADB_DATABASE: dudefish_os
       MARIADB_USER: username
@@ -39,7 +55,6 @@ services:
 
   audit-postgres:
     image: postgres:17
-    profiles: ["audit"]
     environment:
       POSTGRES_DB: dfp_audit
       POSTGRES_USER: dfp_audit
@@ -56,7 +71,6 @@ services:
 
   audit-redis:
     image: redis:7-alpine
-    profiles: ["audit"]
     ports:
       - "6379:6379"
     volumes:
@@ -69,7 +83,6 @@ services:
 
   audit-log:
     build: services/audit-log
-    profiles: ["audit"]
     env_file:
       - services/audit-log/.env
     ports:
@@ -84,9 +97,25 @@ services:
       "uv run alembic upgrade head &&
       uv run uvicorn app.main:app --host 0.0.0.0 --port 8090"
 
+  api-docs:
+    profiles:
+      - docs
+    build: services/dfpos-api-docs
+    env_file:
+      - services/dfpos-api-docs/.env
+    environment:
+      DFPOS_OPENAPI_URL: http://web:5000/api/openapi.json
+      APP_NAME: Dude Fish OS API Reference
+      REDOC_THEME: light
+    ports:
+      - "8080:8080"
+    depends_on:
+      - web
+
 volumes:
   mariadb_data:
   web_venv:
   web_node_modules:
+  receipt_uploads:
   audit_postgres_data:
   audit_redis_data:
