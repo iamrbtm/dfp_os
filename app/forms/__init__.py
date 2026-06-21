@@ -23,10 +23,13 @@ from app.forms.inventory import FilamentSpoolForm, InventoryLocationForm, Invent
 from app.forms.order import OrderForm, OrderItemForm, PaymentForm
 from app.forms.pos import PosCloseSessionForm, PosSessionForm
 from app.forms.print_job import PrintJobForm
+from app.forms.storefront import AddToCartForm, CheckoutForm
 
 __all__ = [
+    "AddToCartForm",
     "AMSUnitForm",
     "CategoryForm",
+    "CheckoutForm",
     "CollectionForm",
     "CustomerForm",
     "CustomRequestForm",

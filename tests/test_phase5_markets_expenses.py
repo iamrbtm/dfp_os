@@ -174,6 +174,23 @@ def test_market_list_page_loads_for_admin(login_admin, client):
     assert resp.status_code == 200
 
 
+def test_market_list_can_sort_by_header(login_admin, client, app):
+    with app.app_context():
+        db.session.add_all(
+            [
+                Market(name="Zulu Market", status=MarketStatus.SCHEDULED),
+                Market(name="Alpha Market", status=MarketStatus.ACCEPTED),
+            ]
+        )
+        db.session.commit()
+
+    resp = client.get("/markets/markets/?sort=name&dir=asc", follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert resp.text.index("Alpha Market") < resp.text.index("Zulu Market")
+    assert "sort=name" in resp.text
+
+
 def test_market_create_page_loads_for_admin(login_admin, client):
     resp = client.get("/markets/markets/new", follow_redirects=True)
     assert resp.status_code == 200

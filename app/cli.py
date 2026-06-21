@@ -4,6 +4,7 @@ import click
 from flask import current_app
 
 from app.services.demo_seed import seed_demo_data
+from app.services.events_seed import seed_events_2026
 from app.services.users import ensure_admin_user
 
 
@@ -43,5 +44,14 @@ def seed_demo() -> None:
         admin_password=current_app.config["ADMIN_PASSWORD"],
     )
     click.echo("Demo seed complete.")
+    for key, value in counts.items():
+        click.echo(f"- {key}: {value}")
+
+
+@seed_group.command("events-2026")
+def seed_events_2026_command() -> None:
+    """Seed 2026 Clarksville-area events and markets (dummy data based on web research)."""
+    counts = seed_events_2026()
+    click.echo("2026 events seed complete.")
     for key, value in counts.items():
         click.echo(f"- {key}: {value}")

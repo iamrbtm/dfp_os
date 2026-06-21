@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Checkout | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-8">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Secure checkout</p>
+    <h1 class="text-4xl font-semibold" style="color: var(--color-text);">Finish your order</h1>
+    <p class="mt-3 max-w-3xl text-base leading-7" style="color: var(--color-text-muted);">
+      Fill out your details once, choose pickup or shipping, and then pay with Square or reserve your order with Venmo.
+    </p>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+    <form method="post" class="app-card p-6 space-y-6">
+      {{ form.hidden_tag() }}
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.first_name.label.text }}</label>
+          {{ form.first_name(class="app-input") }}
+          {% for error in form.first_name.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.last_name.label.text }}</label>
+          {{ form.last_name(class="app-input") }}
+          {% for error in form.last_name.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+        </div>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.email.label.text }}</label>
+          {{ form.email(class="app-input") }}
+          {% for error in form.email.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.phone.label.text }}</label>
+          {{ form.phone(class="app-input") }}
+          {% for error in form.phone.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <p class="mb-3 text-sm font-medium" style="color: var(--color-text);">{{ form.fulfillment_method.label.text }}</p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          {% for value, label in form.fulfillment_method.choices %}
+            <label class="rounded-2xl border p-4 cursor-pointer" style="border-color: var(--color-border);">
+              <input type="radio" name="{{ form.fulfillment_method.name }}" value="{{ value }}" {% if form.fulfillment_method.data == value %}checked{% endif %}>
+              <span class="ml-2 font-medium" style="color: var(--color-text);">{{ label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="space-y-4 rounded-[1.5rem] p-5" style="background-color: var(--color-surface-muted);">
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Shipping details</h2>
+        <div>
+          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.shipping_name.label.text }}</label>
+          {{ form.shipping_name(class="app-input") }}
+          {% for error in form.shipping_name.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.shipping_address_line_1.label.text }}</label>
+          {{ form.shipping_address_line_1(class="app-input") }}
+          {% for error in form.shipping_address_line_1.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.shipping_address_line_2.label.text }}</label>
+          {{ form.shipping_address_line_2(class="app-input") }}
+        </div>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.shipping_city.label.text }}</label>
+            {{ form.shipping_city(class="app-input") }}
+            {% for error in form.shipping_city.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.shipping_state.label.text }}</label>
+            {{ form.shipping_state(class="app-input") }}
+            {% for error in form.shipping_state.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.shipping_postal_code.label.text }}</label>
+            {{ form.shipping_postal_code(class="app-input") }}
+            {% for error in form.shipping_postal_code.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="mb-3 text-sm font-medium" style="color: var(--color-text);">{{ form.payment_option.label.text }}</p>
+        <div class="grid gap-3">
+          {% for value, label in form.payment_option.choices %}
+            <label class="rounded-2xl border p-4 cursor-pointer" style="border-color: var(--color-border);">
+              <input type="radio" name="{{ form.payment_option.name }}" value="{{ value }}" {% if form.payment_option.data == value %}checked{% endif %}>
+              <span class="ml-2 font-medium" style="color: var(--color-text);">{{ label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        {% if not square_enabled %}
+          <p class="mt-3 text-sm" style="color: var(--color-text-muted);">Square isn’t connected in this environment yet, so Venmo reservation is the current checkout path.</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.notes.label.text }}</label>
+        {{ form.notes(class="app-textarea", rows="4") }}
+      </div>
+
+      <div>
+        {{ form.submit(class="app-btn app-btn-primary") }}
+      </div>
+    </form>
+
+    <aside class="app-card p-6 h-fit space-y-5">
+      <div>
+        <h2 class="text-2xl font-semibold" style="color: var(--color-text);">Order summary</h2>
+        <p class="mt-2 text-sm leading-6" style="color: var(--color-text-muted);">You can still go back and adjust quantities from your cart before paying.</p>
+      </div>
+      <div class="space-y-4">
+        {% for line in summary.lines %}
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="font-medium" style="color: var(--color-text);">{{ line.display_name }}</p>
+              <p class="text-sm" style="color: var(--color-text-muted);">Qty {{ line.quantity }}</p>
+            </div>
+            <span style="color: var(--color-text);">${{ '%.2f'|format(line.line_total) }}</span>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="space-y-3 border-t pt-4 text-sm" style="border-color: var(--color-divider);">
+        <div class="flex justify-between">
+          <span>Subtotal</span>
+          <span>${{ '%.2f'|format(summary.subtotal) }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Shipping</span>
+          <span>${{ '%.2f'|format(summary.shipping_total) }}</span>
+        </div>
+        <div class="flex justify-between text-lg font-semibold" style="color: var(--color-text);">
+          <span>Total</span>
+          <span>${{ '%.2f'|format(summary.total) }}</span>
+        </div>
+      </div>
+      {% if venmo_handle %}
+        <div class="rounded-2xl p-4" style="background-color: var(--color-info-bg); color: var(--color-info);">
+          Venmo fallback: {{ venmo_handle }}
+        </div>
+      {% endif %}
+    </aside>
+  </div>
+</section>
+{% endblock %}

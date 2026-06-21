@@ -198,13 +198,16 @@ Python 3.14 compatibility is mandatory. After dependencies are selected, run `uv
 
 Avoid unnecessary compiled dependencies. Prefer libraries that publish Python 3.14-compatible wheels or are pure Python.
 
-## Architecture Rules
+## Workflow And Architecture Docs
 
-Use a Flask application factory.
+Use the project docs together instead of overloading this file:
 
-Use blueprints.
+- `PROMPTS.md`: session workflow, custom prompts, and agent rules of engagement
+- `TODO.md`: live working list that agents should keep updated
+- `DESIGN.md`: product vision, UX direction, and business-facing design intent
+- `ARCHITECTURE.md`: folder structure, data flow, state choices, and module/service interaction rules
 
-Keep routes thin.
+Core architectural expectations still apply:
 
 Put business logic in services.
 

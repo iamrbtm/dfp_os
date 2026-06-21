@@ -53,6 +53,7 @@ class ResourceConfig:
     form_class: type
     search_fields: list[str]
     columns: list[tuple[str, callable]]
+    sortable_columns: dict[str, object]
 
 
 def _display_value(value):
@@ -126,6 +127,13 @@ MARKET_RESOURCES: dict[str, ResourceConfig] = {
             ("Revenue", lambda item: _format_money(item.calculated_revenue)),
             ("Profit", lambda item: _format_money(item.calculated_profit)),
         ],
+        sortable_columns={
+            "name": Market.name,
+            "location": Market.location_name,
+            "date": Market.event_date,
+            "status": Market.status,
+            "created": Market.created_at,
+        },
     ),
     "packing-lists": ResourceConfig(
         key="packing-lists",
@@ -141,8 +149,46 @@ MARKET_RESOURCES: dict[str, ResourceConfig] = {
             ("Sold", lambda item: item.sold_quantity or 0),
             ("Returned", lambda item: item.returned_quantity or 0),
         ],
+        sortable_columns={
+            "product": MarketPackingList.product_id,
+            "planned": MarketPackingList.planned_quantity,
+            "packed": MarketPackingList.packed_quantity,
+            "sold": MarketPackingList.sold_quantity,
+            "returned": MarketPackingList.returned_quantity,
+            "created": MarketPackingList.created_at,
+        },
     ),
 }
+
+
+MARKET_SORT_LABELS = {
+    "markets": {
+        "Name": "name",
+        "Location": "location",
+        "Date": "date",
+        "Status": "status",
+    },
+    "packing-lists": {
+        "Product": "product",
+        "Planned": "planned",
+        "Packed": "packed",
+        "Sold": "sold",
+        "Returned": "returned",
+    },
+}
+
+
+def _resolve_sort(config: ResourceConfig, resource_key: str) -> tuple[str, str, object]:
+    sort_key = request.args.get("sort", "").strip().lower() or "created"
+    sort_dir = request.args.get("dir", "").strip().lower() or "desc"
+    if sort_key not in config.sortable_columns:
+        sort_key = "created"
+    if sort_dir not in {"asc", "desc"}:
+        sort_dir = "desc"
+
+    sort_column = config.sortable_columns[sort_key]
+    order_clause = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
+    return sort_key, sort_dir, order_clause
 
 
 def _build_form(config: ResourceConfig, instance=None):
@@ -177,19 +223,41 @@ def list_resource(resource_key: str):
     config = MARKET_RESOURCES[resource_key]
     page = request.args.get("page", default=1, type=int)
     search_term = request.args.get("q", "").strip()
+    sort_key, sort_dir, order_clause = _resolve_sort(config, resource_key)
     statement = apply_search(select(config.model), config.model, search_term, config.search_fields)
-    pagination = paginate_query(statement.order_by(config.model.created_at.desc()), page, 20)
+    pagination = paginate_query(statement.order_by(order_clause, config.model.id.desc()), page, 20)
     rows = [
         {"id": item.id, "cells": [_display_value(getter(item)) for _, getter in config.columns]}
         for item in pagination.items
     ]
+    sortable_headers = []
+    label_map = MARKET_SORT_LABELS.get(resource_key, {})
+    for column in [label for label, _ in config.columns]:
+        header_sort_key = label_map.get(column)
+        if not header_sort_key:
+            sortable_headers.append({"label": column, "sortable": False})
+            continue
+        next_dir = "desc" if sort_key == header_sort_key and sort_dir == "asc" else "asc"
+        sortable_headers.append(
+            {
+                "label": column,
+                "sortable": True,
+                "sort_key": header_sort_key,
+                "active": sort_key == header_sort_key,
+                "dir": sort_dir if sort_key == header_sort_key else None,
+                "next_dir": next_dir,
+            }
+        )
     return render_template(
         "dashboard/resource_list.html",
         resource=config,
         rows=rows,
         columns=[label for label, _ in config.columns],
+        sortable_headers=sortable_headers,
         pagination=pagination,
         search_term=search_term,
+        active_sort=sort_key,
+        active_dir=sort_dir,
     )
 
 

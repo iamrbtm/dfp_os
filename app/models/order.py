@@ -47,6 +47,19 @@ class PaymentMethod(StrEnum):
     OTHER = "other"
 
 
+class OrderPaymentStatus(StrEnum):
+    UNPAID = "unpaid"
+    PENDING = "pending"
+    PAID = "paid"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+
+
+class OrderFulfillmentMethod(StrEnum):
+    PICKUP = "pickup"
+    SHIPPING = "shipping"
+
+
 def generate_order_number() -> str:
     short = uuid.uuid4().hex[:8].upper()
     return f"DFP-{short}"
@@ -75,6 +88,17 @@ class Order(PrimaryKeyMixin, TimestampMixin, db.Model):
         default=OrderSource.MANUAL,
         nullable=False,
     )
+    payment_status: Mapped[OrderPaymentStatus] = mapped_column(
+        Enum(OrderPaymentStatus, native_enum=False, length=40),
+        default=OrderPaymentStatus.UNPAID,
+        nullable=False,
+        index=True,
+    )
+    fulfillment_method: Mapped[OrderFulfillmentMethod] = mapped_column(
+        Enum(OrderFulfillmentMethod, native_enum=False, length=40),
+        default=OrderFulfillmentMethod.PICKUP,
+        nullable=False,
+    )
     market_id: Mapped[int | None] = mapped_column(
         Integer, nullable=True, index=True
     )
@@ -83,11 +107,25 @@ class Order(PrimaryKeyMixin, TimestampMixin, db.Model):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    customer_email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    customer_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    shipping_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    shipping_address_line_1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    shipping_address_line_2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    shipping_city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    shipping_state: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    shipping_postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    shipping_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     tax_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     discount_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     paid_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    payment_provider: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    external_checkout_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    external_checkout_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    external_payment_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

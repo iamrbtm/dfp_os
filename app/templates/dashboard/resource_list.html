@@ -26,9 +26,31 @@
           <table class="app-table">
             <thead>
               <tr>
-                {% for column in columns %}
-                  <th class="font-medium">{{ column }}</th>
-                {% endfor %}
+                {% if sortable_headers is defined %}
+                  {% for column in sortable_headers %}
+                  <th class="font-medium">
+                    {% if column.sortable %}
+                      <a
+                        href="{{ url_for(request.endpoint, resource_key=resource.key, q=search_term, sort=column.sort_key, dir=column.next_dir) }}"
+                        class="inline-flex items-center gap-1 hover:opacity-80"
+                      >
+                        <span>{{ column.label }}</span>
+                        {% if column.active %}
+                          <span aria-hidden="true">{% if column.dir == 'asc' %}↑{% else %}↓{% endif %}</span>
+                        {% endif %}
+                      </a>
+                    {% else %}
+                      {{ column.label }}
+                    {% endif %}
+                  </th>
+                  {% endfor %}
+                {% else %}
+                  {% for column in columns %}
+                  <th class="font-medium">
+                    {{ column }}
+                  </th>
+                  {% endfor %}
+                {% endif %}
                 <th class="font-medium">Actions</th>
               </tr>
             </thead>
