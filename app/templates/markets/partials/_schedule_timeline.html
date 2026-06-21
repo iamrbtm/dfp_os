@@ -1,0 +1,46 @@
+<section class="app-card overflow-hidden">
+  <div class="app-card-header flex items-center gap-3">
+    <span class="flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold" style="border-color: var(--color-link); color: var(--color-link);">4</span>
+    <div>
+      <h2>Schedule &amp; Timeline</h2>
+      <p class="text-xs font-normal" style="color: var(--color-text-muted);">Load-in, booth setup, event hours, deadlines, and reminders.</p>
+    </div>
+  </div>
+  <div class="grid gap-5 p-5 lg:grid-cols-[1fr_18rem]">
+    <div class="space-y-3">
+      {% for item in command.timeline_events %}
+        <div class="flex gap-3 rounded-lg border p-3" style="border-color: var(--color-border);">
+          <div class="mt-1 h-3 w-3 rounded-full {% if item.completed_at %}bg-green-500{% else %}bg-blue-500{% endif %}"></div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h3 class="font-semibold">{{ item.title }}</h3>
+              <span class="app-badge app-badge-info">{{ item.event_type.value.replace("_", " ").title() }}</span>
+            </div>
+            <p class="mt-1 text-sm" style="color: var(--color-text-muted);">
+              {{ item.starts_at.strftime("%b %d, %Y %-I:%M %p") if item.starts_at else "Time TBD" }}
+              {% if item.location %} &middot; {{ item.location }}{% endif %}
+            </p>
+            {% if item.notes %}<p class="mt-2 text-sm">{{ item.notes }}</p>{% endif %}
+          </div>
+          {% if not item.completed_at %}
+            <form method="post" action="{{ url_for('markets.complete_timeline', market_id=instance.id, event_id=item.id) }}" hx-post="{{ url_for('markets.complete_timeline', market_id=instance.id, event_id=item.id) }}" hx-target="#market-schedule-timeline" hx-swap="innerHTML">
+              <button class="app-btn app-btn-secondary" type="submit">Done</button>
+            </form>
+          {% endif %}
+        </div>
+      {% else %}
+        <p class="text-sm" style="color: var(--color-text-muted);">No timeline items yet.</p>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('markets.create_timeline_event', market_id=instance.id) }}" hx-post="{{ url_for('markets.create_timeline_event', market_id=instance.id) }}" hx-target="#market-schedule-timeline" hx-swap="innerHTML" class="space-y-3">
+      {{ timeline_form.hidden_tag() }}
+      {{ timeline_form.title(class_="app-input", placeholder="Timeline item") }}
+      {{ timeline_form.event_type(class_="app-select") }}
+      {{ timeline_form.starts_at(class_="app-input") }}
+      {{ timeline_form.ends_at(class_="app-input") }}
+      {{ timeline_form.location(class_="app-input", placeholder="Location") }}
+      {{ timeline_form.notes(class_="app-textarea", rows="3", placeholder="Notes") }}
+      <button class="app-btn app-btn-primary w-full" type="submit">Add Timeline Item</button>
+    </form>
+  </div>
+</section>

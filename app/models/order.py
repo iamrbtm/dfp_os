@@ -71,6 +71,9 @@ class Order(PrimaryKeyMixin, TimestampMixin, db.Model):
     order_number: Mapped[str] = mapped_column(
         String(40), nullable=False, unique=True, index=True, default=generate_order_number
     )
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     customer_id: Mapped[int | None] = mapped_column(
         ForeignKey("customers.id"), nullable=True, index=True
     )

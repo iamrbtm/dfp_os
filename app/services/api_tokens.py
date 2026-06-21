@@ -9,6 +9,18 @@ from sqlalchemy import select
 from app.extensions import db
 from app.models import ApiToken, User
 from app.models.base import utc_now
+from app.services.audit import record_audit_event
+
+AVAILABLE_API_TOKEN_SCOPES: tuple[tuple[str, str], ...] = (
+    ("catalog", "Catalog: products, categories, collections, variants, model assets"),
+    ("inventory", "Inventory: finished goods, filament, and locations"),
+    ("orders", "Orders: orders, items, payments, and customers"),
+    ("pos", "POS: sessions and sales"),
+    ("markets", "Markets: events, packing lists, and market operations"),
+    ("receipts", "Receipts & Expenses: receipts and expense ledger"),
+    ("analytics", "Analytics: summaries, charts, and insights"),
+    ("settings", "Settings: settings, feature flags, modules, and API tokens"),
+)
 
 
 def _hash_token(raw_token: str) -> str:
@@ -33,6 +45,14 @@ def create_api_token(
     )
     db.session.add(token)
     db.session.commit()
+    record_audit_event(
+        action="api_token.created",
+        entity_type="api_token",
+        entity_id=token.id,
+        after_state={"name": token.name, "prefix": token.prefix, "scopes": token.scopes},
+        source_module=__name__,
+        actor_id=user.id,
+    )
     return token, raw_token
 
 

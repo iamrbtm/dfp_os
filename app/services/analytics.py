@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+import json
 
 from sqlalchemy import func
 
@@ -407,3 +408,95 @@ def expense_analytics(months: int = 6) -> dict:
         "total_expenses": total_all,
         "months": months,
     }
+
+
+def analytics_numbers_snapshot() -> dict:
+    summary = executive_summary()
+    pos = pos_analytics()
+    inventory = inventory_analytics()
+    expenses = expense_analytics()
+    markets = market_analytics()[:5]
+    products = product_analytics(limit=10)
+    return {
+        "summary": {
+            "today_revenue": str(summary["today_revenue"]),
+            "month_revenue": str(summary["month_revenue"]),
+            "month_expenses": str(summary["month_expenses"]),
+            "estimated_month_profit": str(summary["estimated_month_profit"]),
+            "open_orders_count": summary["open_orders_count"],
+            "low_inventory_count": summary["low_inventory_count"],
+            "low_filament_count": summary["low_filament_count"],
+        },
+        "pos": {
+            "total_revenue": str(pos["total_revenue"]),
+            "total_sales": pos["total_sales"],
+            "payment_totals": {k: str(v) for k, v in pos["payment_totals"].items()},
+        },
+        "inventory": {
+            "low_stock_count": inventory["low_stock_count"],
+            "total_inventory_value": str(inventory["total_inventory_value"]),
+            "filament_low": inventory["filament_low"],
+        },
+        "expenses": {
+            "total_expenses": str(expenses["total_expenses"]),
+            "by_category": [
+                {"category": row["category"], "total": str(row["total"])}
+                for row in expenses["by_category"][:8]
+            ],
+        },
+        "markets": [
+            {"name": row["name"], "profit": str(row["profit"]), "total_sales": str(row["total_sales"])}
+            for row in markets
+        ],
+        "products": [
+            {"name": row["name"], "units_sold": row["units_sold"], "revenue": str(row["revenue"])}
+            for row in products
+        ],
+    }
+
+
+def analytics_insights() -> dict:
+    from flask import current_app
+    from app.services.audit import record_audit_event
+
+    snapshot = analytics_numbers_snapshot()
+    fallback = {
+        "enabled": False,
+        "insight": (
+            "AI analytics insights are disabled. Review the numeric dashboard: prioritize low inventory, "
+            "top-selling products, high-expense categories, and markets with positive profit."
+        ),
+        "numbers": snapshot,
+    }
+    if not current_app.config.get("AI_ANALYTICS_INSIGHTS_ENABLED", False):
+        return fallback
+
+    api_key = current_app.config.get("OPENAI_API_KEY")
+    if not api_key:
+        return fallback
+
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(api_key=api_key)
+        response = client.responses.create(
+            model=current_app.config.get("OPENAI_MODEL_ANALYTICS", "gpt-4o-mini"),
+            input=(
+                "Explain these small-business 3D printing analytics. Keep the answer practical. "
+                "Mention what changed, what to print next, which markets look repeatable, expenses "
+                "hurting margin, and what needs attention. Always ground claims in the numbers.\n\n"
+                + json.dumps(snapshot)
+            ),
+        )
+        text = getattr(response, "output_text", None) or ""
+        record_audit_event(
+            action="analytics.ai_insight_generated",
+            entity_type="analytics",
+            entity_id="summary",
+            after_state={"model": current_app.config.get("OPENAI_MODEL_ANALYTICS")},
+            source_module=__name__,
+        )
+        return {"enabled": True, "insight": text, "numbers": snapshot}
+    except Exception as exc:
+        current_app.logger.warning("AI analytics insight generation failed: %s", exc)
+        return fallback

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Receipt Workflow Help | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6 max-w-4xl">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Expenses</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Receipt Workflow Help</h1>
+    </div>
+    <a href="{{ url_for('receipts.help_download') }}" class="app-btn app-btn-secondary">Download Markdown</a>
+  </div>
+
+  <article class="app-card p-6 prose prose-sm max-w-none" style="color: var(--color-text);">
+    <h2>Overview</h2>
+    <p>The Receipt Management system converts receipt images and PDFs into structured expense records. The workflow is: <strong>Upload &rarr; OCR &rarr; AI Extraction &rarr; Review &rarr; Approve &rarr; Expense Ledger</strong>.</p>
+
+    <h2>1. Upload / Capture</h2>
+    <ul>
+      <li>Supported formats: JPG, PNG, HEIC/HEIF, PDF (including multi-page).</li>
+      <li>Maximum file size: configurable (default 25 MB).</li>
+      <li>You can drag-and-drop, use the file picker, or capture via camera on mobile devices.</li>
+      <li>Uploaded files are stored unchanged for audit purposes.</li>
+    </ul>
+
+    <h2>2. OCR Processing</h2>
+    <p>Once uploaded, the receipt image is preprocessed (orientation fix, deskew, contrast enhancement) and then OCR is run to extract raw text. Supported OCR engines:</p>
+    <ul>
+      <li><strong>PaddleOCR</strong> (default) &mdash; best accuracy for printed receipts.</li>
+      <li><strong>Tesseract</strong> &mdash; open-source fallback.</li>
+      <li><strong>EasyOCR</strong> &mdash; alternative.</li>
+    </ul>
+
+    <h2>3. AI Extraction</h2>
+    <p>After OCR, a local AI model (Ollama with Qwen2.5-VL by default) converts the raw text into structured data including merchant, totals, date, and line items. A mock/test mode is available by passing <code>test</code> as the API key.</p>
+
+    <h2>4. Confidence Scores</h2>
+    <p>Each extracted field has a confidence score from 0 to 1. Fields below the threshold (default 0.8) are flagged for review. Low-confidence fields are visually marked in the review screen.</p>
+
+    <h2>5. Review &amp; Edit</h2>
+    <p>The review screen shows the receipt image alongside parsed metadata. You can:</p>
+    <ul>
+      <li>Edit merchant name, totals, date, and other metadata.</li>
+      <li>Review and edit individual line items.</li>
+      <li>Mark items as reviewed.</li>
+      <li>Add or remove line items.</li>
+      <li>Save drafts, approve, or reject.</li>
+    </ul>
+
+    <h2>6. Line Item Assignment</h2>
+    <p>Each line item can be assigned to:</p>
+    <ul>
+      <li><strong>Market</strong> &mdash; expense attributed to a specific vendor market.</li>
+      <li><strong>Custom Job</strong> &mdash; materials for a custom order.</li>
+      <li><strong>Inventory</strong> &mdash; items that become inventory stock.</li>
+      <li><strong>General Business Expense</strong> &mdash; regular operating costs.</li>
+      <li><strong>Personal/Excluded</strong> &mdash; not counted as business expenses.</li>
+    </ul>
+    <p>Bulk assignment lets you assign all items at once. Split allocations are supported within line items.</p>
+
+    <h2>7. Tax/Fee/Discount Allocation</h2>
+    <p>The system can reverse-allocate receipt-level taxes, fees, discounts, tips, deposits, and rounding back to individual line items using these methods:</p>
+    <ul>
+      <li><strong>Exact</strong> &mdash; if the receipt shows per-line amounts.</li>
+      <li><strong>Taxable Proportional</strong> &mdash; allocate tax across taxable items.</li>
+      <li><strong>Subtotal Proportional</strong> &mdash; allocate fees/tips by line subtotal.</li>
+      <li><strong>Manual</strong> &mdash; override any allocation.</li>
+    </ul>
+
+    <h2>8. Inventory Prompts</h2>
+    <p>When a line item is marked as an inventory candidate, you will be prompted to either add it to an existing inventory item or create a new one. Inventory is never created without user confirmation.</p>
+
+    <h2>9. Duplicate Detection</h2>
+    <p>Before approval, the system checks for duplicate receipts using a weighted score based on:</p>
+    <ul>
+      <li>File hash (exact match)</li>
+      <li>Merchant/store name similarity</li>
+      <li>Date/time proximity</li>
+      <li>Grand total match</li>
+      <li>Receipt number match</li>
+    </ul>
+    <p>If flagged, you can keep, reject, or merge the duplicate.</p>
+
+    <h2>10. Approval &amp; Expense Records</h2>
+    <p>When a receipt is approved:</p>
+    <ul>
+      <li>Status changes to <strong>Approved</strong>.</li>
+      <li>Expense ledger records are created for each assigned line item.</li>
+      <li>Expenses feed into Markets, Custom Jobs, Inventory, and Analytics.</li>
+      <li>Double-counting is prevented.</li>
+    </ul>
+
+    <h2>Best Practices</h2>
+    <ul>
+      <li>Take photos in good lighting with the receipt flat and unwrinkled.</li>
+      <li>Avoid shadows and glare.</li>
+      <li>PDF scans are preferred for long receipts.</li>
+      <li>Always review AI-extracted data before approving.</li>
+      <li>Check the reconciliation summary to verify totals match.</li>
+    </ul>
+
+    <h2>Known Limitations</h2>
+    <ul>
+      <li>Handwritten receipts may not parse correctly.</li>
+      <li>OCR accuracy depends on image quality.</li>
+      <li>AI extraction requires Ollama to be running.</li>
+      <li>Real card processing is not implemented &mdash; use external payment recording.</li>
+    </ul>
+  </article>
+</section>
+{% endblock %}

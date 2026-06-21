@@ -1,84 +1,40 @@
 {% extends "base.html" %}
 {% block title %}{{ instance.name }} | {{ app_name }}{% endblock %}
 {% block content %}
-  <section class="space-y-6">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div>
-        <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
-        <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ instance.name }}</h1>
-      </div>
-      <div class="flex flex-wrap gap-3">
-        <a href="{{ url_for('markets.market_performance', market_id=instance.id) }}" class="app-btn app-btn-primary">Performance</a>
-        <a href="{{ url_for('markets.edit_resource', resource_key='markets', resource_id=instance.id) }}" class="app-btn app-btn-secondary">Edit</a>
-        <a href="{{ url_for('markets.list_resource', resource_key='markets') }}" class="app-btn app-btn-secondary">Back to Markets</a>
-      </div>
+<section class="space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Market Command Center</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ instance.name }}</h1>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">
+        {{ instance.event_date or "Date TBD" }}
+        {% if instance.start_time %} &middot; {{ instance.start_time.strftime("%I:%M %p") }}{% endif %}
+        {% if instance.end_time %}-{{ instance.end_time.strftime("%I:%M %p") }}{% endif %}
+        {% if instance.location_name %} &middot; {{ instance.location_name }}{% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <a href="{{ url_for('markets.market_performance', market_id=instance.id) }}" class="app-btn app-btn-primary">Performance</a>
+      <a href="{{ url_for('markets.edit_resource', resource_key='markets', resource_id=instance.id) }}" class="app-btn app-btn-secondary">Edit Core</a>
+      <a href="{{ url_for('markets.list_resource', resource_key='markets') }}" class="app-btn app-btn-secondary">Back</a>
+    </div>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div class="space-y-6">
+      <div id="market-event-logistics">{% include "markets/partials/_event_logistics.html" %}</div>
+      <div id="market-financials">{% include "markets/partials/_financials.html" %}</div>
+      <div id="market-products-inventory">{% include "markets/partials/_products_inventory.html" %}</div>
+      <div id="market-schedule-timeline">{% include "markets/partials/_schedule_timeline.html" %}</div>
+      <div id="market-tasks-marketing">{% include "markets/partials/_tasks_marketing.html" %}</div>
+      <div id="market-weather">{% include "markets/partials/_weather.html" %}</div>
+      <div id="market-travel">{% include "markets/partials/_travel.html" %}</div>
+      <div id="market-documents">{% include "markets/partials/_documents.html" %}</div>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <article class="app-card p-5">
-        <p class="text-sm" style="color: var(--color-text-muted);">Name</p>
-        <p class="mt-2 text-lg font-medium" style="color: var(--color-text);">{{ instance.name }}</p>
-      </article>
-      <article class="app-card p-5">
-        <p class="text-sm" style="color: var(--color-text-muted);">Location</p>
-        <p class="mt-2 text-lg font-medium" style="color: var(--color-text);">{{ instance.location_name or "—" }}</p>
-      </article>
-      <article class="app-card p-5">
-        <p class="text-sm" style="color: var(--color-text-muted);">Date</p>
-        <p class="mt-2 text-lg font-medium" style="color: var(--color-text);">{{ instance.event_date or "—" }}</p>
-      </article>
-      <article class="app-card p-5">
-        <p class="text-sm" style="color: var(--color-text-muted);">Status</p>
-        <p class="mt-2 text-lg font-medium" style="color: var(--color-text);">{{ instance.status.value.replace("_", " ").title() }}</p>
-      </article>
-      <article class="app-card p-5">
-        <p class="text-sm" style="color: var(--color-text-muted);">Booth Fee</p>
-        <p class="mt-2 text-lg font-medium" style="color: var(--color-text);">{% if instance.booth_fee %}${{ "{:,.2f}".format(instance.booth_fee) }}{% else %}—{% endif %}</p>
-      </article>
-      <article class="app-card p-5">
-        <p class="text-sm" style="color: var(--color-text-muted);">Revenue</p>
-        <p class="mt-2 text-lg font-medium" style="color: var(--color-success);">${{ "{:,.2f}".format(instance.calculated_revenue) }}</p>
-      </article>
-      <article class="app-card p-5">
-        <p class="text-sm" style="color: var(--color-text-muted);">Expenses</p>
-        <p class="mt-2 text-lg font-medium" style="color: var(--color-danger);">${{ "{:,.2f}".format(instance.calculated_revenue - instance.calculated_profit) }}</p>
-      </article>
-      <article class="app-card p-5">
-        <p class="text-sm" style="color: var(--color-text-muted);">Profit</p>
-        <p class="mt-2 text-lg font-medium" style="{% if instance.calculated_profit >= 0 %}color: var(--color-success){% else %}color: var(--color-danger){% endif %}">${{ "{:,.2f}".format(instance.calculated_profit) }}</p>
-      </article>
-    </div>
-
-    {% if extra and extra.packing_list %}
-    <section>
-      <h2 class="text-2xl font-semibold mb-4" style="color: var(--color-text);">Packing List</h2>
-      <div class="app-card overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="app-table">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Planned</th>
-                <th>Packed</th>
-                <th>Sold</th>
-                <th>Returned</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item in extra.packing_list %}
-              <tr>
-                <td>{{ item.product.name if item.product else "—" }}</td>
-                <td>{{ item.planned_quantity or 0 }}</td>
-                <td>{{ item.packed_quantity or 0 }}</td>
-                <td>{{ item.sold_quantity or 0 }}</td>
-                <td>{{ item.returned_quantity or 0 }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-    {% endif %}
-  </section>
+    <aside class="space-y-4 lg:sticky lg:top-6 lg:self-start">
+      {% include "markets/partials/_sidebar.html" %}
+    </aside>
+  </div>
+</section>
 {% endblock %}

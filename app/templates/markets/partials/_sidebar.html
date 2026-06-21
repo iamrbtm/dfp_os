@@ -1,0 +1,48 @@
+<section class="app-card p-5">
+  <h2 class="text-lg font-semibold">Readiness</h2>
+  <div class="mt-4 space-y-4">
+    {% for label, pct in [
+      ("Application", command.stats.application_pct),
+      ("Payment", command.stats.payment_pct),
+      ("Packing", command.stats.packing_pct),
+      ("Tasks", command.stats.task_pct),
+      ("Marketing", command.stats.marketing_pct)
+    ] %}
+      <div>
+        <div class="mb-1 flex justify-between text-sm">
+          <span>{{ label }}</span>
+          <span style="color: var(--color-text-muted);">{{ pct }}%</span>
+        </div>
+        <div class="h-2 overflow-hidden rounded-full" style="background-color: var(--color-surface-muted);">
+          <div class="h-full rounded-full" style="width: {{ pct }}%; background-color: var(--color-primary);"></div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="app-card p-5">
+  <h2 class="text-lg font-semibold">Quick Stats</h2>
+  <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+    <div><dt style="color: var(--color-text-muted);">Packed</dt><dd class="font-semibold">{{ command.stats.packed_units }}/{{ command.stats.planned_units }}</dd></div>
+    <div><dt style="color: var(--color-text-muted);">Sold</dt><dd class="font-semibold">{{ command.stats.sold_units }}</dd></div>
+    <div><dt style="color: var(--color-text-muted);">Tasks</dt><dd class="font-semibold">{{ command.stats.task_done }}/{{ command.stats.task_total }}</dd></div>
+    <div><dt style="color: var(--color-text-muted);">Files</dt><dd class="font-semibold">{{ command.stats.document_count }}</dd></div>
+    <div><dt style="color: var(--color-text-muted);">Timeline</dt><dd class="font-semibold">{{ command.stats.timeline_count }}</dd></div>
+    <div><dt style="color: var(--color-text-muted);">Net</dt><dd class="font-semibold">${{ "{:,.2f}".format(command.stats.net_position) }}</dd></div>
+  </dl>
+</section>
+
+<section class="app-card p-5">
+  <h2 class="text-lg font-semibold">Recent Activity</h2>
+  <div class="mt-4 space-y-3">
+    {% for item in command.recent_activity %}
+      <div class="border-l-2 pl-3" style="border-color: var(--color-link);">
+        <p class="text-sm font-medium">{{ item.label }}</p>
+        <p class="text-xs" style="color: var(--color-text-muted);">{{ item.detail }} &middot; {{ item.timestamp.strftime("%b %d, %-I:%M %p") if item.timestamp else "Unknown" }}</p>
+      </div>
+    {% else %}
+      <p class="text-sm" style="color: var(--color-text-muted);">No activity yet.</p>
+    {% endfor %}
+  </div>
+</section>

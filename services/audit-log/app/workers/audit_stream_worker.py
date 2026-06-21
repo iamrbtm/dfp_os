@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -87,9 +87,16 @@ async def run_worker() -> None:
                     else:
                         retry_count += 1
                         if retry_count >= MAX_RETRIES:
-                            await client.xadd(DEAD_LETTER_STREAM, {"original_message": json.dumps(msg_data), "original_id": msg_id})
+                            await client.xadd(
+                                DEAD_LETTER_STREAM,
+                                {"original_message": json.dumps(msg_data), "original_id": msg_id},
+                            )
                             await client.xack(settings.stream_name, settings.stream_consumer_group, msg_id)
-                            logger.warning("Moved message %s to dead-letter stream after %d retries", msg_id, MAX_RETRIES)
+                            logger.warning(
+                                "Moved message %s to dead-letter stream after %d retries",
+                                msg_id,
+                                MAX_RETRIES,
+                            )
         except Exception as exc:
             logger.error("Worker error: %s", exc)
             await asyncio.sleep(1)

@@ -1,0 +1,41 @@
+<section class="app-card overflow-hidden">
+  <div class="app-card-header flex items-center gap-3">
+    <span class="flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold" style="border-color: var(--color-link); color: var(--color-link);">7</span>
+    <div>
+      <h2>Travel &amp; Accommodations</h2>
+      <p class="text-xs font-normal" style="color: var(--color-text-muted);">Hotel booking and travel notes for out-of-town markets.</p>
+    </div>
+  </div>
+  <div class="grid gap-5 p-5 lg:grid-cols-[1fr_18rem]">
+    <div class="space-y-3">
+      {% for hotel in command.hotel_bookings %}
+        <div class="rounded-lg border p-3" style="border-color: var(--color-border);">
+          <div class="flex flex-wrap justify-between gap-3">
+            <h3 class="font-semibold">{{ hotel.hotel_name }}</h3>
+            <span class="app-badge app-badge-info">{{ hotel.status.value.title() }}</span>
+          </div>
+          <p class="mt-1 text-sm" style="color: var(--color-text-muted);">
+            {{ hotel.check_in_date or "Check-in TBD" }} to {{ hotel.check_out_date or "Check-out TBD" }}
+            {% if hotel.cost %} &middot; ${{ "{:,.2f}".format(hotel.cost) }}{% endif %}
+          </p>
+          {% if hotel.confirmation_number %}<p class="mt-1 text-sm">Confirmation: {{ hotel.confirmation_number }}</p>{% endif %}
+          {% if hotel.address %}<p class="mt-1 text-sm">{{ hotel.address }}</p>{% endif %}
+        </div>
+      {% else %}
+        <p class="text-sm" style="color: var(--color-text-muted);">No hotel or travel records yet.</p>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('markets.create_hotel', market_id=instance.id) }}" hx-post="{{ url_for('markets.create_hotel', market_id=instance.id) }}" hx-target="#market-travel" hx-swap="innerHTML" class="space-y-3">
+      {{ hotel_form.hidden_tag() }}
+      {{ hotel_form.hotel_name(class_="app-input", placeholder="Hotel name") }}
+      {{ hotel_form.address(class_="app-input", placeholder="Address") }}
+      {{ hotel_form.check_in_date(class_="app-input") }}
+      {{ hotel_form.check_out_date(class_="app-input") }}
+      {{ hotel_form.confirmation_number(class_="app-input", placeholder="Confirmation") }}
+      {{ hotel_form.cost(class_="app-input", placeholder="Cost") }}
+      {{ hotel_form.status(class_="app-select") }}
+      {{ hotel_form.notes(class_="app-textarea", rows="3", placeholder="Notes") }}
+      <button class="app-btn app-btn-primary w-full" type="submit">Add Hotel</button>
+    </form>
+  </div>
+</section>

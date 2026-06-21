@@ -2,15 +2,45 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, send_file, url_for
+from flask_login import current_user
+from markupsafe import escape
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.markets import bp
-from app.forms import MarketForm, MarketPackingListForm
-from app.models import Market, MarketPackingList, UserRole
+from app.extensions import db
+from app.forms import (
+    MarketDocumentForm,
+    MarketForm,
+    MarketHotelBookingForm,
+    MarketLogisticsForm,
+    MarketPackingListForm,
+    MarketTaskForm,
+    MarketTimelineEventForm,
+)
+from app.models import (
+    Market,
+    MarketDocument,
+    MarketDocumentType,
+    MarketHotelBooking,
+    MarketPackingList,
+    MarketTask,
+    MarketTimelineEvent,
+    UserRole,
+)
 from app.services.crud import apply_search, archive_instance, get_by_id, paginate_query, save_instance
-from app.services.markets import get_market_performance
+from app.services.markets import (
+    complete_market_task,
+    complete_timeline_event,
+    fetch_weather_snapshot,
+    geocode_market_address,
+    get_market_command_center,
+    get_market_performance,
+    market_document_path,
+    record_market_audit,
+    save_market_document,
+)
 from app.utils.auth import roles_required
 
 
@@ -40,6 +70,45 @@ def _format_money(value):
     if value is None:
         return "\u2014"
     return f"${value:,.2f}"
+
+
+def _is_htmx() -> bool:
+    return request.headers.get("HX-Request") == "true"
+
+
+def _detail_forms(market: Market) -> dict:
+    logistics_form = MarketLogisticsForm(obj=market)
+    return {
+        "logistics_form": logistics_form,
+        "task_form": MarketTaskForm(),
+        "timeline_form": MarketTimelineEventForm(),
+        "hotel_form": MarketHotelBookingForm(),
+        "document_form": MarketDocumentForm(),
+        "packing_form": MarketPackingListForm(),
+    }
+
+
+def _render_market_section(market: Market, section: str):
+    context = get_market_command_center(market)
+    return render_template(
+        f"markets/partials/_{section}.html",
+        instance=market,
+        market=market,
+        command=context,
+        **_detail_forms(market),
+    )
+
+
+def _after_market_action(market: Market, section: str, message: str, category: str = "success"):
+    if _is_htmx():
+        notice = (
+            '<div class="mb-3 rounded-lg border p-3 text-sm" '
+            'style="border-color: var(--color-border); color: var(--color-text);">'
+            f"{escape(message)}</div>"
+        )
+        return notice + _render_market_section(market, section)
+    flash(message, category)
+    return redirect(url_for("markets.detail_resource", resource_id=market.id))
 
 
 MARKET_RESOURCES: dict[str, ResourceConfig] = {
@@ -204,6 +273,8 @@ def create_resource(resource_key: str = "markets"):
         instance = config.model()
         form.apply(instance)
         try:
+            if resource_key == "markets":
+                geocode_market_address(instance, actor=current_user)
             save_instance(instance)
         except IntegrityError:
             flash(
@@ -237,17 +308,20 @@ def detail_resource(resource_id: int, resource_key: str = "markets"):
         for label, getter in config.columns
     ]
     extra = None
+    command = None
+    forms = {}
     if resource_key == "markets":
-        packing_list = MarketPackingList.query.filter_by(market_id=resource_id).order_by(
-            MarketPackingList.product_id
-        ).all()
-        extra = {"packing_list": packing_list}
+        command = get_market_command_center(instance)
+        extra = {"packing_list": command["packing_list"]}
+        forms = _detail_forms(instance)
     return render_template(
         "markets/detail.html" if resource_key == "markets" else "dashboard/resource_detail.html",
         resource=config,
         instance=instance,
         details=details,
         extra=extra,
+        command=command,
+        **forms,
     )
 
 
@@ -265,6 +339,8 @@ def edit_resource(resource_id: int, resource_key: str = "markets"):
     if form.validate_on_submit():
         form.apply(instance)
         try:
+            if resource_key == "markets":
+                geocode_market_address(instance, actor=current_user)
             save_instance(instance)
         except IntegrityError:
             flash(
@@ -306,3 +382,231 @@ def market_performance(market_id: int):
         return render_template("errors/404.html"), 404
     performance = get_market_performance(market)
     return render_template("markets/performance.html", market=market, performance=performance)
+
+
+@bp.post("/<int:market_id>/logistics")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def update_logistics(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    before = {
+        "location_name": market.location_name,
+        "zip_code": market.zip_code,
+        "booth_location": market.booth_location,
+        "latitude": market.latitude,
+        "longitude": market.longitude,
+    }
+    form = MarketLogisticsForm()
+    if form.validate_on_submit():
+        form.apply(market)
+        geocode_market_address(market, actor=current_user)
+        db.session.commit()
+        record_market_audit(
+            "market.logistics_updated",
+            "market",
+            market.id,
+            actor=current_user,
+            before_state=before,
+            after_state={
+                "location_name": market.location_name,
+                "zip_code": market.zip_code,
+                "booth_location": market.booth_location,
+                "latitude": market.latitude,
+                "longitude": market.longitude,
+            },
+        )
+        return _after_market_action(market, "event_logistics", "Market logistics updated.")
+    return _after_market_action(market, "event_logistics", "Review the logistics fields.", "danger")
+
+
+@bp.post("/<int:market_id>/tasks")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def create_task(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    form = MarketTaskForm()
+    if form.validate_on_submit():
+        task = MarketTask(market_id=market.id)
+        form.apply(task)
+        db.session.add(task)
+        db.session.commit()
+        record_market_audit(
+            "market_task.created",
+            "market_task",
+            task.id,
+            actor=current_user,
+            after_state={"market_id": market.id, "title": task.title, "task_type": task.task_type.value},
+        )
+        return _after_market_action(market, "tasks_marketing", "Task added.")
+    return _after_market_action(market, "tasks_marketing", "Task title is required.", "danger")
+
+
+@bp.post("/<int:market_id>/tasks/<int:task_id>/complete")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def complete_task(market_id: int, task_id: int):
+    market = get_by_id(Market, market_id)
+    task = get_by_id(MarketTask, task_id)
+    if market is None or task is None or task.market_id != market.id:
+        return render_template("errors/404.html"), 404
+    complete_market_task(task, actor=current_user)
+    return _after_market_action(market, "tasks_marketing", "Task completed.")
+
+
+@bp.post("/<int:market_id>/timeline")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def create_timeline_event(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    form = MarketTimelineEventForm()
+    if form.validate_on_submit():
+        event = MarketTimelineEvent(market_id=market.id)
+        form.apply(event)
+        db.session.add(event)
+        db.session.commit()
+        record_market_audit(
+            "market_timeline.created",
+            "market_timeline_event",
+            event.id,
+            actor=current_user,
+            after_state={"market_id": market.id, "title": event.title, "event_type": event.event_type.value},
+        )
+        return _after_market_action(market, "schedule_timeline", "Timeline event added.")
+    return _after_market_action(market, "schedule_timeline", "Timeline event title is required.", "danger")
+
+
+@bp.post("/<int:market_id>/timeline/<int:event_id>/complete")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def complete_timeline(market_id: int, event_id: int):
+    market = get_by_id(Market, market_id)
+    event = get_by_id(MarketTimelineEvent, event_id)
+    if market is None or event is None or event.market_id != market.id:
+        return render_template("errors/404.html"), 404
+    complete_timeline_event(event, actor=current_user)
+    return _after_market_action(market, "schedule_timeline", "Timeline event completed.")
+
+
+@bp.post("/<int:market_id>/hotels")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def create_hotel(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    form = MarketHotelBookingForm()
+    if form.validate_on_submit():
+        booking = MarketHotelBooking(market_id=market.id)
+        form.apply(booking)
+        db.session.add(booking)
+        db.session.commit()
+        record_market_audit(
+            "market_hotel.created",
+            "market_hotel_booking",
+            booking.id,
+            actor=current_user,
+            after_state={"market_id": market.id, "hotel_name": booking.hotel_name},
+        )
+        return _after_market_action(market, "travel", "Hotel booking added.")
+    return _after_market_action(market, "travel", "Hotel name is required.", "danger")
+
+
+@bp.post("/<int:market_id>/weather/fetch")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def fetch_weather(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    try:
+        fetch_weather_snapshot(market, actor=current_user)
+    except ValueError as exc:
+        return _after_market_action(market, "weather", str(exc), "warning")
+    except Exception:
+        return _after_market_action(
+            market,
+            "weather",
+            "Weather.gov data could not be fetched right now. Existing snapshots were left unchanged.",
+            "warning",
+        )
+    return _after_market_action(market, "weather", "Weather snapshot fetched.")
+
+
+@bp.post("/<int:market_id>/documents")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def upload_document(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    form = MarketDocumentForm()
+    if form.validate_on_submit():
+        try:
+            save_market_document(
+                market=market,
+                file=request.files.get("file"),
+                document_type=MarketDocumentType(form.document_type.data),
+                notes=form.notes.data,
+                uploaded_by_user_id=current_user.id,
+                actor=current_user,
+            )
+        except ValueError as exc:
+            return _after_market_action(market, "documents", str(exc), "danger")
+        return _after_market_action(market, "documents", "Document uploaded.")
+    return _after_market_action(market, "documents", "Document upload could not be validated.", "danger")
+
+
+@bp.post("/<int:market_id>/documents/<int:document_id>/delete")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def delete_document(market_id: int, document_id: int):
+    market = get_by_id(Market, market_id)
+    document = get_by_id(MarketDocument, document_id)
+    if market is None or document is None or document.market_id != market.id:
+        return render_template("errors/404.html"), 404
+    path = market_document_path(document)
+    if path.exists():
+        path.unlink()
+    record_market_audit(
+        "market_document.deleted",
+        "market_document",
+        document.id,
+        actor=current_user,
+        before_state={"market_id": market.id, "filename": document.original_filename},
+    )
+    db.session.delete(document)
+    db.session.commit()
+    return _after_market_action(market, "documents", "Document deleted.")
+
+
+@bp.get("/<int:market_id>/documents/<int:document_id>/download")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def download_document(market_id: int, document_id: int):
+    market = get_by_id(Market, market_id)
+    document = get_by_id(MarketDocument, document_id)
+    if market is None or document is None or document.market_id != market.id:
+        return render_template("errors/404.html"), 404
+    path = market_document_path(document)
+    if not path.exists():
+        abort(404)
+    return send_file(path, as_attachment=True, download_name=document.original_filename, mimetype=document.content_type)
+
+
+@bp.post("/<int:market_id>/packing-list/quick-add")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def packing_quick_add(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    form = MarketPackingListForm()
+    if form.validate_on_submit():
+        item = MarketPackingList(market_id=market.id)
+        form.apply(item)
+        db.session.add(item)
+        db.session.commit()
+        record_market_audit(
+            "market_packing_item.created",
+            "market_packing_list",
+            item.id,
+            actor=current_user,
+            after_state={"market_id": market.id, "product_id": item.product_id, "planned_quantity": item.planned_quantity},
+        )
+        return _after_market_action(market, "products_inventory", "Packing item added.")
+    return _after_market_action(market, "products_inventory", "Choose a product before adding a packing item.", "danger")
