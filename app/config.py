@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from decimal import Decimal
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -34,6 +35,20 @@ class Config:
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change-me-now")
     POS_CARD_PROCESSING_ENABLED = _as_bool(os.getenv("POS_CARD_PROCESSING_ENABLED"), False)
     POS_CARD_PROCESSOR = os.getenv("POS_CARD_PROCESSOR", "placeholder")
+    SHOP_DEFAULT_SHIPPING_RATE = Decimal(os.getenv("SHOP_DEFAULT_SHIPPING_RATE", "6.95"))
+    SHOP_DEFAULT_CURRENCY = os.getenv("SHOP_DEFAULT_CURRENCY", "USD")
+    SHOP_VENMO_HANDLE = os.getenv("SHOP_VENMO_HANDLE", "@dudefishprinting")
+    SHOP_SUPPORT_EMAIL = os.getenv("SHOP_SUPPORT_EMAIL", os.getenv("ADMIN_EMAIL", "admin@example.com"))
+    SQUARE_ENVIRONMENT = os.getenv("SQUARE_ENVIRONMENT", "sandbox")
+    SQUARE_ACCESS_TOKEN = os.getenv("SQUARE_ACCESS_TOKEN")
+    SQUARE_LOCATION_ID = os.getenv("SQUARE_LOCATION_ID")
+    SQUARE_APPLICATION_ID = os.getenv("SQUARE_APPLICATION_ID")
+    SQUARE_API_BASE_URL = os.getenv(
+        "SQUARE_API_BASE_URL",
+        "https://connect.squareup.com"
+        if os.getenv("SQUARE_ENVIRONMENT") == "production"
+        else "https://connect.squareupsandbox.com",
+    )
     API_TITLE = "Dude Fish OS API"
     API_VERSION = "v1"
     OPENAPI_VERSION = "3.0.3"
@@ -43,6 +58,7 @@ class Config:
     OPENAPI_SWAGGER_UI_URL = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
     MIGRATIONS_DIR = str(BASE_DIR / "migrations")
     DEFAULT_THEME = "dfp-github-light"
+
 
 
 class DevelopmentConfig(Config):

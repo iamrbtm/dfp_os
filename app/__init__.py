@@ -122,6 +122,7 @@ def register_context_processors(app: Flask) -> None:
         from flask_login import current_user
         from flask import request, url_for
         from app.theme_registry import ALL_THEMES
+        from app.services.storefront import cart_item_count
 
         BLUEPRINT_SECTION_MAP: dict[str, str | None] = {
             "dashboard": "dashboard",
@@ -211,6 +212,7 @@ def register_context_processors(app: Flask) -> None:
             "active_section": active_section,
             "context_title": context_title,
             "context_nav_items": context_nav_items,
+            "public_cart_count": cart_item_count(),
         }
         if current_user and current_user.is_authenticated and hasattr(current_user, "theme_slug"):
             ctx["active_theme"] = current_user.theme_slug

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Your Cart | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-8">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Your order</p>
+      <h1 class="text-4xl font-semibold" style="color: var(--color-text);">Cart</h1>
+    </div>
+    <a href="{{ url_for('public.shop') }}" class="app-btn app-btn-secondary">Keep shopping</a>
+  </div>
+
+  {% if summary.lines %}
+    <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <div class="space-y-4">
+        {% for line in summary.lines %}
+          <article class="app-card p-5">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div class="space-y-2">
+                <h2 class="text-xl font-semibold" style="color: var(--color-text);">{{ line.display_name }}</h2>
+                <p class="text-sm" style="color: var(--color-text-muted);">{{ line.product.short_description or line.product.description or "3D printed with care." }}</p>
+                <div class="flex flex-wrap items-center gap-3 text-sm">
+                  <span class="app-badge app-badge-info">
+                    {% if line.available_stock is none %}Made to order{% elif line.available_stock > 0 %}In stock{% else %}Out of stock{% endif %}
+                  </span>
+                  <span style="color: var(--color-text-muted);">${{ '%.2f'|format(line.unit_price) }} each</span>
+                </div>
+              </div>
+              <div class="space-y-3 sm:min-w-48">
+                <form method="post" action="{{ url_for('public.cart_update', line_key=line.key) }}" class="flex items-end gap-3">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <div class="flex-1">
+                    <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Qty</label>
+                    <input type="number" min="0" max="25" name="quantity" value="{{ line.quantity }}" class="app-input">
+                  </div>
+                  <button type="submit" class="app-btn app-btn-secondary">Update</button>
+                </form>
+                <div class="flex items-center justify-between">
+                  <span class="text-lg font-semibold" style="color: var(--color-text);">${{ '%.2f'|format(line.line_total) }}</span>
+                  <form method="post" action="{{ url_for('public.cart_remove', line_key=line.key) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="app-link" style="color: var(--color-danger);">Remove</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+
+      <aside class="app-card p-6 h-fit space-y-5">
+        <div class="space-y-2">
+          <h2 class="text-2xl font-semibold" style="color: var(--color-text);">Order summary</h2>
+          <p class="text-sm leading-6" style="color: var(--color-text-muted);">Shipping is a simple flat rate for shipped orders. Local pickup stays free.</p>
+        </div>
+        <div class="space-y-3 text-sm">
+          <div class="flex items-center justify-between">
+            <span>Subtotal</span>
+            <span>${{ '%.2f'|format(summary.subtotal) }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Shipping</span>
+            <span>{% if fulfillment_method == 'shipping' %}${{ '%.2f'|format(summary.shipping_total) }}{% else %}Calculated at checkout{% endif %}</span>
+          </div>
+          <div class="flex items-center justify-between border-t pt-3 text-lg font-semibold" style="border-color: var(--color-divider); color: var(--color-text);">
+            <span>Total</span>
+            <span>${{ '%.2f'|format(summary.total) }}</span>
+          </div>
+        </div>
+        <div class="space-y-3">
+          <a href="{{ url_for('public.checkout') }}" class="app-btn app-btn-primary w-full">Checkout</a>
+          {% if square_enabled %}
+            <p class="text-sm" style="color: var(--color-text-muted);">Secure card checkout is available through Square.</p>
+          {% else %}
+            <p class="text-sm" style="color: var(--color-text-muted);">Square checkout isn’t configured yet, so we’ll offer a Venmo reservation flow instead.</p>
+          {% endif %}
+          {% if venmo_handle %}
+            <p class="text-sm" style="color: var(--color-text-muted);">Venmo handle: <span style="color: var(--color-text);">{{ venmo_handle }}</span></p>
+          {% endif %}
+        </div>
+      </aside>
+    </div>
+  {% else %}
+    <div class="app-empty">
+      Your cart is empty right now. Start with the shop and add something fun.
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

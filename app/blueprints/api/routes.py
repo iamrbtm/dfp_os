@@ -32,7 +32,9 @@ from app.models import (
     ModelAsset,
     ModelSourceType,
     Order,
+    OrderFulfillmentMethod,
     OrderItem,
+    OrderPaymentStatus,
     OrderStatus,
     OrderSource,
     Payment,
@@ -282,14 +284,32 @@ def _apply_order(instance: Order, data: dict):
     instance.customer_id = data.get("customer_id")
     instance.status = OrderStatus(data["status"])
     instance.source = OrderSource(data["source"])
+    if data.get("payment_status"):
+        instance.payment_status = OrderPaymentStatus(data["payment_status"])
+    if data.get("fulfillment_method"):
+        instance.fulfillment_method = OrderFulfillmentMethod(data["fulfillment_method"])
     instance.market_id = data.get("market_id")
     instance.notes = data.get("notes")
     instance.internal_notes = data.get("internal_notes")
+    instance.customer_name = data.get("customer_name")
+    instance.customer_email = data.get("customer_email")
+    instance.customer_phone = data.get("customer_phone")
+    instance.shipping_name = data.get("shipping_name")
+    instance.shipping_address_line_1 = data.get("shipping_address_line_1")
+    instance.shipping_address_line_2 = data.get("shipping_address_line_2")
+    instance.shipping_city = data.get("shipping_city")
+    instance.shipping_state = data.get("shipping_state")
+    instance.shipping_postal_code = data.get("shipping_postal_code")
     instance.subtotal = data.get("subtotal", 0) or 0
+    instance.shipping_total = data.get("shipping_total", 0) or 0
     instance.tax_total = data.get("tax_total", 0) or 0
     instance.discount_total = data.get("discount_total", 0) or 0
     instance.total = data.get("total", 0) or 0
     instance.paid_amount = data.get("paid_amount", 0) or 0
+    instance.payment_provider = data.get("payment_provider")
+    instance.external_checkout_id = data.get("external_checkout_id")
+    instance.external_checkout_url = data.get("external_checkout_url")
+    instance.external_payment_reference = data.get("external_payment_reference")
 
 
 def _apply_order_item(instance: OrderItem, data: dict):

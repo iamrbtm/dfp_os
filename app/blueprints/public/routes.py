@@ -1,28 +1,61 @@
 from __future__ import annotations
 
-from flask import abort, flash, render_template, request
+from flask import abort, current_app, flash, redirect, render_template, request, url_for
 from sqlalchemy import select
 
 from app.blueprints.public import bp
 from app.extensions import db
-from app.forms import PublicCustomRequestForm
-from app.models import Category, Collection, CustomRequest, Market, MarketStatus, Product, ProductStatus
+from app.forms import AddToCartForm, CheckoutForm, PublicCustomRequestForm
+from app.models import Category, Collection, CustomRequest, Market, MarketStatus, Order, OrderSource, Product, ProductStatus
 from app.services.crud import save_instance
+from app.services.square_checkout import SquareCheckoutError, create_payment_link
+from app.services.storefront import (
+    StorefrontError,
+    active_variants,
+    add_to_cart,
+    available_stock_label,
+    build_cart_summary,
+    clear_cart,
+    create_online_order,
+    is_product_purchasable,
+    remove_cart_line,
+    square_checkout_available,
+    update_cart_line,
+    variant_choices,
+)
+
+
+def _public_product_query():
+    return select(Product).where(
+        Product.is_public.is_(True),
+        Product.deleted_at.is_(None),
+        Product.status == ProductStatus.ACTIVE,
+    )
+
+
+def _cart_shipping_choice() -> str:
+    return request.values.get("fulfillment_method", "pickup").strip() or "pickup"
 
 
 @bp.get("/")
 def home():
     featured = (
-        Product.query.filter_by(is_public=True, is_featured=True)
-        .filter(Product.deleted_at.is_(None), Product.status == ProductStatus.ACTIVE)
-        .order_by(Product.name)
-        .limit(6)
+        db.session.scalars(_public_product_query().where(Product.is_featured.is_(True)).order_by(Product.name).limit(6))
         .all()
     )
-    upcoming = Market.query.filter(
-        Market.status.in_([MarketStatus.SCHEDULED, MarketStatus.ACCEPTED])
-    ).order_by(Market.event_date.asc()).limit(3).all()
-    return render_template("public/home.html", featured=featured, upcoming_markets=upcoming)
+    upcoming = (
+        Market.query.filter(Market.status.in_([MarketStatus.ACCEPTED, MarketStatus.SCHEDULED]))
+        .order_by(Market.event_date.asc())
+        .limit(3)
+        .all()
+    )
+    latest = db.session.scalars(_public_product_query().order_by(Product.created_at.desc()).limit(4)).all()
+    return render_template(
+        "public/home.html",
+        featured=featured,
+        latest_products=latest,
+        upcoming_markets=upcoming,
+    )
 
 
 @bp.get("/about")
@@ -59,12 +92,7 @@ def shop():
     collection_slug = request.args.get("collection", "").strip()
     search_term = request.args.get("q", "").strip()
 
-    statement = select(Product).where(
-        Product.is_public.is_(True),
-        Product.deleted_at.is_(None),
-        Product.status == ProductStatus.ACTIVE,
-    )
-
+    statement = _public_product_query()
     if category_slug:
         statement = statement.join(Category).where(Category.slug == category_slug)
     if collection_slug:
@@ -89,15 +117,152 @@ def shop():
         selected_category=category_slug,
         selected_collection=collection_slug,
         search_term=search_term,
+        available_stock_label=available_stock_label,
+        active_variants=active_variants,
     )
 
 
-@bp.get("/shop/<slug>")
+@bp.route("/shop/<slug>", methods=["GET", "POST"])
 def product_detail(slug: str):
     product = Product.query.filter_by(slug=slug, is_public=True).first()
-    if product is None or product.deleted_at is not None:
+    if product is None or not is_product_purchasable(product):
         abort(404)
-    return render_template("public/product_detail.html", product=product)
+
+    form = AddToCartForm()
+    form.product_id.data = str(product.id)
+    form.variant_id.choices = [(0, "Choose an option")] + variant_choices(product)
+
+    product_variants = active_variants(product)
+    if product_variants and not form.variant_id.data:
+        form.variant_id.data = product_variants[0].id
+
+    if form.validate_on_submit():
+        try:
+            add_to_cart(product, form.variant_id.data or None, form.quantity.data or 1)
+        except StorefrontError as exc:
+            flash(str(exc), "danger")
+        else:
+            flash(f"{product.name} added to your cart.", "success")
+            return redirect(url_for("public.cart"))
+
+    return render_template(
+        "public/product_detail.html",
+        product=product,
+        form=form,
+        stock_label=available_stock_label(product),
+        product_variants=product_variants,
+        available_stock_label=available_stock_label,
+    )
+
+
+@bp.get("/cart")
+def cart():
+    summary = build_cart_summary(current_app.config, fulfillment_method=_cart_shipping_choice())
+    return render_template(
+        "public/cart.html",
+        summary=summary,
+        fulfillment_method=_cart_shipping_choice(),
+        square_enabled=square_checkout_available(current_app.config),
+        venmo_handle=current_app.config.get("SHOP_VENMO_HANDLE"),
+    )
+
+
+@bp.post("/cart/<line_key>/update")
+def cart_update(line_key: str):
+    quantity = request.form.get("quantity", type=int, default=1)
+    try:
+        update_cart_line(line_key, quantity)
+    except StorefrontError as exc:
+        flash(str(exc), "danger")
+    else:
+        flash("Your cart has been updated.", "success")
+    return redirect(url_for("public.cart"))
+
+
+@bp.post("/cart/<line_key>/remove")
+def cart_remove(line_key: str):
+    remove_cart_line(line_key)
+    flash("Item removed from your cart.", "success")
+    return redirect(url_for("public.cart"))
+
+
+@bp.route("/checkout", methods=["GET", "POST"])
+def checkout():
+    form = CheckoutForm()
+    square_enabled = square_checkout_available(current_app.config)
+    if not square_enabled:
+        form.payment_option.choices = [("venmo", "Reserve now, pay by Venmo")]
+        form.payment_option.data = "venmo"
+
+    summary = build_cart_summary(current_app.config, fulfillment_method=form.fulfillment_method.data or "pickup")
+    if not summary.lines:
+        flash("Your cart is empty.", "warning")
+        return redirect(url_for("public.shop"))
+
+    if form.validate_on_submit():
+        shipping = {
+            "shipping_name": form.shipping_name.data.strip() if form.shipping_name.data else None,
+            "shipping_address_line_1": form.shipping_address_line_1.data.strip() if form.shipping_address_line_1.data else None,
+            "shipping_address_line_2": form.shipping_address_line_2.data.strip() if form.shipping_address_line_2.data else None,
+            "shipping_city": form.shipping_city.data.strip() if form.shipping_city.data else None,
+            "shipping_state": form.shipping_state.data.strip() if form.shipping_state.data else None,
+            "shipping_postal_code": form.shipping_postal_code.data.strip() if form.shipping_postal_code.data else None,
+        }
+        try:
+            order = create_online_order(
+                first_name=form.first_name.data,
+                last_name=form.last_name.data,
+                email=form.email.data,
+                phone=form.phone.data,
+                notes=form.notes.data,
+                fulfillment_method=form.fulfillment_method.data,
+                payment_option=form.payment_option.data,
+                shipping=shipping,
+                config=current_app.config,
+            )
+        except StorefrontError as exc:
+            flash(str(exc), "danger")
+        else:
+            if form.payment_option.data == "square":
+                try:
+                    payment_link = create_payment_link(order, current_app.config)
+                except SquareCheckoutError as exc:
+                    order.payment_provider = "venmo"
+                    order.external_payment_reference = current_app.config.get("SHOP_VENMO_HANDLE")
+                    db.session.commit()
+                    flash(
+                        f"Square checkout is unavailable right now, so we saved your order with the Venmo fallback instead. {exc}",
+                        "warning",
+                    )
+                else:
+                    order.external_checkout_id = payment_link.payment_link_id
+                    order.external_checkout_url = payment_link.url
+                    db.session.commit()
+                    clear_cart()
+                    return redirect(payment_link.url)
+
+            clear_cart()
+            return redirect(url_for("public.checkout_confirmation", order_number=order.order_number))
+
+    summary = build_cart_summary(
+        current_app.config,
+        fulfillment_method=form.fulfillment_method.data or "pickup",
+    )
+    return render_template(
+        "public/checkout.html",
+        form=form,
+        summary=summary,
+        square_enabled=square_enabled,
+        venmo_handle=current_app.config.get("SHOP_VENMO_HANDLE"),
+    )
+
+
+@bp.get("/checkout/confirmation/<order_number>")
+def checkout_confirmation(order_number: str):
+    order = Order.query.filter_by(order_number=order_number, source=OrderSource.ONLINE).first()
+    if order is None:
+        abort(404)
+    return render_template("public/checkout_confirmation.html", order=order)
 
 
 @bp.route("/custom-orders", methods=["GET", "POST"])
@@ -136,6 +301,21 @@ def market_schedule():
     return render_template("public/market_schedule.html", markets=markets)
 
 
+@bp.get("/3d-printing-basics")
+def printing_basics():
+    return render_template("public/printing_basics.html")
+
+
+@bp.get("/returns")
+def returns():
+    return render_template("public/returns.html")
+
+
+@bp.get("/customer-policies")
+def customer_policies():
+    return render_template("public/customer_policies.html")
+
+
 @bp.get("/privacy")
 def privacy():
     return render_template("public/privacy.html")
@@ -159,5 +339,8 @@ def collection_detail(slug: str):
         .all()
     )
     return render_template(
-        "public/collection_detail.html", collection=collection, products=products
+        "public/collection_detail.html",
+        collection=collection,
+        products=products,
+        available_stock_label=available_stock_label,
     )

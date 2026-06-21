@@ -103,73 +103,24 @@ Python 3.14 compatibility is mandatory. After dependencies are selected, run `uv
 
 Avoid unnecessary compiled dependencies. Prefer libraries that publish Python 3.14-compatible wheels or are pure Python.
 
-## Architecture Rules
+## Workflow And Architecture Docs
 
-Use a Flask application factory.
+Use the project docs together instead of overloading this file:
 
-Use blueprints.
+- `PROMPTS.md`: session workflow, custom prompts, and agent rules of engagement
+- `TODO.md`: live working list that agents should keep updated
+- `DESIGN.md`: product vision, UX direction, and business-facing design intent
+- `ARCHITECTURE.md`: folder structure, data flow, state choices, and module/service interaction rules
 
-Keep routes thin.
+Core architectural expectations still apply:
 
-Put business logic in services.
-
-Put browser validation in forms.
-
-Put API validation/serialization in schemas.
-
-Use reusable Jinja components/partials.
-
-Expected structure:
-
-```text
-app/
-  __init__.py
-  config.py
-  extensions.py
-  cli.py
-  models/
-  blueprints/
-    public/
-    auth/
-    dashboard/
-    products/
-    inventory/
-    printers/
-    print_jobs/
-    customers/
-    orders/
-    custom_orders/
-    markets/
-    expenses/
-    analytics/
-    pos/
-    api/
-    settings/
-  forms/
-  schemas/
-  services/
-  templates/
-  static/
-    src/
-    dist/
-  utils/
-migrations/
-tests/
-scripts/
-docs/
-uploads/.gitkeep
-.env.example
-.gitignore
-Dockerfile
-docker-compose.yml
-pyproject.toml
-uv.lock
-.python-version
-package.json
-tailwind.config.js
-postcss.config.js
-README.md
-```
+- Use a Flask application factory.
+- Use blueprints.
+- Keep routes thin.
+- Put business logic in services.
+- Put browser validation in forms.
+- Put API validation/serialization in schemas.
+- Use reusable Jinja components and partials.
 
 ## Security Rules
 
@@ -553,14 +504,18 @@ At minimum test:
 When asked to build:
 
 1. Read `AGENTS.md`
-2. Read `DESIGN.md`
-3. Inspect repo files
-4. Give a short implementation plan
-5. Build one phase at a time
-6. Run formatting/tests if possible
-7. Summarize changed files
-8. Explain how to run the app
-9. Stop at requested phase
+2. Read `PROMPTS.md`
+3. Read `TODO.md`
+4. Read `DESIGN.md`
+5. Read `ARCHITECTURE.md`
+6. Inspect repo files
+7. Give a short implementation plan
+8. Build one phase at a time
+9. Run formatting/tests if possible
+10. Update `TODO.md`
+11. Summarize changed files
+12. Explain how to run the app
+13. Stop at requested phase
 
 Do not build all phases in one giant pass unless explicitly requested.
 

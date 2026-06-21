@@ -3,6 +3,9 @@
 Copy these files into the root of a fresh GitHub repo before starting Codex:
 
 - `AGENTS.md`
+- `PROMPTS.md`
+- `TODO.md`
+- `ARCHITECTURE.md`
 - `DESIGN.md`
 - `codex_build_prompt.md`
 - `.env.example`

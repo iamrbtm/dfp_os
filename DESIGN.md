@@ -80,59 +80,21 @@ Design style:
 - Clear table actions
 - Useful empty states
 
-## 5. Technical Architecture
+## 5. Architecture Reference
 
-Backend:
+Technical architecture now lives in `ARCHITECTURE.md`.
 
-- Flask app factory
-- SQLAlchemy models
-- MariaDB
-- Flask-Migrate
-- Flask-Login
-- Flask-WTF
-- Service layer
-- API schemas
-- Token auth
+Use that file for:
 
-Frontend:
+- Folder structure
+- Blueprint and module boundaries
+- Request and data flow
+- State management choices
+- Microservice and service interaction guidance
 
-- Jinja2 templates
-- Tailwind CSS
-- Vanilla JS
-- HTMX
-- Alpine.js sparingly
-- Chart.js
+Design should stay focused on product goals, user experience, and business-facing intent.
 
-Deployment:
-
-- Dockerfile
-- docker-compose.yml
-- Gunicorn
-- `.env.example`
-- MariaDB container for local dev
-
-## 6. Blueprints
-
-Use these blueprints:
-
-- `public`
-- `auth`
-- `dashboard`
-- `products`
-- `inventory`
-- `printers`
-- `print_jobs`
-- `customers`
-- `orders`
-- `custom_orders`
-- `markets`
-- `expenses`
-- `analytics`
-- `pos`
-- `api`
-- `settings`
-
-## 7. Core Data Models
+## 6. Core Data Models
 
 ### Users
 

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}3D Printing Basics | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-8">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Helpful guide</p>
+    <h1 class="mt-2 text-4xl font-semibold" style="color: var(--color-text);">3D printing basics for normal people</h1>
+    <p class="mt-4 text-lg leading-8" style="color: var(--color-text-muted);">
+      If you’ve never bought a 3D printed item before, this page explains the basics without the jargon.
+    </p>
+  </div>
+
+  <div class="grid gap-5 md:grid-cols-2">
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold" style="color: var(--color-text);">What is a 3D printed item?</h2>
+      <p class="mt-3 text-sm leading-7" style="color: var(--color-text-muted);">It’s a physical object built layer by layer from melted filament. That means tiny layer lines are normal and part of the handmade look.</p>
+    </article>
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold" style="color: var(--color-text);">Will every item look identical?</h2>
+      <p class="mt-3 text-sm leading-7" style="color: var(--color-text-muted);">Close, but not factory-identical. Color transitions, shimmer, and tiny texture differences are part of what makes each print unique.</p>
+    </article>
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold" style="color: var(--color-text);">What material do you use?</h2>
+      <p class="mt-3 text-sm leading-7" style="color: var(--color-text-muted);">Most gifts and desk items are printed in PLA. It’s lightweight, durable for normal indoor use, and available in lots of colors.</p>
+    </article>
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold" style="color: var(--color-text);">How should I care for it?</h2>
+      <p class="mt-3 text-sm leading-7" style="color: var(--color-text-muted);">Avoid extreme heat, especially hot car interiors. Clean with a soft cloth and don’t bend articulated pieces farther than they naturally want to move.</p>
+    </article>
+  </div>
+
+  <div class="app-card p-6">
+    <h2 class="text-2xl font-semibold" style="color: var(--color-text);">Good to know before ordering</h2>
+    <ul class="mt-4 space-y-3 text-sm leading-7" style="color: var(--color-text-muted);">
+      <li>Small parts can be a choking hazard for young children.</li>
+      <li>Color-shift and rainbow filaments can vary from one batch or print to another.</li>
+      <li>Custom orders usually take longer than ready-made items because they need quoting, setup, and test prints.</li>
+      <li>If you are buying for a business or event, it helps to order early so there’s time for revisions.</li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

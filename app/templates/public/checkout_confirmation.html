@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Order Received | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-8">
+  <div class="rounded-[2rem] p-8 text-center"
+       style="background: linear-gradient(135deg, rgba(156,219,113,0.16), rgba(104,200,255,0.16)); border: 1px solid var(--color-border);">
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Order received</p>
+    <h1 class="mt-3 text-4xl font-semibold" style="color: var(--color-text);">Thanks for shopping with us.</h1>
+    <p class="mt-4 text-lg leading-8" style="color: var(--color-text-muted);">
+      Your order number is <strong style="color: var(--color-text);">{{ order.order_number }}</strong>.
+    </p>
+  </div>
+
+  <div class="app-card p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-2xl font-semibold" style="color: var(--color-text);">What happens next</h2>
+      <span class="app-badge app-badge-info">{{ order.payment_provider|replace('_', ' ')|title if order.payment_provider else "Pending" }}</span>
+    </div>
+    {% if order.payment_provider == "venmo" %}
+      <p class="text-sm leading-7" style="color: var(--color-text-muted);">
+        Your order is reserved and waiting for Venmo payment. Send payment using
+        <strong style="color: var(--color-text);">{{ order.external_payment_reference }}</strong>
+        and include <strong style="color: var(--color-text);">{{ order.order_number }}</strong> in the payment note.
+      </p>
+    {% elif order.external_checkout_url %}
+      <p class="text-sm leading-7" style="color: var(--color-text-muted);">
+        We created a secure Square payment link for this order. If you stepped away before paying, you can finish here:
+      </p>
+      <a href="{{ order.external_checkout_url }}" class="app-btn app-btn-primary">Open Square checkout</a>
+    {% else %}
+      <p class="text-sm leading-7" style="color: var(--color-text-muted);">We’ll review your order and follow up if anything needs clarification.</p>
+    {% endif %}
+  </div>
+
+  <div class="app-card p-6">
+    <h2 class="text-xl font-semibold" style="color: var(--color-text);">Order summary</h2>
+    <div class="mt-4 space-y-3">
+      {% for item in order.items %}
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="font-medium" style="color: var(--color-text);">{{ item.variant.name if item.variant else item.product.name if item.product else item.custom_description }}</p>
+            <p class="text-sm" style="color: var(--color-text-muted);">Qty {{ item.quantity }}</p>
+          </div>
+          <span style="color: var(--color-text);">${{ '%.2f'|format(item.line_total) }}</span>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="mt-4 border-t pt-4 text-sm" style="border-color: var(--color-divider);">
+      <div class="flex items-center justify-between">
+        <span>Subtotal</span>
+        <span>${{ '%.2f'|format(order.subtotal) }}</span>
+      </div>
+      <div class="mt-2 flex items-center justify-between">
+        <span>Shipping</span>
+        <span>${{ '%.2f'|format(order.shipping_total) }}</span>
+      </div>
+      <div class="mt-2 flex items-center justify-between text-lg font-semibold" style="color: var(--color-text);">
+        <span>Total</span>
+        <span>${{ '%.2f'|format(order.total) }}</span>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

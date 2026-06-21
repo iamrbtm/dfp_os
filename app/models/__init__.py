@@ -16,7 +16,16 @@ from app.models.expense import Expense, ExpenseCategory
 from app.models.fleet import AMSUnit, AMSUnitStatus, AMSUnitType, Printer, PrinterStatus
 from app.models.market import Market, MarketPackingList, MarketStatus
 from app.models.inventory import FilamentSpool, FilamentStatus, InventoryLocation, InventoryRecord
-from app.models.order import Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod
+from app.models.order import (
+    Order,
+    OrderFulfillmentMethod,
+    OrderItem,
+    OrderPaymentStatus,
+    OrderSource,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+)
 from app.models.pos import (
     PosSale,
     PosSaleItem,
@@ -52,7 +61,9 @@ __all__ = [
     "ModelAsset",
     "ModelSourceType",
     "Order",
+    "OrderFulfillmentMethod",
     "OrderItem",
+    "OrderPaymentStatus",
     "OrderSource",
     "OrderStatus",
     "Payment",

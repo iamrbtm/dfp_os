@@ -1,7 +1,13 @@
 <footer class="app-nav" style="border-top: 1px solid var(--color-border);">
-  <div class="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-6 text-sm sm:px-6 lg:px-8 md:flex-row md:items-center md:justify-between" style="color: var(--color-nav-muted);">
-    <p>&copy; {{ now().year if now is defined else "2025" }} Dude Fish Printing &mdash; Clarksville, Tennessee</p>
-    <div class="flex gap-4">
+  <div class="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 text-sm sm:px-6 lg:px-8 md:grid-cols-[1.2fr_0.8fr]" style="color: var(--color-nav-muted);">
+    <div class="space-y-2">
+      <p class="text-base font-semibold" style="color: var(--color-text);">Dude Fish Printing</p>
+      <p>Family-run 3D printing for dragons, fidgets, flexi animals, personalized gifts, and small business displays.</p>
+      <p>&copy; {{ now().year if now is defined else "2025" }} Dude Fish Printing &mdash; Clarksville, Tennessee</p>
+    </div>
+    <div class="flex flex-wrap gap-4 md:justify-end">
+      <a href="{{ url_for('public.returns') }}" class="hover:opacity-80">Returns</a>
+      <a href="{{ url_for('public.customer_policies') }}" class="hover:opacity-80">Policies</a>
       <a href="{{ url_for('public.privacy') }}" class="hover:opacity-80">Privacy</a>
       <a href="{{ url_for('public.terms') }}" class="hover:opacity-80">Terms</a>
       <a href="{{ url_for('public.faq') }}" class="hover:opacity-80">FAQ</a>
