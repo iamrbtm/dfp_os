@@ -29,6 +29,7 @@ from app.models import (
     ProductType,
 )
 from app.services.markets import fetch_weather_snapshot
+from app.services.expenses import create_expense
 
 
 def test_market_model_can_be_created(app):
@@ -228,6 +229,29 @@ def test_admin_can_create_expense(login_admin, client):
     }, follow_redirects=True)
     assert resp.status_code == 200
     assert "Test Vendor Inc" in resp.text
+
+
+def test_expense_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        expense = Expense(
+            date=date(2026, 6, 20),
+            vendor="Audit Vendor",
+            category=ExpenseCategory.OTHER,
+            description="Audit me",
+            amount=Decimal("42.00"),
+            tax_deductible=False,
+        )
+        create_expense(expense, actor_id=123)
+
+    assert any(call["action"] == "expense.created" for call in calls)
 
 
 def test_market_api_requires_token(client):

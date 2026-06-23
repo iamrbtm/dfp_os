@@ -31,6 +31,7 @@
             <th>Date</th>
             <th>Total</th>
             <th>Status</th>
+            <th>Signals</th>
             <th>Uploaded</th>
             <th>Actions</th>
           </tr>
@@ -48,6 +49,22 @@
                            color: {% if r.status in (ReceiptStatus.APPROVED, ReceiptStatus.REJECTED) %}white{% else %}var(--color-text){% endif %};">
                 {{ r.status.value.replace('_', ' ').title() }}
               </span>
+            </td>
+            <td>
+              <div class="flex flex-wrap gap-1 text-xs">
+                {% if r.duplicate_score %}
+                <span class="px-2 py-0.5 rounded" style="background: var(--color-warning); color: var(--color-text);">Dup {{ r.duplicate_score }}</span>
+                {% endif %}
+                {% if r.status == ReceiptStatus.PROCESSING_FAILED %}
+                <span class="px-2 py-0.5 rounded" style="background: var(--color-danger); color: white;">Processing failed</span>
+                {% endif %}
+                {% if r.low_confidence_flags %}
+                <span class="px-2 py-0.5 rounded" style="background: var(--color-bg-subtle); color: var(--color-text);">Low confidence</span>
+                {% endif %}
+                {% if not r.raw_ocr_text and r.status not in (ReceiptStatus.UPLOADED, ReceiptStatus.ARCHIVED) %}
+                <span class="px-2 py-0.5 rounded" style="background: var(--color-bg-subtle); color: var(--color-text);">No OCR text</span>
+                {% endif %}
+              </div>
             </td>
             <td>{{ r.created_at.strftime('%Y-%m-%d') }}</td>
             <td>

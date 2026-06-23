@@ -1,47 +1,64 @@
 from __future__ import annotations
 
-from decimal import Decimal
-
-from sqlalchemy import func, extract
-
 from app.extensions import db
 from app.models import Expense
+from app.services.audit import record_audit_event
+from app.services.crud import archive_instance
 
 
-def get_expense_summary() -> dict:
-    total = db.session.query(func.sum(Expense.amount)).scalar() or Decimal(0)
+def snapshot_expense(expense: Expense) -> dict:
+    data = {}
+    for column in expense.__table__.columns:
+        value = getattr(expense, column.name)
+        if hasattr(value, "value"):
+            value = value.value
+        elif hasattr(value, "isoformat"):
+            value = value.isoformat()
+        elif value is not None:
+            value = str(value)
+        data[column.name] = value
+    return data
 
-    by_category = (
-        db.session.query(
-            Expense.category,
-            func.count(Expense.id).label("count"),
-            func.sum(Expense.amount).label("total"),
-        )
-        .group_by(Expense.category)
-        .order_by(func.sum(Expense.amount).desc())
-        .all()
+
+def create_expense(expense: Expense, *, actor_id: int | None = None) -> Expense:
+    db.session.add(expense)
+    db.session.commit()
+    record_audit_event(
+        action="expense.created",
+        entity_type="expense",
+        entity_id=expense.id,
+        after_state=snapshot_expense(expense),
+        source_module=__name__,
+        actor_id=actor_id,
     )
+    return expense
 
-    monthly_totals = (
-        db.session.query(
-            extract("year", Expense.date).label("year"),
-            extract("month", Expense.date).label("month"),
-            func.sum(Expense.amount).label("total"),
-        )
-        .group_by("year", "month")
-        .order_by(extract("year", Expense.date).desc(), extract("month", Expense.date).desc())
-        .limit(12)
-        .all()
+
+def update_expense(expense: Expense, *, before_state: dict, actor_id: int | None = None) -> Expense:
+    db.session.add(expense)
+    db.session.commit()
+    record_audit_event(
+        action="expense.updated",
+        entity_type="expense",
+        entity_id=expense.id,
+        before_state=before_state,
+        after_state=snapshot_expense(expense),
+        source_module=__name__,
+        actor_id=actor_id,
     )
+    return expense
 
-    return {
-        "total": total,
-        "by_category": [
-            {"category": r[0], "count": int(r[1]), "total": Decimal(str(r[2])) if r[2] else Decimal(0)}
-            for r in by_category
-        ],
-        "monthly_totals": [
-            {"year": int(r[0]), "month": int(r[1]), "total": Decimal(str(r[2])) if r[2] else Decimal(0)}
-            for r in monthly_totals
-        ],
-    }
+
+def archive_expense(expense: Expense, *, actor_id: int | None = None) -> Expense:
+    before_state = snapshot_expense(expense)
+    archive_instance(expense)
+    record_audit_event(
+        action="expense.archived",
+        entity_type="expense",
+        entity_id=expense.id,
+        before_state=before_state,
+        after_state=snapshot_expense(expense),
+        source_module=__name__,
+        actor_id=actor_id,
+    )
+    return expense
