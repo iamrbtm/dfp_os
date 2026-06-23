@@ -464,9 +464,18 @@ def check_receipt_duplicates(receipt_id: int):
         flash(f"Possible duplicate detected (score: {result['score']}).", "warning")
         receipt = db.session.get(Receipt, receipt_id)
         if receipt:
+            before_state = snapshot_receipt(receipt)
             receipt.status = ReceiptStatus.POSSIBLE_DUPLICATE
             receipt.duplicate_score = result["score"]
             db.session.commit()
+            record_audit(
+                receipt_id,
+                "receipt_duplicate_flagged",
+                current_user.id,
+                details={"score": result["score"], "matches": len(result.get("matches", []))},
+                before_state=before_state,
+                after_state=snapshot_receipt(receipt),
+            )
     else:
         flash("No duplicates found.", "success")
     return redirect(url_for("receipts.review", receipt_id=receipt_id))
@@ -509,10 +518,17 @@ def archive(receipt_id: int):
     receipt = db.session.get(Receipt, receipt_id)
     if not receipt:
         abort(404)
+    before_state = snapshot_receipt(receipt)
     receipt.deleted_at = datetime.now(timezone.utc)
     receipt.status = ReceiptStatus.ARCHIVED
     db.session.commit()
-    record_audit(receipt_id, "receipt_archived", current_user.id)
+    record_audit(
+        receipt_id,
+        "receipt_archived",
+        current_user.id,
+        before_state=before_state,
+        after_state=snapshot_receipt(receipt),
+    )
     flash("Receipt archived.", "success")
     return redirect(url_for("receipts.inbox"))
 
