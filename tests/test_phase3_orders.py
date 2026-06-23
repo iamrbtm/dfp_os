@@ -21,6 +21,9 @@ from app.models import (
     ProductType,
     ProductVariant,
 )
+from app.services.custom_requests import create_custom_request
+from app.services.customers import create_customer
+from app.services.order_admin import create_order_resource
 
 
 def test_customer_model_can_be_created(app):
@@ -38,6 +41,27 @@ def test_customer_model_can_be_created(app):
         stored = Customer.query.filter_by(email="jane@example.com").first()
         assert stored is not None
         assert stored.full_name == "Jane Doe"
+
+
+def test_customer_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        customer = Customer(
+            first_name="Audit",
+            last_name="Customer",
+            email="audit-customer@example.com",
+            is_active=True,
+        )
+        create_customer(customer, actor_id=123)
+
+    assert any(call["action"] == "customer.created" for call in calls)
 
 
 def test_custom_request_model_can_be_created(app):
@@ -98,6 +122,28 @@ def test_public_custom_order_form_submission(client):
         assert req.source == "website"
 
 
+def test_custom_request_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        req = CustomRequest(
+            name="Audit Request",
+            email="audit-request@example.com",
+            description="Audit this request",
+            status=CustomRequestStatus.NEW,
+            source="website",
+        )
+        create_custom_request(req, actor_type="anonymous")
+
+    assert any(call["action"] == "custom_request.created" for call in calls)
+
+
 def test_order_model_can_be_created(app):
     with app.app_context():
         customer = Customer(
@@ -123,6 +169,28 @@ def test_order_model_can_be_created(app):
         stored = Order.query.filter_by(customer=customer).first()
         assert stored is not None
         assert stored.order_number.startswith("DFP-")
+
+
+def test_order_admin_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        order = Order(
+            status=OrderStatus.PENDING,
+            source=OrderSource.MANUAL,
+            subtotal=Decimal("12.00"),
+            total=Decimal("12.00"),
+            paid_amount=Decimal("0.00"),
+        )
+        create_order_resource(order, actor_id=123)
+
+    assert any(call["action"] == "order.created" for call in calls)
 
 
 def test_order_with_items_and_payment(app):

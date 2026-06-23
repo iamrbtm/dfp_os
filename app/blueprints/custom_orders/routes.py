@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from flask import flash, redirect, render_template, request, url_for
+from flask_login import current_user
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -15,8 +16,8 @@ from app.services.crud import (
     apply_search,
     get_by_id,
     paginate_query,
-    save_instance,
 )
+from app.services.custom_requests import archive_custom_request, create_custom_request, snapshot_custom_request, update_custom_request
 from app.utils.auth import roles_required
 
 
@@ -144,8 +145,9 @@ def create_resource(resource_key: str = "requests"):
         instance = config.model()
         form.apply(instance)
         try:
-            save_instance(instance)
+            create_custom_request(instance, actor_id=current_user.id)
         except IntegrityError:
+            db.session.rollback()
             flash(f"Unable to save that {config.singular.lower()}.", "danger")
             return (
                 render_template(
@@ -208,10 +210,12 @@ def edit_resource(resource_id: int, resource_key: str = "requests"):
         return render_template("errors/404.html"), 404
     form = _build_form(config, instance)
     if form.validate_on_submit():
+        before_state = snapshot_custom_request(instance)
         form.apply(instance)
         try:
-            save_instance(instance)
+            update_custom_request(instance, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
+            db.session.rollback()
             flash(f"Unable to update that {config.singular.lower()}.", "danger")
             return (
                 render_template(
@@ -240,7 +244,6 @@ def archive_resource_view(resource_id: int, resource_key: str = "requests"):
     instance = get_by_id(config.model, resource_id)
     if instance is None:
         return render_template("errors/404.html"), 404
-    instance.status = CustomRequestStatus.ARCHIVED
-    save_instance(instance)
+    archive_custom_request(instance, actor_id=current_user.id)
     flash(f"{config.singular} archived.", "success")
     return redirect(url_for("custom_orders.list_resource", resource_key=resource_key))

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from flask import flash, redirect, render_template, request, url_for
+from flask_login import current_user
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -12,10 +13,14 @@ from app.forms import OrderForm, OrderItemForm, PaymentForm
 from app.models import Order, OrderItem, Payment, UserRole
 from app.services.crud import (
     apply_search,
-    archive_instance,
     get_by_id,
     paginate_query,
-    save_instance,
+)
+from app.services.order_admin import (
+    archive_order_resource,
+    create_order_resource,
+    snapshot_order_resource,
+    update_order_resource,
 )
 from app.utils.auth import roles_required
 
@@ -152,8 +157,9 @@ def create_resource(resource_key: str = "orders"):
         instance = config.model()
         form.apply(instance)
         try:
-            save_instance(instance)
+            create_order_resource(instance, actor_id=current_user.id)
         except IntegrityError:
+            db.session.rollback()
             flash(f"Unable to save that {config.singular.lower()}.", "danger")
             return (
                 render_template(
@@ -201,10 +207,12 @@ def edit_resource(resource_id: int, resource_key: str = "orders"):
         return render_template("errors/404.html"), 404
     form = _build_form(config, instance)
     if form.validate_on_submit():
+        before_state = snapshot_order_resource(instance)
         form.apply(instance)
         try:
-            save_instance(instance)
+            update_order_resource(instance, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
+            db.session.rollback()
             flash(f"Unable to update that {config.singular.lower()}.", "danger")
             return (
                 render_template(
@@ -229,12 +237,6 @@ def archive_resource_view(resource_id: int, resource_key: str = "orders"):
     instance = get_by_id(config.model, resource_id)
     if instance is None:
         return render_template("errors/404.html"), 404
-    if config.model is Order:
-        archive_instance(instance)
-    elif config.model is Payment:
-        archive_instance(instance)
-    elif config.model is OrderItem:
-        db.session.delete(instance)
-        db.session.commit()
+    archive_order_resource(instance, actor_id=current_user.id)
     flash(f"{config.singular} archived.", "success")
     return redirect(url_for("orders.list_resource", resource_key=resource_key))

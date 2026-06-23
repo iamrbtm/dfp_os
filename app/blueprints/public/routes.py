@@ -7,7 +7,7 @@ from app.blueprints.public import bp
 from app.extensions import db
 from app.forms import AddToCartForm, CheckoutForm, PublicCustomRequestForm
 from app.models import Category, Collection, CustomRequest, Market, MarketStatus, Order, OrderSource, Product, ProductStatus
-from app.services.crud import save_instance
+from app.services.custom_requests import create_custom_request
 from app.services.square_checkout import SquareCheckoutError, create_payment_link
 from app.services.storefront import (
     StorefrontError,
@@ -80,7 +80,7 @@ def contact():
             estimated_budget=form.estimated_budget.data.strip() if form.estimated_budget.data else None,
             source="website",
         )
-        save_instance(custom_req)
+        create_custom_request(custom_req, actor_type="anonymous")
         flash("Thanks for reaching out! We'll get back to you soon.", "success")
         return render_template("public/contact.html", form=PublicCustomRequestForm(), submitted=True)
     return render_template("public/contact.html", form=form, submitted=False)
@@ -277,7 +277,7 @@ def custom_orders():
             estimated_budget=form.estimated_budget.data.strip() if form.estimated_budget.data else None,
             source="website",
         )
-        save_instance(custom_req)
+        create_custom_request(custom_req, actor_type="anonymous")
         flash("Thanks! We'll review your request and get back to you soon.", "success")
         return render_template("public/custom_orders.html", form=PublicCustomRequestForm(), submitted=True)
     return render_template("public/custom_orders.html", form=form, submitted=False)
