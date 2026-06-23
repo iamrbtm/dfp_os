@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from app.extensions import db
 from app.models import Category, Product, ProductStatus, ProductType
+from app.services.admin_mutations import create_resource
 
 
 def test_product_model_can_be_created(app):
@@ -70,3 +73,34 @@ def test_product_api_returns_data_with_token(client, catalog_product, api_token)
     payload = response.get_json()
     assert payload["pagination"]["total"] == 1
     assert payload["data"][0]["slug"] == "rainbow-dragon"
+
+
+def test_product_admin_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        category = Category(
+            name="Audit Catalog",
+            slug="audit-catalog",
+            is_public=True,
+            is_pos_visible=True,
+        )
+        db.session.add(category)
+        db.session.flush()
+        product = Product(
+            name="Audit Product",
+            slug="audit-product",
+            category_id=category.id,
+            product_type=ProductType.FINISHED_GOOD,
+            status=ProductStatus.ACTIVE,
+            base_price=Decimal("9.00"),
+        )
+        create_resource(product, actor_id=123)
+
+    assert any(call["action"] == "product.created" for call in calls)

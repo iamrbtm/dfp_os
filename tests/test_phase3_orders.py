@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.models import (
+    AMSUnit,
+    AMSUnitType,
     Category,
     CustomRequest,
     CustomRequestStatus,
@@ -20,10 +22,14 @@ from app.models import (
     ProductStatus,
     ProductType,
     ProductVariant,
+    Printer,
+    PrinterStatus,
 )
+from app.services.admin_mutations import create_resource
 from app.services.custom_requests import create_custom_request
 from app.services.customers import create_customer
 from app.services.order_admin import create_order_resource
+from app.services.print_jobs import create_print_job
 
 
 def test_customer_model_can_be_created(app):
@@ -255,6 +261,54 @@ def test_print_job_model_can_be_created(app):
         stored = PrintJob.query.filter_by(label="Test print job").first()
         assert stored is not None
         assert stored.status == PrintJobStatus.QUEUED
+
+
+def test_printer_admin_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        printer = Printer(name="Audit Printer", model="Bambu A1", status=PrinterStatus.ACTIVE)
+        create_resource(printer, actor_id=123)
+
+    assert any(call["action"] == "printer.created" for call in calls)
+
+
+def test_ams_admin_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        ams = AMSUnit(name="Audit AMS", type=AMSUnitType.AMS_LITE)
+        create_resource(ams, actor_id=123)
+
+    assert any(call["action"] == "ams_unit.created" for call in calls)
+
+
+def test_print_job_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        job = PrintJob(status=PrintJobStatus.QUEUED, label="Audit print job")
+        create_print_job(job, actor_id=123)
+
+    assert any(call["action"] == "print_job.created" for call in calls)
 
 
 def test_pos_sale_creates_order_and_payment(client, login_admin):

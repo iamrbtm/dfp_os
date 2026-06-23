@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from flask import flash, redirect, render_template, request, url_for
+from flask_login import current_user
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -14,8 +15,9 @@ from app.services.crud import (
     apply_search,
     get_by_id,
     paginate_query,
-    save_instance,
 )
+from app.services.admin_mutations import snapshot_instance
+from app.services.print_jobs import archive_print_job, create_print_job, update_print_job
 from app.utils.auth import roles_required
 
 
@@ -120,8 +122,10 @@ def create_resource(resource_key: str = "print-jobs"):
         instance = config.model()
         form.apply(instance)
         try:
-            save_instance(instance)
+            create_print_job(instance, actor_id=current_user.id)
         except IntegrityError:
+            from app.extensions import db
+            db.session.rollback()
             flash(f"Unable to save that {config.singular.lower()}.", "danger")
             return (
                 render_template(
@@ -173,10 +177,13 @@ def edit_resource(resource_id: int, resource_key: str = "print-jobs"):
         return render_template("errors/404.html"), 404
     form = _build_form(config, instance)
     if form.validate_on_submit():
+        before_state = snapshot_instance(instance)
         form.apply(instance)
         try:
-            save_instance(instance)
+            update_print_job(instance, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
+            from app.extensions import db
+            db.session.rollback()
             flash(f"Unable to update that {config.singular.lower()}.", "danger")
             return (
                 render_template(
@@ -205,7 +212,6 @@ def archive_resource_view(resource_id: int, resource_key: str = "print-jobs"):
     instance = get_by_id(config.model, resource_id)
     if instance is None:
         return render_template("errors/404.html"), 404
-    db.session.delete(instance)
-    db.session.commit()
-    flash(f"{config.singular} deleted.", "success")
+    archive_print_job(instance, actor_id=current_user.id)
+    flash(f"{config.singular} archived.", "success")
     return redirect(url_for("print_jobs.list_resource", resource_key=resource_key))
