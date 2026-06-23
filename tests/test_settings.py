@@ -143,3 +143,10 @@ def test_api_v1_settings_update_requires_value(api_token, client):
 def test_api_v1_settings_requires_token(client):
     response = client.get("/api/v1/settings")
     assert response.status_code == 401
+
+
+def test_default_theme_setting_can_be_updated(login_admin, client):
+    response = client.post("/settings/themes/default", json={"theme_slug": "dfp-github-dark"})
+    assert response.status_code == 200
+    with client.application.app_context():
+        assert get_setting("default_theme") == "dfp-github-dark"

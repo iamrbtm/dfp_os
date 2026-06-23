@@ -6,6 +6,11 @@ from app.blueprints.settings import bp
 from app.extensions import db
 from app.forms.admin import BusinessForm, FeatureFlagForm
 from app.models import Business, FeatureFlag, Setting, UserRole
+from app.services.admin_mutations import (
+    create_resource as create_admin_resource,
+    snapshot_instance,
+    update_resource as update_admin_resource,
+)
 from app.services.settings import get_all_settings, set_setting
 from app.module_registry import module_statuses
 from app.services.business import ensure_default_business
@@ -63,25 +68,9 @@ def business_settings():
     business = ensure_default_business()
     form = _build_form(BusinessForm, business)
     if form.validate_on_submit():
-        before_state = {
-            "name": business.name,
-            "slug": business.slug,
-            "contact_email": business.contact_email,
-            "city": business.city,
-            "state": business.state,
-        }
+        before_state = snapshot_instance(business)
         form.apply(business)
-        db.session.commit()
-        record_audit_event(
-            action="business.updated",
-            entity_type="business",
-            entity_id=business.id,
-            before_state=before_state,
-            after_state={"name": business.name, "slug": business.slug, "contact_email": business.contact_email},
-            source_module=__name__,
-            actor_id=current_user.id,
-            business_id=business.id,
-        )
+        update_admin_resource(business, before_state=before_state, actor_id=current_user.id)
         flash("Business settings updated.", "success")
         return redirect(url_for("settings.business_settings"))
     return render_template("settings/business.html", form=form, business=business)
@@ -103,16 +92,7 @@ def feature_flag_new():
     if form.validate_on_submit():
         flag = FeatureFlag()
         form.apply(flag)
-        db.session.add(flag)
-        db.session.commit()
-        record_audit_event(
-            action="feature_flag.created",
-            entity_type="feature_flag",
-            entity_id=flag.id,
-            after_state={"key": flag.key, "enabled": flag.enabled, "business_id": flag.business_id},
-            source_module=__name__,
-            actor_id=current_user.id,
-        )
+        create_admin_resource(flag, actor_id=current_user.id)
         flash("Feature flag created.", "success")
         return redirect(url_for("settings.feature_flags"))
     return render_template("settings/feature_flag_form.html", form=form, mode="create")
@@ -127,18 +107,9 @@ def feature_flag_edit(flag_id: int):
         return render_template("errors/404.html"), 404
     form = _build_form(FeatureFlagForm, flag)
     if form.validate_on_submit():
-        before_state = {"key": flag.key, "enabled": flag.enabled, "business_id": flag.business_id}
+        before_state = snapshot_instance(flag)
         form.apply(flag)
-        db.session.commit()
-        record_audit_event(
-            action="feature_flag.updated",
-            entity_type="feature_flag",
-            entity_id=flag.id,
-            before_state=before_state,
-            after_state={"key": flag.key, "enabled": flag.enabled, "business_id": flag.business_id},
-            source_module=__name__,
-            actor_id=current_user.id,
-        )
+        update_admin_resource(flag, before_state=before_state, actor_id=current_user.id)
         flash("Feature flag updated.", "success")
         return redirect(url_for("settings.feature_flags"))
     return render_template("settings/feature_flag_form.html", form=form, mode="edit", flag=flag)

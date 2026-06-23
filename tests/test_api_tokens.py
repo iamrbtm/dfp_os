@@ -1,6 +1,6 @@
 from app.extensions import db
 from app.models import ApiToken, User, UserRole
-from app.services.api_tokens import create_api_token
+from app.services.api_tokens import create_api_token, revoke_api_token
 
 
 def _make_user_and_token(client):
@@ -93,9 +93,7 @@ def test_revoke_api_token(app):
         db.session.commit()
         token, raw = create_api_token(user=user, name="Revocable")
         assert token.is_active
-        from app.models.base import utc_now
-        token.revoked_at = utc_now()
-        db.session.commit()
+        revoke_api_token(token, actor_id=user.id)
         assert not token.is_active
 
 

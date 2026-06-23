@@ -6,6 +6,8 @@ from flask_login import current_user, login_required
 from app.blueprints.settings import bp
 from app.extensions import db
 from app.theme_registry import ALL_THEMES, DEFAULT_THEME, THEME_MAP, is_valid_theme
+from app.services.audit import record_audit_event
+from app.services.settings import set_setting
 from app.utils.auth import roles_required
 from app.models.user import UserRole
 
@@ -30,8 +32,18 @@ def apply_theme():
     slug = data.get("theme_slug", "").strip()
     if not is_valid_theme(slug):
         return jsonify({"error": "Invalid theme slug"}), 400
+    before_state = {"theme_slug": current_user.theme_slug}
     current_user.theme_slug = slug
     db.session.commit()
+    record_audit_event(
+        action="user.theme_updated",
+        entity_type="user",
+        entity_id=current_user.id,
+        before_state=before_state,
+        after_state={"theme_slug": current_user.theme_slug},
+        source_module=__name__,
+        actor_id=current_user.id,
+    )
     return jsonify({"theme_slug": slug})
 
 
@@ -43,7 +55,18 @@ def set_default_theme():
     if not is_valid_theme(slug):
         return jsonify({"error": "Invalid theme slug"}), 400
     from flask import current_app
+    before_state = {"default_theme": current_app.config.get("DEFAULT_THEME", DEFAULT_THEME)}
     current_app.config["DEFAULT_THEME"] = slug
+    set_setting("default_theme", slug)
+    record_audit_event(
+        action="theme.default_updated",
+        entity_type="setting",
+        entity_id="default_theme",
+        before_state=before_state,
+        after_state={"default_theme": slug},
+        source_module=__name__,
+        actor_id=current_user.id,
+    )
     return jsonify({"theme_slug": slug})
 
 
@@ -77,6 +100,16 @@ def api_update_user_theme():
     slug = data.get("theme_slug", "").strip()
     if not is_valid_theme(slug):
         return jsonify({"error": "Invalid theme slug"}), 400
+    before_state = {"theme_slug": current_user.theme_slug}
     current_user.theme_slug = slug
     db.session.commit()
+    record_audit_event(
+        action="user.theme_updated",
+        entity_type="user",
+        entity_id=current_user.id,
+        before_state=before_state,
+        after_state={"theme_slug": current_user.theme_slug},
+        source_module=__name__,
+        actor_id=current_user.id,
+    )
     return jsonify({"theme_slug": slug})

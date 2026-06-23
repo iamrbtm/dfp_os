@@ -108,15 +108,19 @@ from app.schemas import (
     ResourceListEnvelope,
 )
 from app.schemas.receipt import ReceiptSchema, ReceiptLineItemSchema
+from app.services.admin_mutations import (
+    archive_resource as archive_admin_resource,
+    create_resource as create_admin_resource,
+    update_resource as update_admin_resource,
+)
 from app.services.crud import (
     apply_search,
-    archive_instance,
     get_by_id,
     paginate_query,
-    save_instance,
 )
 from app.extensions import db
 from app.services.audit import record_audit_event
+from app.services.api_tokens import revoke_api_token
 from app.services.inventory import release_inventory, reserve_inventory, transfer_inventory
 from app.services.pos import refund_sale
 from app.utils.auth import api_token_required, require_api_scopes
@@ -884,8 +888,13 @@ def _register_resource(config: ApiResourceConfig):
             instance = config.model()
             config.apply_data(instance, body_data)
             try:
-                save_instance(instance)
+                create_admin_resource(
+                    instance,
+                    actor_id=getattr(getattr(g, "api_token", None), "user_id", None),
+                    entity_type=config.endpoint,
+                )
             except IntegrityError:
+                db.session.rollback()
                 return jsonify(
                     {
                         "error": {
@@ -895,13 +904,6 @@ def _register_resource(config: ApiResourceConfig):
                         }
                     },
                 ), 400
-            record_audit_event(
-                action=f"{config.endpoint}.created",
-                entity_type=config.endpoint,
-                entity_id=getattr(instance, "id", None),
-                after_state=_instance_state(instance),
-                source_module=__name__,
-            )
             return instance, 201
 
     @catalog_blp.route(f"/{config.endpoint}/<int:resource_id>")
@@ -948,8 +950,14 @@ def _register_resource(config: ApiResourceConfig):
             before_state = _instance_state(instance)
             config.apply_data(instance, body_data)
             try:
-                save_instance(instance)
+                update_admin_resource(
+                    instance,
+                    before_state=before_state,
+                    actor_id=getattr(getattr(g, "api_token", None), "user_id", None),
+                    entity_type=config.endpoint,
+                )
             except IntegrityError:
+                db.session.rollback()
                 return jsonify(
                     {
                         "error": {
@@ -959,14 +967,6 @@ def _register_resource(config: ApiResourceConfig):
                         }
                     },
                 ), 400
-            record_audit_event(
-                action=f"{config.endpoint}.updated",
-                entity_type=config.endpoint,
-                entity_id=getattr(instance, "id", None),
-                before_state=before_state,
-                after_state=_instance_state(instance),
-                source_module=__name__,
-            )
             return instance
 
         @api_token_required
@@ -987,14 +987,10 @@ def _register_resource(config: ApiResourceConfig):
                     },
                 ), 404
             before_state = _instance_state(instance)
-            archive_instance(instance)
-            record_audit_event(
-                action=f"{config.endpoint}.archived",
+            archive_admin_resource(
+                instance,
+                actor_id=getattr(getattr(g, "api_token", None), "user_id", None),
                 entity_type=config.endpoint,
-                entity_id=getattr(instance, "id", None),
-                before_state=before_state,
-                after_state=_instance_state(instance),
-                source_module=__name__,
             )
             return {"status": "archived"}
 
@@ -1570,17 +1566,7 @@ class ApiTokenItem(MethodView):
         token = db.session.get(ApiToken, token_id)
         if token is None or token.user_id != g.api_user.id:
             return {"error": {"code": "not_found", "message": "API token not found.", "details": {}}}, 404
-        from app.models.base import utc_now
-        from app.services.audit import record_audit_event
-        token.revoked_at = utc_now()
-        db.session.commit()
-        record_audit_event(
-            action="api_token.revoked",
-            entity_type="api_token",
-            entity_id=token.id,
-            after_state={"revoked_at": token.revoked_at.isoformat()},
-            source_module=__name__,
-        )
+        revoke_api_token(token, actor_id=g.api_user.id)
         return {"status": "revoked"}
 
 

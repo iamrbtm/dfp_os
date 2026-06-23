@@ -7,8 +7,7 @@ from sqlalchemy import select
 from app.blueprints.api_tokens import bp
 from app.extensions import db
 from app.models import ApiToken, UserRole
-from app.services.api_tokens import AVAILABLE_API_TOKEN_SCOPES, create_api_token
-from app.services.audit import record_audit_event
+from app.services.api_tokens import AVAILABLE_API_TOKEN_SCOPES, create_api_token, revoke_api_token
 from app.utils.auth import roles_required
 
 
@@ -78,16 +77,6 @@ def revoke_token(token_id: int):
         flash("API token not found.", "danger")
         return redirect(url_for("api_tokens.list_tokens"))
 
-    from app.models.base import utc_now
-    token.revoked_at = utc_now()
-    db.session.commit()
-    record_audit_event(
-        action="api_token.revoked",
-        entity_type="api_token",
-        entity_id=token.id,
-        after_state={"revoked_at": token.revoked_at.isoformat()},
-        source_module=__name__,
-        actor_id=current_user.id,
-    )
+    revoke_api_token(token, actor_id=current_user.id)
     flash("API token revoked.", "success")
     return redirect(url_for("api_tokens.list_tokens"))

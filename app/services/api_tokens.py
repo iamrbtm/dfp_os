@@ -56,6 +56,32 @@ def create_api_token(
     return token, raw_token
 
 
+def revoke_api_token(token: ApiToken, *, actor_id: int | None = None) -> ApiToken:
+    before_state = {
+        "name": token.name,
+        "prefix": token.prefix,
+        "scopes": token.scopes,
+        "revoked_at": token.revoked_at.isoformat() if token.revoked_at else None,
+    }
+    token.revoked_at = utc_now()
+    db.session.commit()
+    record_audit_event(
+        action="api_token.revoked",
+        entity_type="api_token",
+        entity_id=token.id,
+        before_state=before_state,
+        after_state={
+            "name": token.name,
+            "prefix": token.prefix,
+            "scopes": token.scopes,
+            "revoked_at": token.revoked_at.isoformat() if token.revoked_at else None,
+        },
+        source_module=__name__,
+        actor_id=actor_id or token.user_id,
+    )
+    return token
+
+
 def authenticate_api_token(raw_token: str) -> ApiToken | None:
     statement = select(ApiToken).where(ApiToken.token_hash == _hash_token(raw_token))
     token = db.session.scalar(statement)
