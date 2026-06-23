@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import Boolean, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
 from app.models.base import PrimaryKeyMixin, TimestampMixin
@@ -34,3 +34,4 @@ class FeatureFlag(PrimaryKeyMixin, TimestampMixin, db.Model):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     business_id: Mapped[int | None] = mapped_column(db.ForeignKey("businesses.id"), nullable=True, index=True)
+    business = relationship("Business")

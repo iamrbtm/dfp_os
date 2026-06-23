@@ -410,6 +410,51 @@ class TestAuthZ:
         response = client.get("/expenses/receipts/inbox")
         assert response.status_code in (200, 302)
 
+    def test_receipt_image_route_serves_relative_stored_file(
+        self, app_with_receipts, admin_user, client
+    ):
+        receipt_dir = app_with_receipts.config["RECEIPT_STORAGE_PATH"]
+        file_path = f"{receipt_dir}/review-test.jpg"
+        with open(file_path, "wb") as handle:
+            handle.write(b"fake-image-bytes")
+
+        with app_with_receipts.app_context():
+            receipt = Receipt(
+                user_id=admin_user["id"],
+                status=ReceiptStatus.NEEDS_REVIEW,
+                original_file_id="review-test.jpg",
+            )
+            db.session.add(receipt)
+            db.session.commit()
+            receipt_id = receipt.id
+
+        response = client.get(f"/expenses/receipts/{receipt_id}/image")
+        assert response.status_code == 200
+        assert response.data == b"fake-image-bytes"
+
+    def test_review_page_embeds_pdf_receipts(
+        self, app_with_receipts, admin_user, client
+    ):
+        receipt_dir = app_with_receipts.config["RECEIPT_STORAGE_PATH"]
+        file_path = f"{receipt_dir}/review-test.pdf"
+        with open(file_path, "wb") as handle:
+            handle.write(b"%PDF-1.4\n%fake\n")
+
+        with app_with_receipts.app_context():
+            receipt = Receipt(
+                user_id=admin_user["id"],
+                status=ReceiptStatus.NEEDS_REVIEW,
+                original_file_id="review-test.pdf",
+            )
+            db.session.add(receipt)
+            db.session.commit()
+            receipt_id = receipt.id
+
+        response = client.get(f"/expenses/receipts/{receipt_id}/review")
+        assert response.status_code == 200
+        assert b'type="application/pdf"' in response.data
+        assert f"/expenses/receipts/{receipt_id}/image".encode() in response.data
+
 
 class TestProviderInterface:
     def test_ocr_provider_interface(self):
@@ -426,6 +471,65 @@ class TestProviderInterface:
         assert result.success is True
         assert result.data is not None
         assert result.data["merchant_name"] == "Mock Supermarket"
+
+    def test_process_receipt_with_mock_ai_creates_review_draft(
+        self, app_with_receipts, admin_user, monkeypatch
+    ):
+        from app.services import receipts as receipt_service
+        from app.services.receipt_providers.base import ProviderResult
+
+        class FakePreprocessor:
+            def process(self, file_path, **kwargs):
+                return ProviderResult(
+                    success=True,
+                    data={
+                        "preview_path": file_path,
+                        "pages": [file_path],
+                    },
+                )
+
+        class FakeOCR:
+            def process(self, file_path, **kwargs):
+                return ProviderResult(
+                    success=True,
+                    raw_text="Mock OCR text",
+                    raw_json='{"lines": [{"text": "Mock OCR text"}]}',
+                    data={"lines": [{"text": "Mock OCR text"}]},
+                    diagnostics={"provider": "mock_ocr"},
+                )
+
+        monkeypatch.setattr(receipt_service, "ImagePreprocessorProvider", FakePreprocessor)
+        monkeypatch.setattr(receipt_service, "OCRProvider", FakeOCR)
+
+        with app_with_receipts.app_context():
+            app_with_receipts.config["AI_RECEIPT_PARSING_ENABLED"] = True
+            app_with_receipts.config["RECEIPT_AI_PROVIDER"] = "mock"
+
+            receipt = Receipt(
+                user_id=admin_user["id"],
+                status=ReceiptStatus.UPLOADED,
+                original_file_id="/tmp/mock-receipt.jpg",
+                subtotal=Decimal("1.23"),
+            )
+            db.session.add(receipt)
+            db.session.commit()
+
+            result = receipt_service.process_receipt(receipt.id)
+
+            assert result["success"] is True
+            receipt = db.session.get(Receipt, receipt.id)
+            assert receipt.status == ReceiptStatus.NEEDS_REVIEW
+            assert receipt.ai_extracted_json is not None
+            assert receipt.merchant_name == "Mock Supermarket"
+            assert receipt.subtotal == Decimal("42.50")
+            assert receipt.grand_total == Decimal("46.40")
+            assert receipt.parser_model == "test"
+            assert receipt.confidence_overall == Decimal("0.9200")
+
+            items = ReceiptLineItem.query.filter_by(receipt_id=receipt.id).all()
+            assert len(items) == 3
+            assert all(item.needs_review for item in items)
+            assert Expense.query.filter_by(receipt_id=receipt.id).count() == 0
 
 
 class TestBulkAssignment:

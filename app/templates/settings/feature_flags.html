@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Feature Flags | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex items-end justify-between gap-4">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Feature Flags</h1>
+    </div>
+    <a href="{{ url_for('settings.feature_flag_new') }}" class="app-btn app-btn-primary">New Feature Flag</a>
+  </div>
+  <div class="app-card overflow-hidden">
+    <table class="app-table">
+      <thead><tr><th>Key</th><th>Enabled</th><th>Business</th><th>Description</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for flag in flags %}
+        <tr>
+          <td>{{ flag.key }}</td>
+          <td>{{ "Enabled" if flag.enabled else "Disabled" }}</td>
+          <td>{{ flag.business.name if flag.business_id and flag.business else "Global" }}</td>
+          <td>{{ flag.description or "—" }}</td>
+          <td><a href="{{ url_for('settings.feature_flag_edit', flag_id=flag.id) }}" class="app-link">Edit</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5">No feature flags created yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

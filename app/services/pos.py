@@ -4,7 +4,15 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.extensions import db
-from app.models.order import Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod
+from app.models.order import (
+    Order,
+    OrderItem,
+    OrderPaymentStatus,
+    OrderSource,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+)
 from app.models.pos import (
     PosSale,
     PosSaleItem,
@@ -14,7 +22,7 @@ from app.models.pos import (
     PosSessionStatus,
 )
 from app.services.audit import record_audit_event
-from app.services.inventory import deduct_finished_goods
+from app.services.inventory import deduct_finished_goods, return_inventory
 
 
 def open_session(
@@ -270,3 +278,67 @@ def get_session_summary(session_id: int) -> dict:
         "payment_totals": payment_totals,
         "expected_cash": expected_cash,
     }
+
+
+def refund_sale(
+    *,
+    sale_id: int,
+    actor_id: int | None = None,
+    restock: bool = True,
+    notes: str | None = None,
+) -> PosSale:
+    sale = db.session.get(PosSale, sale_id)
+    if sale is None:
+        raise ValueError("Sale not found")
+    if sale.status != PosSaleStatus.COMPLETED:
+        raise ValueError("Only completed sales can be refunded")
+
+    session = sale.session
+    if session is None:
+        raise ValueError("Sale session not found")
+
+    before = {"status": sale.status.value, "total": str(sale.total)}
+    sale.status = PosSaleStatus.REFUNDED
+    if notes:
+        sale.notes = f"{sale.notes}\nRefund: {notes}".strip() if sale.notes else f"Refund: {notes}"
+
+    if sale.order:
+        sale.order.status = OrderStatus.REFUNDED
+        sale.order.payment_status = OrderPaymentStatus.REFUNDED
+        sale.order.paid_amount = Decimal("0.00")
+        refund_payment = Payment(
+            order_id=sale.order.id,
+            amount=Decimal("0.00") - sale.total,
+            method=PaymentMethod(sale.payment_method),
+            notes=notes or f"Refund for POS sale {sale.sale_number}",
+            payment_date=datetime.now(timezone.utc),
+        )
+        db.session.add(refund_payment)
+
+    if restock:
+        for item in sale.items:
+            if item.item_type != PosSaleItemType.PRODUCT or item.product_id is None:
+                continue
+            return_inventory(
+                product_id=item.product_id,
+                variant_id=item.variant_id,
+                quantity=item.quantity,
+                location_id=session.inventory_location_id,
+                reference_type="pos_refund",
+                reference_id=sale.id,
+                actor_id=actor_id,
+                notes=notes or f"Refund for {sale.sale_number}",
+            )
+
+    db.session.commit()
+    record_audit_event(
+        action="pos_sale.refunded",
+        entity_type="pos_sale",
+        entity_id=sale.id,
+        before_state=before,
+        after_state={"status": sale.status.value, "restocked": restock},
+        metadata={"notes": notes, "session_id": session.id},
+        source_module=__name__,
+        actor_id=actor_id,
+    )
+    return sale

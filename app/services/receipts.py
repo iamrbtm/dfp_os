@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -16,6 +17,12 @@ from app.models import Receipt, ReceiptLineItem, ReceiptLineAllocation, ReceiptS
 from app.models.base import utc_now
 from app.services.receipt_providers import ImagePreprocessorProvider, OCRProvider, AIExtractionProvider
 from app.services.audit import record_audit_event
+from app.services.storage import (
+    content_type_for_name,
+    materialize_storage_reference,
+    storage_reference_extension,
+    upload_file_to_storage,
+)
 
 
 def _compute_file_hash(file_path: str) -> str:
@@ -30,8 +37,42 @@ def get_upload_folder() -> str:
     folder = current_app.config.get("RECEIPT_STORAGE_PATH") or os.path.join(
         current_app.config.get("UPLOAD_FOLDER", "uploads"), "receipts"
     )
+    folder = os.path.abspath(folder)
     os.makedirs(folder, exist_ok=True)
     return folder
+
+
+def resolve_receipt_file_path(file_path: str | None) -> str | None:
+    if not file_path:
+        return None
+    if str(file_path).startswith("s3://"):
+        return None
+
+    path = Path(file_path)
+    project_root = Path(current_app.root_path).parent
+    upload_root = Path(current_app.config.get("UPLOAD_FOLDER", "uploads"))
+    receipt_root = Path(get_upload_folder())
+
+    candidates: list[Path] = []
+    if path.is_absolute():
+        candidates.append(path)
+    else:
+        candidates.extend(
+            [
+                project_root / path,
+                upload_root / path,
+                receipt_root / path,
+                receipt_root / path.name,
+                upload_root / path.name,
+            ]
+        )
+
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.exists() and resolved.is_file():
+            return str(resolved)
+
+    return None
 
 
 def _allowed_file(filename: str) -> bool:
@@ -46,6 +87,29 @@ def _allowed_file(filename: str) -> bool:
 
 def _max_upload_mb() -> int:
     return int(current_app.config.get("RECEIPT_MAX_UPLOAD_MB", 25))
+
+
+def _receipt_bucket() -> str:
+    return current_app.config.get("RECEIPT_STORAGE_BUCKET", "receipts")
+
+
+def _store_receipt_artifact(
+    local_path: str | Path,
+    *,
+    prefix: str,
+    filename: str | None = None,
+    receipt_id: int | None = None,
+) -> str:
+    name = filename or Path(local_path).name
+    key_prefix = f"{prefix}/{receipt_id}" if receipt_id is not None else prefix
+    key = f"{key_prefix}/{name}"
+    return upload_file_to_storage(
+        local_path,
+        bucket=_receipt_bucket(),
+        key=key,
+        local_root=get_upload_folder(),
+        content_type=content_type_for_name(name),
+    )
 
 
 def upload_receipt(file_obj, user_id: int, source_type: str = "upload") -> Receipt | None:
@@ -71,6 +135,11 @@ def upload_receipt(file_obj, user_id: int, source_type: str = "upload") -> Recei
     file_obj.save(file_path)
 
     file_hash = _compute_file_hash(file_path)
+    original_reference = _store_receipt_artifact(
+        file_path,
+        prefix="originals",
+        filename=unique_name,
+    )
 
     duplicate = _check_duplicate_by_hash(file_hash)
     status = ReceiptStatus.POSSIBLE_DUPLICATE if duplicate else ReceiptStatus.UPLOADED
@@ -78,7 +147,7 @@ def upload_receipt(file_obj, user_id: int, source_type: str = "upload") -> Recei
     receipt = Receipt(
         user_id=user_id,
         status=status,
-        original_file_id=file_path,
+        original_file_id=original_reference,
         file_hash=file_hash,
         source_type=source_type,
         duplicate_group_id=duplicate.id if duplicate else None,
@@ -110,92 +179,118 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
     receipt.status = ReceiptStatus.PREPROCESSING
     db.session.commit()
 
-    preprocessor = ImagePreprocessorProvider()
-    preprocess_result = preprocessor.process(
-        receipt.original_file_id,
-        output_dir=str(Path(receipt.original_file_id).parent),
-    )
-    results["preprocessing"] = preprocess_result
-
-    if not preprocess_result.success:
-        receipt.status = ReceiptStatus.PROCESSING_FAILED
-        db.session.commit()
-        return {"success": False, "errors": preprocess_result.errors, "results": results}
-
-    if preprocess_result.data:
-        receipt.preview_file_id = preprocess_result.data.get("preview_path")
-        receipt.thumbnail_file_id = preprocess_result.data.get("thumbnail_path")
-
-    # Step 2: OCR
-    receipt.status = ReceiptStatus.OCR_PROCESSING
-    db.session.commit()
-
-    ocr_provider = OCRProvider()
     ocr_config = current_app.config
-    ocr_image = preprocess_result.data.get("enhanced_path") or preprocess_result.data.get("pages", [receipt.original_file_id])[0]
-    ocr_result = ocr_provider.process(
-        ocr_image,
-        provider=ocr_config.get("RECEIPT_OCR_PROVIDER", "paddleocr"),
-        enhanced_path=preprocess_result.data.get("enhanced_path"),
-    )
-    results["ocr"] = ocr_result
+    with tempfile.TemporaryDirectory(prefix=f"receipt-{receipt.id}-") as working_dir:
+        source_path, _ = materialize_storage_reference(
+            receipt.original_file_id,
+            suffix=storage_reference_extension(receipt.original_file_id),
+            working_dir=working_dir,
+        )
 
-    if not ocr_result.success:
-        receipt.status = ReceiptStatus.PROCESSING_FAILED
+        preprocessor = ImagePreprocessorProvider()
+        preprocess_result = preprocessor.process(
+            source_path,
+            output_dir=working_dir,
+        )
+        results["preprocessing"] = preprocess_result
+
+        if not preprocess_result.success:
+            receipt.status = ReceiptStatus.PROCESSING_FAILED
+            db.session.commit()
+            return {"success": False, "errors": preprocess_result.errors, "results": results}
+
+        if preprocess_result.data:
+            preview_path = preprocess_result.data.get("preview_path")
+            if preview_path:
+                if Path(preview_path).resolve() == Path(source_path).resolve():
+                    receipt.preview_file_id = receipt.original_file_id
+                else:
+                    receipt.preview_file_id = _store_receipt_artifact(
+                        preview_path,
+                        prefix="previews",
+                        receipt_id=receipt.id,
+                    )
+
+            thumbnail_path = preprocess_result.data.get("thumbnail_path")
+            if thumbnail_path:
+                receipt.thumbnail_file_id = _store_receipt_artifact(
+                    thumbnail_path,
+                    prefix="thumbnails",
+                    receipt_id=receipt.id,
+                )
+
+        # Step 2: OCR
+        receipt.status = ReceiptStatus.OCR_PROCESSING
+        db.session.commit()
+
+        ocr_provider = OCRProvider()
+        ocr_image = preprocess_result.data.get("enhanced_path") or preprocess_result.data.get(
+            "pages", [source_path]
+        )[0]
+        ocr_result = ocr_provider.process(
+            ocr_image,
+            provider=ocr_config.get("RECEIPT_OCR_PROVIDER", "paddleocr"),
+            enhanced_path=preprocess_result.data.get("enhanced_path"),
+        )
+        results["ocr"] = ocr_result
+
+        if not ocr_result.success:
+            receipt.status = ReceiptStatus.PROCESSING_FAILED
+            receipt.raw_ocr_text = ocr_result.raw_text
+            db.session.commit()
+            return {"success": False, "errors": ocr_result.errors, "results": results}
+
         receipt.raw_ocr_text = ocr_result.raw_text
+        receipt.raw_ocr_json = ocr_result.raw_json
+        receipt.parser_provider = ocr_result.diagnostics.get("provider", "unknown")
+        receipt.parser_version = ocr_result.diagnostics.get("provider", "unknown")
+
+        ai_enabled = bool(ocr_config.get("AI_RECEIPT_PARSING_ENABLED", False))
+        if ai_enabled:
+            receipt.status = ReceiptStatus.AI_EXTRACTING
+            db.session.commit()
+
+            ai_provider = AIExtractionProvider()
+            ai_kwargs = {
+                "raw_ocr_text": ocr_result.raw_text or "",
+                "provider": ocr_config.get("RECEIPT_AI_PROVIDER", "openai"),
+            }
+            if ai_kwargs["provider"] == "openai":
+                ai_kwargs["openai_api_key"] = ocr_config.get("OPENAI_API_KEY", "")
+                ai_kwargs["openai_model"] = ocr_config.get("OPENAI_MODEL_RECEIPTS", "gpt-4o-mini")
+            else:
+                ai_kwargs["ollama_base_url"] = ocr_config.get("OLLAMA_BASE_URL", "http://localhost:11434")
+                ai_kwargs["ollama_fallback_url"] = ocr_config.get("OLLAMA_FALLBACK_URL", "http://localhost:11434")
+                ai_kwargs["model"] = ocr_config.get("OLLAMA_RECEIPT_MODEL", "deepseek-r1:8b")
+
+            ai_result = ai_provider.process(source_path, **ai_kwargs)
+            results["ai"] = ai_result
+
+            if ai_result.success and ai_result.data:
+                receipt.ai_extracted_json = ai_result.raw_json
+                receipt.parser_model = ai_result.diagnostics.get("model", "unknown")
+                # Delete existing line items before re-extracting (prevents duplication on reprocess)
+                for item in list(receipt.line_items):
+                    db.session.delete(item)
+                from app.models.receipt import ReceiptAdjustmentAllocation
+
+                ReceiptAdjustmentAllocation.query.filter_by(receipt_id=receipt_id).delete()
+                db.session.flush()
+                normalized = _normalize_ai_data(ai_result.data)
+                _apply_ai_extraction(receipt, normalized)
+                record_audit_event(
+                    action="receipt.ai_parsed",
+                    entity_type="receipt",
+                    entity_id=receipt.id,
+                    after_state={"parser_model": receipt.parser_model, "confidence": str(ai_result.confidence)},
+                    source_module=__name__,
+                )
+            receipt.confidence_overall = Decimal(str(ai_result.confidence)) if ai_result.confidence is not None else None
+
+        receipt.status = ReceiptStatus.NEEDS_REVIEW
+
         db.session.commit()
-        return {"success": False, "errors": ocr_result.errors, "results": results}
-
-    receipt.raw_ocr_text = ocr_result.raw_text
-    receipt.raw_ocr_json = ocr_result.raw_json
-    receipt.parser_provider = ocr_result.diagnostics.get("provider", "unknown")
-    receipt.parser_version = ocr_result.diagnostics.get("provider", "unknown")
-
-    ai_enabled = bool(ocr_config.get("AI_RECEIPT_PARSING_ENABLED", False))
-    if ai_enabled:
-        receipt.status = ReceiptStatus.AI_EXTRACTING
-        db.session.commit()
-
-        ai_provider = AIExtractionProvider()
-        ai_kwargs = {
-            "raw_ocr_text": ocr_result.raw_text or "",
-            "provider": ocr_config.get("RECEIPT_AI_PROVIDER", "openai"),
-        }
-        if ai_kwargs["provider"] == "openai":
-            ai_kwargs["openai_api_key"] = ocr_config.get("OPENAI_API_KEY", "")
-            ai_kwargs["openai_model"] = ocr_config.get("OPENAI_MODEL_RECEIPTS", "gpt-4o-mini")
-        else:
-            ai_kwargs["ollama_base_url"] = ocr_config.get("OLLAMA_BASE_URL", "http://localhost:11434")
-            ai_kwargs["ollama_fallback_url"] = ocr_config.get("OLLAMA_FALLBACK_URL", "http://localhost:11434")
-            ai_kwargs["model"] = ocr_config.get("OLLAMA_RECEIPT_MODEL", "deepseek-r1:8b")
-
-        ai_result = ai_provider.process(receipt.original_file_id, **ai_kwargs)
-        results["ai"] = ai_result
-
-        if ai_result.success and ai_result.data:
-            receipt.ai_extracted_json = ai_result.raw_json
-            receipt.parser_model = ai_result.diagnostics.get("model", "unknown")
-            # Delete existing line items before re-extracting (prevents duplication on reprocess)
-            for item in list(receipt.line_items):
-                db.session.delete(item)
-            from app.models.receipt import ReceiptAdjustmentAllocation
-            ReceiptAdjustmentAllocation.query.filter_by(receipt_id=receipt_id).delete()
-            db.session.flush()
-            normalized = _normalize_ai_data(ai_result.data)
-            _apply_ai_extraction(receipt, normalized)
-            record_audit_event(
-                action="receipt.ai_parsed",
-                entity_type="receipt",
-                entity_id=receipt.id,
-                after_state={"parser_model": receipt.parser_model, "confidence": str(ai_result.confidence)},
-                source_module=__name__,
-            )
-        receipt.confidence_overall = Decimal(str(ai_result.confidence)) if ai_result.confidence is not None else None
-
-    receipt.status = ReceiptStatus.NEEDS_REVIEW
-
-    db.session.commit()
-    return {"success": True, "results": results}
+        return {"success": True, "results": results}
 
 
 AI_FIELD_ALIASES = {
@@ -288,14 +383,19 @@ def _apply_ai_extraction(receipt: Receipt, data: dict):
             pass
 
     receipt.timezone = data.get("timezone") or receipt.timezone
-    receipt.subtotal = _safe_decimal(data.get("subtotal"))
-    receipt.tax_total = _safe_decimal(data.get("tax_total"))
-    receipt.fee_total = _safe_decimal(data.get("fee_total"))
-    receipt.discount_total = _safe_decimal(data.get("discount_total"))
-    receipt.tip_total = _safe_decimal(data.get("tip_total"))
-    receipt.deposit_total = _safe_decimal(data.get("deposit_total"))
-    receipt.rounding_adjustment = _safe_decimal(data.get("rounding_adjustment"))
-    receipt.grand_total = _safe_decimal(data.get("grand_total"))
+    for field in (
+        "subtotal",
+        "tax_total",
+        "fee_total",
+        "discount_total",
+        "tip_total",
+        "deposit_total",
+        "rounding_adjustment",
+        "grand_total",
+    ):
+        value = _safe_decimal(data.get(field))
+        if value is not None:
+            setattr(receipt, field, value)
     receipt.payment_method = data.get("payment_method") or receipt.payment_method
     receipt.payment_card_brand = data.get("payment_card_brand") or receipt.payment_card_brand
     receipt.payment_card_last4 = data.get("payment_card_last4") or receipt.payment_card_last4

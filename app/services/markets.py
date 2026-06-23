@@ -33,6 +33,11 @@ from app.models import (
 )
 from app.models.base import utc_now
 from app.services.audit_client import get_audit_client
+from app.services.cost_engine import estimate_market_profit
+from app.services.storage import (
+    content_type_for_name,
+    upload_file_to_storage,
+)
 
 
 ALLOWED_MARKET_DOCUMENT_TYPES = {
@@ -50,6 +55,8 @@ def get_market_performance(market: Market) -> dict:
     total_sales = _get_market_sales_total(market)
     total_expenses = _get_market_expenses_total(market)
     booth_cost = (market.booth_fee or Decimal(0)) + (market.application_fee or Decimal(0))
+    units_sold = _get_units_sold(market)
+    cost_engine = estimate_market_profit(market.id)
 
     return {
         "market": market,
@@ -57,10 +64,17 @@ def get_market_performance(market: Market) -> dict:
         "total_expenses": total_expenses,
         "booth_cost": booth_cost,
         "estimated_profit": total_sales - total_expenses - booth_cost,
+        "cost_engine": cost_engine,
+        "repeat_recommendation": _repeat_recommendation(
+            revenue=cost_engine["revenue"],
+            profit=cost_engine["profit"],
+            margin_percent=cost_engine["margin_percent"],
+            units_sold=units_sold,
+        ),
         "booth_fee_pct": _calc_pct(booth_cost, total_sales),
         "top_products": _get_top_products(market),
         "payment_methods": _get_payment_methods(market),
-        "units_sold": _get_units_sold(market),
+        "units_sold": units_sold,
     }
 
 
@@ -244,15 +258,22 @@ def save_market_document(
     if content_type not in ALLOWED_MARKET_DOCUMENT_TYPES:
         raise ValueError("That file type is not supported for market documents.")
 
-    upload_dir = Path(current_app.config["UPLOAD_FOLDER"]) / "markets" / str(market.id)
+    upload_dir = Path(current_app.config["MARKET_DOCUMENTS_PATH"]) / str(market.id)
     upload_dir.mkdir(parents=True, exist_ok=True)
     stored_filename = f"{uuid4().hex}_{original_filename}"
     destination = upload_dir / stored_filename
     file.save(destination)
+    storage_reference = upload_file_to_storage(
+        destination,
+        bucket=current_app.config.get("MARKET_DOCUMENTS_BUCKET", "markets"),
+        key=f"{market.id}/{stored_filename}",
+        local_root=current_app.config["MARKET_DOCUMENTS_PATH"],
+        content_type=content_type or content_type_for_name(original_filename),
+    )
     document = MarketDocument(
         market_id=market.id,
         original_filename=original_filename,
-        stored_filename=stored_filename,
+        stored_filename=storage_reference,
         content_type=content_type,
         file_size=destination.stat().st_size,
         document_type=document_type,
@@ -276,7 +297,10 @@ def save_market_document(
 
 
 def market_document_path(document: MarketDocument) -> Path:
-    return Path(current_app.config["UPLOAD_FOLDER"]) / "markets" / str(document.market_id) / document.stored_filename
+    stored = Path(document.stored_filename)
+    if stored.is_absolute():
+        return stored
+    return Path(current_app.config["MARKET_DOCUMENTS_PATH"]) / str(document.market_id) / document.stored_filename
 
 
 def record_market_audit(
@@ -463,6 +487,34 @@ def _count_pct(part: int, total: int) -> int:
     if not total:
         return 0
     return int(round(part / total * 100))
+
+
+def _repeat_recommendation(
+    *,
+    revenue: Decimal,
+    profit: Decimal,
+    margin_percent: Decimal,
+    units_sold: int,
+) -> dict[str, str]:
+    if revenue <= Decimal("0.00"):
+        return {
+            "label": "Needs more data",
+            "reason": "This market has not produced enough sales yet to judge whether it should be repeated.",
+        }
+    if profit > Decimal("0.00") and margin_percent >= Decimal("25.00") and units_sold >= 10:
+        return {
+            "label": "Strong repeat candidate",
+            "reason": "Profit, margin, and sell-through all cleared a healthy baseline.",
+        }
+    if profit >= Decimal("0.00"):
+        return {
+            "label": "Conditional repeat",
+            "reason": "The market covered its costs, but the mix still needs tightening before the next booking.",
+        }
+    return {
+        "label": "Review before repeating",
+        "reason": "The market appears unprofitable after cost-of-goods and expenses. Review pricing, booth cost, and product mix first.",
+    }
 
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:

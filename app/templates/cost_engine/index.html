@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Cost Engine | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Cost Engine</h1>
+  </div>
+  <form method="post" class="app-card p-6">
+    <div class="grid gap-4 md:grid-cols-3">
+      {% for key, value in settings.items() %}
+        <div>
+          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ key.replace('_', ' ').title() }}</label>
+          <input name="cost_engine_{{ key }}" value="{{ value }}" class="app-input w-full">
+        </div>
+      {% endfor %}
+    </div>
+    <div class="mt-4"><button class="app-btn app-btn-primary" type="submit">Save Settings</button></div>
+  </form>
+  <div class="grid gap-6 lg:grid-cols-3">
+    <form method="get" class="app-card p-5 space-y-3">
+      <h2 class="text-xl font-semibold" style="color: var(--color-text);">Product Calculator</h2>
+      <select class="app-input w-full" name="product_id">
+        <option value="">Choose product</option>
+        {% for product in products %}<option value="{{ product.id }}" {% if selected_product == product.id %}selected{% endif %}>{{ product.name }}</option>{% endfor %}
+      </select>
+      <input class="app-input w-full" name="variant_id" value="{{ selected_variant or '' }}" placeholder="Optional variant ID">
+      <button class="app-btn app-btn-secondary" type="submit">Calculate</button>
+      {% if product_breakdown %}
+      <div class="space-y-2 text-sm">
+        {% for key, value in product_breakdown.as_dict().items() %}
+        <div class="flex justify-between gap-4"><span>{{ key.replace('_', ' ').title() }}</span><span>{{ value }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </form>
+    <form method="get" class="app-card p-5 space-y-3">
+      <h2 class="text-xl font-semibold" style="color: var(--color-text);">Order Profit</h2>
+      <select class="app-input w-full" name="order_id">
+        <option value="">Choose order</option>
+        {% for order in orders %}<option value="{{ order.id }}" {% if selected_order == order.id %}selected{% endif %}>{{ order.order_number }}</option>{% endfor %}
+      </select>
+      <button class="app-btn app-btn-secondary" type="submit">Estimate</button>
+      {% if order_profit %}
+      <div class="space-y-2 text-sm">{% for key, value in order_profit.items() %}<div class="flex justify-between gap-4"><span>{{ key.replace('_', ' ').title() }}</span><span>{{ value }}</span></div>{% endfor %}</div>
+      {% endif %}
+    </form>
+    <form method="get" class="app-card p-5 space-y-3">
+      <h2 class="text-xl font-semibold" style="color: var(--color-text);">Market Profit</h2>
+      <select class="app-input w-full" name="market_id">
+        <option value="">Choose market</option>
+        {% for market in markets %}<option value="{{ market.id }}" {% if selected_market == market.id %}selected{% endif %}>{{ market.name }}</option>{% endfor %}
+      </select>
+      <button class="app-btn app-btn-secondary" type="submit">Estimate</button>
+      {% if market_profit %}
+      <div class="space-y-2 text-sm">{% for key, value in market_profit.items() %}<div class="flex justify-between gap-4"><span>{{ key.replace('_', ' ').title() }}</span><span>{{ value }}</span></div>{% endfor %}</div>
+      {% endif %}
+    </form>
+  </div>
+</section>
+{% endblock %}

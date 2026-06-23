@@ -78,6 +78,33 @@ class ImagePreprocessorProvider(BaseReceiptProvider):
 
     def _convert_pdf(self, file_path: str, output_dir: str) -> list[str]:
         pages = []
+        output_prefix = str(Path(output_dir) / f"{Path(file_path).stem}_page")
+        try:
+            result = subprocess.run(
+                [
+                    "pdftoppm",
+                    "-jpeg",
+                    "-r",
+                    "200",
+                    "-f",
+                    "1",
+                    "-l",
+                    "1",
+                    file_path,
+                    output_prefix,
+                ],
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
+            if result.returncode == 0:
+                for f in sorted(Path(output_dir).glob(f"{Path(file_path).stem}_page-*.jpg")):
+                    pages.append(str(f))
+                if pages:
+                    return pages
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
         try:
             result = subprocess.run(
                 ["magick", "-density", "200", file_path, str(Path(output_dir) / f"{Path(file_path).stem}_page_%d.jpg")],

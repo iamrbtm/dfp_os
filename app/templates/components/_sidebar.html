@@ -58,6 +58,10 @@
        style="{% if active_section == 'markets' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Markets
     </a>
+    <a href="{{ url_for('prep_tasks.list_resource', resource_key='tasks') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'prep_tasks' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Prep Tasks
+    </a>
     <div class="space-y-0.5">
       <a href="{{ url_for('expenses.list_resource', resource_key='expenses') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
          style="{% if active_section == 'expenses' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
@@ -73,6 +77,14 @@
     <a href="{{ url_for('analytics.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'analytics' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Analytics
+    </a>
+    <a href="{{ url_for('cost_engine.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'cost_engine' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Cost Engine
+    </a>
+    <a href="{{ url_for('audit_logs.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'audit_logs' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Audit Logs
     </a>
   </nav>
 

@@ -24,6 +24,12 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "default_theme": "dfp-github-light",
     "pos_card_processor": "placeholder",
     "pos_card_processing_enabled": "false",
+    "cost_engine_cost_per_gram": "0.025",
+    "cost_engine_labor_rate": "18.00",
+    "cost_engine_packaging_cost": "0.50",
+    "cost_engine_machine_hour_rate": "0.50",
+    "cost_engine_failure_rate": "0.05",
+    "cost_engine_target_margin_percent": "55.00",
 }
 
 

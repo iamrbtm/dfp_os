@@ -44,7 +44,7 @@ from app.models.market import (
 )
 from app.models.inventory import FilamentSpool, FilamentStatus, InventoryLocation, InventoryRecord
 from app.models.inventory_movement import InventoryMovement, InventoryMovementType
-from app.models.order import Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod
+from app.models.order import Order, OrderFulfillmentMethod, OrderItem, OrderPaymentStatus, OrderSource, OrderStatus, Payment, PaymentMethod
 from app.models.pos import (
     PosSale,
     PosSaleItem,

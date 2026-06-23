@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Business Settings | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-5xl space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Business Settings</h1>
+    <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Manage the default business/account foundation for DFPos.</p>
+  </div>
+  <form method="post" class="app-card p-6">
+    {{ form.hidden_tag() }}
+    <div class="grid gap-5 md:grid-cols-2">
+      {% for field in form if field.name not in ['csrf_token', 'submit'] %}
+        <div class="{% if field.type == 'BooleanField' %}md:col-span-2{% endif %}">
+          {% if field.type == 'BooleanField' %}
+            <label class="flex items-center gap-3 app-card px-4 py-3">{{ field(class='app-checkbox') }}<span>{{ field.label.text }}</span></label>
+          {% else %}
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ field.label.text }}</label>
+            {{ field(class="app-input w-full") }}
+          {% endif %}
+          {% for error in field.errors %}<p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+    <div class="mt-6">{{ form.submit(class="app-btn app-btn-primary") }}</div>
+  </form>
+</section>
+{% endblock %}

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 from flask import (
     abort,
@@ -34,13 +34,14 @@ from app.services.receipt_allocations import (
 from app.services.receipt_audit import record_audit
 from app.services.receipt_duplicates import check_duplicates, resolve_duplicate
 from app.services.receipts import (
-    get_upload_folder,
     approve_receipt,
     get_receipt_dashboard,
     process_receipt,
     reject_receipt,
+    resolve_receipt_file_path,
     upload_receipt,
 )
+from app.services.storage import send_storage_reference, storage_reference_extension
 from app.utils.auth import roles_required
 from app.models.user import UserRole
 
@@ -189,6 +190,29 @@ def review(receipt_id: int):
 
     line_items = ReceiptLineItem.query.filter_by(receipt_id=receipt_id).order_by(ReceiptLineItem.row_order).all()
     reconciliation = get_reconciliation_summary(receipt_id)
+    duplicate_analysis = check_duplicates(receipt_id)
+    original_extension = storage_reference_extension(receipt.original_file_id)
+    receipt_reference = (
+        receipt.original_file_id
+        if original_extension == ".pdf"
+        else receipt.preview_file_id or receipt.original_file_id
+    )
+    receipt_display_path = resolve_receipt_file_path(receipt_reference)
+    receipt_display_available = bool(receipt_reference and (receipt_reference.startswith("s3://") or receipt_display_path))
+    receipt_extension = storage_reference_extension(receipt_reference) or (
+        Path(receipt_display_path).suffix.lower() if receipt_display_path else ""
+    )
+    receipt_asset_kind = "pdf" if receipt_extension == ".pdf" else "image"
+    receipt_display_file = "original" if receipt_reference == receipt.original_file_id else "preview"
+    diagnostics = {
+        "parser_provider": receipt.parser_provider,
+        "parser_model": receipt.parser_model,
+        "parser_version": receipt.parser_version,
+        "ocr_text_present": bool(receipt.raw_ocr_text),
+        "ocr_json_present": bool(receipt.raw_ocr_json),
+        "ai_extracted_present": bool(receipt.ai_extracted_json),
+        "low_confidence_flags": receipt.low_confidence_flags,
+    }
 
     return render_template(
         "receipts/review.html",
@@ -196,6 +220,11 @@ def review(receipt_id: int):
         form=form,
         line_items=line_items,
         reconciliation=reconciliation,
+        duplicate_analysis=duplicate_analysis,
+        diagnostics=diagnostics,
+        receipt_display_available=receipt_display_available,
+        receipt_asset_kind=receipt_asset_kind,
+        receipt_display_file=receipt_display_file,
         ReceiptStatus=ReceiptStatus,
         low_confidence_threshold=float(current_app.config.get("RECEIPT_LOW_CONFIDENCE_THRESHOLD", 0.8)),
     )
@@ -472,7 +501,8 @@ def duplicates():
         Receipt.status == ReceiptStatus.POSSIBLE_DUPLICATE,
         Receipt.deleted_at.is_(None),
     ).order_by(Receipt.created_at.desc()).all()
-    return render_template("receipts/duplicates.html", receipts=receipts, ReceiptStatus=ReceiptStatus)
+    receipt_rows = [{"receipt": receipt, "analysis": check_duplicates(receipt.id)} for receipt in receipts]
+    return render_template("receipts/duplicates.html", receipt_rows=receipt_rows, ReceiptStatus=ReceiptStatus)
 
 
 @bp.route("/settings")
@@ -508,20 +538,23 @@ def help_download():
 @bp.route("/<int:receipt_id>/image")
 @login_required
 def receipt_image(receipt_id: int):
-    from flask import send_file
     receipt = db.session.get(Receipt, receipt_id)
     if not receipt or receipt.deleted_at:
         abort(404)
-    file_path = receipt.preview_file_id or receipt.original_file_id
-    if not file_path:
+    file_kind = request.args.get("file", "preview")
+    if file_kind == "original":
+        reference = receipt.original_file_id
+    elif file_kind == "thumbnail":
+        reference = receipt.thumbnail_file_id or receipt.preview_file_id or receipt.original_file_id
+    else:
+        reference = receipt.preview_file_id or receipt.original_file_id
+    if not reference:
         abort(404)
-    abs_path = os.path.abspath(file_path)
-    if os.path.exists(abs_path):
-        return send_file(abs_path)
-    basename = os.path.basename(file_path)
-    alt = os.path.join(get_upload_folder(), basename)
-    if os.path.exists(alt):
-        return send_file(os.path.abspath(alt))
+    if reference.startswith("s3://"):
+        return send_storage_reference(reference)
+    resolved_path = resolve_receipt_file_path(reference)
+    if resolved_path:
+        return send_storage_reference(resolved_path)
     abort(404)
 
 

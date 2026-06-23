@@ -326,6 +326,22 @@ def terms():
     return render_template("public/terms.html")
 
 
+@bp.get("/gallery")
+def gallery():
+    products = db.session.scalars(_public_product_query().order_by(Product.name.asc()).limit(18)).all()
+    return render_template("public/gallery.html", products=products)
+
+
+@bp.get("/accessibility")
+def accessibility():
+    return render_template("public/accessibility.html")
+
+
+@bp.get("/shipping-policy")
+def shipping_policy():
+    return render_template("public/shipping_policy.html")
+
+
 @bp.get("/collections/<slug>")
 def collection_detail(slug: str):
     collection = Collection.query.filter_by(slug=slug, is_public=True).first()

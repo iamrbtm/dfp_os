@@ -29,6 +29,14 @@
         <p class="mt-2 text-2xl font-bold" style="{% if performance.estimated_profit >= 0 %}color: var(--color-success){% else %}color: var(--color-danger){% endif %}">${{ "{:,.2f}".format(performance.estimated_profit) }}</p>
       </article>
       <article class="app-card p-5">
+        <p class="text-sm" style="color: var(--color-text-muted);">Costed Profit</p>
+        <p class="mt-2 text-2xl font-bold" style="{% if performance.cost_engine.profit >= 0 %}color: var(--color-success){% else %}color: var(--color-danger){% endif %}">${{ "{:,.2f}".format(performance.cost_engine.profit) }}</p>
+      </article>
+      <article class="app-card p-5">
+        <p class="text-sm" style="color: var(--color-text-muted);">Item Cost</p>
+        <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">${{ "{:,.2f}".format(performance.cost_engine.item_cost) }}</p>
+      </article>
+      <article class="app-card p-5">
         <p class="text-sm" style="color: var(--color-text-muted);">Booth Fee % of Sales</p>
         <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">{{ "%.1f" % performance.booth_fee_pct if performance.booth_fee_pct is not none else "—" }}%</p>
       </article>
@@ -36,7 +44,17 @@
         <p class="text-sm" style="color: var(--color-text-muted);">Units Sold</p>
         <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">{{ performance.units_sold }}</p>
       </article>
+      <article class="app-card p-5">
+        <p class="text-sm" style="color: var(--color-text-muted);">Profit Margin</p>
+        <p class="mt-2 text-2xl font-bold" style="color: var(--color-text);">{{ "{:,.2f}".format(performance.cost_engine.margin_percent) }}%</p>
+      </article>
     </div>
+
+    <section class="app-card p-5">
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Repeat Decision</p>
+      <h2 class="mt-2 text-xl font-semibold" style="color: var(--color-text);">{{ performance.repeat_recommendation.label }}</h2>
+      <p class="mt-2 text-sm leading-7" style="color: var(--color-text-muted);">{{ performance.repeat_recommendation.reason }}</p>
+    </section>
 
     {% if performance.top_products %}
     <section>

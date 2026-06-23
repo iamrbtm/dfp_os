@@ -193,6 +193,7 @@ MODULES: dict[str, ModuleDefinition] = {
         description="Reusable cost, price, margin, and profitability calculations.",
         feature_flag_key="module.cost_engine.enabled",
         dependencies=("products", "orders", "markets", "expense_ledger"),
+        blueprint_names=("cost_engine",),
         api_resources=("cost-engine",),
     ),
     "prep_tasks": ModuleDefinition(
@@ -201,7 +202,9 @@ MODULES: dict[str, ModuleDefinition] = {
         description="Reusable prep templates, generated market tasks, readiness scores, and packing guidance.",
         feature_flag_key="module.prep_tasks.enabled",
         dependencies=("markets", "inventory", "print_jobs"),
-        api_resources=("prep-tasks",),
+        blueprint_names=("prep_tasks",),
+        api_resources=("prep-tasks", "prep-task-templates"),
+        admin_nav_entries=(NavEntry("Prep Tasks", "prep_tasks.list_resource"),),
     ),
     "api": ModuleDefinition(
         key="api",
@@ -217,6 +220,7 @@ MODULES: dict[str, ModuleDefinition] = {
         description="Application settings, themes, module status, and feature flags.",
         feature_flag_key="module.settings.enabled",
         blueprint_names=("settings", "api_tokens"),
+        api_resources=("businesses",),
     ),
     "audit_logs": ModuleDefinition(
         key="audit_logs",
@@ -224,6 +228,7 @@ MODULES: dict[str, ModuleDefinition] = {
         description="Audit-log microservice dispatch and admin visibility.",
         feature_flag_key="module.audit_logs.enabled",
         default_enabled=True,
+        blueprint_names=("audit_logs",),
     ),
     "feature_flags": ModuleDefinition(
         key="feature_flags",
@@ -232,6 +237,7 @@ MODULES: dict[str, ModuleDefinition] = {
         feature_flag_key="module.feature_flags.enabled",
         default_enabled=True,
         dependencies=("settings",),
+        api_resources=("feature-flags",),
     ),
 }
 

@@ -161,6 +161,9 @@ class AIExtractionProvider(BaseReceiptProvider):
 
         provider = kwargs.get("provider", "openai")
 
+        if provider == "mock":
+            return self._mock_response()
+
         if provider == "openai":
             api_key = kwargs.get("openai_api_key", "")
             if not api_key:

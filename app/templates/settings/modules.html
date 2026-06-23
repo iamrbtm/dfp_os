@@ -1,44 +1,49 @@
 {% extends "base.html" %}
-
 {% block content %}
-<div class="space-y-6">
-  <div>
-    <h1 class="text-2xl font-semibold text-slate-900">Module Status</h1>
-    <p class="mt-1 text-sm text-slate-600">Feature flags are enforced server-side for routes and API resources.</p>
+<section class="space-y-6">
+  <div class="flex items-end justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-semibold" style="color: var(--color-text);">Module Status</h1>
+      <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Feature flags are enforced server-side for routes and API resources.</p>
+    </div>
+    <a href="{{ url_for('settings.feature_flags') }}" class="app-btn app-btn-secondary">Advanced Flags</a>
   </div>
 
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
-    <table class="min-w-full divide-y divide-slate-200 text-sm">
-      <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+  <form method="post" action="{{ url_for('settings.module_status_update') }}" class="app-card overflow-hidden">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <table class="app-table">
+      <thead>
         <tr>
-          <th class="px-4 py-3">Module</th>
-          <th class="px-4 py-3">Flag</th>
-          <th class="px-4 py-3">Status</th>
-          <th class="px-4 py-3">Dependencies</th>
-          <th class="px-4 py-3">Health</th>
+          <th>Module</th>
+          <th>Flag</th>
+          <th>Status</th>
+          <th>Dependencies</th>
+          <th>Health</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-slate-100">
+      <tbody>
         {% for module in modules %}
         <tr>
-          <td class="px-4 py-3">
-            <div class="font-medium text-slate-900">{{ module.display_name }}</div>
-            <div class="text-xs text-slate-500">{{ module.description }}</div>
+          <td>
+            <div class="font-medium" style="color: var(--color-text);">{{ module.display_name }}</div>
+            <div class="text-xs" style="color: var(--color-text-muted);">{{ module.description }}</div>
           </td>
-          <td class="px-4 py-3 font-mono text-xs text-slate-700">{{ module.feature_flag_key }}</td>
-          <td class="px-4 py-3">
-            {% if module.enabled %}
-            <span class="rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">Enabled</span>
-            {% else %}
-            <span class="rounded bg-slate-200 px-2 py-1 text-xs font-medium text-slate-700">Locked</span>
-            {% endif %}
+          <td class="font-mono text-xs">{{ module.feature_flag_key }}</td>
+          <td>
+            <label class="inline-flex items-center gap-2">
+              <input type="checkbox" name="{{ module.feature_flag_key }}" {% if module.enabled %}checked{% endif %}>
+              <span>{{ "Enabled" if module.enabled else "Disabled" }}</span>
+            </label>
           </td>
-          <td class="px-4 py-3 text-xs text-slate-600">{{ module.dependencies|join(", ") or "None" }}</td>
-          <td class="px-4 py-3 text-xs text-slate-600">{{ module.health }}: {{ module.health_message }}</td>
+          <td class="text-xs">{{ module.dependencies|join(", ") or "None" }}</td>
+          <td class="text-xs">{{ module.health }}: {{ module.health_message }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
-  </div>
-</div>
+    <div class="border-t p-4" style="border-color: var(--color-border);">
+      <button class="app-btn app-btn-primary" type="submit">Save Module Settings</button>
+    </div>
+  </form>
+</section>
 {% endblock %}

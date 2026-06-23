@@ -51,6 +51,30 @@ def record_movement(
     return movement
 
 
+def get_or_create_inventory_record(
+    *,
+    product_id: int,
+    variant_id: int | None,
+    location_id: int,
+) -> InventoryRecord:
+    record = InventoryRecord.query.filter_by(
+        product_id=product_id,
+        variant_id=variant_id,
+        location_id=location_id,
+    ).with_for_update().first()
+    if record is None:
+        record = InventoryRecord(
+            product_id=product_id,
+            variant_id=variant_id,
+            location_id=location_id,
+            quantity_on_hand=0,
+            quantity_reserved=0,
+        )
+        db.session.add(record)
+        db.session.flush()
+    return record
+
+
 def deduct_finished_goods(
     *,
     product_id: int,
@@ -182,5 +206,232 @@ def adjust_inventory(
         },
         metadata={"quantity_delta": quantity_delta, "notes": notes},
         source_module=__name__,
+    )
+    return record
+
+
+def transfer_inventory(
+    *,
+    record_id: int,
+    to_location_id: int,
+    quantity: int,
+    actor_id: int | None = None,
+    notes: str | None = None,
+) -> tuple[InventoryRecord, InventoryRecord]:
+    if quantity <= 0:
+        raise ValueError("Transfer quantity must be greater than zero")
+
+    source = db.session.get(InventoryRecord, record_id)
+    if source is None:
+        raise ValueError("Inventory record not found")
+    if source.location_id == to_location_id:
+        raise ValueError("Choose a different destination location")
+    if source.quantity_available < quantity and not allow_negative_inventory():
+        raise ValueError("Transfer quantity exceeds available stock")
+
+    source_before = {
+        "quantity_on_hand": source.quantity_on_hand,
+        "quantity_reserved": source.quantity_reserved,
+        "location_id": source.location_id,
+    }
+    destination = get_or_create_inventory_record(
+        product_id=source.product_id,
+        variant_id=source.variant_id,
+        location_id=to_location_id,
+    )
+    dest_before = {
+        "quantity_on_hand": destination.quantity_on_hand,
+        "quantity_reserved": destination.quantity_reserved,
+        "location_id": destination.location_id,
+    }
+
+    source.quantity_on_hand -= quantity
+    destination.quantity_on_hand += quantity
+
+    record_movement(
+        movement_type=InventoryMovementType.TRANSFER_OUT,
+        quantity=quantity,
+        inventory_record=source,
+        from_location_id=source.location_id,
+        to_location_id=to_location_id,
+        actor_id=actor_id,
+        notes=notes,
+    )
+    record_movement(
+        movement_type=InventoryMovementType.TRANSFER_IN,
+        quantity=quantity,
+        inventory_record=destination,
+        from_location_id=source.location_id,
+        to_location_id=to_location_id,
+        actor_id=actor_id,
+        notes=notes,
+    )
+    record_audit_event(
+        action="inventory.transferred",
+        entity_type="inventory_record",
+        entity_id=source.id,
+        before_state=source_before,
+        after_state={
+            "quantity_on_hand": source.quantity_on_hand,
+            "quantity_reserved": source.quantity_reserved,
+            "location_id": source.location_id,
+        },
+        metadata={"to_location_id": to_location_id, "quantity": quantity, "notes": notes},
+        source_module=__name__,
+        actor_id=actor_id,
+    )
+    record_audit_event(
+        action="inventory.transfer_received",
+        entity_type="inventory_record",
+        entity_id=destination.id,
+        before_state=dest_before,
+        after_state={
+            "quantity_on_hand": destination.quantity_on_hand,
+            "quantity_reserved": destination.quantity_reserved,
+            "location_id": destination.location_id,
+        },
+        metadata={"from_record_id": source.id, "quantity": quantity, "notes": notes},
+        source_module=__name__,
+        actor_id=actor_id,
+    )
+    return source, destination
+
+
+def reserve_inventory(
+    *,
+    record_id: int,
+    quantity: int,
+    actor_id: int | None = None,
+    notes: str | None = None,
+) -> InventoryRecord:
+    if quantity <= 0:
+        raise ValueError("Reservation quantity must be greater than zero")
+    record = db.session.get(InventoryRecord, record_id)
+    if record is None:
+        raise ValueError("Inventory record not found")
+    if record.quantity_available < quantity and not allow_negative_inventory():
+        raise ValueError("Reservation quantity exceeds available stock")
+
+    before = {
+        "quantity_on_hand": record.quantity_on_hand,
+        "quantity_reserved": record.quantity_reserved,
+    }
+    record.quantity_reserved += quantity
+    record_movement(
+        movement_type=InventoryMovementType.RESERVATION,
+        quantity=quantity,
+        inventory_record=record,
+        to_location_id=record.location_id,
+        actor_id=actor_id,
+        notes=notes,
+    )
+    record_audit_event(
+        action="inventory.reserved",
+        entity_type="inventory_record",
+        entity_id=record.id,
+        before_state=before,
+        after_state={
+            "quantity_on_hand": record.quantity_on_hand,
+            "quantity_reserved": record.quantity_reserved,
+        },
+        metadata={"quantity": quantity, "notes": notes},
+        source_module=__name__,
+        actor_id=actor_id,
+    )
+    return record
+
+
+def release_inventory(
+    *,
+    record_id: int,
+    quantity: int,
+    actor_id: int | None = None,
+    notes: str | None = None,
+) -> InventoryRecord:
+    if quantity <= 0:
+        raise ValueError("Release quantity must be greater than zero")
+    record = db.session.get(InventoryRecord, record_id)
+    if record is None:
+        raise ValueError("Inventory record not found")
+    if record.quantity_reserved < quantity:
+        raise ValueError("Release quantity exceeds reserved stock")
+
+    before = {
+        "quantity_on_hand": record.quantity_on_hand,
+        "quantity_reserved": record.quantity_reserved,
+    }
+    record.quantity_reserved -= quantity
+    record_movement(
+        movement_type=InventoryMovementType.RELEASE,
+        quantity=quantity,
+        inventory_record=record,
+        from_location_id=record.location_id,
+        actor_id=actor_id,
+        notes=notes,
+    )
+    record_audit_event(
+        action="inventory.released",
+        entity_type="inventory_record",
+        entity_id=record.id,
+        before_state=before,
+        after_state={
+            "quantity_on_hand": record.quantity_on_hand,
+            "quantity_reserved": record.quantity_reserved,
+        },
+        metadata={"quantity": quantity, "notes": notes},
+        source_module=__name__,
+        actor_id=actor_id,
+    )
+    return record
+
+
+def return_inventory(
+    *,
+    product_id: int,
+    variant_id: int | None,
+    quantity: int,
+    location_id: int | None,
+    reference_type: str,
+    reference_id: str | int,
+    actor_id: int | None = None,
+    notes: str | None = None,
+) -> InventoryRecord:
+    if quantity <= 0:
+        raise ValueError("Return quantity must be greater than zero")
+    if location_id is None:
+        raise ValueError("A destination location is required to return inventory")
+
+    record = get_or_create_inventory_record(
+        product_id=product_id,
+        variant_id=variant_id,
+        location_id=location_id,
+    )
+    before = {
+        "quantity_on_hand": record.quantity_on_hand,
+        "quantity_reserved": record.quantity_reserved,
+    }
+    record.quantity_on_hand += quantity
+    record_movement(
+        movement_type=InventoryMovementType.RETURN,
+        quantity=quantity,
+        inventory_record=record,
+        to_location_id=location_id,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        actor_id=actor_id,
+        notes=notes,
+    )
+    record_audit_event(
+        action="inventory.returned",
+        entity_type="inventory_record",
+        entity_id=record.id,
+        before_state=before,
+        after_state={
+            "quantity_on_hand": record.quantity_on_hand,
+            "quantity_reserved": record.quantity_reserved,
+        },
+        metadata={"reference_type": reference_type, "reference_id": str(reference_id), "quantity": quantity, "notes": notes},
+        source_module=__name__,
+        actor_id=actor_id,
     )
     return record

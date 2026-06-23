@@ -13,6 +13,8 @@ from app.blueprints.auth import bp as auth_bp
 from app.blueprints.analytics import bp as analytics_bp
 from app.blueprints.api import register_api_blueprints
 from app.blueprints.api_tokens import bp as api_tokens_bp
+from app.blueprints.audit_logs import bp as audit_logs_bp
+from app.blueprints.cost_engine import bp as cost_engine_bp
 from app.blueprints.customers import bp as customers_bp
 from app.blueprints.expenses import bp as expenses_bp
 from app.blueprints.custom_orders import bp as custom_orders_bp
@@ -21,6 +23,7 @@ from app.blueprints.markets import bp as markets_bp
 from app.blueprints.inventory import bp as inventory_bp
 from app.blueprints.orders import bp as orders_bp
 from app.blueprints.pos import bp as pos_bp
+from app.blueprints.prep_tasks import bp as prep_tasks_bp
 from app.blueprints.print_jobs import bp as print_jobs_bp
 from app.blueprints.printers import bp as printers_bp
 from app.blueprints.products import bp as products_bp
@@ -47,6 +50,9 @@ def create_app(config_name: str | None = None, test_config: dict | None = None) 
         app.config.update(test_config)
 
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
+    Path(app.config["RECEIPT_STORAGE_PATH"]).mkdir(parents=True, exist_ok=True)
+    Path(app.config["MARKET_DOCUMENTS_PATH"]).mkdir(parents=True, exist_ok=True)
+    Path(app.config["PRODUCT_ASSETS_PATH"]).mkdir(parents=True, exist_ok=True)
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 
     register_extensions(app)
@@ -60,6 +66,8 @@ def create_app(config_name: str | None = None, test_config: dict | None = None) 
 
 
 def register_extensions(app: Flask) -> None:
+    from app.services.storage import bootstrap_object_storage
+
     db.init_app(app)
     migrate.init_app(
         app,
@@ -71,6 +79,8 @@ def register_extensions(app: Flask) -> None:
     login_manager.init_app(app)
     csrf.init_app(app)
     api.init_app(app)
+    with app.app_context():
+        bootstrap_object_storage()
 
     login_manager.login_view = "auth.login"
     login_manager.login_message_category = "warning"
@@ -97,8 +107,11 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(pos_bp)
     app.register_blueprint(print_jobs_bp)
     app.register_blueprint(markets_bp)
+    app.register_blueprint(prep_tasks_bp)
     app.register_blueprint(analytics_bp)
+    app.register_blueprint(cost_engine_bp)
     app.register_blueprint(expenses_bp)
+    app.register_blueprint(audit_logs_bp)
     app.register_blueprint(api_tokens_bp)
     register_api_blueprints(api)
     _register_redoc_view(app)
@@ -206,6 +219,9 @@ def register_context_processors(app: Flask) -> None:
             "auth": None,
             "public": None,
             "api": None,
+            "prep_tasks": "prep_tasks",
+            "cost_engine": "cost_engine",
+            "audit_logs": "audit_logs",
         }
 
         SECTION_TITLES: dict[str, str] = {
@@ -247,6 +263,16 @@ def register_context_processors(app: Flask) -> None:
                 ("Markets", url_for("markets.list_resource", resource_key="markets")),
                 ("New Market", url_for("markets.create_resource", resource_key="markets")),
                 ("Packing List", url_for("markets.list_resource", resource_key="packing-lists")),
+            ],
+            "prep_tasks": [
+                ("Tasks", url_for("prep_tasks.list_resource", resource_key="tasks")),
+                ("Templates", url_for("prep_tasks.list_resource", resource_key="templates")),
+            ],
+            "cost_engine": [
+                ("Overview", url_for("cost_engine.index")),
+            ],
+            "audit_logs": [
+                ("Audit Logs", url_for("audit_logs.index")),
             ],
             "expenses": [
                 ("Receipts", url_for("receipts.dashboard")),

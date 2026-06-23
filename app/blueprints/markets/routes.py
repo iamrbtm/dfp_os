@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from flask import abort, flash, redirect, render_template, request, send_file, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from markupsafe import escape
 from sqlalchemy import select
@@ -41,6 +41,7 @@ from app.services.markets import (
     record_market_audit,
     save_market_document,
 )
+from app.services.storage import delete_storage_reference, send_storage_reference
 from app.utils.auth import roles_required
 
 
@@ -561,9 +562,12 @@ def delete_document(market_id: int, document_id: int):
     document = get_by_id(MarketDocument, document_id)
     if market is None or document is None or document.market_id != market.id:
         return render_template("errors/404.html"), 404
-    path = market_document_path(document)
-    if path.exists():
-        path.unlink()
+    if document.stored_filename.startswith("s3://"):
+        delete_storage_reference(document.stored_filename)
+    else:
+        path = market_document_path(document)
+        if path.exists():
+            path.unlink()
     record_market_audit(
         "market_document.deleted",
         "market_document",
@@ -583,10 +587,22 @@ def download_document(market_id: int, document_id: int):
     document = get_by_id(MarketDocument, document_id)
     if market is None or document is None or document.market_id != market.id:
         return render_template("errors/404.html"), 404
+    if document.stored_filename.startswith("s3://"):
+        return send_storage_reference(
+            document.stored_filename,
+            as_attachment=True,
+            download_name=document.original_filename,
+            mimetype=document.content_type,
+        )
     path = market_document_path(document)
     if not path.exists():
         abort(404)
-    return send_file(path, as_attachment=True, download_name=document.original_filename, mimetype=document.content_type)
+    return send_storage_reference(
+        str(path),
+        as_attachment=True,
+        download_name=document.original_filename,
+        mimetype=document.content_type,
+    )
 
 
 @bp.post("/<int:market_id>/packing-list/quick-add")

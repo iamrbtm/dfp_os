@@ -8,7 +8,7 @@
     <p class="mt-2" style="color: var(--color-text-muted);">Receipts flagged as possible duplicates.</p>
   </div>
 
-  {% if receipts %}
+  {% if receipt_rows %}
   <div class="app-card overflow-hidden">
     <div class="overflow-x-auto">
       <table class="app-table">
@@ -19,17 +19,28 @@
             <th>Total</th>
             <th>Date</th>
             <th>Score</th>
+            <th>Matches</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {% for r in receipts %}
+          {% for row in receipt_rows %}
+          {% set r = row.receipt %}
           <tr>
             <td>#{{ r.id }}</td>
             <td>{{ r.merchant_name or '—' }}</td>
             <td>${{ "{:,.2f}".format(r.grand_total|float) if r.grand_total else '—' }}</td>
             <td>{{ r.date_time.strftime('%Y-%m-%d') if r.date_time else '—' }}</td>
-            <td>{{ "{:.0%}".format(r.duplicate_score|float) if r.duplicate_score else '—' }}</td>
+            <td>{{ row.analysis.score or r.duplicate_score or '—' }}</td>
+            <td class="text-sm">
+              {% if row.analysis.possible_duplicates %}
+                {% for candidate in row.analysis.possible_duplicates[:2] %}
+                  {% if not loop.first %}, {% endif %}#{{ candidate.id }}
+                {% endfor %}
+              {% else %}
+              —
+              {% endif %}
+            </td>
             <td><a href="{{ url_for('receipts.review', receipt_id=r.id) }}" class="app-link">Review</a></td>
           </tr>
           {% endfor %}

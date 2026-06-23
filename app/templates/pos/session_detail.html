@@ -79,9 +79,25 @@
           <td class="font-mono text-sm">{{ sale.sale_number }}</td>
           <td class="text-sm">{{ sale.created_at.strftime('%H:%M') if sale.created_at else '' }}</td>
           <td class="text-sm">{{ sale.items|length }}</td>
-          <td class="text-sm">{{ sale.payment_method.replace('_', ' ').title() }}</td>
+          <td class="text-sm">
+            {{ sale.payment_method.replace('_', ' ').title() }}
+            {% if sale.status != 'completed' %}
+            <div class="text-xs mt-1" style="color: var(--color-text-muted);">{{ sale.status.value.replace('_', ' ').title() }}</div>
+            {% endif %}
+          </td>
           <td class="font-bold">${{ "%.2f"|format(sale.total) }}</td>
-          <td><a href="{{ url_for('pos.receipt', session_id=session.id, sale_id=sale.id) }}" class="app-link text-sm">Receipt</a></td>
+          <td>
+            <div class="flex flex-wrap gap-2 items-center">
+              <a href="{{ url_for('pos.receipt', session_id=session.id, sale_id=sale.id) }}" class="app-link text-sm">Receipt</a>
+              {% if sale.status == 'completed' %}
+              <form action="{{ url_for('pos.sale_refund', session_id=session.id, sale_id=sale.id) }}" method="post" onsubmit="return confirm('Refund this sale and restock its inventory?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="restock_inventory" value="1">
+                <button type="submit" class="app-link text-sm" style="color: var(--color-danger);">Refund</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
         </tr>
         {% else %}
         <tr><td colspan="6" class="app-empty">No sales in this session.</td></tr>

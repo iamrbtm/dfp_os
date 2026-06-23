@@ -3,18 +3,32 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from flask import flash, redirect, render_template, request, url_for
+from flask_login import current_user
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.inventory import bp
-from app.forms import FilamentSpoolForm, InventoryLocationForm, InventoryRecordForm
-from app.models import FilamentSpool, InventoryLocation, InventoryRecord, UserRole
+from app.forms import (
+    FilamentSpoolForm,
+    InventoryAdjustmentForm,
+    InventoryLocationForm,
+    InventoryRecordForm,
+    InventoryReservationForm,
+    InventoryTransferForm,
+)
+from app.models import FilamentSpool, InventoryLocation, InventoryMovement, InventoryRecord, UserRole
 from app.services.crud import (
     apply_search,
     archive_instance,
     get_by_id,
     paginate_query,
     save_instance,
+)
+from app.services.inventory import (
+    adjust_inventory,
+    release_inventory,
+    reserve_inventory,
+    transfer_inventory,
 )
 from app.utils.auth import roles_required
 
@@ -185,6 +199,20 @@ def detail_resource(resource_id: int, resource_key: str = "records"):
         {"label": label, "value": _display_value(getter(instance))}
         for label, getter in config.columns
     ]
+    if resource_key == "records":
+        movements = InventoryMovement.query.filter(
+            InventoryMovement.inventory_record_id == instance.id
+        ).order_by(InventoryMovement.created_at.desc()).limit(25).all()
+        return render_template(
+            "inventory/record_detail.html",
+            resource=config,
+            instance=instance,
+            details=details,
+            movements=movements,
+            adjustment_form=InventoryAdjustmentForm(),
+            transfer_form=InventoryTransferForm(source_location_id=instance.location_id),
+            reservation_form=InventoryReservationForm(),
+        )
     return render_template(
         "dashboard/resource_detail.html", resource=config, instance=instance, details=details
     )
@@ -236,3 +264,105 @@ def archive_resource_view(resource_id: int, resource_key: str = "records"):
     archive_instance(instance)
     flash(f"{config.singular} archived.", "success")
     return redirect(url_for("inventory.list_resource", resource_key=resource_key))
+
+
+@bp.post("/records/<int:resource_id>/adjust")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def adjust_record(resource_id: int):
+    record = get_by_id(InventoryRecord, resource_id)
+    if record is None:
+        return render_template("errors/404.html"), 404
+    form = InventoryAdjustmentForm()
+    if not form.validate_on_submit():
+        flash("Review the adjustment quantity before saving.", "danger")
+        return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+    try:
+        adjust_inventory(
+            record_id=record.id,
+            quantity_delta=form.quantity_delta.data,
+            actor_id=current_user.id,
+            notes=form.notes.data,
+        )
+        save_instance(record)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    else:
+        flash("Inventory adjusted.", "success")
+    return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+
+
+@bp.post("/records/<int:resource_id>/transfer")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def transfer_record(resource_id: int):
+    record = get_by_id(InventoryRecord, resource_id)
+    if record is None:
+        return render_template("errors/404.html"), 404
+    form = InventoryTransferForm(source_location_id=record.location_id)
+    if not form.validate_on_submit():
+        flash("Review the destination and quantity before transferring.", "danger")
+        return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+    try:
+        transfer_inventory(
+            record_id=record.id,
+            to_location_id=form.to_location_id.data,
+            quantity=form.quantity.data,
+            actor_id=current_user.id,
+            notes=form.notes.data,
+        )
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    else:
+        flash("Inventory transferred.", "success")
+    return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+
+
+@bp.post("/records/<int:resource_id>/reserve")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def reserve_record(resource_id: int):
+    record = get_by_id(InventoryRecord, resource_id)
+    if record is None:
+        return render_template("errors/404.html"), 404
+    form = InventoryReservationForm()
+    if not form.validate_on_submit():
+        flash("Reservation quantity is required.", "danger")
+        return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+    try:
+        reserve_inventory(
+            record_id=record.id,
+            quantity=form.quantity.data,
+            actor_id=current_user.id,
+            notes=form.notes.data,
+        )
+        save_instance(record)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    else:
+        flash("Inventory reserved.", "success")
+    return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+
+
+@bp.post("/records/<int:resource_id>/release")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def release_record(resource_id: int):
+    record = get_by_id(InventoryRecord, resource_id)
+    if record is None:
+        return render_template("errors/404.html"), 404
+    form = InventoryReservationForm()
+    if not form.validate_on_submit():
+        flash("Release quantity is required.", "danger")
+        return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+    try:
+        release_inventory(
+            record_id=record.id,
+            quantity=form.quantity.data,
+            actor_id=current_user.id,
+            notes=form.notes.data,
+        )
+        save_instance(record)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    else:
+        flash("Reserved inventory released.", "success")
+    return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))

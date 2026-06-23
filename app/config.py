@@ -59,11 +59,32 @@ class Config:
     OPENAPI_REDOC_PATH = "/redoc"
     OPENAPI_REDOC_URL = "https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"
     MIGRATIONS_DIR = str(BASE_DIR / "migrations")
+    FILE_STORAGE_BACKEND = os.getenv(
+        "FILE_STORAGE_BACKEND",
+        os.getenv("RECEIPT_STORAGE_DRIVER", "local"),
+    )
     RECEIPT_STORAGE_DRIVER = os.getenv("RECEIPT_STORAGE_DRIVER", "local")
     RECEIPT_STORAGE_PATH = os.getenv(
         "RECEIPT_STORAGE_PATH",
         str(BASE_DIR / "uploads" / "receipts"),
     )
+    MARKET_DOCUMENTS_PATH = os.getenv(
+        "MARKET_DOCUMENTS_PATH",
+        str(BASE_DIR / "uploads" / "markets"),
+    )
+    PRODUCT_ASSETS_PATH = os.getenv(
+        "PRODUCT_ASSETS_PATH",
+        str(BASE_DIR / "uploads" / "products"),
+    )
+    S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL", "")
+    S3_REGION = os.getenv("S3_REGION", "us-east-1")
+    S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "")
+    S3_SECRET_KEY = os.getenv("S3_SECRET_KEY", "")
+    S3_USE_SSL = _as_bool(os.getenv("S3_USE_SSL"), False)
+    S3_AUTO_CREATE_BUCKETS = _as_bool(os.getenv("S3_AUTO_CREATE_BUCKETS"), True)
+    RECEIPT_STORAGE_BUCKET = os.getenv("RECEIPT_STORAGE_BUCKET", "receipts")
+    MARKET_DOCUMENTS_BUCKET = os.getenv("MARKET_DOCUMENTS_BUCKET", "markets")
+    PRODUCT_ASSETS_BUCKET = os.getenv("PRODUCT_ASSETS_BUCKET", "products")
     RECEIPT_MAX_UPLOAD_MB = int(os.getenv("RECEIPT_MAX_UPLOAD_MB", "25"))
     RECEIPT_ALLOWED_TYPES = os.getenv(
         "RECEIPT_ALLOWED_TYPES",

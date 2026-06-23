@@ -22,7 +22,14 @@ from app.models import (
     UserRole,
 )
 from app.services.crud import apply_search, paginate_query
-from app.services.pos import open_session, close_session, create_sale, get_session_summary, void_session
+from app.services.pos import (
+    close_session,
+    create_sale,
+    get_session_summary,
+    open_session,
+    refund_sale,
+    void_session,
+)
 from app.utils.auth import roles_required
 
 
@@ -225,6 +232,30 @@ def receipt(session_id, sale_id):
         flash("Sale not found.", "error")
         return redirect(url_for("pos.pos_screen", session_id=session_id))
     return render_template("pos/receipt.html", session=session, sale=sale)
+
+
+@bp.route("/sessions/<int:session_id>/sales/<int:sale_id>/refund", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def sale_refund(session_id: int, sale_id: int):
+    session = db.session.get(PosSession, session_id)
+    sale = db.session.get(PosSale, sale_id)
+    if not session or not sale or sale.pos_session_id != session_id:
+        flash("Sale not found.", "error")
+        return redirect(url_for("pos.session_detail", session_id=session_id))
+    restock = request.form.get("restock_inventory", "1") == "1"
+    notes = request.form.get("notes", "").strip() or None
+    try:
+        refund_sale(
+            sale_id=sale.id,
+            actor_id=current_user.id,
+            restock=restock,
+            notes=notes,
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    else:
+        flash("Sale refunded.", "success")
+    return redirect(url_for("pos.session_detail", session_id=session_id))
 
 
 @bp.route("/customers/quick", methods=["POST"])

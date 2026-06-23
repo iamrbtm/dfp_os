@@ -7,11 +7,25 @@ services:
       AUDIT_LOG_BASE_URL: http://audit-log:8090
       AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:-change-me-audit-token}
       AUDIT_LOG_ENABLED: ${AUDIT_LOG_ENABLED:-false}
+      FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
       RECEIPT_STORAGE_PATH: ${RECEIPT_STORAGE_PATH:-uploads/receipts}
+      MARKET_DOCUMENTS_PATH: ${MARKET_DOCUMENTS_PATH:-uploads/markets}
+      PRODUCT_ASSETS_PATH: ${PRODUCT_ASSETS_PATH:-uploads/products}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-change-me-access-key}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-change-me-secret-key}
+      S3_USE_SSL: ${S3_USE_SSL:-false}
+      S3_AUTO_CREATE_BUCKETS: ${S3_AUTO_CREATE_BUCKETS:-true}
+      RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
+      MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
+      PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
       RECEIPT_OCR_PROVIDER: ${RECEIPT_OCR_PROVIDER:-tesseract}
       RECEIPT_AI_PROVIDER: ${RECEIPT_AI_PROVIDER:-openai}
+      AI_RECEIPT_PARSING_ENABLED: ${AI_RECEIPT_PARSING_ENABLED:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_MODEL_RECEIPTS: ${OPENAI_MODEL_RECEIPTS:-gpt-4o-mini}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://localhost:11434}
       OLLAMA_FALLBACK_URL: ${OLLAMA_FALLBACK_URL:-http://localhost:11434}
       OLLAMA_RECEIPT_MODEL: ${OLLAMA_RECEIPT_MODEL:-llama3}
@@ -26,6 +40,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      seaweedfs:
+        condition: service_started
     command: >
       /bin/sh -c
       "npm install &&
@@ -52,6 +68,50 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: "server -dir=/data -s3"
+    environment:
+      S3_ENABLE_AUTH: "true"
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-change-me-access-key}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-change-me-secret-key}
+    ports:
+      - "8333:8333"
+      - "9333:9333"
+    volumes:
+      - ${HOME}/Documents/DFPos/Receipts/Upload:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9333/cluster/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  seaweedfs-init:
+    image: amazon/aws-cli:2.27.50
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-change-me-access-key}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-change-me-secret-key}
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
+      RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
+      MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
+      PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
+    depends_on:
+      seaweedfs:
+        condition: service_started
+    restart: "no"
+    command: >
+      /bin/sh -c "
+      until aws --endpoint-url $$S3_ENDPOINT_URL s3api list-buckets >/dev/null 2>&1; do
+        echo 'Waiting for SeaweedFS S3 endpoint...';
+        sleep 2;
+      done;
+      aws --endpoint-url $$S3_ENDPOINT_URL s3api create-bucket --bucket $$RECEIPT_STORAGE_BUCKET 2>/dev/null || true;
+      aws --endpoint-url $$S3_ENDPOINT_URL s3api create-bucket --bucket $$MARKET_DOCUMENTS_BUCKET 2>/dev/null || true;
+      aws --endpoint-url $$S3_ENDPOINT_URL s3api create-bucket --bucket $$PRODUCT_ASSETS_BUCKET 2>/dev/null || true;
+      aws --endpoint-url $$S3_ENDPOINT_URL s3api list-buckets
+      "
 
   audit-postgres:
     image: postgres:17

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Audit Logs | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Audit Logs</h1>
+    <p class="mt-2 text-sm" style="color: var(--color-text-muted);">
+      {% if audit_configured %}Live data from the audit-log service.{% else %}Audit service is not configured in this environment.{% endif %}
+    </p>
+  </div>
+  <form method="get" class="app-card p-4 grid gap-4 md:grid-cols-5">
+    <input class="app-input" name="action" placeholder="Action" value="{{ filters.action or '' }}">
+    <input class="app-input" name="entity_type" placeholder="Entity type" value="{{ filters.entity_type or '' }}">
+    <input class="app-input" name="entity_id" placeholder="Entity ID" value="{{ filters.entity_id or '' }}">
+    <input class="app-input" name="actor_id" placeholder="Actor ID" value="{{ filters.actor_id or '' }}">
+    <button class="app-btn app-btn-secondary" type="submit">Search</button>
+  </form>
+  <div class="app-card overflow-hidden">
+    <table class="app-table">
+      <thead><tr><th>Occurred</th><th>Action</th><th>Entity</th><th>Actor</th><th>Module</th></tr></thead>
+      <tbody>
+      {% for event in events %}
+      <tr>
+        <td>{{ event.occurred_at }}</td>
+        <td>{{ event.action }}</td>
+        <td>{{ event.entity_type }}{% if event.entity_id %} #{{ event.entity_id }}{% endif %}</td>
+        <td>{{ event.actor_display_name or event.actor_id or "—" }}</td>
+        <td>{{ event.source_module or "—" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">No audit events found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

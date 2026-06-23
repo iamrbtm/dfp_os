@@ -20,7 +20,7 @@ from app.models import (
     ProductVariant,
 )
 from app.services.cost_engine import calculate_product_cost
-from app.services.inventory import deduct_finished_goods
+from app.services.inventory import deduct_finished_goods, release_inventory, reserve_inventory, transfer_inventory
 from app.services.prep_tasks import generate_market_prep_tasks, market_readiness_score
 
 
@@ -125,6 +125,45 @@ def test_inventory_deduction_blocks_negative(app):
                 reference_type="test",
                 reference_id="abc",
             )
+
+
+def test_inventory_transfer_and_reservation_flow(app):
+    with app.app_context():
+        product, variant = _product_with_variant()
+        source = InventoryLocation(name="Source Bin", type="Bin", active=True)
+        destination = InventoryLocation(name="Destination Bin", type="Bin", active=True)
+        db.session.add_all([source, destination])
+        db.session.flush()
+        record = InventoryRecord(
+            product_id=product.id,
+            variant_id=variant.id,
+            location_id=source.id,
+            quantity_on_hand=8,
+            quantity_reserved=0,
+        )
+        db.session.add(record)
+        db.session.commit()
+
+        reserve_inventory(record_id=record.id, quantity=3)
+        db.session.commit()
+        assert record.quantity_reserved == 3
+        assert record.quantity_available == 5
+
+        release_inventory(record_id=record.id, quantity=1)
+        db.session.commit()
+        assert record.quantity_reserved == 2
+        assert record.quantity_available == 6
+
+        source_record, destination_record = transfer_inventory(
+            record_id=record.id,
+            to_location_id=destination.id,
+            quantity=4,
+        )
+        db.session.commit()
+
+        assert source_record.quantity_on_hand == 4
+        assert destination_record.quantity_on_hand == 4
+        assert InventoryMovement.query.count() == 4
 
 
 def test_cost_engine_product_breakdown(app):

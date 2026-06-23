@@ -14,12 +14,14 @@ from app.models import (
     AMSUnitStatus,
     AMSUnitType,
     ApiToken,
+    Business,
     Category,
     Collection,
     CustomRequest,
     CustomRequestStatus,
     Customer,
     Expense,
+    FeatureFlag,
     ExpenseCategory,
     FilamentSpool,
     FilamentStatus,
@@ -52,6 +54,10 @@ from app.models import (
     PosSale,
     PosSaleStatus,
     PosSession,
+    PrepTask,
+    PrepTaskCategory,
+    PrepTaskStatus,
+    PrepTaskTemplate,
     Printer,
     PrinterStatus,
     PrintJob,
@@ -69,12 +75,14 @@ from app.models.receipt import (
 from app.schemas import (
     AMSUnitSchema,
     ApiTokenSchema,
+    BusinessSchema,
     CategorySchema,
     CollectionSchema,
     SettingSchema,
     CustomRequestSchema,
     CustomerSchema,
     ExpenseSchema,
+    FeatureFlagSchema,
     FilamentSpoolSchema,
     InventoryLocationSchema,
     InventoryRecordSchema,
@@ -91,6 +99,8 @@ from app.schemas import (
     PaymentSchema,
     PosSaleSchema,
     PosSessionSchema,
+    PrepTaskSchema,
+    PrepTaskTemplateSchema,
     PrinterSchema,
     PrintJobSchema,
     ProductSchema,
@@ -106,6 +116,8 @@ from app.services.crud import (
     save_instance,
 )
 from app.extensions import db
+from app.services.inventory import release_inventory, reserve_inventory, transfer_inventory
+from app.services.pos import refund_sale
 from app.utils.auth import api_token_required
 
 catalog_blp = Blueprint("catalog_api", __name__, url_prefix="/api/v1")
@@ -119,6 +131,22 @@ class ListQuerySchema(Schema):
 
 class EmptyBodySchema(Schema):
     pass
+
+
+class InventoryTransferRequestSchema(Schema):
+    to_location_id = fields.Integer(required=True)
+    quantity = fields.Integer(required=True)
+    notes = fields.String(load_default=None, allow_none=True)
+
+
+class InventoryReservationRequestSchema(Schema):
+    quantity = fields.Integer(required=True)
+    notes = fields.String(load_default=None, allow_none=True)
+
+
+class PosRefundRequestSchema(Schema):
+    restock_inventory = fields.Boolean(load_default=True)
+    notes = fields.String(load_default=None, allow_none=True)
 
 
 @dataclass(frozen=True)
@@ -267,6 +295,31 @@ def _apply_location(instance: InventoryLocation, data: dict):
     instance.active = data.get("active", True)
 
 
+def _apply_business(instance: Business, data: dict):
+    instance.name = data["name"].strip()
+    instance.slug = data["slug"].strip()
+    instance.legal_name = data.get("legal_name")
+    instance.public_name = data.get("public_name")
+    instance.contact_email = data.get("contact_email")
+    instance.phone = data.get("phone")
+    instance.website_url = data.get("website_url")
+    instance.address_line1 = data.get("address_line1")
+    instance.address_line2 = data.get("address_line2")
+    instance.city = data.get("city")
+    instance.state = data.get("state")
+    instance.postal_code = data.get("postal_code")
+    instance.timezone = data.get("timezone", "America/Chicago")
+    instance.currency = data.get("currency", "USD")
+    instance.is_active = data.get("is_active", True)
+
+
+def _apply_feature_flag(instance: FeatureFlag, data: dict):
+    instance.key = data["key"].strip()
+    instance.enabled = data.get("enabled", True)
+    instance.description = data.get("description")
+    instance.business_id = data.get("business_id")
+
+
 def _apply_inventory_record(instance: InventoryRecord, data: dict):
     instance.product_id = data["product_id"]
     instance.variant_id = data.get("variant_id")
@@ -365,6 +418,26 @@ def _apply_print_job(instance: PrintJob, data: dict):
     instance.order_item_id = data.get("order_item_id")
     instance.quantity = data.get("quantity", 1)
     instance.priority = data.get("priority", 0)
+    instance.notes = data.get("notes")
+
+
+def _apply_prep_task_template(instance: PrepTaskTemplate, data: dict):
+    instance.title = data["title"].strip()
+    instance.category = PrepTaskCategory(data["category"])
+    instance.description = data.get("description")
+    instance.default_due_days_before = data.get("default_due_days_before", 7)
+    instance.default_enabled = data.get("default_enabled", True)
+
+
+def _apply_prep_task(instance: PrepTask, data: dict):
+    instance.market_id = data.get("market_id")
+    instance.template_id = data.get("template_id")
+    instance.title = data["title"].strip()
+    instance.category = PrepTaskCategory(data["category"])
+    instance.status = PrepTaskStatus(data["status"])
+    instance.assigned_user_id = data.get("assigned_user_id")
+    instance.due_at = data.get("due_at")
+    instance.source = data.get("source", "api")
     instance.notes = data.get("notes")
 
 
@@ -533,6 +606,12 @@ def _apply_expense(instance: Expense, data: dict):
 
 
 API_RESOURCES = {
+    "businesses": ApiResourceConfig(
+        "businesses", Business, BusinessSchema, ["name", "slug", "public_name"], _apply_business
+    ),
+    "feature-flags": ApiResourceConfig(
+        "feature-flags", FeatureFlag, FeatureFlagSchema, ["key", "description"], _apply_feature_flag
+    ),
     "categories": ApiResourceConfig(
         "categories", Category, CategorySchema, ["name", "slug"], _apply_category
     ),
@@ -608,6 +687,20 @@ API_RESOURCES = {
         PrintJobSchema,
         ["label", "notes"],
         _apply_print_job,
+    ),
+    "prep-task-templates": ApiResourceConfig(
+        "prep-task-templates",
+        PrepTaskTemplate,
+        PrepTaskTemplateSchema,
+        ["title", "description"],
+        _apply_prep_task_template,
+    ),
+    "prep-tasks": ApiResourceConfig(
+        "prep-tasks",
+        PrepTask,
+        PrepTaskSchema,
+        ["title", "notes", "source"],
+        _apply_prep_task,
     ),
     "pos-sessions": ApiResourceConfig(
         "pos-sessions",
@@ -919,6 +1012,91 @@ class MarketPackingListsExport(MethodView):
         )
 
 
+@catalog_blp.route("/inventory-records/<int:record_id>/transfer")
+class InventoryRecordTransfer(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Inventory"])
+    @catalog_blp.arguments(InventoryTransferRequestSchema)
+    @catalog_blp.response(200)
+    def post(self, body_data, record_id: int):
+        try:
+            source, destination = transfer_inventory(
+                record_id=record_id,
+                to_location_id=body_data["to_location_id"],
+                quantity=body_data["quantity"],
+                actor_id=g.api_user.id if getattr(g, "api_user", None) else None,
+                notes=body_data.get("notes"),
+            )
+            db.session.commit()
+        except ValueError as exc:
+            db.session.rollback()
+            return {"error": {"code": "validation_error", "message": str(exc), "details": {}}}, 400
+        return {
+            "data": {
+                "source_record_id": source.id,
+                "destination_record_id": destination.id,
+                "source_quantity_on_hand": source.quantity_on_hand,
+                "destination_quantity_on_hand": destination.quantity_on_hand,
+            }
+        }
+
+
+@catalog_blp.route("/inventory-records/<int:record_id>/reserve")
+class InventoryRecordReserve(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Inventory"])
+    @catalog_blp.arguments(InventoryReservationRequestSchema)
+    @catalog_blp.response(200)
+    def post(self, body_data, record_id: int):
+        try:
+            record = reserve_inventory(
+                record_id=record_id,
+                quantity=body_data["quantity"],
+                actor_id=g.api_user.id if getattr(g, "api_user", None) else None,
+                notes=body_data.get("notes"),
+            )
+            db.session.commit()
+        except ValueError as exc:
+            db.session.rollback()
+            return {"error": {"code": "validation_error", "message": str(exc), "details": {}}}, 400
+        return {
+            "data": {
+                "record_id": record.id,
+                "quantity_on_hand": record.quantity_on_hand,
+                "quantity_reserved": record.quantity_reserved,
+                "quantity_available": record.quantity_available,
+            }
+        }
+
+
+@catalog_blp.route("/inventory-records/<int:record_id>/release")
+class InventoryRecordRelease(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Inventory"])
+    @catalog_blp.arguments(InventoryReservationRequestSchema)
+    @catalog_blp.response(200)
+    def post(self, body_data, record_id: int):
+        try:
+            record = release_inventory(
+                record_id=record_id,
+                quantity=body_data["quantity"],
+                actor_id=g.api_user.id if getattr(g, "api_user", None) else None,
+                notes=body_data.get("notes"),
+            )
+            db.session.commit()
+        except ValueError as exc:
+            db.session.rollback()
+            return {"error": {"code": "validation_error", "message": str(exc), "details": {}}}, 400
+        return {
+            "data": {
+                "record_id": record.id,
+                "quantity_on_hand": record.quantity_on_hand,
+                "quantity_reserved": record.quantity_reserved,
+                "quantity_available": record.quantity_available,
+            }
+        }
+
+
 @catalog_blp.route("/analytics/summary")
 class AnalyticsSummary(MethodView):
     @api_token_required
@@ -1035,6 +1213,31 @@ class AnalyticsExpenses(MethodView):
         return {
             "total_expenses": float(e["total_expenses"]),
             "by_category": [{"category": c["category"], "total": float(c["total"]), "count": c["count"]} for c in e["by_category"]],
+        }
+
+
+@catalog_blp.route("/pos-sales/<int:sale_id>/refund")
+class PosSaleRefund(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["POS"])
+    @catalog_blp.arguments(PosRefundRequestSchema)
+    @catalog_blp.response(200)
+    def post(self, body_data, sale_id: int):
+        try:
+            sale = refund_sale(
+                sale_id=sale_id,
+                actor_id=g.api_user.id if getattr(g, "api_user", None) else None,
+                restock=body_data.get("restock_inventory", True),
+                notes=body_data.get("notes"),
+            )
+        except ValueError as exc:
+            return {"error": {"code": "validation_error", "message": str(exc), "details": {}}}, 400
+        return {
+            "data": {
+                "sale_id": sale.id,
+                "status": sale.status.value,
+                "order_id": sale.order_id,
+            }
         }
 
 

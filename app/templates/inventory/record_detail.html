@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Inventory Record | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Inventory record</h1>
+      <p class="mt-2" style="color: var(--color-text-muted);">{{ instance.product.name if instance.product else "Unknown product" }} - {{ instance.location.name if instance.location else "No location" }}</p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <a href="{{ url_for('inventory.edit_resource', resource_key='records', resource_id=instance.id) }}" class="app-btn app-btn-primary">Edit</a>
+      <a href="{{ url_for('inventory.list_resource', resource_key='records') }}" class="app-btn app-btn-secondary">Back to Inventory Records</a>
+    </div>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    {% for detail in details %}
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">{{ detail.label }}</p>
+      <p class="mt-2 text-lg font-medium" style="color: var(--color-text);">{{ detail.value }}</p>
+    </article>
+    {% endfor %}
+  </div>
+
+  <div class="grid gap-6 xl:grid-cols-3">
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">Adjust stock</h2>
+      <form method="post" action="{{ url_for('inventory.adjust_record', resource_id=instance.id) }}" class="mt-4 space-y-3">
+        {{ adjustment_form.hidden_tag() }}
+        <div>
+          <label class="block text-sm font-medium mb-1">Quantity delta</label>
+          {{ adjustment_form.quantity_delta(class="app-input") }}
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Notes</label>
+          {{ adjustment_form.notes(class="app-input", rows=3) }}
+        </div>
+        {{ adjustment_form.submit(class="app-btn app-btn-primary") }}
+      </form>
+    </article>
+
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">Transfer stock</h2>
+      <form method="post" action="{{ url_for('inventory.transfer_record', resource_id=instance.id) }}" class="mt-4 space-y-3">
+        {{ transfer_form.hidden_tag() }}
+        <div>
+          <label class="block text-sm font-medium mb-1">Destination</label>
+          {{ transfer_form.to_location_id(class="app-input") }}
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Quantity</label>
+          {{ transfer_form.quantity(class="app-input") }}
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Notes</label>
+          {{ transfer_form.notes(class="app-input", rows=3) }}
+        </div>
+        {{ transfer_form.submit(class="app-btn app-btn-primary") }}
+      </form>
+    </article>
+
+    <article class="app-card p-5 space-y-5">
+      <div>
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Reserve stock</h2>
+        <form method="post" action="{{ url_for('inventory.reserve_record', resource_id=instance.id) }}" class="mt-4 space-y-3">
+          {{ reservation_form.hidden_tag() }}
+          <div>
+            <label class="block text-sm font-medium mb-1">Quantity</label>
+            {{ reservation_form.quantity(class="app-input") }}
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Notes</label>
+            {{ reservation_form.notes(class="app-input", rows=2) }}
+          </div>
+          {{ reservation_form.submit_reserve(class="app-btn app-btn-primary") }}
+        </form>
+      </div>
+      <div style="border-top: 1px solid var(--color-border);" class="pt-5">
+        <h3 class="text-base font-semibold" style="color: var(--color-text);">Release reservation</h3>
+        <form method="post" action="{{ url_for('inventory.release_record', resource_id=instance.id) }}" class="mt-4 space-y-3">
+          {{ reservation_form.hidden_tag() }}
+          <div>
+            <label class="block text-sm font-medium mb-1">Quantity</label>
+            <input class="app-input" name="quantity" type="number" min="1" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Notes</label>
+            <textarea class="app-input" name="notes" rows="2"></textarea>
+          </div>
+          {{ reservation_form.submit_release(class="app-btn app-btn-secondary") }}
+        </form>
+      </div>
+    </article>
+  </div>
+
+  <article class="app-card overflow-hidden">
+    <div class="flex items-center justify-between p-5" style="border-bottom: 1px solid var(--color-border);">
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">Recent movement history</h2>
+      <span class="text-sm" style="color: var(--color-text-muted);">{{ movements|length }} shown</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Type</th>
+            <th>Quantity</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Reference</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for movement in movements %}
+          <tr>
+            <td>{{ movement.created_at.strftime('%Y-%m-%d %H:%M') if movement.created_at else '—' }}</td>
+            <td>{{ movement.movement_type.value.replace('_', ' ').title() }}</td>
+            <td>{{ movement.quantity }}</td>
+            <td>{{ movement.from_location_id or '—' }}</td>
+            <td>{{ movement.to_location_id or '—' }}</td>
+            <td>{{ movement.reference_type or '—' }}{% if movement.reference_id %}:{{ movement.reference_id }}{% endif %}</td>
+            <td>{{ movement.notes or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="app-empty">No movement history yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+{% endblock %}

@@ -142,3 +142,30 @@ class InventoryRecordForm(FlaskForm):
         record.reorder_target = self.reorder_target.data or 0
         record.last_counted_at = self.last_counted_at.data
         return record
+
+
+class InventoryAdjustmentForm(FlaskForm):
+    quantity_delta = IntegerField("Adjustment Quantity", validators=[DataRequired()])
+    notes = TextAreaField("Notes", validators=[Optional(), Length(max=1000)])
+    submit = SubmitField("Apply adjustment")
+
+
+class InventoryTransferForm(FlaskForm):
+    to_location_id = SelectField("Transfer To", coerce=int, validators=[DataRequired()])
+    quantity = IntegerField("Quantity", validators=[DataRequired(), NumberRange(min=1)])
+    notes = TextAreaField("Notes", validators=[Optional(), Length(max=1000)])
+    submit = SubmitField("Transfer inventory")
+
+    def __init__(self, *args, source_location_id: int | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        query = InventoryLocation.query.filter(InventoryLocation.active.is_(True)).order_by(InventoryLocation.name)
+        if source_location_id is not None:
+            query = query.filter(InventoryLocation.id != source_location_id)
+        self.to_location_id.choices = [(item.id, item.name) for item in query]
+
+
+class InventoryReservationForm(FlaskForm):
+    quantity = IntegerField("Quantity", validators=[DataRequired(), NumberRange(min=1)])
+    notes = TextAreaField("Notes", validators=[Optional(), Length(max=1000)])
+    submit_reserve = SubmitField("Reserve stock")
+    submit_release = SubmitField("Release stock")

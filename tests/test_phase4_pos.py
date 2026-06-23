@@ -16,7 +16,7 @@ from app.models import (
     UserRole,
     InventoryRecord,
 )
-from app.services.pos import close_session, get_session_summary, open_session, create_sale, void_session
+from app.services.pos import close_session, create_sale, get_session_summary, open_session, refund_sale, void_session
 
 
 def _ensure_admin(app):
@@ -242,6 +242,53 @@ def test_pos_get_session_summary_with_sales(app):
         assert summary["sale_count"] == 2
         assert summary["total_sales"] == Decimal("22")
         assert summary["payment_totals"].get("cash") == Decimal("22")
+
+
+def test_pos_refund_sale_restocks_inventory(app):
+    with app.app_context():
+        admin_id = _ensure_admin_id(app)
+        product = _ensure_product(_ensure_category())
+        variant = _ensure_variant(product)
+        loc = _ensure_location()
+        db.session.add(
+            InventoryRecord(
+                product_id=product.id,
+                variant_id=variant.id,
+                location_id=loc.id,
+                quantity_on_hand=3,
+                quantity_reserved=0,
+            )
+        )
+        db.session.commit()
+
+        session = open_session(user_id=admin_id, opening_cash=Decimal("10.00"), inventory_location_id=loc.id)
+        sale, order = create_sale(
+            session_id=session.id,
+            payment_method="cash",
+            amount_received=Decimal("10.00"),
+            items=[
+                {
+                    "product_id": product.id,
+                    "variant_id": variant.id,
+                    "quantity": 1,
+                    "unit_price": "10.00",
+                    "description": "Refundable Product",
+                    "item_type": "product",
+                }
+            ],
+        )
+        inventory = InventoryRecord.query.filter_by(
+            product_id=product.id,
+            variant_id=variant.id,
+            location_id=loc.id,
+        ).first()
+        assert inventory.quantity_on_hand == 2
+
+        refunded = refund_sale(sale_id=sale.id, actor_id=admin_id, restock=True, notes="Customer changed mind")
+
+        assert refunded.status == PosSaleStatus.REFUNDED
+        assert order.status.value == "refunded"
+        assert inventory.quantity_on_hand == 3
 
 
 # ---------------------------------------------------------------------------
