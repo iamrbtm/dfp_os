@@ -3,12 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from flask import flash, redirect, render_template, request, url_for
+from flask_login import current_user
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.prep_tasks import bp
 from app.forms.admin import PrepTaskAdminForm, PrepTaskTemplateForm
 from app.models import PrepTask, PrepTaskTemplate, UserRole
-from app.services.crud import apply_search, archive_instance, get_by_id, paginate_query, save_instance
+from app.services.admin_mutations import (
+    create_resource as create_admin_resource,
+    snapshot_instance,
+    update_resource as update_admin_resource,
+)
+from app.services.crud import apply_search, get_by_id, paginate_query
 from app.utils.auth import roles_required
 
 
@@ -123,7 +130,19 @@ def create_resource(resource_key: str):
     if form.validate_on_submit():
         instance = config.model()
         form.apply(instance)
-        save_instance(instance)
+        try:
+            create_admin_resource(instance, actor_id=current_user.id)
+        except IntegrityError:
+            from app.extensions import db
+
+            db.session.rollback()
+            flash(f"Unable to save that {config.singular.lower()}.", "danger")
+            return (
+                render_template(
+                    "dashboard/resource_form.html", resource=config, form=form, mode="create"
+                ),
+                400,
+            )
         flash(f"{config.singular} created successfully.", "success")
         return redirect(url_for("prep_tasks.detail_resource", resource_key=resource_key, resource_id=instance.id))
     return render_template("dashboard/resource_form.html", resource=config, form=form, mode="create")
@@ -153,8 +172,21 @@ def edit_resource(resource_key: str, resource_id: int):
         return render_template("errors/404.html"), 404
     form = _build_form(config, instance)
     if form.validate_on_submit():
+        before_state = snapshot_instance(instance)
         form.apply(instance)
-        save_instance(instance)
+        try:
+            update_admin_resource(instance, before_state=before_state, actor_id=current_user.id)
+        except IntegrityError:
+            from app.extensions import db
+
+            db.session.rollback()
+            flash(f"Unable to update that {config.singular.lower()}.", "danger")
+            return (
+                render_template(
+                    "dashboard/resource_form.html", resource=config, form=form, mode="edit"
+                ),
+                400,
+            )
         flash(f"{config.singular} updated successfully.", "success")
         return redirect(url_for("prep_tasks.detail_resource", resource_key=resource_key, resource_id=instance.id))
     return render_template("dashboard/resource_form.html", resource=config, form=form, mode="edit")
@@ -169,15 +201,13 @@ def archive_resource_view(resource_key: str, resource_id: int):
     instance = get_by_id(config.model, resource_id)
     if instance is None:
         return render_template("errors/404.html"), 404
+    before_state = snapshot_instance(instance)
     if resource_key == "templates":
         instance.default_enabled = False
-        save_instance(instance)
     elif resource_key == "tasks":
         from app.models import PrepTaskStatus
 
         instance.status = PrepTaskStatus.CANCELED
-        save_instance(instance)
-    else:
-        archive_instance(instance)
+    update_admin_resource(instance, before_state=before_state, actor_id=current_user.id)
     flash(f"{config.singular} archived.", "success")
     return redirect(url_for("prep_tasks.list_resource", resource_key=resource_key))

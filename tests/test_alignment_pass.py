@@ -20,6 +20,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.admin_mutations import create_resource
 from app.services.business import ensure_default_business
 from app.services.pos import create_sale, open_session
 
@@ -128,6 +129,43 @@ def test_prep_task_admin_pages(client, login_admin):
     assert template_response.status_code == 302
     with client.application.app_context():
         assert PrepTaskTemplate.query.filter_by(title="Pack batteries").first() is not None
+
+
+def test_inventory_admin_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        location = InventoryLocation(name="Audit Shelf", type="Shelf", active=True)
+        create_resource(location, actor_id=123)
+
+    assert any(call["action"] == "inventory_location.created" for call in calls)
+
+
+def test_prep_task_template_admin_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        template = PrepTaskTemplate(
+            title="Audit Prep Template",
+            category=PrepTaskCategory.GENERAL,
+            default_due_days_before=3,
+            default_enabled=True,
+        )
+        create_resource(template, actor_id=123)
+
+    assert any(call["action"] == "prep_task_template.created" for call in calls)
 
 
 def test_cost_engine_page_loads(client, login_admin):

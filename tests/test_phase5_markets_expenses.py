@@ -28,6 +28,7 @@ from app.models import (
     ProductStatus,
     ProductType,
 )
+from app.services.admin_mutations import create_resource
 from app.services.markets import fetch_weather_snapshot
 from app.services.expenses import create_expense
 
@@ -51,6 +52,27 @@ def test_market_model_can_be_created(app):
         assert market.status == MarketStatus.SCHEDULED
         assert market.total_booth_cost == Decimal("50.00")
         assert market.profit_margin_pct is None
+
+
+def test_market_admin_service_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-test"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        market = Market(
+            name="Audit Market",
+            location_name="Audit Square",
+            event_date=date(2026, 9, 1),
+            status=MarketStatus.SCHEDULED,
+        )
+        create_resource(market, actor_id=123)
+
+    assert any(call["action"] == "market.created" for call in calls)
 
 
 def test_expense_model_can_be_created(app):

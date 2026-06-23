@@ -17,9 +17,14 @@ from app.forms import (
     InventoryTransferForm,
 )
 from app.models import FilamentSpool, InventoryLocation, InventoryMovement, InventoryRecord, UserRole
+from app.services.admin_mutations import (
+    archive_resource as archive_admin_resource,
+    create_resource as create_admin_resource,
+    snapshot_instance,
+    update_resource as update_admin_resource,
+)
 from app.services.crud import (
     apply_search,
-    archive_instance,
     get_by_id,
     paginate_query,
     save_instance,
@@ -164,8 +169,11 @@ def create_resource(resource_key: str = "records"):
         instance = config.model()
         form.apply(instance)
         try:
-            save_instance(instance)
+            create_admin_resource(instance, actor_id=current_user.id)
         except IntegrityError:
+            from app.extensions import db
+
+            db.session.rollback()
             flash(
                 f"Unable to save that {config.singular.lower()}. Please review duplicate values.",
                 "danger",
@@ -230,10 +238,14 @@ def edit_resource(resource_id: int, resource_key: str = "records"):
         return render_template("errors/404.html"), 404
     form = _build_form(config, instance)
     if form.validate_on_submit():
+        before_state = snapshot_instance(instance)
         form.apply(instance)
         try:
-            save_instance(instance)
+            update_admin_resource(instance, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
+            from app.extensions import db
+
+            db.session.rollback()
             flash(
                 f"Unable to update that {config.singular.lower()}. Please review duplicate values.",
                 "danger",
@@ -261,7 +273,7 @@ def archive_resource_view(resource_id: int, resource_key: str = "records"):
     instance = get_by_id(config.model, resource_id)
     if instance is None:
         return render_template("errors/404.html"), 404
-    archive_instance(instance)
+    archive_admin_resource(instance, actor_id=current_user.id)
     flash(f"{config.singular} archived.", "success")
     return redirect(url_for("inventory.list_resource", resource_key=resource_key))
 
