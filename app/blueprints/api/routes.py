@@ -116,9 +116,10 @@ from app.services.crud import (
     save_instance,
 )
 from app.extensions import db
+from app.services.audit import record_audit_event
 from app.services.inventory import release_inventory, reserve_inventory, transfer_inventory
 from app.services.pos import refund_sale
-from app.utils.auth import api_token_required
+from app.utils.auth import api_token_required, require_api_scopes
 
 catalog_blp = Blueprint("catalog_api", __name__, url_prefix="/api/v1")
 
@@ -159,6 +160,42 @@ class ApiResourceConfig:
     list_filters: callable | None = None
 
 
+RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
+    "businesses": ("settings",),
+    "feature-flags": ("settings",),
+    "categories": ("catalog",),
+    "collections": ("catalog",),
+    "products": ("catalog",),
+    "variants": ("catalog",),
+    "model-assets": ("catalog",),
+    "printers": ("inventory",),
+    "ams-units": ("inventory",),
+    "filament-spools": ("inventory",),
+    "inventory-locations": ("inventory",),
+    "inventory-records": ("inventory",),
+    "customers": ("orders",),
+    "custom-requests": ("orders",),
+    "orders": ("orders",),
+    "order-items": ("orders",),
+    "payments": ("orders",),
+    "print-jobs": ("orders",),
+    "prep-task-templates": ("markets",),
+    "prep-tasks": ("markets",),
+    "pos-sessions": ("pos",),
+    "pos-sales": ("pos",),
+    "markets": ("markets",),
+    "market-packing-lists": ("markets",),
+    "market-timeline-events": ("markets",),
+    "market-tasks": ("markets",),
+    "market-weather-snapshots": ("markets",),
+    "market-hotel-bookings": ("markets",),
+    "market-documents": ("markets",),
+    "expenses": ("receipts",),
+    "receipts": ("receipts",),
+    "receipt-line-items": ("receipts",),
+}
+
+
 def _list_response(pagination, schema_cls: type[Schema]):
     schema = schema_cls(many=True)
     return {
@@ -170,6 +207,24 @@ def _list_response(pagination, schema_cls: type[Schema]):
             "pages": pagination.pages,
         },
     }
+
+
+def _scope_guard_for(endpoint: str):
+    return require_api_scopes(*RESOURCE_SCOPES.get(endpoint, ()))
+
+
+def _instance_state(instance) -> dict:
+    state = {}
+    for column in instance.__table__.columns:
+        value = getattr(instance, column.name)
+        if hasattr(value, "value"):
+            value = value.value
+        elif hasattr(value, "isoformat"):
+            value = value.isoformat()
+        elif value is not None:
+            value = str(value)
+        state[column.name] = value
+    return state
 
 
 def _apply_category(instance: Category, data: dict):
@@ -803,6 +858,9 @@ def _register_resource(config: ApiResourceConfig):
         @catalog_blp.doc(tags=[tag])
         @catalog_blp.response(200, ResourceListEnvelope)
         def get(self):
+            denied = _scope_guard_for(config.endpoint)
+            if denied:
+                return denied
             args = query_schema.load(request.args)
             statement = select(config.model)
             if config.list_filters:
@@ -820,6 +878,9 @@ def _register_resource(config: ApiResourceConfig):
         @catalog_blp.arguments(schema_cls)
         @catalog_blp.response(201, schema_cls)
         def post(self, body_data):
+            denied = _scope_guard_for(config.endpoint)
+            if denied:
+                return denied
             instance = config.model()
             config.apply_data(instance, body_data)
             try:
@@ -834,6 +895,13 @@ def _register_resource(config: ApiResourceConfig):
                         }
                     },
                 ), 400
+            record_audit_event(
+                action=f"{config.endpoint}.created",
+                entity_type=config.endpoint,
+                entity_id=getattr(instance, "id", None),
+                after_state=_instance_state(instance),
+                source_module=__name__,
+            )
             return instance, 201
 
     @catalog_blp.route(f"/{config.endpoint}/<int:resource_id>")
@@ -842,6 +910,9 @@ def _register_resource(config: ApiResourceConfig):
         @catalog_blp.doc(tags=[tag])
         @catalog_blp.response(200, schema_cls)
         def get(self, resource_id: int):
+            denied = _scope_guard_for(config.endpoint)
+            if denied:
+                return denied
             instance = get_by_id(config.model, resource_id)
             if instance is None:
                 return jsonify(
@@ -860,6 +931,9 @@ def _register_resource(config: ApiResourceConfig):
         @catalog_blp.arguments(schema_cls)
         @catalog_blp.response(200, schema_cls)
         def put(self, body_data, resource_id: int):
+            denied = _scope_guard_for(config.endpoint)
+            if denied:
+                return denied
             instance = get_by_id(config.model, resource_id)
             if instance is None:
                 return jsonify(
@@ -871,6 +945,7 @@ def _register_resource(config: ApiResourceConfig):
                         }
                     },
                 ), 404
+            before_state = _instance_state(instance)
             config.apply_data(instance, body_data)
             try:
                 save_instance(instance)
@@ -884,11 +959,22 @@ def _register_resource(config: ApiResourceConfig):
                         }
                     },
                 ), 400
+            record_audit_event(
+                action=f"{config.endpoint}.updated",
+                entity_type=config.endpoint,
+                entity_id=getattr(instance, "id", None),
+                before_state=before_state,
+                after_state=_instance_state(instance),
+                source_module=__name__,
+            )
             return instance
 
         @api_token_required
         @catalog_blp.doc(tags=[tag])
         def delete(self, resource_id: int):
+            denied = _scope_guard_for(config.endpoint)
+            if denied:
+                return denied
             instance = get_by_id(config.model, resource_id)
             if instance is None:
                 return jsonify(
@@ -900,7 +986,16 @@ def _register_resource(config: ApiResourceConfig):
                         }
                     },
                 ), 404
+            before_state = _instance_state(instance)
             archive_instance(instance)
+            record_audit_event(
+                action=f"{config.endpoint}.archived",
+                entity_type=config.endpoint,
+                entity_id=getattr(instance, "id", None),
+                before_state=before_state,
+                after_state=_instance_state(instance),
+                source_module=__name__,
+            )
             return {"status": "archived"}
 
 
@@ -914,6 +1009,9 @@ class ThemeCollection(MethodView):
     @catalog_blp.doc(tags=["Themes"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("catalog")
+        if denied:
+            return denied
         from app.theme_registry import ALL_THEMES
         return [
             {"slug": t.slug, "name": t.name, "mode": t.mode, "description": t.description}
@@ -927,6 +1025,9 @@ class ThemeCurrent(MethodView):
     @catalog_blp.doc(tags=["Themes"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("catalog")
+        if denied:
+            return denied
         from flask_login import current_user
         from app.theme_registry import THEME_MAP, DEFAULT_THEME
         slug = getattr(current_user, "theme_slug", DEFAULT_THEME)
@@ -943,6 +1044,9 @@ class MarketsExport(MethodView):
     @api_token_required
     @catalog_blp.doc(tags=["Exports"])
     def get(self):
+        denied = require_api_scopes("markets")
+        if denied:
+            return denied
         import csv
         import io
         output = io.StringIO()
@@ -968,6 +1072,9 @@ class ExpensesExport(MethodView):
     @api_token_required
     @catalog_blp.doc(tags=["Exports"])
     def get(self):
+        denied = require_api_scopes("receipts")
+        if denied:
+            return denied
         import csv
         import io
         output = io.StringIO()
@@ -993,6 +1100,9 @@ class MarketPackingListsExport(MethodView):
     @api_token_required
     @catalog_blp.doc(tags=["Exports"])
     def get(self):
+        denied = require_api_scopes("markets")
+        if denied:
+            return denied
         import csv
         import io
         output = io.StringIO()
@@ -1019,6 +1129,9 @@ class InventoryRecordTransfer(MethodView):
     @catalog_blp.arguments(InventoryTransferRequestSchema)
     @catalog_blp.response(200)
     def post(self, body_data, record_id: int):
+        denied = require_api_scopes("inventory")
+        if denied:
+            return denied
         try:
             source, destination = transfer_inventory(
                 record_id=record_id,
@@ -1048,6 +1161,9 @@ class InventoryRecordReserve(MethodView):
     @catalog_blp.arguments(InventoryReservationRequestSchema)
     @catalog_blp.response(200)
     def post(self, body_data, record_id: int):
+        denied = require_api_scopes("inventory")
+        if denied:
+            return denied
         try:
             record = reserve_inventory(
                 record_id=record_id,
@@ -1076,6 +1192,9 @@ class InventoryRecordRelease(MethodView):
     @catalog_blp.arguments(InventoryReservationRequestSchema)
     @catalog_blp.response(200)
     def post(self, body_data, record_id: int):
+        denied = require_api_scopes("inventory")
+        if denied:
+            return denied
         try:
             record = release_inventory(
                 record_id=record_id,
@@ -1103,6 +1222,9 @@ class AnalyticsSummary(MethodView):
     @catalog_blp.doc(tags=["Analytics"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.analytics import executive_summary
         s = executive_summary()
         return {
@@ -1125,6 +1247,9 @@ class AnalyticsProducts(MethodView):
     @catalog_blp.doc(tags=["Analytics"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.analytics import product_analytics
         products = product_analytics()
         return [{
@@ -1145,6 +1270,9 @@ class AnalyticsMarkets(MethodView):
     @catalog_blp.doc(tags=["Analytics"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.analytics import market_analytics
         markets = market_analytics()
         return [{
@@ -1165,6 +1293,9 @@ class AnalyticsPrinting(MethodView):
     @catalog_blp.doc(tags=["Analytics"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.analytics import printing_analytics
         return printing_analytics()
 
@@ -1175,6 +1306,9 @@ class AnalyticsInventory(MethodView):
     @catalog_blp.doc(tags=["Analytics"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.analytics import inventory_analytics
         inv = inventory_analytics()
         return {
@@ -1191,6 +1325,9 @@ class AnalyticsPos(MethodView):
     @catalog_blp.doc(tags=["Analytics"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.analytics import pos_analytics
         p = pos_analytics()
         return {
@@ -1208,6 +1345,9 @@ class AnalyticsExpenses(MethodView):
     @catalog_blp.doc(tags=["Analytics"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.analytics import expense_analytics
         e = expense_analytics()
         return {
@@ -1223,6 +1363,9 @@ class PosSaleRefund(MethodView):
     @catalog_blp.arguments(PosRefundRequestSchema)
     @catalog_blp.response(200)
     def post(self, body_data, sale_id: int):
+        denied = require_api_scopes("pos")
+        if denied:
+            return denied
         try:
             sale = refund_sale(
                 sale_id=sale_id,
@@ -1247,6 +1390,9 @@ class AnalyticsInsights(MethodView):
     @catalog_blp.doc(tags=["Analytics"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.analytics import analytics_insights
 
         return analytics_insights()
@@ -1258,6 +1404,9 @@ class ModuleStatusCollection(MethodView):
     @catalog_blp.doc(tags=["Modules"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("settings")
+        if denied:
+            return denied
         from app.module_registry import module_statuses
 
         return {"data": module_statuses()}
@@ -1269,6 +1418,9 @@ class CostEngineProduct(MethodView):
     @catalog_blp.doc(tags=["Cost Engine"])
     @catalog_blp.response(200)
     def get(self, product_id: int):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.cost_engine import calculate_product_cost
 
         product = db.session.get(Product, product_id)
@@ -1286,6 +1438,9 @@ class CostEngineOrder(MethodView):
     @catalog_blp.doc(tags=["Cost Engine"])
     @catalog_blp.response(200)
     def get(self, order_id: int):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.cost_engine import estimate_order_profit
 
         try:
@@ -1300,6 +1455,9 @@ class CostEngineMarket(MethodView):
     @catalog_blp.doc(tags=["Cost Engine"])
     @catalog_blp.response(200)
     def get(self, market_id: int):
+        denied = require_api_scopes("analytics")
+        if denied:
+            return denied
         from app.services.cost_engine import estimate_market_profit
 
         return {"data": {key: str(value) for key, value in estimate_market_profit(market_id).items()}}
@@ -1312,6 +1470,9 @@ class PrepTaskGenerate(MethodView):
     @catalog_blp.arguments(EmptyBodySchema)
     @catalog_blp.response(201)
     def post(self, _body_data, market_id: int):
+        denied = require_api_scopes("markets")
+        if denied:
+            return denied
         from app.services.prep_tasks import generate_market_prep_tasks
 
         try:
@@ -1327,6 +1488,9 @@ class PrepTaskReadiness(MethodView):
     @catalog_blp.doc(tags=["Prep Tasks"])
     @catalog_blp.response(200)
     def get(self, market_id: int):
+        denied = require_api_scopes("markets")
+        if denied:
+            return denied
         from app.services.prep_tasks import market_readiness_score
 
         data = market_readiness_score(market_id)
@@ -1340,6 +1504,9 @@ class ApiTokenCollection(MethodView):
     @catalog_blp.doc(tags=["API Tokens"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("settings")
+        if denied:
+            return denied
         from app.models import ApiToken
         tokens = ApiToken.query.filter_by(user_id=g.api_user.id).order_by(ApiToken.created_at.desc()).all()
         schema = ApiTokenSchema(many=True)
@@ -1349,6 +1516,9 @@ class ApiTokenCollection(MethodView):
     @catalog_blp.doc(tags=["API Tokens"])
     @catalog_blp.response(201)
     def post(self):
+        denied = require_api_scopes("settings")
+        if denied:
+            return denied
         from app.services.api_tokens import create_api_token
         payload = request.get_json(silent=True) or {}
         name = payload.get("name", "").strip()
@@ -1383,6 +1553,9 @@ class ApiTokenItem(MethodView):
     @catalog_blp.doc(tags=["API Tokens"])
     @catalog_blp.response(200)
     def get(self, token_id: int):
+        denied = require_api_scopes("settings")
+        if denied:
+            return denied
         token = db.session.get(ApiToken, token_id)
         if token is None or token.user_id != g.api_user.id:
             return {"error": {"code": "not_found", "message": "API token not found.", "details": {}}}, 404
@@ -1391,6 +1564,9 @@ class ApiTokenItem(MethodView):
     @api_token_required
     @catalog_blp.doc(tags=["API Tokens"])
     def delete(self, token_id: int):
+        denied = require_api_scopes("settings")
+        if denied:
+            return denied
         token = db.session.get(ApiToken, token_id)
         if token is None or token.user_id != g.api_user.id:
             return {"error": {"code": "not_found", "message": "API token not found.", "details": {}}}, 404
@@ -1414,6 +1590,9 @@ class SettingCollection(MethodView):
     @catalog_blp.doc(tags=["Settings"])
     @catalog_blp.response(200)
     def get(self):
+        denied = require_api_scopes("settings")
+        if denied:
+            return denied
         from app.services.settings import get_all_settings
         settings = get_all_settings()
         return {"data": SettingSchema(many=True).dump(settings)}
@@ -1425,6 +1604,9 @@ class SettingItem(MethodView):
     @catalog_blp.doc(tags=["Settings"])
     @catalog_blp.response(200)
     def get(self, key: str):
+        denied = require_api_scopes("settings")
+        if denied:
+            return denied
         from app.models import Setting
         from sqlalchemy import select
         setting = db.session.scalar(select(Setting).where(Setting.key == key))
@@ -1436,6 +1618,9 @@ class SettingItem(MethodView):
     @catalog_blp.doc(tags=["Settings"])
     @catalog_blp.response(200)
     def put(self, key: str):
+        denied = require_api_scopes("settings")
+        if denied:
+            return denied
         from app.services.settings import set_setting
         from app.services.audit import record_audit_event
         from app.models import Setting

@@ -66,18 +66,10 @@ def close_session(
     if not session or session.status != PosSessionStatus.OPEN:
         raise ValueError("Session is not open")
 
-    total_cash_sales = (
-        db.session.query(db.func.coalesce(db.func.sum(PosSale.total), 0))
-        .filter(
-            PosSale.pos_session_id == session_id,
-            PosSale.status == PosSaleStatus.COMPLETED,
-            PosSale.payment_method == PaymentMethod.CASH.value,
-        )
-        .scalar()
-    )
+    summary = get_session_summary(session_id)
 
     session.closing_cash = closing_cash
-    session.expected_cash = session.opening_cash + Decimal(str(total_cash_sales))
+    session.expected_cash = summary["expected_cash"]
     session.cash_difference = closing_cash - session.expected_cash
     session.closed_by_user_id = closed_by_user_id
     session.closed_at = datetime.now(timezone.utc)
@@ -93,6 +85,8 @@ def close_session(
             "closing_cash": str(session.closing_cash),
             "expected_cash": str(session.expected_cash),
             "cash_difference": str(session.cash_difference),
+            "cash_sales_total": str(summary["cash_sales_total"]),
+            "cash_refunds_total": str(summary["cash_refunds_total"]),
         },
         source_module=__name__,
         actor_id=closed_by_user_id,
@@ -261,21 +255,35 @@ def get_session_summary(session_id: int) -> dict:
         raise ValueError("Session not found")
 
     sales = PosSale.query.filter_by(pos_session_id=session_id, status=PosSaleStatus.COMPLETED).all()
+    refunded_sales = PosSale.query.filter_by(
+        pos_session_id=session_id,
+        status=PosSaleStatus.REFUNDED,
+    ).all()
     total_sales = sum(s.total for s in sales)
+    refunded_total = sum(s.total for s in refunded_sales)
     payment_totals: dict[str, Decimal] = {}
     for s in sales:
         pm = str(s.payment_method)
         payment_totals[pm] = payment_totals.get(pm, Decimal("0")) + s.total
 
     cash_sales_total = sum(s.total for s in sales if s.payment_method == PaymentMethod.CASH.value)
-    expected_cash = session.opening_cash + Decimal(str(cash_sales_total))
+    cash_refunds_total = sum(
+        s.total for s in refunded_sales if s.payment_method == PaymentMethod.CASH.value
+    )
+    expected_cash = session.opening_cash + Decimal(str(cash_sales_total)) - Decimal(str(cash_refunds_total))
 
     return {
         "session": session,
         "sales": sales,
+        "refunded_sales": refunded_sales,
         "total_sales": total_sales,
+        "refunded_total": refunded_total,
+        "net_sales_total": total_sales - refunded_total,
         "sale_count": len(sales),
+        "refund_count": len(refunded_sales),
         "payment_totals": payment_totals,
+        "cash_sales_total": cash_sales_total,
+        "cash_refunds_total": cash_refunds_total,
         "expected_cash": expected_cash,
     }
 

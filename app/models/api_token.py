@@ -37,3 +37,13 @@ class ApiToken(PrimaryKeyMixin, TimestampMixin, db.Model):
             if expires <= now:
                 return False
         return True
+
+    @property
+    def scope_set(self) -> set[str]:
+        return {scope.strip() for scope in (self.scopes or "").split(",") if scope.strip()}
+
+    def has_scope(self, *required_scopes: str) -> bool:
+        token_scopes = self.scope_set
+        if not token_scopes:
+            return True
+        return any(scope in token_scopes for scope in required_scopes)

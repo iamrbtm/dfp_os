@@ -99,6 +99,18 @@ def test_module_status_update_creates_override(client, login_admin):
         assert FeatureFlag.query.filter_by(key="module.products.enabled").first() is not None
 
 
+def test_module_status_update_keeps_critical_modules_enabled(client, login_admin):
+    response = client.post("/settings/modules/update", data={}, follow_redirects=False)
+    assert response.status_code == 302
+    with client.application.app_context():
+        auth_flag = FeatureFlag.query.filter_by(key="module.auth.enabled").first()
+        settings_flag = FeatureFlag.query.filter_by(key="module.settings.enabled").first()
+        assert auth_flag is not None
+        assert settings_flag is not None
+        assert auth_flag.enabled is True
+        assert settings_flag.enabled is True
+
+
 def test_prep_task_admin_pages(client, login_admin):
     response = client.get("/prep-tasks/tasks/")
     assert response.status_code == 200
@@ -276,3 +288,46 @@ def test_pos_refund_api_works(api_token, client, app):
     )
     assert response.status_code == 200
     assert response.get_json()["data"]["status"] == "refunded"
+
+
+def test_catalog_scoped_token_cannot_use_inventory_operation_api(api_token, client, app):
+    with app.app_context():
+        category = Category(name="Scoped Ops", slug="scoped-ops", is_public=False, is_pos_visible=False)
+        product = Product(
+            name="Scoped Product",
+            slug="scoped-product",
+            category=category,
+            product_type=ProductType.FINISHED_GOOD,
+            status=ProductStatus.ACTIVE,
+            base_price=Decimal("5.00"),
+        )
+        variant = ProductVariant(product=product, sku="SCOPE-1", name="Default", price=Decimal("5.00"), active=True)
+        source = InventoryLocation(name="Scoped Source", type="Bin", active=True)
+        destination = InventoryLocation(name="Scoped Destination", type="Bin", active=True)
+        db.session.add_all([category, product, variant, source, destination])
+        db.session.flush()
+        record = InventoryRecord(
+            product_id=product.id,
+            variant_id=variant.id,
+            location_id=source.id,
+            quantity_on_hand=2,
+            quantity_reserved=0,
+        )
+        db.session.add(record)
+        db.session.commit()
+        record_id = record.id
+        destination_id = destination.id
+
+    response = client.post(
+        f"/api/v1/inventory-records/{record_id}/transfer",
+        headers={"Authorization": f"Bearer {api_token}"},
+        json={"quantity": 1, "to_location_id": destination_id},
+    )
+    assert response.status_code == 403
+    assert response.get_json()["error"]["code"] == "insufficient_scope"
+
+
+def test_catalog_scoped_token_cannot_use_analytics_api(api_token, client):
+    response = client.get("/api/v1/analytics/summary", headers={"Authorization": f"Bearer {api_token}"})
+    assert response.status_code == 403
+    assert response.get_json()["error"]["code"] == "insufficient_scope"

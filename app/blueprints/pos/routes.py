@@ -99,16 +99,8 @@ def session_close(session_id):
         flash("Session is not open.", "error")
         return redirect(url_for("pos.session_list"))
 
-    cash_sales_total = (
-        db.session.query(db.func.coalesce(db.func.sum(PosSale.total), 0))
-        .filter(
-            PosSale.pos_session_id == session_id,
-            PosSale.status == PosSaleStatus.COMPLETED,
-            PosSale.payment_method == PaymentMethod.CASH.value,
-        )
-        .scalar()
-    )
-    expected_cash = session.opening_cash + Decimal(str(cash_sales_total))
+    summary = get_session_summary(session_id)
+    expected_cash = summary["expected_cash"]
 
     form = PosCloseSessionForm()
     if form.validate_on_submit():
@@ -132,7 +124,13 @@ def session_close(session_id):
         )
         flash(f"Session {session.session_number} closed.")
         return redirect(url_for("pos.session_detail", session_id=session_id))
-    return render_template("pos/session_close.html", form=form, session=session, expected_cash=expected_cash)
+    return render_template(
+        "pos/session_close.html",
+        form=form,
+        session=session,
+        expected_cash=expected_cash,
+        summary=summary,
+    )
 
 
 @bp.route("/sessions/<int:session_id>/void", methods=["POST"])

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from app.services.audit_client import get_audit_client
@@ -10,6 +11,9 @@ def record_audit(
     action: str,
     user_id: int | None = None,
     details: str | None = None,
+    *,
+    before_state: dict[str, Any] | None = None,
+    after_state: dict[str, Any] | None = None,
 ):
     client = get_audit_client()
     metadata = {}
@@ -28,8 +32,66 @@ def record_audit(
         actor_type="user" if user_id else None,
         source_service="dfp-os",
         source_module="receipts",
+        before_state=before_state,
+        after_state=after_state,
         metadata=metadata,
     )
+
+
+def snapshot_receipt(receipt) -> dict[str, Any]:
+    fields = [
+        "status",
+        "merchant_name",
+        "store_name",
+        "store_number",
+        "address_line_1",
+        "address_line_2",
+        "city",
+        "state",
+        "postal_code",
+        "phone",
+        "receipt_number",
+        "transaction_number",
+        "payment_method",
+        "currency",
+        "subtotal",
+        "tax_total",
+        "fee_total",
+        "discount_total",
+        "tip_total",
+        "deposit_total",
+        "grand_total",
+        "date_time",
+        "notes",
+    ]
+    return {field: _serialize_value(getattr(receipt, field, None)) for field in fields}
+
+
+def snapshot_line_item(item) -> dict[str, Any]:
+    fields = [
+        "description",
+        "sku",
+        "quantity",
+        "unit_price",
+        "line_total",
+        "line_tax",
+        "needs_review",
+        "is_inventory_candidate",
+        "is_personal_or_excluded",
+    ]
+    return {field: _serialize_value(getattr(item, field, None)) for field in fields}
+
+
+def _serialize_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if hasattr(value, "value"):
+        return value.value
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    return value
 
 
 def log_upload(

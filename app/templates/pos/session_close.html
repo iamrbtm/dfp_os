@@ -6,6 +6,8 @@
   <div class="app-card p-4 mb-4 space-y-1" style="color: var(--color-text);">
     <p><strong>Opened:</strong> {{ session.opened_at.strftime('%Y-%m-%d %H:%M') }}</p>
     <p><strong>Opening Cash:</strong> ${{ "%.2f"|format(session.opening_cash) }}</p>
+    <p><strong>Cash Sales:</strong> ${{ "%.2f"|format(summary.cash_sales_total) }}</p>
+    <p><strong>Cash Refunds:</strong> ${{ "%.2f"|format(summary.cash_refunds_total) }}</p>
     <p><strong>Expected Cash:</strong> ${{ "%.2f"|format(expected_cash) }}</p>
   </div>
   <form method="post" class="app-card p-6 space-y-4" x-data="cashCounter()">

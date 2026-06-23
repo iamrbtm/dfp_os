@@ -1,15 +1,18 @@
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import select
 
 from app.blueprints.settings import bp
 from app.extensions import db
 from app.forms.admin import BusinessForm, FeatureFlagForm
-from app.models import Business, FeatureFlag, UserRole
+from app.models import Business, FeatureFlag, Setting, UserRole
 from app.services.settings import get_all_settings, set_setting
 from app.module_registry import module_statuses
 from app.services.business import ensure_default_business
 from app.services.audit import record_audit_event
 from app.utils.auth import roles_required
+
+CRITICAL_MODULE_KEYS = {"public_site", "auth", "dashboard", "settings"}
 
 
 @bp.route("/")
@@ -28,14 +31,15 @@ def settings_update():
     for key, value in request.form.items():
         if key in ("csrf_token",):
             continue
-        before = None
+        existing = db.session.scalar(select(Setting).where(Setting.key == key))
+        before = {"key": key, "value": existing.value, "type": existing.type} if existing else None
         set_setting(key, value)
         record_audit_event(
             action="settings.changed",
             entity_type="setting",
             entity_id=key,
             before_state=before,
-            after_state={"key": key, "value": value},
+            after_state={"key": key, "value": value, "type": existing.type if existing else "string"},
             source_module=__name__,
             actor_id=current_user.id,
         )
@@ -144,9 +148,13 @@ def feature_flag_edit(flag_id: int):
 @login_required
 @roles_required(UserRole.ADMIN)
 def module_status_update():
+    skipped_modules: list[str] = []
     for module in module_statuses():
         key = module["feature_flag_key"]
         enabled = request.form.get(key) == "on"
+        if module["key"] in CRITICAL_MODULE_KEYS and not enabled:
+            skipped_modules.append(module["display_name"])
+            enabled = True
         record = FeatureFlag.query.filter_by(key=key).first()
         before_state = {"enabled": module["enabled"]}
         if record is None:
@@ -164,6 +172,11 @@ def module_status_update():
             actor_id=current_user.id,
         )
     db.session.commit()
+    if skipped_modules:
+        flash(
+            "Protected core modules were left enabled: " + ", ".join(skipped_modules) + ".",
+            "warning",
+        )
     flash("Module settings updated.", "success")
     return redirect(url_for("settings.module_status"))
 

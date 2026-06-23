@@ -32,6 +32,7 @@ from app.services.receipt_allocations import (
     get_reconciliation_summary,
 )
 from app.services.receipt_audit import record_audit
+from app.services.receipt_audit import snapshot_line_item, snapshot_receipt
 from app.services.receipt_duplicates import check_duplicates, resolve_duplicate
 from app.services.receipts import (
     approve_receipt,
@@ -156,6 +157,7 @@ def review(receipt_id: int):
                     flash(e, "danger")
 
         else:
+            before_state = snapshot_receipt(receipt)
             receipt.merchant_name = form.merchant_name.data
             receipt.store_name = form.store_name.data
             receipt.store_number = form.store_number.data
@@ -184,7 +186,13 @@ def review(receipt_id: int):
                 receipt.date_time = form.date_time.data
 
             db.session.commit()
-            record_audit(receipt_id, "receipt_edited", current_user.id)
+            record_audit(
+                receipt_id,
+                "receipt_edited",
+                current_user.id,
+                before_state=before_state,
+                after_state=snapshot_receipt(receipt),
+            )
             flash("Receipt saved.", "success")
             return redirect(url_for("receipts.review", receipt_id=receipt_id))
 
@@ -272,6 +280,7 @@ def inline_edit_line_item(receipt_id: int, item_id: int):
         abort(400, "CSRF validation failed")
 
     value = request.form.get("value", "").strip()
+    before_state = snapshot_line_item(item)
 
     if field in ("description", "sku"):
         setattr(item, field, value or None)
@@ -308,7 +317,14 @@ def inline_edit_line_item(receipt_id: int, item_id: int):
 
     item.needs_review = False
     db.session.commit()
-    record_audit(receipt_id, f"line_item_{field}_edited", current_user.id)
+    record_audit(
+        receipt_id,
+        f"line_item_{field}_edited",
+        current_user.id,
+        details={"field": field, "item_id": item.id},
+        before_state=before_state,
+        after_state=snapshot_line_item(item),
+    )
 
     # Build display value
     if field == "description":
@@ -345,6 +361,7 @@ def edit_line_item(receipt_id: int, item_id: int):
         abort(404)
 
     data = request.get_json() or request.form
+    before_state = snapshot_line_item(item)
     if data.get("description") is not None:
         item.description = data["description"]
     if data.get("sku") is not None:
@@ -375,7 +392,14 @@ def edit_line_item(receipt_id: int, item_id: int):
         item.is_personal_or_excluded = bool(data["is_personal_or_excluded"])
 
     db.session.commit()
-    record_audit(receipt_id, "line_item_edited", current_user.id)
+    record_audit(
+        receipt_id,
+        "line_item_edited",
+        current_user.id,
+        details={"item_id": item.id},
+        before_state=before_state,
+        after_state=snapshot_line_item(item),
+    )
     flash("Line item updated.", "success")
     return redirect(url_for("receipts.review", receipt_id=receipt_id))
 

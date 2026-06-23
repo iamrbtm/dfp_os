@@ -289,6 +289,11 @@ def test_pos_refund_sale_restocks_inventory(app):
         assert refunded.status == PosSaleStatus.REFUNDED
         assert order.status.value == "refunded"
         assert inventory.quantity_on_hand == 3
+        summary = get_session_summary(session.id)
+        assert summary["refund_count"] == 1
+        assert summary["refunded_total"] == Decimal("10.00")
+        assert summary["cash_refunds_total"] == Decimal("10.00")
+        assert summary["expected_cash"] == session.opening_cash
 
 
 # ---------------------------------------------------------------------------

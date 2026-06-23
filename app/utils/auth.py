@@ -96,3 +96,33 @@ def api_token_required(view: Callable):
         return view(*args, **kwargs)
 
     return wrapped
+
+
+def require_api_scopes(*required_scopes: str):
+    token = getattr(g, "api_token", None)
+    if token is None or not required_scopes:
+        return None
+    if token.has_scope(*required_scopes):
+        return None
+
+    record_audit_event(
+        action="api_token.scope_denied",
+        entity_type="api_request",
+        entity_id=request.path,
+        source_module=__name__,
+        actor_id=getattr(token, "id", None),
+        actor_type="api_token",
+        metadata={"required_scopes": list(required_scopes), "token_scopes": sorted(token.scope_set)},
+    )
+    return (
+        jsonify(
+            {
+                "error": {
+                    "code": "insufficient_scope",
+                    "message": "The API token does not have the required scope for this resource.",
+                    "details": {"required_scopes": list(required_scopes)},
+                }
+            }
+        ),
+        403,
+    )
