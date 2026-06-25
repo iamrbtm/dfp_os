@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from sqlalchemy import select
 
@@ -30,6 +30,7 @@ from app.services.pos import (
     refund_sale,
     void_session,
 )
+from app.services.storage import send_storage_reference, storage_reference_name
 from app.utils.auth import roles_required
 
 
@@ -270,3 +271,17 @@ def quick_customer():
     db.session.add(c)
     db.session.commit()
     return {"id": c.id, "display_name": f"{c.first_name} {c.last_name}"}
+
+
+@bp.route("/product-image/<int:product_id>")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def product_image(product_id: int):
+    product = db.session.get(Product, product_id)
+    if not product:
+        abort(404)
+
+    ref = product.pos_image_path or product.default_image_path
+    if not ref:
+        abort(404)
+
+    return send_storage_reference(ref, mimetype="image/jpeg")

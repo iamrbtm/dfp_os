@@ -1,0 +1,6 @@
+{
+  "success": true,
+  "product_id": 14,
+  "breakdown": "CostBreakdown(material_cost=Decimal('7.62'), filament_grams=Decimal('304.61'), cost_per_gram=Decimal('0.025'), labor_minutes=Decimal('0'), labor_rate=Decimal('18.00'), print_minutes=Decimal('614'), machine_cost=Decimal('5.12'), packaging_cost=Decimal('0.50'), payment_fees=Decimal('0.00'), market_allocation=Decimal('0.00'), failure_adjustment=Decimal('0.66'), total_cost=Decimal('13.90'), suggested_price=Decimal('30.89'), margin_dollars=Decimal('16.10'), margin_percent=Decimal('53.67'))",
+  "variant_results": []
+}

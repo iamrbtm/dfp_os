@@ -38,6 +38,25 @@ class CostBreakdown:
         return self.__dict__.copy()
 
 
+def _latest_model_analysis(product: Product, variant: ProductVariant | None = None) -> dict | None:
+    assets = None
+    if variant is not None:
+        assets = getattr(variant, "model_assets", None)
+    if not assets:
+        assets = getattr(product, "model_assets", []) or []
+    completed = [
+        a for a in assets
+        if a.analysis_status == "complete" and a.parsed_filament_grams
+    ]
+    if not completed:
+        return None
+    latest = max(completed, key=lambda a: a.analysis_completed_at or a.created_at)
+    return {
+        "filament_grams": Decimal(str(latest.parsed_filament_grams or 0)),
+        "print_minutes": Decimal(str(latest.parsed_print_minutes or 0)),
+    }
+
+
 def calculate_product_cost(
     *,
     product: Product,
@@ -52,14 +71,18 @@ def calculate_product_cost(
     failure_rate: Decimal = Decimal("0.05"),
     target_margin_percent: Decimal = Decimal("55.00"),
 ) -> CostBreakdown:
-    filament_grams = Decimal(str(getattr(variant, "estimated_filament_grams", 0) or 0))
-    print_minutes = Decimal(str(getattr(variant, "estimated_print_minutes", 0) or product.estimated_print_minutes or 0))
     labor_minutes = Decimal(str(product.estimated_labor_minutes or 0))
     cost_per_gram = cost_per_gram if cost_per_gram is not None else Decimal("0.025")
 
-    material_cost = money(getattr(variant, "material_cost", None) or product.estimated_material_cost)
-    if material_cost == Decimal("0.00") and filament_grams:
+    model_data = _latest_model_analysis(product, variant)
+    if model_data:
+        filament_grams = model_data["filament_grams"]
+        print_minutes = model_data["print_minutes"]
         material_cost = money(filament_grams * cost_per_gram)
+    else:
+        filament_grams = Decimal("0")
+        print_minutes = Decimal("0")
+        material_cost = Decimal("0.00")
 
     labor_cost = money((labor_minutes / Decimal("60")) * labor_rate)
     machine_cost = money((print_minutes / Decimal("60")) * machine_hour_rate)

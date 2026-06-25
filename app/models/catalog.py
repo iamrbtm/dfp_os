@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
@@ -113,6 +113,7 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     estimated_print_minutes: Mapped[int] = mapped_column(default=0, nullable=False)
     estimated_profit: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     default_image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    pos_image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)
     care_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     safety_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -136,6 +137,7 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     model_assets = relationship(
         "ModelAsset", back_populates="product", cascade="all, delete-orphan"
     )
+    images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     inventory_records = relationship("InventoryRecord", back_populates="product")
 
 
@@ -162,6 +164,8 @@ class ProductVariant(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     product = relationship("Product", back_populates="variants")
     inventory_records = relationship("InventoryRecord", back_populates="variant")
+    model_assets = relationship("ModelAsset", back_populates="variant", cascade="all, delete-orphan")
+    images = relationship("ProductImage", back_populates="variant", cascade="all, delete-orphan")
 
 
 class ModelAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
@@ -185,6 +189,9 @@ class ModelAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
     related_product_id: Mapped[int | None] = mapped_column(
         ForeignKey("products.id"), nullable=True, index=True
     )
+    variant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_variants.id"), nullable=True, index=True
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[LicenseStatus] = mapped_column(
         Enum(LicenseStatus, native_enum=False, length=40),
@@ -192,4 +199,86 @@ class ModelAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
         nullable=False,
     )
 
+    analysis_status: Mapped[str | None] = mapped_column(
+        String(30), default=None, nullable=True
+    )
+    analysis_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    analysis_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    analysis_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    parsed_volume_mm3: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 4), nullable=True
+    )
+    parsed_surface_area_mm2: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 4), nullable=True
+    )
+    parsed_triangle_count: Mapped[int | None] = mapped_column(nullable=True)
+    parsed_filament_grams: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
+    parsed_print_minutes: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
+    parsed_material_cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
+    convert_status: Mapped[str | None] = mapped_column(
+        String(30), default=None, nullable=True
+    )
+    conversion_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    converted_model_path: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )
+    gcode_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     product = relationship("Product", back_populates="model_assets")
+    variant = relationship("ProductVariant", back_populates="model_assets")
+
+
+class ProductImage(PrimaryKeyMixin, TimestampMixin, db.Model):
+    __tablename__ = "product_images"
+
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id"), nullable=False, index=True
+    )
+    variant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_variants.id"), nullable=True, index=True
+    )
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    sort_order: Mapped[int] = mapped_column(default=0, nullable=False)
+    alt_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    product = relationship("Product", back_populates="images")
+    variant = relationship("ProductVariant", back_populates="images")
+
+
+@event.listens_for(ProductImage, "after_delete")
+def _cleanup_product_image_storage(mapper, connection, target: ProductImage) -> None:
+    from app.services.storage import delete_storage_reference
+    if target.file_path:
+        try:
+            delete_storage_reference(target.file_path)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to delete image storage: %s", target.file_path
+            )
+
+
+@event.listens_for(ModelAsset, "after_delete")
+def _cleanup_model_asset_storage(mapper, connection, target: ModelAsset) -> None:
+    from app.services.storage import delete_storage_reference
+    for ref in (target.file_location, target.converted_model_path, target.gcode_path):
+        if ref:
+            try:
+                delete_storage_reference(ref)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Failed to delete storage reference: %s", ref
+                )

@@ -14,6 +14,7 @@ RUN apt-get update \
         tesseract-ocr tesseract-ocr-eng \
         imagemagick poppler-utils \
         libgl1 libglib2.0-0 \
+        prusa-slicer \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock* .python-version ./

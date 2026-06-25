@@ -2,9 +2,22 @@ from __future__ import annotations
 
 import click
 from flask import current_app
+from pathlib import Path
 
+from app.extensions import db
+from app.models.catalog import ModelAsset, ProductImage
 from app.services.demo_seed import seed_demo_data
 from app.services.events_seed import seed_events_2026
+from app.services.storage import (
+    converted_storage_key,
+    delete_storage_reference,
+    download_storage_bytes,
+    gcode_storage_key,
+    image_storage_key,
+    product_storage_key,
+    storage_reference_name,
+    upload_bytes_to_storage,
+)
 from app.services.users import ensure_admin_user
 
 
@@ -55,3 +68,105 @@ def seed_events_2026_command() -> None:
     click.echo("2026 events seed complete.")
     for key, value in counts.items():
         click.echo(f"- {key}: {value}")
+
+
+@click.group("migrate")
+def migrate_group() -> None:
+    """Migrate data between versions."""
+
+
+@migrate_group.command("file-paths")
+def migrate_file_paths() -> None:
+    """Migrate product asset file paths to the new structured layout.
+
+    Old layout (flat):  products/{id}/models/file.ext
+    New layout:         products/{id}/models/file.ext          (product-level)
+                        products/{id}/variants/{vid}/models/   (variant-level)
+    """
+    bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
+    local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
+
+    migrated = 0
+    errors = 0
+
+    def _migrate_ref(
+        ref: str | None,
+        *,
+        product_id: int,
+        variant_id: int | None,
+        storage_key_fn,
+    ) -> str | None:
+        if not ref:
+            return None
+
+        filename = storage_reference_name(ref)
+        if not filename:
+            return None
+
+        new_key = storage_key_fn(product_id, filename, variant_id=variant_id)
+        new_ref = (
+            f"s3://{bucket}/{new_key}"
+            if ref.startswith("s3://")
+            else str(Path(local_root) / new_key)
+        )
+
+        if ref == new_ref:
+            return None
+
+        try:
+            data = download_storage_bytes(ref)
+            upload_bytes_to_storage(data, bucket=bucket, key=new_key, local_root=local_root)
+            delete_storage_reference(ref)
+        except Exception as exc:
+            click.echo(f"  Error migrating {ref}: {exc}", err=True)
+            return None
+
+        return new_ref
+
+    click.echo("Migrating ModelAsset file paths...")
+    for asset in db.session.query(ModelAsset).all():
+        product_id = asset.product_id
+        new_file = _migrate_ref(
+            asset.file_location,
+            product_id=product_id,
+            variant_id=asset.variant_id,
+            storage_key_fn=product_storage_key,
+        )
+        new_converted = _migrate_ref(
+            asset.converted_model_path,
+            product_id=product_id,
+            variant_id=asset.variant_id,
+            storage_key_fn=converted_storage_key,
+        )
+        new_gcode = _migrate_ref(
+            asset.gcode_path,
+            product_id=product_id,
+            variant_id=asset.variant_id,
+            storage_key_fn=gcode_storage_key,
+        )
+
+        if new_file or new_converted or new_gcode:
+            if new_file:
+                asset.file_location = new_file
+            if new_converted:
+                asset.converted_model_path = new_converted
+            if new_gcode:
+                asset.gcode_path = new_gcode
+            migrated += 1
+
+    click.echo("Migrating ProductImage file paths...")
+    for img in db.session.query(ProductImage).all():
+        new_ref = _migrate_ref(
+            img.file_path,
+            product_id=img.product_id,
+            variant_id=img.variant_id,
+            storage_key_fn=image_storage_key,
+        )
+        if new_ref:
+            img.file_path = new_ref
+            migrated += 1
+
+    db.session.commit()
+    click.echo(f"\nMigration complete. {migrated} records updated.")
+    if errors:
+        click.echo(f"{errors} errors occurred (see above).", err=True)

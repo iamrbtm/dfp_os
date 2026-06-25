@@ -211,3 +211,35 @@ def send_storage_reference(
         mimetype=mimetype,
         as_attachment=as_attachment,
     )
+
+
+def product_asset_key(product_id: int, category: str, filename: str) -> str:
+    return f"products/{product_id}/{category}/{filename}"
+
+
+def variant_asset_key(product_id: int, variant_id: int, category: str, filename: str) -> str:
+    return f"products/{product_id}/variants/{variant_id}/{category}/{filename}"
+
+
+def product_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
+    if variant_id is not None:
+        return f"products/{product_id}/variants/{variant_id}/models/{filename}"
+    return f"products/{product_id}/models/{filename}"
+
+
+def converted_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
+    if variant_id is not None:
+        return f"products/{product_id}/variants/{variant_id}/converted/{filename}"
+    return f"products/{product_id}/converted/{filename}"
+
+
+def gcode_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
+    if variant_id is not None:
+        return f"products/{product_id}/variants/{variant_id}/gcode/{filename}"
+    return f"products/{product_id}/gcode/{filename}"
+
+
+def image_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
+    if variant_id is not None:
+        return f"products/{product_id}/variants/{variant_id}/images/{filename}"
+    return f"products/{product_id}/images/{filename}"

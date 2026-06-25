@@ -7,6 +7,11 @@ from app.forms.catalog import (
     ProductForm,
     ProductVariantForm,
 )
+from app.forms.studio import (
+    ModelAssetUploadForm,
+    ProductStudioForm,
+    VariantInlineForm,
+)
 from app.forms.custom_request import CustomRequestForm, PublicCustomRequestForm
 from app.forms.expense import ExpenseForm
 from app.forms.market import (
@@ -59,6 +64,7 @@ __all__ = [
     "MarketTaskForm",
     "MarketTimelineEventForm",
     "ModelAssetForm",
+    "ModelAssetUploadForm",
     "OrderForm",
     "OrderItemForm",
     "PaymentForm",
@@ -69,6 +75,8 @@ __all__ = [
     "PrinterForm",
     "PrintJobForm",
     "ProductForm",
+    "ProductStudioForm",
     "ProductVariantForm",
     "PublicCustomRequestForm",
+    "VariantInlineForm",
 ]

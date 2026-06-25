@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ app_name }}{% endblock %}</title>
     <meta name="description" content="Dude Fish OS helps Dude Fish Printing run the shop, sell at markets, and stay organized.">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='dist/app.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='src/css/theme-tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='src/css/app.css') }}">

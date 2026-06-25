@@ -30,7 +30,7 @@ from app.blueprints.products import bp as products_bp
 from app.blueprints.public import bp as public_bp
 from app.blueprints.receipts import bp as receipts_bp
 from app.blueprints.settings import bp as settings_bp
-from app.cli import seed_group
+from app.cli import migrate_group, seed_group
 from app.extensions import api, csrf, db, login_manager, migrate
 from app.models import User
 
@@ -79,6 +79,12 @@ def register_extensions(app: Flask) -> None:
     login_manager.init_app(app)
     csrf.init_app(app)
     api.init_app(app)
+
+    from app.celery_app import make_celery
+    import app.extensions as ext_mod
+
+    ext_mod.celery = make_celery(app)
+
     with app.app_context():
         bootstrap_object_storage()
 
@@ -175,6 +181,7 @@ def register_request_guards(app: Flask) -> None:
 
 def register_cli(app: Flask) -> None:
     app.cli.add_command(seed_group)
+    app.cli.add_command(migrate_group)
 
 
 def register_error_handlers(app: Flask) -> None:
@@ -240,6 +247,7 @@ def register_context_processors(app: Flask) -> None:
             ],
             "products": [
                 ("Products", url_for("products.list_resource", resource_key="products")),
+                ("Product Studio", url_for("products.studio")),
                 ("Categories", url_for("products.list_resource", resource_key="categories")),
                 ("Collections", url_for("products.list_resource", resource_key="collections")),
                 ("Variants", url_for("products.list_resource", resource_key="variants")),

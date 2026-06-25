@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from celery import Celery
 from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_smorest import Api
@@ -17,3 +18,4 @@ migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
 api = Api()
+celery: Celery | None = None
