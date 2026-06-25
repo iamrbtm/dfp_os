@@ -12,6 +12,7 @@ import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
 from flask import abort, current_app, send_file
+from werkzeug.utils import secure_filename
 
 
 def storage_backend() -> str:
@@ -213,33 +214,49 @@ def send_storage_reference(
     )
 
 
-def product_asset_key(product_id: int, category: str, filename: str) -> str:
-    return f"products/{product_id}/{category}/{filename}"
+def normalize_storage_filename(filename: str, *, fallback_stem: str = "file") -> str:
+    candidate = secure_filename(filename or "").strip("._")
+    if not candidate:
+        return fallback_stem
+
+    path = Path(candidate)
+    stem = path.stem.strip("._") or fallback_stem
+    suffix = path.suffix.lower()
+    return f"{stem}{suffix}"
 
 
-def variant_asset_key(product_id: int, variant_id: int, category: str, filename: str) -> str:
-    return f"products/{product_id}/variants/{variant_id}/{category}/{filename}"
+def storage_slug(value: str | None, *, fallback: str = "file") -> str:
+    slug = secure_filename(value or "").strip("._").lower()
+    return slug or fallback
+
+
+def product_asset_key(product_id: int, filename: str) -> str:
+    return f"products/{product_id}/{filename}"
+
+
+def variant_asset_key(product_id: int, variant_id: int, filename: str) -> str:
+    return f"products/{product_id}/variants/{variant_id}/{filename}"
 
 
 def product_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
     if variant_id is not None:
-        return f"products/{product_id}/variants/{variant_id}/models/{filename}"
-    return f"products/{product_id}/models/{filename}"
+        return variant_asset_key(product_id, variant_id, filename)
+    return product_asset_key(product_id, filename)
 
 
 def converted_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
     if variant_id is not None:
-        return f"products/{product_id}/variants/{variant_id}/converted/{filename}"
-    return f"products/{product_id}/converted/{filename}"
+        return variant_asset_key(product_id, variant_id, filename)
+    return product_asset_key(product_id, filename)
 
 
 def gcode_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
     if variant_id is not None:
-        return f"products/{product_id}/variants/{variant_id}/gcode/{filename}"
-    return f"products/{product_id}/gcode/{filename}"
+        return variant_asset_key(product_id, variant_id, filename)
+    return product_asset_key(product_id, filename)
 
 
 def image_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
     if variant_id is not None:
-        return f"products/{product_id}/variants/{variant_id}/images/{filename}"
-    return f"products/{product_id}/images/{filename}"
+        return variant_asset_key(product_id, variant_id, filename)
+    return product_asset_key(product_id, filename)

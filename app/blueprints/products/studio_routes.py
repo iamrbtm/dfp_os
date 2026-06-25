@@ -45,10 +45,10 @@ from app.services.storage import (
     content_type_for_name,
     image_storage_key,
     is_s3_reference,
+    normalize_storage_filename,
     product_storage_key,
     storage_reference_name,
     upload_bytes_to_storage,
-    upload_file_to_storage,
 )
 from app.utils.auth import roles_required
 
@@ -56,6 +56,31 @@ from app.utils.auth import roles_required
 def _get_celery():
     from app.celery_app import celery as _celery_instance
     return _celery_instance
+
+
+def _unique_storage_filename(existing_names: set[str], desired_name: str) -> str:
+    normalized = normalize_storage_filename(desired_name)
+    if normalized not in existing_names:
+        return normalized
+
+    path = Path(normalized)
+    stem = path.stem
+    suffix = path.suffix
+    counter = 2
+    while True:
+        candidate = f"{stem}-{counter}{suffix}"
+        if candidate not in existing_names:
+            return candidate
+        counter += 1
+
+
+def _preferred_image_filename(product: Product, original_filename: str, *, variant_id: int | None) -> str:
+    existing_names = {
+        storage_reference_name(image.file_path)
+        for image in product.images
+        if image.variant_id == variant_id and image.file_path
+    }
+    return _unique_storage_filename(existing_names, original_filename)
 
 
 @bp.route("/studio", methods=["GET", "POST"])
@@ -163,7 +188,7 @@ def upload_model(product_id: int):
             return jsonify({"success": False, "error": "Invalid variant"}), 400
 
     ext = Path(file.filename).suffix.lower()
-    safe_filename = f"{uuid.uuid4().hex}{ext}"
+    safe_filename = normalize_storage_filename(f"{uuid.uuid4().hex}{ext}")
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
     key = product_storage_key(product.id, safe_filename, variant_id=variant_id)
@@ -527,7 +552,11 @@ def upload_product_image(product_id: int):
     if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
         return jsonify({"success": False, "error": "Unsupported image type. Use JPG, PNG, WebP, or GIF."}), 400
 
-    safe_filename = f"{uuid.uuid4().hex}{ext}"
+    safe_filename = _preferred_image_filename(
+        product,
+        file.filename or f"image{ext}",
+        variant_id=variant_id,
+    )
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
     key = image_storage_key(product.id, safe_filename, variant_id=variant_id)

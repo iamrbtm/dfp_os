@@ -28,7 +28,7 @@ What happens:
 3. Reads the file bytes
 4. Uploads to storage via `upload_bytes_to_storage()`:
    - S3 mode → uploads to SeaweedFS bucket `products`
-   - Local mode → saves to `uploads/products/models/{product_id}/{uuid}.stl`
+   - Local mode → saves to `uploads/products/{product_id}/{uuid}.stl` for product-level files or `uploads/products/{product_id}/variants/{variant_id}/{uuid}.stl` for variant files
 5. Creates a `ModelAsset` DB row with:
    - `status = "pending"`
    - `analysis_status = "pending"`
@@ -118,7 +118,7 @@ If Attempt 1 fails (no G-code produced): retry without `--center` flag. Some mod
 
 - If file is already `.glb` → uses it directly
 - Otherwise, loads with trimesh and exports as GLB
-- Uploads converted file to storage
+- Uploads the converted GLB back into the same product or variant folder as the source asset
 - Sets `converted_model_path` and `convert_status = "complete"`
 
 ## 7. Browser detects task completion

@@ -79,9 +79,10 @@ def migrate_group() -> None:
 def migrate_file_paths() -> None:
     """Migrate product asset file paths to the new structured layout.
 
-    Old layout (flat):  products/{id}/models/file.ext
-    New layout:         products/{id}/models/file.ext          (product-level)
-                        products/{id}/variants/{vid}/models/   (variant-level)
+    Old layout: products/{id}/models|converted|gcode|images/file.ext
+                products/{id}/variants/{vid}/models|converted|gcode|images/file.ext
+    New layout: products/{id}/file.ext
+                products/{id}/variants/{vid}/file.ext
     """
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
@@ -107,7 +108,7 @@ def migrate_file_paths() -> None:
         new_ref = (
             f"s3://{bucket}/{new_key}"
             if ref.startswith("s3://")
-            else str(Path(local_root) / new_key)
+            else str((Path(local_root) / new_key).resolve())
         )
 
         if ref == new_ref:
@@ -125,7 +126,13 @@ def migrate_file_paths() -> None:
 
     click.echo("Migrating ModelAsset file paths...")
     for asset in db.session.query(ModelAsset).all():
-        product_id = asset.product_id
+        product_id = asset.related_product_id
+        if not product_id:
+            click.echo(
+                f"  Skipping ModelAsset {asset.id}: missing related_product_id.",
+                err=True,
+            )
+            continue
         new_file = _migrate_ref(
             asset.file_location,
             product_id=product_id,

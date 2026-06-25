@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -22,9 +21,35 @@ from app.services.storage import (
     download_storage_bytes,
     gcode_storage_key,
     is_s3_reference,
+    normalize_storage_filename,
+    storage_reference_name,
+    storage_slug,
     upload_bytes_to_storage,
     upload_file_to_storage,
 )
+
+
+def _preferred_gcode_filename(asset: ModelAsset) -> str:
+    if asset.variant is not None:
+        label = asset.variant.size or asset.variant.name or asset.variant.sku or f"variant-{asset.variant_id}"
+        return f"{storage_slug(label, fallback=f'variant-{asset.variant_id or asset.id or 0}')}.gcode"
+
+    if asset.product is not None:
+        label = asset.product.slug or asset.product.name or f"product-{asset.related_product_id or asset.id or 0}"
+        return f"{storage_slug(label, fallback=f'product-{asset.related_product_id or asset.id or 0}')}.gcode"
+
+    source_name = storage_reference_name(asset.file_location)
+    if source_name:
+        return f"{Path(source_name).stem}.gcode"
+    return f"asset-{asset.id or 0}.gcode"
+
+
+def _preferred_converted_filename(asset: ModelAsset) -> str:
+    source_name = storage_reference_name(asset.file_location)
+    source_stem = Path(source_name).stem if source_name else f"asset-{asset.id or 0}"
+    if asset.variant_id is not None:
+        return normalize_storage_filename(f"{asset.variant_id}_{source_stem}.glb")
+    return normalize_storage_filename(f"{source_stem}.glb")
 
 
 @celery.task(bind=True, max_retries=2, default_retry_delay=30)
@@ -133,7 +158,8 @@ def analyze_model_asset(self, asset_id: int) -> dict:
                 prod_id = asset.related_product_id or 0
                 var_id = asset.variant_id
                 gcode_key = gcode_storage_key(
-                    prod_id, f"{uuid.uuid4().hex}.gcode",
+                    prod_id,
+                    _preferred_gcode_filename(asset),
                     variant_id=var_id,
                 )
                 gcode_ref = upload_bytes_to_storage(
@@ -232,7 +258,8 @@ def convert_model_asset_for_viewer(self, asset_id: int) -> dict:
         local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
         prod_id = asset.related_product_id or 0
         key = converted_storage_key(
-            prod_id, f"{Path(file_location).stem}.glb",
+            prod_id,
+            _preferred_converted_filename(asset),
             variant_id=asset.variant_id,
         )
 
