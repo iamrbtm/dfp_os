@@ -39,11 +39,10 @@ class CostBreakdown:
 
 
 def _latest_model_analysis(product: Product, variant: ProductVariant | None = None) -> dict | None:
-    assets = None
     if variant is not None:
-        assets = getattr(variant, "model_assets", None)
-    if not assets:
-        assets = getattr(product, "model_assets", []) or []
+        assets = [asset for asset in (getattr(variant, "model_assets", []) or []) if asset.variant_id == variant.id]
+    else:
+        assets = [asset for asset in (getattr(product, "model_assets", []) or []) if asset.variant_id is None]
     completed = [
         a for a in assets
         if a.analysis_status == "complete" and a.parsed_filament_grams

@@ -16,7 +16,6 @@
   document.addEventListener("DOMContentLoaded", function () {
     initModelUpload();
     initVariantModelUpload();
-    initVariantModelToggle();
     initVariantForm();
     initCostCalculation();
     initReanalyze();
@@ -104,18 +103,6 @@
             btn.textContent = "Upload & Analyze";
           }
         });
-    });
-  }
-
-  function initVariantModelToggle() {
-    document.addEventListener("click", function (e) {
-      var btn = e.target.closest(".variant-model-toggle");
-      if (!btn) return;
-      var variantId = btn.getAttribute("data-variant-id");
-      if (!variantId) return;
-      var panel = document.getElementById("variant-models-" + variantId);
-      if (!panel) return;
-      panel.classList.toggle("hidden");
     });
   }
 
@@ -279,6 +266,8 @@
     const addBtn = document.getElementById("add-variant-btn");
     const form = document.getElementById("variant-form");
     if (!addBtn || !form) return;
+    var productId = form.getAttribute("data-product-id");
+    if (!productId) return;
 
     addBtn.addEventListener("click", function () {
       form.classList.remove("hidden");
@@ -286,29 +275,50 @@
     });
 
     form.addEventListener("submit", function (e) {
+      e.preventDefault();
+
       const sku = form.querySelector("[name='sku']");
       const name = form.querySelector("[name='name']");
       if (!sku.value || !name.value) {
-        e.preventDefault();
         showFlash("SKU and Name are required.", "warning");
+        return;
       }
-    });
 
-    form.addEventListener("htmx:afterRequest", function (evt) {
-      if (evt.detail.successful) {
-        form.reset();
-        form.classList.add("hidden");
-        const btn = document.getElementById("add-variant-btn");
-        if (btn) btn.classList.remove("hidden");
-        try {
-          const resp = JSON.parse(evt.detail.xhr.responseText);
-          if (resp.success) {
-            showFlash("Variant added.", "success");
-          } else {
-            showFlash(resp.error || "Failed to add variant.", "danger");
-          }
-        } catch (e) {}
+      var btn = form.querySelector("[type='submit']");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Saving...";
       }
+
+      fetch("/products/studio/create-variant/" + productId, {
+        method: "POST",
+        body: new FormData(form),
+        headers: {
+          "X-CSRFToken": getCSRFToken(),
+        },
+      })
+        .then(function (r) {
+          if (!r.ok) return r.json().then(function (d) {
+            throw new Error(d.error || "Failed to add variant");
+          });
+          return r.json();
+        })
+        .then(function (resp) {
+          if (!resp.success) {
+            throw new Error(resp.error || "Failed to add variant");
+          }
+          showFlash("Variant added.", "success");
+          location.reload();
+        })
+        .catch(function (err) {
+          showFlash(err.message || "Failed to add variant.", "danger");
+        })
+        .finally(function () {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Save Variant";
+          }
+        });
     });
   }
 
@@ -348,11 +358,12 @@
         .then(function (data) {
           if (data.task_id) {
             pollTask(data.task_id, function (taskResult) {
-            if (productId) {
+              if (productId) {
                 fetchCostResult(productId, resultTarget, btn);
-            } else if (variantId) {
-                location.reload();
-            }
+              } else if (variantId) {
+                showCostResult(taskResult || data, resultTarget);
+                resetBtn(btn, "Re-Calculate");
+              }
             }, function () {
               showFlash("Cost calculation timed out. The task may still be running.", "warning");
               resetBtn(btn, "Retry Calculate");
@@ -390,6 +401,24 @@
   function showCostResult(data, targetId) {
     var el = document.getElementById(targetId);
     if (!el) return;
+    if (data && data.variant_id) {
+      el.innerHTML =
+        '<div class="grid gap-4 md:grid-cols-3">' +
+          '<div class="app-card p-4 text-center">' +
+            '<p class="text-xs uppercase tracking-wider" style="color:var(--color-text-muted);">Material Cost</p>' +
+            '<p class="text-2xl font-bold mt-1" style="color:var(--color-text);">$' + fmtDecimal(data.material_cost) + '</p>' +
+          '</div>' +
+          '<div class="app-card p-4 text-center">' +
+            '<p class="text-xs uppercase tracking-wider" style="color:var(--color-text-muted);">Filament</p>' +
+            '<p class="text-2xl font-bold mt-1" style="color:var(--color-text);">' + fmtDecimal(data.filament_grams) + ' g</p>' +
+          '</div>' +
+          '<div class="app-card p-4 text-center">' +
+            '<p class="text-xs uppercase tracking-wider" style="color:var(--color-text-muted);">Print Time</p>' +
+            '<p class="text-2xl font-bold mt-1" style="color:var(--color-text);">' + fmtDecimal(data.print_minutes) + ' min</p>' +
+          '</div>' +
+        '</div>';
+      return;
+    }
     el.innerHTML =
       '<div class="grid gap-4 md:grid-cols-3">' +
         '<div class="app-card p-4 text-center">' +

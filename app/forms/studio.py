@@ -133,6 +133,35 @@ class VariantInlineForm(FlaskForm):
         "POS Sort Order", validators=[Optional(), NumberRange(min=0)], default=0
     )
 
+    def populate_variant(self, variant: ProductVariant) -> ProductVariant:
+        variant.sku = self.sku.data.strip()
+        variant.name = self.name.data.strip()
+        variant.colorway = self.colorway.data or None
+        variant.size = self.size.data or None
+        variant.material_type = self.material_type.data or None
+        variant.price = self.price.data if self.price.data is not None else Decimal("0")
+        variant.material_cost = self.material_cost.data if self.material_cost.data is not None else Decimal("0")
+        variant.estimated_print_minutes = self.estimated_print_minutes.data or 0
+        variant.estimated_filament_grams = self.estimated_filament_grams.data or 0
+        variant.active = bool(self.active.data)
+        variant.pos_button_label = self.pos_button_label.data or None
+        variant.pos_sort_order = self.pos_sort_order.data or 0
+        return variant
+
+    def load_from_variant(self, variant: ProductVariant) -> None:
+        self.sku.data = variant.sku
+        self.name.data = variant.name
+        self.colorway.data = variant.colorway
+        self.size.data = variant.size
+        self.material_type.data = variant.material_type
+        self.price.data = variant.price
+        self.material_cost.data = variant.material_cost
+        self.estimated_print_minutes.data = variant.estimated_print_minutes
+        self.estimated_filament_grams.data = variant.estimated_filament_grams
+        self.active.data = variant.active
+        self.pos_button_label.data = variant.pos_button_label
+        self.pos_sort_order.data = variant.pos_sort_order
+
 
 class ModelAssetUploadForm(FlaskForm):
     title = StringField("Model Title", validators=[DataRequired(), Length(max=160)])

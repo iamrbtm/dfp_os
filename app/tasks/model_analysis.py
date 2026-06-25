@@ -11,6 +11,7 @@ from flask import current_app
 from app.celery_app import celery
 from app.extensions import db
 from app.models.catalog import ModelAsset
+from app.services.cost_engine import calculate_product_cost
 from app.services.model_analysis import (
     convert_to_glb,
     slice_with_prusaslicer,
@@ -50,6 +51,66 @@ def _preferred_converted_filename(asset: ModelAsset) -> str:
     if asset.variant_id is not None:
         return normalize_storage_filename(f"{asset.variant_id}_{source_stem}.glb")
     return normalize_storage_filename(f"{source_stem}.glb")
+
+
+def _load_cost_settings() -> dict[str, Decimal]:
+    settings = {
+        "cost_per_gram": Decimal("0.025"),
+        "labor_rate": Decimal("18.00"),
+        "packaging_cost": Decimal("0.50"),
+        "machine_hour_rate": Decimal("0.50"),
+        "failure_rate": Decimal("0.05"),
+        "target_margin_percent": Decimal("55.00"),
+    }
+    try:
+        from app.services.settings import get_setting
+        settings["cost_per_gram"] = Decimal(str(get_setting("cost_engine_cost_per_gram", "0.025")))
+        settings["labor_rate"] = Decimal(str(get_setting("cost_engine_labor_rate", "18.00")))
+        settings["packaging_cost"] = Decimal(str(get_setting("cost_engine_packaging_cost", "0.50")))
+        settings["machine_hour_rate"] = Decimal(str(get_setting("cost_engine_machine_hour_rate", "0.50")))
+        settings["failure_rate"] = Decimal(str(get_setting("cost_engine_failure_rate", "0.05")))
+        settings["target_margin_percent"] = Decimal(str(get_setting("cost_engine_target_margin_percent", "55.00")))
+    except Exception:
+        pass
+    return settings
+
+
+def _apply_initial_cost_snapshot(asset: ModelAsset) -> None:
+    product = asset.product
+    if product is None:
+        return
+
+    settings = _load_cost_settings()
+    if asset.variant is not None:
+        breakdown = calculate_product_cost(
+            product=product,
+            variant=asset.variant,
+            sale_price=asset.variant.price,
+            cost_per_gram=settings["cost_per_gram"],
+            labor_rate=settings["labor_rate"],
+            packaging_cost=settings["packaging_cost"],
+            machine_hour_rate=settings["machine_hour_rate"],
+            failure_rate=settings["failure_rate"],
+            target_margin_percent=settings["target_margin_percent"],
+        )
+        asset.variant.material_cost = breakdown.material_cost
+        asset.variant.estimated_filament_grams = int(round(float(breakdown.filament_grams)))
+        asset.variant.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
+        return
+
+    breakdown = calculate_product_cost(
+        product=product,
+        variant=None,
+        cost_per_gram=settings["cost_per_gram"],
+        labor_rate=settings["labor_rate"],
+        packaging_cost=settings["packaging_cost"],
+        machine_hour_rate=settings["machine_hour_rate"],
+        failure_rate=settings["failure_rate"],
+        target_margin_percent=settings["target_margin_percent"],
+    )
+    product.estimated_material_cost = breakdown.material_cost
+    product.estimated_profit = breakdown.margin_dollars
+    product.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
 
 
 @celery.task(bind=True, max_retries=2, default_retry_delay=30)
@@ -140,14 +201,7 @@ def analyze_model_asset(self, asset_id: int) -> dict:
 
         asset.parsed_filament_grams = slicer_result.filament_grams
         asset.parsed_print_minutes = slicer_result.print_minutes
-        cost_per_gram = Decimal("0.025")
-        try:
-            from app.services.settings import get_setting
-            cost_per_gram = Decimal(
-                str(get_setting("cost_engine_cost_per_gram", "0.025"))
-            )
-        except Exception:
-            pass
+        cost_per_gram = _load_cost_settings()["cost_per_gram"]
         asset.parsed_material_cost = (
             slicer_result.filament_grams * cost_per_gram
         ).quantize(Decimal("0.01"))
@@ -178,11 +232,7 @@ def analyze_model_asset(self, asset_id: int) -> dict:
 
         asset.analysis_status = "complete"
         asset.analysis_completed_at = datetime.now(timezone.utc)
-
-        if asset.product and asset.parsed_print_minutes:
-            asset.product.estimated_print_minutes = int(
-                round(float(asset.parsed_print_minutes))
-            )
+        _apply_initial_cost_snapshot(asset)
 
         db.session.commit()
 

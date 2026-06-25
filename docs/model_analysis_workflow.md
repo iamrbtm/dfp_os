@@ -105,7 +105,7 @@ If Attempt 1 fails (no G-code produced): retry without `--center` flag. Some mod
 - `parsed_print_minutes` — e.g. 349.22 (min)
 - `parsed_material_cost` — e.g. $1.77
 - `analysis_status = "complete"`
-- Propagates `print_minutes` to `product.estimated_print_minutes`
+- Immediately updates the matching product or variant cost snapshot so the studio shows initial material/print-time cost data without needing a separate manual calculate action
 
 ### 5i. Dispatch conversion task
 
@@ -133,13 +133,13 @@ If Attempt 1 fails (no G-code produced): retry without `--center` flag. Some mod
 - Template renders `<model-viewer>` with `src` pointing to `view_model` endpoint
 - Model viewer shows the 3D model with orbit controls and auto-rotate
 
-## 9. Cost Calculation (separate step, user clicks "Calc Cost")
+## 9. Cost Calculation
 
 **File: `app/services/cost_engine.py:60-110`** (`calculate_product_cost()`)
 
 1. Calls `_latest_model_analysis(product, variant)`:
-   - If variant has model assets → uses the most recently analyzed one
-   - If variant has no model assets → falls back to product-level model assets
+   - If a variant is provided → uses only that variant's most recently analyzed asset
+   - If no variant is provided → uses the product-level asset set only
 2. Gets `filament_grams` and `print_minutes` from model analysis (preferred) or from cached variant values
 3. Calculates material cost: `filament_grams × cost_per_gram`
 4. Calculates labor cost: `(labor_minutes / 60) × labor_rate`
@@ -150,6 +150,8 @@ If Attempt 1 fails (no G-code produced): retry without `--center` flag. Some mod
 9. `total_cost = material + labor + machine + packaging + failure + fees`
 10. `suggested_price = total_cost / (1 - target_margin_percent/100)`
 11. Returns `CostBreakdown` with all values
+
+The upload-analysis task now uses this service immediately after a successful slice so the initial studio view has real cost numbers. The manual calculate buttons remain available for re-runs after field changes.
 
 ## 10. Task saves results back to variant record
 
@@ -166,9 +168,9 @@ If Attempt 1 fails (no G-code produced): retry without `--center` flag. Some mod
 
 ## Bugfix: Wrong material cost on Medium variant
 
-**Root cause:** `calculate_product_cost()` checked cached `variant.estimated_filament_grams` first. When the Medium variant was calculated before its own model was uploaded, `_latest_model_analysis(variant=Medium)` found no variant-specific assets, fell back to product-level assets, and picked up the Large model's values (206.60g). These got cached onto the Medium variant. Every subsequent calculation saw non-zero cached values and **skipped the model analysis lookup entirely**, so Medium kept using Large's wrong values forever.
+**Root cause:** `calculate_product_cost()` checked cached `variant.estimated_filament_grams` first. When the Medium variant was calculated before its own model was uploaded, `_latest_model_analysis(variant=Medium)` fell back to product-level assets and picked up the Large model's values (206.60g). These got cached onto the Medium variant. Every subsequent calculation saw non-zero cached values and **skipped the model analysis lookup entirely**, so Medium kept using Large's wrong values forever.
 
-**Fix:** Model analysis data now always takes priority over cached values. PrusaSlicer output is the source of truth when available:
+**Fix:** Model analysis data now always takes priority over cached values, and variant calculations read only variant-scoped analyzed assets. PrusaSlicer output is the source of truth when available:
 ```python
 model_data = _latest_model_analysis(product, variant)
 if model_data:

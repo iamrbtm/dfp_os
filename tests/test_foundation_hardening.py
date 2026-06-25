@@ -14,6 +14,7 @@ from app.models import (
     InventoryRecord,
     Market,
     MarketStatus,
+    ModelAsset,
     Product,
     ProductStatus,
     ProductType,
@@ -22,6 +23,7 @@ from app.models import (
 from app.services.cost_engine import calculate_product_cost
 from app.services.inventory import deduct_finished_goods, release_inventory, reserve_inventory, transfer_inventory
 from app.services.prep_tasks import generate_market_prep_tasks, market_readiness_score
+from app.tasks.model_analysis import _apply_initial_cost_snapshot
 
 
 def _product_with_variant():
@@ -173,6 +175,82 @@ def test_cost_engine_product_breakdown(app):
         assert breakdown.total_cost > Decimal("0")
         assert breakdown.margin_dollars > Decimal("0")
         assert breakdown.suggested_price > breakdown.total_cost
+
+
+def test_variant_cost_engine_uses_only_variant_assets(app):
+    with app.app_context():
+        product, variant = _product_with_variant()
+        product_asset = ModelAsset(
+            title="Primary Asset",
+            related_product_id=product.id,
+            analysis_status="complete",
+            parsed_filament_grams=Decimal("250.00"),
+            parsed_print_minutes=Decimal("500.00"),
+        )
+        variant_asset = ModelAsset(
+            title="Variant Asset",
+            related_product_id=product.id,
+            variant_id=variant.id,
+            analysis_status="complete",
+            parsed_filament_grams=Decimal("40.00"),
+            parsed_print_minutes=Decimal("80.00"),
+        )
+        db.session.add_all([product_asset, variant_asset])
+        db.session.commit()
+
+        variant_breakdown = calculate_product_cost(product=product, variant=variant)
+        primary_breakdown = calculate_product_cost(product=product)
+
+        assert variant_breakdown.filament_grams == Decimal("40.00")
+        assert variant_breakdown.print_minutes == Decimal("80.00")
+        assert primary_breakdown.filament_grams == Decimal("250.00")
+        assert primary_breakdown.print_minutes == Decimal("500.00")
+
+
+def test_model_analysis_auto_updates_variant_cost_snapshot(app):
+    with app.app_context():
+        product, variant = _product_with_variant()
+        asset = ModelAsset(
+            title="Variant Asset",
+            product=product,
+            variant=variant,
+            related_product_id=product.id,
+            variant_id=variant.id,
+            analysis_status="complete",
+            parsed_filament_grams=Decimal("42.00"),
+            parsed_print_minutes=Decimal("84.00"),
+        )
+        db.session.add(asset)
+        db.session.flush()
+
+        _apply_initial_cost_snapshot(asset)
+        db.session.commit()
+
+        assert variant.estimated_filament_grams == 42
+        assert variant.estimated_print_minutes == 84
+        assert variant.material_cost == Decimal("1.05")
+
+
+def test_model_analysis_auto_updates_primary_cost_snapshot(app):
+    with app.app_context():
+        product, variant = _product_with_variant()
+        asset = ModelAsset(
+            title="Primary Asset",
+            product=product,
+            related_product_id=product.id,
+            analysis_status="complete",
+            parsed_filament_grams=Decimal("60.00"),
+            parsed_print_minutes=Decimal("120.00"),
+        )
+        db.session.add(asset)
+        db.session.flush()
+
+        _apply_initial_cost_snapshot(asset)
+        db.session.commit()
+
+        assert product.estimated_material_cost == Decimal("1.50")
+        assert product.estimated_print_minutes == 120
+        assert product.estimated_profit > Decimal("0.00")
 
 
 def test_market_prep_generation(app):

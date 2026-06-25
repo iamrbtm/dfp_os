@@ -83,6 +83,12 @@ def _preferred_image_filename(product: Product, original_filename: str, *, varia
     return _unique_storage_filename(existing_names, original_filename)
 
 
+def _variant_form_for(variant: ProductVariant) -> VariantInlineForm:
+    form = VariantInlineForm(prefix=f"variant-{variant.id}")
+    form.load_from_variant(variant)
+    return form
+
+
 @bp.route("/studio", methods=["GET", "POST"])
 @bp.route("/studio/<int:product_id>", methods=["GET", "POST"])
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
@@ -145,6 +151,8 @@ def studio(product_id: int | None = None):
     model_assets = product.model_assets if product else []
     variants = product.variants if product else []
     product_images = [img for img in (product.images if product else []) if img.variant_id is None]
+    primary_assets = [asset for asset in model_assets if asset.variant_id is None]
+    variant_forms = {variant.id: _variant_form_for(variant) for variant in variants}
 
     return render_template(
         "products/studio.html",
@@ -156,6 +164,9 @@ def studio(product_id: int | None = None):
         model_assets=model_assets,
         variants=variants,
         product_images=product_images,
+        primary_assets=primary_assets,
+        variant_forms=variant_forms,
+        storage_reference_name=storage_reference_name,
     )
 
 
@@ -307,18 +318,7 @@ def create_variant(product_id: int):
         variant = ProductVariant()
         variant.product_id = product.id
         variant.business_id = product.business_id or 1
-        variant.sku = form.sku.data.strip()
-        variant.name = form.name.data.strip()
-        variant.colorway = form.colorway.data or None
-        variant.size = form.size.data or None
-        variant.material_type = form.material_type.data or None
-        variant.price = form.price.data if form.price.data is not None else Decimal("0")
-        variant.material_cost = form.material_cost.data if form.material_cost.data is not None else Decimal("0")
-        variant.estimated_print_minutes = form.estimated_print_minutes.data or 0
-        variant.estimated_filament_grams = form.estimated_filament_grams.data or 0
-        variant.active = bool(form.active.data)
-        variant.pos_button_label = form.pos_button_label.data or None
-        variant.pos_sort_order = form.pos_sort_order.data or 0
+        form.populate_variant(variant)
 
         try:
             create_admin_resource(variant, actor_id=current_user.id)
@@ -352,6 +352,35 @@ def create_variant(product_id: int):
         for err in field_errors:
             errors.append(f"{field}: {err}")
     return jsonify({"success": False, "error": "; ".join(errors)}), 400
+
+
+@bp.route("/studio/update-variant/<int:variant_id>", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def update_variant(variant_id: int):
+    variant = get_by_id(ProductVariant, variant_id)
+    if variant is None:
+        abort(404)
+
+    form = VariantInlineForm(prefix=f"variant-{variant.id}")
+    if not form.validate_on_submit():
+        errors = []
+        for field, field_errors in form.errors.items():
+            for err in field_errors:
+                errors.append(f"{field}: {err}")
+        flash("; ".join(errors) or "Unable to update variant.", "danger")
+        return redirect(url_for("products.studio", product_id=variant.product_id))
+
+    before_state = snapshot_instance(variant)
+    form.populate_variant(variant)
+    try:
+        update_admin_resource(variant, before_state=before_state, actor_id=current_user.id)
+    except IntegrityError:
+        db.session.rollback()
+        flash("Unable to save that variant. Please check for duplicate SKUs.", "danger")
+        return redirect(url_for("products.studio", product_id=variant.product_id))
+
+    flash(f"{variant.name} updated.", "success")
+    return redirect(url_for("products.studio", product_id=variant.product_id))
 
 
 @bp.route("/studio/delete-variant/<int:variant_id>", methods=["POST"])
