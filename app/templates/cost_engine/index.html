@@ -32,6 +32,22 @@
         <div class="flex justify-between gap-4"><span>{{ key.replace('_', ' ').title() }}</span><span>{{ value }}</span></div>
         {% endfor %}
       </div>
+      {% if pricing_scenarios %}
+      <div class="mt-4 space-y-2 border-t pt-4 text-sm" style="border-color: var(--color-border);">
+        <p class="font-semibold" style="color: var(--color-text);">Printer Scenarios</p>
+        {% for scenario in pricing_scenarios %}
+        <div class="rounded-xl border p-3" style="border-color: var(--color-border);">
+          <div class="flex items-center justify-between gap-3">
+            <span>{{ scenario.printer_model }}</span>
+            <span>{% if scenario.recommended %}Recommended{% else %}Scenario{% endif %}</span>
+          </div>
+          <div class="mt-2 flex justify-between gap-4"><span>Profit / Print Hour</span><span>{{ scenario.profit_per_print_hour }}</span></div>
+          <div class="flex justify-between gap-4"><span>Margin Dollars</span><span>{{ scenario.margin_dollars }}</span></div>
+          <div class="flex justify-between gap-4"><span>Failure Rate</span><span>{{ scenario.failure_rate }}</span></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% endif %}
     </form>
     <form method="get" class="app-card p-5 space-y-3">

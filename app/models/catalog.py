@@ -139,6 +139,12 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     )
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     inventory_records = relationship("InventoryRecord", back_populates="product")
+    cost_snapshots = relationship(
+        "CostSnapshot",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="CostSnapshot.created_at.desc()",
+    )
 
 
 class ProductVariant(PrimaryKeyMixin, TimestampMixin, db.Model):
@@ -166,6 +172,12 @@ class ProductVariant(PrimaryKeyMixin, TimestampMixin, db.Model):
     inventory_records = relationship("InventoryRecord", back_populates="variant")
     model_assets = relationship("ModelAsset", back_populates="variant", cascade="all, delete-orphan")
     images = relationship("ProductImage", back_populates="variant", cascade="all, delete-orphan")
+    cost_snapshots = relationship(
+        "CostSnapshot",
+        back_populates="variant",
+        cascade="all, delete-orphan",
+        order_by="CostSnapshot.created_at.desc()",
+    )
 
 
 class ModelAsset(PrimaryKeyMixin, TimestampMixin, db.Model):

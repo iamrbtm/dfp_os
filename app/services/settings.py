@@ -28,6 +28,10 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "cost_engine_labor_rate": "18.00",
     "cost_engine_packaging_cost": "0.50",
     "cost_engine_machine_hour_rate": "0.50",
+    "cost_engine_energy_hour_rate": "0.18",
+    "cost_engine_depreciation_hour_rate": "0.22",
+    "cost_engine_maintenance_hour_rate": "0.06",
+    "cost_engine_ams_waste_hour_rate": "0.04",
     "cost_engine_failure_rate": "0.05",
     "cost_engine_target_margin_percent": "55.00",
 }

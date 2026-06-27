@@ -8,7 +8,9 @@ import pytest
 from app.extensions import db
 from app.models import (
     Category,
+    CostSnapshot,
     FeatureFlag,
+    FilamentSpool,
     InventoryLocation,
     InventoryMovement,
     InventoryRecord,
@@ -44,6 +46,7 @@ def _product_with_variant():
         sku="FOUND-DRG-001",
         name="Default",
         price=Decimal("20.00"),
+        material_type="PLA",
         material_cost=Decimal("3.00"),
         estimated_filament_grams=100,
         estimated_print_minutes=120,
@@ -52,6 +55,21 @@ def _product_with_variant():
     db.session.add_all([category, product, variant])
     db.session.flush()
     return product, variant
+
+
+def _add_spool(material_type: str = "PLA", cost_per_gram: Decimal = Decimal("0.0250")) -> FilamentSpool:
+    spool = FilamentSpool(
+        brand="Test Brand",
+        material_type=material_type,
+        color_name="Blue",
+        spool_weight_grams=1000,
+        remaining_weight_grams=1000,
+        cost_per_spool=Decimal("25.00"),
+        cost_per_gram=cost_per_gram,
+    )
+    db.session.add(spool)
+    db.session.flush()
+    return spool
 
 
 def test_disabled_module_blocks_route(client, login_admin):
@@ -171,15 +189,44 @@ def test_inventory_transfer_and_reservation_flow(app):
 def test_cost_engine_product_breakdown(app):
     with app.app_context():
         product, variant = _product_with_variant()
+        _add_spool()
+        asset = ModelAsset(
+            title="Variant Asset",
+            product=product,
+            variant=variant,
+            related_product_id=product.id,
+            variant_id=variant.id,
+            analysis_status="complete",
+            parsed_filament_grams=Decimal("100.00"),
+            parsed_print_minutes=Decimal("120.00"),
+        )
+        db.session.add(asset)
+        db.session.commit()
         breakdown = calculate_product_cost(product=product, variant=variant)
         assert breakdown.total_cost > Decimal("0")
         assert breakdown.margin_dollars > Decimal("0")
         assert breakdown.suggested_price > breakdown.total_cost
+        assert breakdown.evidence_source == "generated_slice.variant"
+        assert breakdown.confidence in {"medium", "high", "low"}
+
+
+def test_cost_engine_zeroes_model_derived_values_without_model(app):
+    with app.app_context():
+        product, variant = _product_with_variant()
+        _add_spool()
+        breakdown = calculate_product_cost(product=product, variant=variant)
+        assert breakdown.filament_grams == Decimal("0.00")
+        assert breakdown.print_minutes == Decimal("0.00")
+        assert breakdown.material_cost == Decimal("0.00")
+        assert breakdown.machine_cost == Decimal("0.00")
+        assert breakdown.evidence_source == "no_model"
+        assert breakdown.confidence == "none"
 
 
 def test_variant_cost_engine_uses_only_variant_assets(app):
     with app.app_context():
         product, variant = _product_with_variant()
+        _add_spool()
         product_asset = ModelAsset(
             title="Primary Asset",
             related_product_id=product.id,
@@ -210,6 +257,7 @@ def test_variant_cost_engine_uses_only_variant_assets(app):
 def test_model_analysis_auto_updates_variant_cost_snapshot(app):
     with app.app_context():
         product, variant = _product_with_variant()
+        spool = _add_spool()
         asset = ModelAsset(
             title="Variant Asset",
             product=product,
@@ -229,11 +277,15 @@ def test_model_analysis_auto_updates_variant_cost_snapshot(app):
         assert variant.estimated_filament_grams == 42
         assert variant.estimated_print_minutes == 84
         assert variant.material_cost == Decimal("1.05")
+        snapshot = CostSnapshot.query.filter_by(variant_id=variant.id, stale=False).first()
+        assert snapshot is not None
+        assert snapshot.filament_spool_id == spool.id
 
 
 def test_model_analysis_auto_updates_primary_cost_snapshot(app):
     with app.app_context():
         product, variant = _product_with_variant()
+        _add_spool()
         asset = ModelAsset(
             title="Primary Asset",
             product=product,
@@ -251,6 +303,8 @@ def test_model_analysis_auto_updates_primary_cost_snapshot(app):
         assert product.estimated_material_cost == Decimal("1.50")
         assert product.estimated_print_minutes == 120
         assert product.estimated_profit > Decimal("0.00")
+        snapshot = CostSnapshot.query.filter_by(product_id=product.id, variant_id=None, stale=False).first()
+        assert snapshot is not None
 
 
 def test_market_prep_generation(app):

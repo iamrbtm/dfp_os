@@ -6,7 +6,12 @@ from flask import flash, redirect, render_template, request, url_for
 
 from app.blueprints.cost_engine import bp
 from app.models import Market, Order, Product, ProductVariant, UserRole
-from app.services.cost_engine import calculate_product_cost, estimate_market_profit, estimate_order_profit
+from app.services.cost_engine import (
+    build_pricing_scenarios,
+    calculate_product_cost,
+    estimate_market_profit,
+    estimate_order_profit,
+)
 from app.services.settings import get_setting_typed, set_setting
 from app.utils.auth import roles_required
 
@@ -21,10 +26,12 @@ def _decimal_setting(key: str, default: str) -> Decimal:
 def index():
     if request.method == "POST":
         for key in (
-            "cost_engine_cost_per_gram",
             "cost_engine_labor_rate",
             "cost_engine_packaging_cost",
-            "cost_engine_machine_hour_rate",
+            "cost_engine_energy_hour_rate",
+            "cost_engine_depreciation_hour_rate",
+            "cost_engine_maintenance_hour_rate",
+            "cost_engine_ams_waste_hour_rate",
             "cost_engine_failure_rate",
             "cost_engine_target_margin_percent",
         ):
@@ -42,15 +49,18 @@ def index():
     selected_market = request.args.get("market_id", type=int)
 
     settings = {
-        "cost_per_gram": _decimal_setting("cost_engine_cost_per_gram", "0.025"),
         "labor_rate": _decimal_setting("cost_engine_labor_rate", "18.00"),
         "packaging_cost": _decimal_setting("cost_engine_packaging_cost", "0.50"),
-        "machine_hour_rate": _decimal_setting("cost_engine_machine_hour_rate", "0.50"),
+        "energy_hour_rate": _decimal_setting("cost_engine_energy_hour_rate", "0.18"),
+        "depreciation_hour_rate": _decimal_setting("cost_engine_depreciation_hour_rate", "0.22"),
+        "maintenance_hour_rate": _decimal_setting("cost_engine_maintenance_hour_rate", "0.06"),
+        "ams_waste_hour_rate": _decimal_setting("cost_engine_ams_waste_hour_rate", "0.04"),
         "failure_rate": _decimal_setting("cost_engine_failure_rate", "0.05"),
         "target_margin_percent": _decimal_setting("cost_engine_target_margin_percent", "55.00"),
     }
 
     product_breakdown = None
+    pricing_scenarios = None
     if selected_product:
         product = Product.query.get(selected_product)
         variant = ProductVariant.query.get(selected_variant) if selected_variant else None
@@ -58,12 +68,15 @@ def index():
             product_breakdown = calculate_product_cost(
                 product=product,
                 variant=variant,
-                cost_per_gram=settings["cost_per_gram"],
                 labor_rate=settings["labor_rate"],
                 packaging_cost=settings["packaging_cost"],
-                machine_hour_rate=settings["machine_hour_rate"],
                 failure_rate=settings["failure_rate"],
                 target_margin_percent=settings["target_margin_percent"],
+            )
+            pricing_scenarios = build_pricing_scenarios(
+                product=product,
+                variant=variant,
+                sale_price=variant.price if variant is not None else product.base_price,
             )
 
     order_profit = estimate_order_profit(selected_order) if selected_order else None
@@ -82,4 +95,5 @@ def index():
         selected_market=selected_market,
         order_profit=order_profit,
         market_profit=market_profit,
+        pricing_scenarios=pricing_scenarios,
     )

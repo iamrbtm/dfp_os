@@ -12,6 +12,7 @@ from app.models.catalog import (
     ProductType,
     ProductVariant,
 )
+from app.models.cost_snapshot import CostSnapshot, CostSnapshotConfidence
 from app.models.custom_request import CustomRequest, CustomRequestStatus
 from app.models.customer import Customer
 from app.models.expense import Expense, ExpenseCategory
@@ -79,6 +80,8 @@ __all__ = [
     "Collection",
     "CustomRequest",
     "CustomRequestStatus",
+    "CostSnapshot",
+    "CostSnapshotConfidence",
     "Customer",
     "Expense",
     "ExpenseCategory",

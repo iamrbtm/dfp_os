@@ -16,6 +16,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` Built the public website + ecommerce storefront pass: polished public pages, session cart, online checkout, and payment fallback flow.
 - `done` Refactored product asset storage so uploaded model/image/generated files follow the per-product and per-variant folder layout used in production file management.
 - `done` Rebuilt Product Studio into isolated primary and variant accordions so each section owns its own fields, assets, previews, and cost calculations.
+- `in-progress` Replace placeholder product pricing with evidence-backed cost snapshots, spool-aware material costing, historical print-job failure rates, and multi-axis profitability metrics.
 - `todo` Keep `ARCHITECTURE.md` aligned with the real codebase as modules and services evolve.
 - `todo` Keep `PROMPTS.md` aligned with the team’s preferred build workflow and review habits.
 

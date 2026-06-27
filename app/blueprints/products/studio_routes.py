@@ -39,7 +39,7 @@ from app.services.admin_mutations import (
     snapshot_instance,
     update_resource as update_admin_resource,
 )
-from app.services.cost_engine import calculate_product_cost
+from app.services.cost_engine import build_pricing_scenarios, calculate_product_cost, persist_cost_snapshot
 from app.services.crud import get_by_id
 from app.services.storage import (
     content_type_for_name,
@@ -264,6 +264,12 @@ def calculate_variant_cost(variant_id: int):
         variant.material_cost = breakdown.material_cost
         variant.estimated_filament_grams = int(round(float(breakdown.filament_grams)))
         variant.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
+        persist_cost_snapshot(
+            product=variant.product,
+            variant=variant,
+            breakdown=breakdown,
+            snapshot_reason="studio.variant",
+        )
         db.session.commit()
         return jsonify(
             {
@@ -272,6 +278,7 @@ def calculate_variant_cost(variant_id: int):
                 "suggested_price": str(breakdown.suggested_price),
                 "margin_percent": str(breakdown.margin_percent),
                 "material_cost": str(breakdown.material_cost),
+                "snapshot_id": breakdown.snapshot_id,
             }
         )
 
@@ -292,6 +299,13 @@ def calculate_product_costs(product_id: int):
         breakdown = calculate_product_cost(product=product)
         product.estimated_material_cost = breakdown.material_cost
         product.estimated_profit = breakdown.margin_dollars
+        product.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
+        persist_cost_snapshot(
+            product=product,
+            variant=None,
+            breakdown=breakdown,
+            snapshot_reason="studio.product",
+        )
         db.session.commit()
         return jsonify(
             {
@@ -302,6 +316,7 @@ def calculate_product_costs(product_id: int):
                 "material_cost": str(breakdown.material_cost),
                 "labor_cost": str(breakdown.labor_cost),
                 "machine_cost": str(breakdown.machine_cost),
+                "snapshot_id": breakdown.snapshot_id,
             }
         )
 
@@ -330,6 +345,12 @@ def create_variant(product_id: int):
         variant.material_cost = breakdown.material_cost
         variant.estimated_filament_grams = int(round(float(breakdown.filament_grams)))
         variant.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
+        persist_cost_snapshot(
+            product=product,
+            variant=variant,
+            breakdown=breakdown,
+            snapshot_reason="studio.create_variant",
+        )
         db.session.commit()
 
         return jsonify(
@@ -344,6 +365,7 @@ def create_variant(product_id: int):
                 "margin_percent": str(breakdown.margin_percent),
                 "suggested_price": str(breakdown.suggested_price),
                 "active": variant.active,
+                "snapshot_id": breakdown.snapshot_id,
             }
         )
 
@@ -547,7 +569,7 @@ def cost_result(product_id: int):
             "success": True,
             "material_cost": str(breakdown.material_cost),
             "filament_grams": str(breakdown.filament_grams),
-            "labor_cost": str(breakdown.labor_minutes * breakdown.labor_rate),
+            "labor_cost": str(breakdown.labor_cost),
             "machine_cost": str(breakdown.machine_cost),
             "packaging_cost": str(breakdown.packaging_cost),
             "payment_fees": str(breakdown.payment_fees),
@@ -556,6 +578,13 @@ def cost_result(product_id: int):
             "suggested_price": str(breakdown.suggested_price),
             "margin_dollars": str(breakdown.margin_dollars),
             "margin_percent": str(breakdown.margin_percent),
+            "evidence_source": breakdown.evidence_source,
+            "confidence": breakdown.confidence,
+            "cost_per_gram": str(breakdown.cost_per_gram),
+            "model_volume_cm3": str(breakdown.model_volume_cm3),
+            "profit_per_print_hour": str(breakdown.profit_per_print_hour),
+            "profit_per_market_bin_cm3": str(breakdown.profit_per_market_bin_cm3),
+            "pricing_scenarios": build_pricing_scenarios(product=product),
         }
     )
 

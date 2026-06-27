@@ -1417,7 +1417,7 @@ class CostEngineProduct(MethodView):
         denied = require_api_scopes("analytics")
         if denied:
             return denied
-        from app.services.cost_engine import calculate_product_cost
+        from app.services.cost_engine import build_pricing_scenarios, calculate_product_cost
 
         product = db.session.get(Product, product_id)
         if product is None:
@@ -1425,7 +1425,9 @@ class CostEngineProduct(MethodView):
         variant_id = request.args.get("variant_id", type=int)
         variant = db.session.get(ProductVariant, variant_id) if variant_id else None
         breakdown = calculate_product_cost(product=product, variant=variant)
-        return {"data": {key: str(value) for key, value in breakdown.as_dict().items()}}
+        data = {key: str(value) for key, value in breakdown.as_dict().items()}
+        data["pricing_scenarios"] = build_pricing_scenarios(product=product, variant=variant)
+        return {"data": data}
 
 
 @catalog_blp.route("/cost-engine/orders/<int:order_id>")

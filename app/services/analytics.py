@@ -121,6 +121,8 @@ def executive_summary() -> dict:
 
 
 def product_analytics(limit: int = 20) -> list[dict]:
+    from app.services.cost_engine import calculate_product_cost
+
     results = (
         db.session.query(
             Product.id,
@@ -162,6 +164,8 @@ def product_analytics(limit: int = 20) -> list[dict]:
                 PrintJob.status == PrintJobStatus.FAILED,
             ).count()
 
+        breakdown = calculate_product_cost(product=product) if product is not None else None
+
         products.append({
             "id": r[0],
             "name": r[1],
@@ -171,6 +175,12 @@ def product_analytics(limit: int = 20) -> list[dict]:
             "avg_price": Decimal(str(r[5])) if r[5] else Decimal(0),
             "inventory_on_hand": inv_count,
             "failure_count": failure_count,
+            "profit_per_unit": breakdown.profit_per_unit if breakdown is not None else Decimal("0.00"),
+            "profit_per_print_hour": breakdown.profit_per_print_hour if breakdown is not None else Decimal("0.00"),
+            "profit_per_market_bin_cm3": (
+                breakdown.profit_per_market_bin_cm3 if breakdown is not None else Decimal("0.00")
+            ),
+            "cost_confidence": breakdown.confidence if breakdown is not None else "none",
         })
 
     return products
