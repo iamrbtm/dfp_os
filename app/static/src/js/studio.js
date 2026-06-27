@@ -414,7 +414,7 @@
           '</div>' +
           '<div class="app-card p-4 text-center">' +
             '<p class="text-xs uppercase tracking-wider" style="color:var(--color-text-muted);">Print Time</p>' +
-            '<p class="text-2xl font-bold mt-1" style="color:var(--color-text);">' + fmtDecimal(data.print_minutes) + ' min</p>' +
+            '<p class="text-2xl font-bold mt-1" style="color:var(--color-text);">' + fmtDurationMinutes(data.print_minutes) + '</p>' +
           '</div>' +
         '</div>';
       return;
@@ -434,6 +434,22 @@
           '<p class="text-2xl font-bold mt-1" style="color:var(--color-text);">' + fmtDecimal(data.margin_percent) + '%</p>' +
         '</div>' +
       '</div>';
+  }
+
+  function fmtDurationMinutes(value) {
+    var totalMinutes = Math.round(Number(value || 0));
+    if (!Number.isFinite(totalMinutes) || totalMinutes < 0) totalMinutes = 0;
+
+    var days = Math.floor(totalMinutes / 1440);
+    var remainder = totalMinutes % 1440;
+    var hours = Math.floor(remainder / 60);
+    var minutes = remainder % 60;
+    var parts = [];
+
+    if (days > 0) parts.push(days + 'd');
+    if (hours > 0 || days > 0) parts.push(hours + 'h');
+    parts.push(minutes + 'm');
+    return parts.join(' ');
   }
 
   function initFileRename() {

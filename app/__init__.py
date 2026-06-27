@@ -200,6 +200,24 @@ def register_error_handlers(app: Flask) -> None:
 
 
 def register_context_processors(app: Flask) -> None:
+    @app.template_filter("duration_minutes")
+    def duration_minutes(value: object) -> str:
+        try:
+            total_minutes = int(round(float(value or 0)))
+        except (TypeError, ValueError):
+            total_minutes = 0
+
+        days, remainder = divmod(total_minutes, 60 * 24)
+        hours, minutes = divmod(remainder, 60)
+
+        parts: list[str] = []
+        if days > 0:
+            parts.append(f"{days}d")
+        if hours > 0 or days > 0:
+            parts.append(f"{hours}h")
+        parts.append(f"{minutes}m")
+        return " ".join(parts)
+
     @app.context_processor
     def inject_brand_context() -> dict[str, object]:
         from flask_login import current_user

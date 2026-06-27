@@ -161,7 +161,7 @@
               <div class="app-card p-4 text-center">
                 <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Est. Print Time</p>
                 <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">
-                  {{ product.estimated_print_minutes if product else 0 }} min
+                  {{ (product.estimated_print_minutes if product else 0)|duration_minutes }}
                 </p>
               </div>
             </div>
@@ -283,7 +283,7 @@
                         <span class="text-muted">Pending</span>
                         {% endif %}
                         {% if asset.parsed_filament_grams %} — {{ "%.1f"|format(asset.parsed_filament_grams) }}g{% endif %}
-                        {% if asset.parsed_print_minutes %} / {{ asset.parsed_print_minutes }}min{% endif %}
+                        {% if asset.parsed_print_minutes %} / {{ asset.parsed_print_minutes|duration_minutes }}{% endif %}
                       </p>
                     </div>
                     <div class="flex flex-wrap justify-end gap-2 shrink-0">
@@ -478,7 +478,7 @@
               </div>
               <div class="app-card p-4 text-center">
                 <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Print Time</p>
-                <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ variant.estimated_print_minutes or 0 }} min</p>
+                <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ (variant.estimated_print_minutes or 0)|duration_minutes }}</p>
               </div>
             </div>
           </div>
@@ -547,7 +547,7 @@
                         <span class="text-muted">Pending</span>
                         {% endif %}
                         {% if asset.parsed_filament_grams %} — {{ "%.1f"|format(asset.parsed_filament_grams) }}g{% endif %}
-                        {% if asset.parsed_print_minutes %} / {{ asset.parsed_print_minutes }}min{% endif %}
+                        {% if asset.parsed_print_minutes %} / {{ asset.parsed_print_minutes|duration_minutes }}{% endif %}
                       </p>
                     </div>
                     <div class="flex flex-wrap justify-end gap-2 shrink-0">
