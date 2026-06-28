@@ -27,6 +27,7 @@ dependencies = [
     "redis>=5.2.0",
     "requests>=2.34.2",
     "rich>=14.0.0",
+    "scikit-learn>=1.9.0",
     "sqlalchemy>=2.0.41",
     "trimesh>=4.5.0",
     "wtforms>=3.2.1",

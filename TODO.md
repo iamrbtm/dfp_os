@@ -20,7 +20,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` **Phase 1: AI Design Trend Scout — Database & Foundation** — Created `TrendSnapshot` and `TrendReport` models, generated migration, set up `app/services/ai/trend_scout/` directory structure.
 - `done` **Phase 2: AI Design Trend Scout — Source Integrations (The Fetchers)** — Built base utility (`_base.py` with rate limiter, UA rotation, `ScoutResult`), API fetchers (MyMiniFactory, Etsy, BGG), scrapers (MakerWorld, Printables, Reddit). All return standardized `ScoutResult` dicts. Pipeline orchestration in `trend_scout/__init__.py`.
 - `done` **Phase 3: AI Design Trend Scout — Pipeline & Celery Task** — Concurrent pipeline via `ThreadPoolExecutor`, Celery task (`app/tasks/trend_scout.py`) with 15-min timeout, DB persistence of `TrendSnapshot` rows with per-source error isolation. Beat schedule set for Monday 6:00 AM. Beat container added to docker-compose.
-- `todo` **Phase 4: AI Design Trend Scout — Analysis & NLP Discovery** — Trend detection, NLP clustering, GPT synthesis into TrendReport.
+- `done` **Phase 4: AI Design Trend Scout — Analysis & NLP Discovery** — Trend detector computes week-over-week velocity/momentum/cross-source correlation. Category discovery extracts noun phrases, embeds via `text-embedding-3-small`, clusters with DBSCAN. GPT-4o-mini synthesizes into `TrendReport` with summary, opportunities, growing/declining categories.
 - `todo` **Phase 5: AI Design Trend Scout — Flask Blueprint & Dashboard** — API endpoints and admin dashboard UI.
 
 ## Next Priorities

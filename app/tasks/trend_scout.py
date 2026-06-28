@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+
+from flask import current_app
 
 from app.celery_app import celery
-from app.extensions import db
-from app.models.trend import TrendSnapshot
-from app.services.ai.trend_scout import run_all_sources
+from app.services.ai.trend_scout import run_full_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -20,58 +19,23 @@ logger = logging.getLogger(__name__)
     acks_late=True,
 )
 def trend_scout_pipeline(self) -> dict:
-    logger.info("Trend Scout pipeline starting...")
-    now = datetime.now(timezone.utc)
-    total_inserted = 0
-    failed_sources: list[str] = []
+    logger.info("Trend Scout full pipeline starting...")
+    api_key = current_app.config.get("OPENAI_API_KEY", "")
+    model = current_app.config.get("OPENAI_MODEL", "gpt-4o-mini")
 
-    try:
-        snapshots = run_all_sources()
-    except Exception as exc:
-        logger.error("Pipeline crashed: %s", exc)
-        return {
-            "success": False,
-            "error": str(exc),
-            "total_inserted": 0,
-            "failed_sources": ["pipeline"],
-        }
+    result = run_full_pipeline(
+        openai_api_key=api_key,
+        openai_model=model,
+    )
 
-    for snapshot in snapshots:
-        source = snapshot.get("source", "unknown")
-        keyword = snapshot.get("keyword_or_category", "unknown")
-        errors = snapshot.get("errors", [])
-
-        if errors:
-            failed_sources.append(f"{source}/{keyword}: {'; '.join(errors)}")
-            logger.warning("Source %s/%s had errors: %s", source, keyword, errors)
-
-        record = TrendSnapshot(
-            source=source,
-            keyword_or_category=keyword,
-            scraped_at=now,
-            raw_metadata=snapshot,
-        )
-        db.session.add(record)
-        total_inserted += 1
-
-    try:
-        db.session.commit()
+    if result.get("success"):
         logger.info(
-            "Trend Scout pipeline done: %d snapshots inserted, %d sources with errors",
-            total_inserted,
-            len(failed_sources),
+            "Pipeline done: %d snapshots, report #%s, %d source errors",
+            result["total_snapshots"],
+            result.get("report_id"),
+            len(result.get("failed_sources", [])),
         )
-        return {
-            "success": True,
-            "total_inserted": total_inserted,
-            "failed_sources": failed_sources,
-        }
-    except Exception as exc:
-        db.session.rollback()
-        logger.error("DB commit failed: %s", exc)
-        return {
-            "success": False,
-            "error": str(exc),
-            "total_inserted": total_inserted,
-            "failed_sources": failed_sources,
-        }
+    else:
+        logger.error("Pipeline failed: %s", result.get("error"))
+
+    return result
