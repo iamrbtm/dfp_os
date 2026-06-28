@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import jsonify, render_template
 
 from app.blueprints.trend_scout import bp
+from app.celery_app import celery
 from app.extensions import db
 from app.models import TrendReport, UserRole
 from app.utils.auth import roles_required
@@ -50,6 +51,28 @@ def latest_report():
             "declining_trends": report.declining_trends,
             "pipeline_meta": report.pipeline_meta,
             "created_at": report.created_at.isoformat(),
+        }
+    )
+
+
+@bp.post("/run")
+@roles_required(UserRole.ADMIN)
+def run_pipeline():
+    from app.tasks.trend_scout import trend_scout_pipeline
+
+    task = trend_scout_pipeline.delay()
+    return jsonify({"task_id": task.id, "status": "dispatched"})
+
+
+@bp.get("/run/status/<task_id>")
+@roles_required(UserRole.ADMIN)
+def run_status(task_id: str):
+    result = celery.AsyncResult(task_id)
+    return jsonify(
+        {
+            "task_id": task_id,
+            "state": result.state,
+            "result": result.result if result.ready() else None,
         }
     )
 

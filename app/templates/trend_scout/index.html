@@ -2,13 +2,28 @@
 {% block title %}Trend Scout | {{ app_name }}{% endblock %}
 {% block content %}
 <section class="space-y-6">
-  <div>
-    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
-    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">AI Trend Scout</h1>
-    <p class="mt-1 text-sm" style="color: var(--color-text-muted);">
-      Autonomous trend monitoring across 3D printing marketplaces, communities, and social sources.
-    </p>
+  <div class="flex items-start justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">AI Trend Scout</h1>
+      <p class="mt-1 text-sm" style="color: var(--color-text-muted);">
+        Autonomous trend monitoring across 3D printing marketplaces, communities, and social sources.
+      </p>
+    </div>
+    <button
+      id="runBtn"
+      class="app-btn app-btn-primary"
+      hx-post="{{ url_for('trend_scout.run_pipeline') }}"
+      hx-target="#runStatus"
+      hx-swap="innerHTML"
+      hx-disabled-elt="#runBtn"
+      _="on htmx:beforeSend add @disabled to #runBtn then set #runBtn.innerHTML to 'Running...'
+         on htmx:afterRequest remove @disabled from #runBtn then set #runBtn.innerHTML to 'Run Pipeline'"
+    >
+      Run Pipeline
+    </button>
   </div>
+  <div id="runStatus"></div>
 
   {% if latest %}
   <article class="app-card p-5">
@@ -92,12 +107,8 @@
   <article class="app-card p-8 text-center">
     <h2 class="text-xl font-semibold mb-2" style="color: var(--color-text);">No Reports Yet</h2>
     <p class="text-sm" style="color: var(--color-text-muted);">
-      The Trend Scout pipeline runs every Monday at 6:00 AM. Run it manually via:
+      The Trend Scout pipeline runs every Monday at 6:00 AM. Click <strong>Run Pipeline</strong> above to run it now.
     </p>
-    <code class="mt-3 inline-block px-3 py-1.5 rounded text-sm font-mono"
-          style="background-color: var(--color-surface); color: var(--color-text);">
-      celery -A app.celery_app.celery call app.tasks.trend_scout.trend_scout_pipeline
-    </code>
   </article>
   {% endif %}
 
