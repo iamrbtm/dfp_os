@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Trend Scout | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">AI Trend Scout</h1>
+    <p class="mt-1 text-sm" style="color: var(--color-text-muted);">
+      Autonomous trend monitoring across 3D printing marketplaces, communities, and social sources.
+    </p>
+  </div>
+
+  {% if latest %}
+  <article class="app-card p-5">
+    <div class="flex items-start justify-between">
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">
+        Latest Report
+      </h2>
+      <time class="text-xs" style="color: var(--color-text-muted);">
+        {{ latest.report_date.strftime("%B %d, %Y at %H:%M UTC") }}
+      </time>
+    </div>
+
+    {% if latest.summary %}
+    <div class="mt-4 p-4 rounded" style="background-color: var(--color-surface);">
+      <p class="text-sm whitespace-pre-line" style="color: var(--color-text);">{{ latest.summary }}</p>
+    </div>
+    {% endif %}
+
+    <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div>
+        <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Top Opportunities</h3>
+        {% if latest.top_opportunities %}
+        <ul class="space-y-2">
+          {% for opp in latest.top_opportunities[:10] %}
+          <li class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs font-semibold flex items-center justify-center flex-shrink-0">
+              {{ opp.rank }}
+            </span>
+            <span class="text-sm" style="color: var(--color-text);">{{ opp.keyword }}</span>
+            <span class="ml-auto text-xs font-mono" style="color: var(--color-text-muted);">{{ opp.score }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm" style="color: var(--color-text-muted);">No opportunities data.</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Growing Categories</h3>
+        {% if latest.growing_categories %}
+        <ul class="space-y-1">
+          {% for cat in latest.growing_categories %}
+          <li class="inline-block mr-1 mb-1 px-2 py-0.5 rounded-full text-xs font-medium"
+              style="background-color: var(--color-primary-bg); color: var(--color-primary);">
+            {{ cat|join(", ") if cat is string else (cat[0] if cat is iterable and cat|length > 0 else cat) }}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm" style="color: var(--color-text-muted);">No growing categories detected.</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Declining Trends</h3>
+        {% if latest.declining_trends %}
+        <ul class="space-y-1">
+          {% for trend in latest.declining_trends %}
+          <li class="text-sm flex items-center gap-1" style="color: var(--color-danger);">
+            <span>&#8595;</span> {{ trend }}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm" style="color: var(--color-text-muted);">No declining trends detected.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if latest.pipeline_meta %}
+    <div class="mt-6 pt-4 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);">
+      <span class="font-semibold">Pipeline:</span>
+      {{ latest.pipeline_meta.get("titles_analyzed", "?") }} titles analyzed,
+      {{ latest.pipeline_meta.get("clusters_found", "?") }} clusters found
+    </div>
+    {% endif %}
+  </article>
+
+  {% else %}
+  <article class="app-card p-8 text-center">
+    <h2 class="text-xl font-semibold mb-2" style="color: var(--color-text);">No Reports Yet</h2>
+    <p class="text-sm" style="color: var(--color-text-muted);">
+      The Trend Scout pipeline runs every Monday at 6:00 AM. Run it manually via:
+    </p>
+    <code class="mt-3 inline-block px-3 py-1.5 rounded text-sm font-mono"
+          style="background-color: var(--color-surface); color: var(--color-text);">
+      celery -A app.celery_app.celery call app.tasks.trend_scout.trend_scout_pipeline
+    </code>
+  </article>
+  {% endif %}
+
+  {% if all_reports|length > 1 %}
+  <article class="app-card p-5">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Past Reports</h2>
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Summary Preview</th>
+            <th>Opportunities</th>
+            <th>Growing</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for report in all_reports %}
+          <tr>
+            <td class="text-sm font-mono">{{ report.report_date.strftime("%Y-%m-%d %H:%M") }}</td>
+            <td class="text-sm max-w-md truncate">{{ (report.summary or "")[:120] }}</td>
+            <td class="text-sm">{{ report.top_opportunities|length if report.top_opportunities else 0 }}</td>
+            <td class="text-sm">{{ report.growing_categories|length if report.growing_categories else 0 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}
