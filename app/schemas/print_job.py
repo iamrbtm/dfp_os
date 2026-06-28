@@ -7,7 +7,6 @@ class PrintJobSchema(Schema):
     id = fields.Integer(dump_only=True)
     order_item_id = fields.Integer(allow_none=True)
     product_id = fields.Integer(allow_none=True)
-    variant_id = fields.Integer(allow_none=True)
     printer_id = fields.Integer(allow_none=True)
     assigned_to_id = fields.Integer(allow_none=True)
     status = fields.String(required=True)

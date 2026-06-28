@@ -234,29 +234,17 @@ def product_asset_key(product_id: int, filename: str) -> str:
     return f"products/{product_id}/{filename}"
 
 
-def variant_asset_key(product_id: int, variant_id: int, filename: str) -> str:
-    return f"products/{product_id}/variants/{variant_id}/{filename}"
-
-
-def product_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
-    if variant_id is not None:
-        return variant_asset_key(product_id, variant_id, filename)
+def product_storage_key(product_id: int, filename: str) -> str:
     return product_asset_key(product_id, filename)
 
 
-def converted_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
-    if variant_id is not None:
-        return variant_asset_key(product_id, variant_id, filename)
+def converted_storage_key(product_id: int, filename: str) -> str:
     return product_asset_key(product_id, filename)
 
 
-def gcode_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
-    if variant_id is not None:
-        return variant_asset_key(product_id, variant_id, filename)
+def gcode_storage_key(product_id: int, filename: str) -> str:
     return product_asset_key(product_id, filename)
 
 
-def image_storage_key(product_id: int, filename: str, *, variant_id: int | None = None) -> str:
-    if variant_id is not None:
-        return variant_asset_key(product_id, variant_id, filename)
+def image_storage_key(product_id: int, filename: str) -> str:
     return product_asset_key(product_id, filename)

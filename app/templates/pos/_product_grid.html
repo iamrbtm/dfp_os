@@ -1,8 +1,6 @@
 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-2">
   {% for p in products %}
-  {% set variant = p.variants|selectattr("active")|first %}
-  {% set price = variant.price if variant else p.base_price %}
-  <button type="button" @click="addToCart({{ p.id }}, '{{ p.name|e|replace("'", "\\'") }}', {{ price }}, {{ variant.id if variant else 'null' }})"
+  <button type="button" @click="addToCart({{ p.id }}, '{{ p.name|e|replace("'", "\\'") }}', {{ p.base_price }})"
           class="pos-product-tile">
     {% if p.pos_image_path or p.default_image_path %}
     <img src="{{ url_for('pos.product_image', product_id=p.id) }}" alt="{{ p.name }}" class="w-full h-16 object-cover rounded mb-1">
@@ -10,7 +8,7 @@
     <div class="w-full h-16 rounded mb-1 flex items-center justify-center text-xs" style="background-color: var(--color-bg-subtle); color: var(--color-text-muted);">No img</div>
     {% endif %}
     <span class="font-semibold text-xs leading-tight line-clamp-2" style="color: var(--color-text);">{{ p.name }}</span>
-    <span class="font-bold text-sm mt-0.5" style="color: var(--color-primary);">${{ "%.2f"|format(price) }}</span>
+    <span class="font-bold text-sm mt-0.5" style="color: var(--color-primary);">${{ "%.2f"|format(p.base_price) }}</span>
   </button>
   {% else %}
   <div class="col-span-full app-empty">No products found.</div>

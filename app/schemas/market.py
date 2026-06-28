@@ -43,7 +43,6 @@ class MarketPackingListSchema(Schema):
     id = fields.Integer(dump_only=True)
     market_id = fields.Integer(required=True)
     product_id = fields.Integer(required=True)
-    variant_id = fields.Integer(allow_none=True)
     planned_quantity = fields.Integer(allow_none=True)
     packed_quantity = fields.Integer(allow_none=True)
     sold_quantity = fields.Integer(allow_none=True)

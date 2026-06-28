@@ -50,9 +50,17 @@ Required environment variables:
 
 The application reads `DATABASE_URL` from your local `.env`. Docker does the same, so there is a single source of truth for the active database connection.
 
+Important database routing:
+
+- From inside the Docker network, the MariaDB hostname is `db`.
+- From your host machine, use `127.0.0.1:3306`.
+- The main app database is `dudefish_os`.
+- The test suite should use `TEST_DATABASE_URL` and the separate `dudefish_os_test` database.
+
 ## Database and Admin Seed
 
 ```bash
+docker compose up -d db
 uv run flask --app app:create_app db upgrade
 uv run flask --app app:create_app seed admin
 ```
@@ -79,6 +87,13 @@ uv run ruff check .
 uv run black --check .
 ```
 
+Host-side test and migration defaults are expected to point at the Docker MariaDB service:
+
+```env
+DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os
+TEST_DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test
+```
+
 ## Production Foundation Notes
 
 This branch includes the modular-monolith foundation:
@@ -98,7 +113,7 @@ Local `.env` files are ignored by git. Be careful with `docker compose config`: 
 docker compose up --build
 ```
 
-The web app runs at `http://localhost:5000`, backed by MariaDB in the `db` service on port `3306`.
+The web app runs at `http://localhost:5000`, backed by MariaDB in the `db` service on port `3306`. Compose creates the main `dudefish_os` database and a separate `dudefish_os_test` database for host-side `pytest` runs.
 
 The container keeps its own virtualenv and `node_modules` in Docker volumes so it does not conflict with a local macOS or Linux `.venv`.
 On startup, the web container also builds `app/static/dist/app.css` so Tailwind styles are present in development.

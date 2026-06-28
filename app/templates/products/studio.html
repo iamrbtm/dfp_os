@@ -8,698 +8,291 @@
 <section class="mx-auto max-w-7xl space-y-8">
   <div>
     <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
-    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">
-      {{ "Edit" if mode == "edit" else "New" }} Product Studio
-    </h1>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Product Studio</h1>
     <p class="mt-1 text-sm" style="color: var(--color-text-muted);">
-      Build the product first, then manage the primary asset set and each variant as separate working sections.
+      One product record holds pricing, sellable details, model analysis, and images.
     </p>
   </div>
 
-  <div id="flash-container"></div>
-
-  <form method="post" action="{{ url_for('products.studio', product_id=product.id) if product else url_for('products.studio') }}" class="space-y-8">
-    {{ form.hidden_tag() }}
-
-    <div class="app-card p-6 space-y-6">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="text-xl font-semibold" style="color: var(--color-text);">Product Details</h2>
-        <div class="flex gap-3">
-          {{ form.submit(class="app-btn app-btn-primary text-lg px-8 py-3") }}
-          {% if product %}
-          <a href="{{ url_for('products.detail_resource', resource_key='products', resource_id=product.id) }}" class="app-btn app-btn-secondary">View Product</a>
-          {% endif %}
-          <a href="{{ url_for('products.list_resource', resource_key='products') }}" class="app-btn app-btn-secondary">Back to Products</a>
-        </div>
+  <div class="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
+    <aside class="app-card p-4 space-y-4">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Products</h2>
+        <a href="{{ url_for('products.studio') }}" class="app-btn app-btn-primary text-sm">New</a>
       </div>
-
-      <div class="grid gap-5 md:grid-cols-2">
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.name.label.text }}</label>
-          {{ form.name(class="app-input") }}
-          {% for error in form.name.errors %}<p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+      <div class="space-y-2">
+        {% for item in products %}
+        <a href="{{ url_for('products.studio', product_id=item.id) }}"
+           class="block rounded-2xl border px-3 py-3 transition {% if product and product.id == item.id %}border-current{% endif %}"
+           style="border-color: var(--color-border); color: var(--color-text);">
+          <p class="font-medium">{{ item.name }}</p>
+          <p class="text-xs font-mono mt-1" style="color: var(--color-text-muted);">{{ item.sku_base or item.slug }}</p>
+        </a>
+        {% else %}
+        <div class="rounded-2xl border border-dashed p-4 text-sm text-center" style="border-color: var(--color-border); color: var(--color-text-muted);">
+          No products yet.
         </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.slug.label.text }}</label>
-          {{ form.slug(class="app-input font-mono text-sm") }}
-          {% for error in form.slug.errors %}<p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.sku_base.label.text }}</label>
-          {{ form.sku_base(class="app-input font-mono text-sm") }}
-          {% for error in form.sku_base.errors %}<p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.base_price.label.text }}</label>
-          {{ form.base_price(class="app-input") }}
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.category_id.label.text }}</label>
-          {{ form.category_id(class="app-input") }}
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.collection_id.label.text }}</label>
-          {{ form.collection_id(class="app-input") }}
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.product_type.label.text }}</label>
-          {{ form.product_type(class="app-input") }}
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.status.label.text }}</label>
-          {{ form.status(class="app-input") }}
-        </div>
+        {% endfor %}
       </div>
-
-      <div>
-        <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.short_description.label.text }}</label>
-        {{ form.short_description(class="app-input", rows=3) }}
+      <div class="pt-2 space-y-2 text-sm">
+        <a href="{{ url_for('products.list_resource', resource_key='categories') }}" class="block" style="color: var(--color-link);">Manage categories</a>
+        <a href="{{ url_for('products.list_resource', resource_key='collections') }}" class="block" style="color: var(--color-link);">Manage collections</a>
       </div>
-      <div>
-        <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.description.label.text }}</label>
-        {{ form.description(class="app-input", rows=6) }}
-      </div>
+    </aside>
 
-      <div class="grid gap-5 md:grid-cols-3">
-        <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-          {{ form.is_public(class="app-checkbox") }}
-          <span>{{ form.is_public.label.text }}</span>
-        </label>
-        <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-          {{ form.is_pos_visible(class="app-checkbox") }}
-          <span>{{ form.is_pos_visible.label.text }}</span>
-        </label>
-        <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-          {{ form.is_featured(class="app-checkbox") }}
-          <span>{{ form.is_featured.label.text }}</span>
-        </label>
-      </div>
+    <div class="space-y-6">
+      <form method="post" action="{{ url_for('products.studio', product_id=product.id) if product else url_for('products.studio') }}" class="space-y-6">
+        {{ form.hidden_tag() }}
 
-      <div>
-        <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.tags.label.text }}</label>
-        {{ form.tags(class="app-input", rows=2, placeholder="comma-separated tags") }}
-      </div>
-    </div>
-  </form>
+        <div class="app-card p-6 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-semibold" style="color: var(--color-text);">
+              {{ "Edit" if mode == "edit" else "New" }} Product
+            </h2>
+            {{ form.submit(class="app-btn app-btn-primary text-lg px-8 py-3") }}
+          </div>
 
-  {% if product %}
-  <div id="product-studio-data" data-product-id="{{ product.id }}"></div>
-
-  <div id="variant-list" class="space-y-4">
-    <details class="app-card overflow-hidden">
-      <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
-        <div>
-          <p class="text-lg font-semibold" style="color: var(--color-text);">Primary</p>
-          <p class="text-sm" style="color: var(--color-text-muted);">
-            Product-level assets, images, and costs stay here and do not mix with variant data.
-          </p>
-        </div>
-        <div class="text-right text-xs" style="color: var(--color-text-muted);">
-          <p>{{ primary_assets|length }} model file{{ "" if primary_assets|length == 1 else "s" }}</p>
-          <p>{{ product_images|length }} image{{ "" if product_images|length == 1 else "s" }}</p>
-        </div>
-      </summary>
-      <div class="border-t px-5 py-5" style="border-color: var(--color-border);">
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.95fr)]">
-          <div class="space-y-4">
-            {% set primary_viewer_asset = primary_assets | first if primary_assets else none %}
-            <div class="app-card p-4" style="min-height: 560px;">
-              {% if primary_viewer_asset and primary_viewer_asset.file_location %}
-              <model-viewer
-                src="{{ url_for('products.view_model', asset_id=primary_viewer_asset.id) }}"
-                alt="{{ primary_viewer_asset.title }}"
-                camera-controls
-                auto-rotate
-                ar
-                shadow-intensity="1"
-                exposure="0.8"
-                style="width: 100%; height: 520px;"
-              ></model-viewer>
-              {% else %}
-              <div class="flex h-[520px] items-center justify-center rounded-2xl border-2 border-dashed text-center" style="border-color: var(--color-border);">
-                <div class="space-y-3">
-                  <div class="text-5xl">🧊</div>
-                  <p class="text-sm" style="color: var(--color-text-muted);">Upload a primary model to preview it here.</p>
-                </div>
-              </div>
-              {% endif %}
+          <div class="grid gap-5 md:grid-cols-2">
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.name.label.text }}</label>
+              {{ form.name(class="app-input") }}
             </div>
-
-            <div id="cost-results" class="grid gap-4 md:grid-cols-3">
-              <div class="app-card p-4 text-center">
-                <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Material Cost</p>
-                <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">
-                  ${{ "%.2f"|format(product.estimated_material_cost) if product and product.estimated_material_cost else "0.00" }}
-                </p>
-              </div>
-              <div class="app-card p-4 text-center">
-                <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Est. Profit</p>
-                <p class="text-2xl font-bold mt-1 {% if product and product.estimated_profit and product.estimated_profit > 0 %}text-success{% else %}text-muted{% endif %}">
-                  ${{ "%.2f"|format(product.estimated_profit) if product and product.estimated_profit else "0.00" }}
-                </p>
-              </div>
-              <div class="app-card p-4 text-center">
-                <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Est. Print Time</p>
-                <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">
-                  {{ (product.estimated_print_minutes if product else 0)|duration_minutes }}
-                </p>
-              </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.slug.label.text }}</label>
+              {{ form.slug(class="app-input font-mono text-sm") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.sku_base.label.text }}</label>
+              {{ form.sku_base(class="app-input font-mono text-sm") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.base_price.label.text }}</label>
+              {{ form.base_price(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.category_id.label.text }}</label>
+              {{ form.category_id(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.collection_id.label.text }}</label>
+              {{ form.collection_id(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.product_type.label.text }}</label>
+              {{ form.product_type(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.status.label.text }}</label>
+              {{ form.status(class="app-input") }}
             </div>
           </div>
 
-          <div class="space-y-4">
-            <div class="app-card p-4 space-y-4">
-              <div class="flex items-center justify-between gap-3">
-                <h3 class="text-base font-semibold" style="color: var(--color-text);">Primary Models</h3>
-                <button class="app-btn app-btn-secondary text-sm"
-                        data-calc-costs
-                        data-url="{{ url_for('products.calculate_product_costs', product_id=product.id) }}"
-                        data-result-target="cost-results"
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.short_description.label.text }}</label>
+            {{ form.short_description(class="app-input", rows=3) }}
+          </div>
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.description.label.text }}</label>
+            {{ form.description(class="app-input", rows=5) }}
+          </div>
+
+          <div class="grid gap-5 md:grid-cols-3">
+            <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
+              {{ form.is_public(class="app-checkbox") }}
+              <span>{{ form.is_public.label.text }}</span>
+            </label>
+            <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
+              {{ form.is_pos_visible(class="app-checkbox") }}
+              <span>{{ form.is_pos_visible.label.text }}</span>
+            </label>
+            <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
+              {{ form.is_featured(class="app-checkbox") }}
+              <span>{{ form.is_featured.label.text }}</span>
+            </label>
+          </div>
+
+          <div class="grid gap-5 md:grid-cols-2">
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.license_status.label.text }}</label>
+              {{ form.license_status(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.design_source.label.text }}</label>
+              {{ form.design_source(class="app-input") }}
+            </div>
+          </div>
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.commercial_license_notes.label.text }}</label>
+            {{ form.commercial_license_notes(class="app-input", rows=3) }}
+          </div>
+
+          <div class="grid gap-5 md:grid-cols-2">
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_source_type.label.text }}</label>
+              {{ form.model_source_type(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_source_url.label.text }}</label>
+              {{ form.model_source_url(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_designer_name.label.text }}</label>
+              {{ form.model_designer_name(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_license_type.label.text }}</label>
+              {{ form.model_license_type(class="app-input") }}
+            </div>
+            <div>
+              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_license_expiration.label.text }}</label>
+              {{ form.model_license_expiration(class="app-input") }}
+            </div>
+            <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
+              {{ form.model_commercial_use_allowed(class="app-checkbox") }}
+              <span>{{ form.model_commercial_use_allowed.label.text }}</span>
+            </label>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_notes.label.text }}</label>
+            {{ form.model_notes(class="app-input", rows=3) }}
+          </div>
+        </div>
+      </form>
+
+      {% if product %}
+      <div class="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.95fr)]">
+        <div class="space-y-4">
+          <div class="app-card p-4" style="min-height: 540px;">
+            {% if product.model_file_path %}
+            <model-viewer
+              src="{{ url_for('products.view_model', product_id=product.id) }}"
+              alt="{{ product.name }}"
+              camera-controls
+              auto-rotate
+              shadow-intensity="1"
+              exposure="0.8"
+              style="width: 100%; height: 500px;"
+            ></model-viewer>
+            {% else %}
+            <div class="flex h-[500px] items-center justify-center rounded-2xl border-2 border-dashed text-center" style="border-color: var(--color-border);">
+              <div class="space-y-3">
+                <div class="text-5xl">🧊</div>
+                <p class="text-sm" style="color: var(--color-text-muted);">Upload a model to preview it here.</p>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div id="cost-results" class="grid gap-4 md:grid-cols-4">
+            <div class="app-card p-4 text-center">
+              <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Material Cost</p>
+              <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">${{ "%.2f"|format(product.estimated_material_cost or 0) }}</p>
+            </div>
+            <div class="app-card p-4 text-center">
+              <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Profit</p>
+              <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">${{ "%.2f"|format(product.estimated_profit or 0) }}</p>
+            </div>
+            <div class="app-card p-4 text-center">
+              <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Print Time</p>
+              <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ (product.estimated_print_minutes or 0)|duration_minutes }}</p>
+            </div>
+            <div class="app-card p-4 text-center">
+              <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Analysis</p>
+              <p class="text-sm font-semibold mt-2" style="color: var(--color-text);">{{ product.analysis_status or "none" }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="app-card p-4 space-y-4">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-base font-semibold" style="color: var(--color-text);">Model File</h3>
+              <button class="app-btn app-btn-secondary text-sm"
+                      data-calc-costs
+                      data-url="{{ url_for('products.calculate_product_costs', product_id=product.id) }}"
+                      data-result-target="cost-results"
+                      data-product-id="{{ product.id }}">
+                Calculate Cost
+              </button>
+            </div>
+
+            <form id="model-upload-form" data-product-id="{{ product.id }}" enctype="multipart/form-data" class="space-y-4">
+              <div id="model-drop-zone" class="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer" style="border-color: var(--color-border);">
+                <div class="text-4xl mb-3">📁</div>
+                <p id="drop-zone-label" style="color: var(--color-text-muted);">
+                  {% if product.model_file_path %}{{ storage_reference_name(product.model_file_path) }}{% else %}Drop a 3D model file here or click to browse{% endif %}
+                </p>
+                <p class="text-xs mt-2" style="color: var(--color-text-muted);">STL, GLB, GLTF, 3MF, OBJ up to 256 MB</p>
+                <input type="file" name="model_file" id="model_file" accept=".stl,.glb,.gltf,.3mf,.obj" class="hidden">
+              </div>
+              <button type="submit" class="app-btn app-btn-primary w-full">Upload & Analyze</button>
+            </form>
+
+            {% if product.model_file_path %}
+            <div class="rounded-2xl border p-4 space-y-2" style="border-color: var(--color-border);">
+              <p class="text-sm font-medium" style="color: var(--color-text);">{{ product.model_notes or product.name }}</p>
+              <p class="text-xs font-mono" style="color: var(--color-text-muted);">{{ storage_reference_name(product.model_file_path) }}</p>
+              <div class="flex flex-wrap gap-2">
+                <a href="{{ url_for('products.download_model', product_id=product.id) }}" class="app-btn text-xs px-2 py-1">Download</a>
+                <button class="app-btn app-btn-secondary text-xs px-2 py-1"
+                        data-reanalyze
+                        data-url="{{ url_for('products.reanalyze_model', product_id=product.id) }}"
                         data-product-id="{{ product.id }}">
-                  Calculate Primary Cost
+                  Re-analyze
                 </button>
               </div>
-
-              <form id="model-upload-form"
-                    data-product-id="{{ product.id }}"
-                    enctype="multipart/form-data"
-                    class="space-y-4">
-                <div id="model-drop-zone"
-                     class="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-colors"
-                     style="border-color: var(--color-border);">
-                  <div class="text-4xl mb-3">📁</div>
-                  <p id="drop-zone-label" style="color: var(--color-text-muted);">Drop a 3D model file here or click to browse</p>
-                  <p class="text-xs mt-2" style="color: var(--color-text-muted);">STL, GLB, GLTF, 3MF, OBJ up to 256 MB</p>
-                  <input type="file" name="model_file" id="model_file" accept=".stl,.glb,.gltf,.3mf,.obj" class="hidden">
-                </div>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Model Title</label>
-                    <input type="text" name="title" class="app-input" placeholder="e.g. Rainbow Dragon master" required>
-                  </div>
-                  <div>
-                    <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Source Type</label>
-                    <select name="source_type" class="app-input">
-                      {% for val, label in [("self_designed","Self Designed"),("purchased_stl","Purchased STL"),("subscription_library","Subscription Library"),("free_model","Free Model"),("customer_provided","Customer Provided"),("commissioned_design","Commissioned Design"),("unknown","Unknown")] %}
-                      <option value="{{ val }}">{{ label }}</option>
-                      {% endfor %}
-                    </select>
-                  </div>
-                  <div>
-                    <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Designer</label>
-                    <input type="text" name="designer_name" class="app-input">
-                  </div>
-                  <div>
-                    <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">License Type</label>
-                    <input type="text" name="license_type" class="app-input" placeholder="e.g. CC BY-NC 4.0">
-                  </div>
-                  <div>
-                    <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Source URL</label>
-                    <input type="url" name="source_url" class="app-input">
-                  </div>
-                  <div>
-                    <label class="flex h-full items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-                      <input type="checkbox" name="commercial_use_allowed" class="app-checkbox" value="y">
-                      <span>Commercial Use Allowed</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div>
-                  <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">License Status</label>
-                  <select name="status" class="app-input">
-                    {% for val, label in [("unknown","Unknown"),("personal_only","Personal Only"),("commercial_allowed","Commercial Allowed"),("needs_review","Needs Review")] %}
-                    <option value="{{ val }}">{{ label }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-
-                <div>
-                  <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Notes</label>
-                  <textarea name="notes" class="app-input" rows="2"></textarea>
-                </div>
-
-                <button type="submit" class="app-btn app-btn-primary w-full">Upload & Analyze</button>
-              </form>
-            </div>
-
-            <div class="app-card p-4 space-y-3">
-              <h3 class="text-base font-semibold" style="color: var(--color-text);">Primary Files</h3>
-              <div id="model-list" class="space-y-3">
-                {% for asset in primary_assets %}
-                <div class="app-card p-3" data-file-id="{{ asset.id }}" data-file-type="model">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0 flex-1">
-                      <p class="font-medium text-sm file-title truncate" style="color: var(--color-text);">{{ asset.title }}</p>
-                      <input class="file-title-input app-input hidden text-sm font-medium py-0.5 mt-2" type="text" value="{{ asset.title }}">
-                      <div class="mt-2 flex flex-wrap gap-2">
-                        {% if asset.file_location %}
-                        <span class="rounded-full px-2 py-1 text-xs font-mono" style="background: var(--color-bg-surface-soft); color: var(--color-text-muted);">
-                          STL · {{ storage_reference_name(asset.file_location) }}
-                        </span>
-                        {% endif %}
-                        {% if asset.converted_model_path %}
-                        <span class="rounded-full px-2 py-1 text-xs font-mono" style="background: var(--color-bg-surface-soft); color: var(--color-text-muted);">
-                          GLB · {{ storage_reference_name(asset.converted_model_path) }}
-                        </span>
-                        {% endif %}
-                        {% if asset.gcode_path %}
-                        <span class="rounded-full px-2 py-1 text-xs font-mono" style="background: var(--color-bg-surface-soft); color: var(--color-text-muted);">
-                          GCODE · {{ storage_reference_name(asset.gcode_path) }}
-                        </span>
-                        {% endif %}
-                      </div>
-                      <p class="text-xs mt-1" style="color: var(--color-text-muted);">
-                        {% if asset.analysis_status == "complete" %}
-                        <span class="text-success">Analyzed</span>
-                        {% elif asset.analysis_status == "analyzing" %}
-                        <span class="text-warning">Validating...</span>
-                        {% elif asset.analysis_status == "slicing" %}
-                        <span class="text-warning">Slicing...</span>
-                        {% elif asset.analysis_status == "failed" %}
-                        <span class="text-danger">Failed</span>
-                        {% else %}
-                        <span class="text-muted">Pending</span>
-                        {% endif %}
-                        {% if asset.parsed_filament_grams %} — {{ "%.1f"|format(asset.parsed_filament_grams) }}g{% endif %}
-                        {% if asset.parsed_print_minutes %} / {{ asset.parsed_print_minutes|duration_minutes }}{% endif %}
-                      </p>
-                    </div>
-                    <div class="flex flex-wrap justify-end gap-2 shrink-0">
-                      <button class="app-btn text-xs px-2 py-1 file-rename-btn">Rename</button>
-                      {% if asset.file_location %}
-                      <a href="{{ url_for('products.download_model', asset_id=asset.id) }}" class="app-btn text-xs px-2 py-1">Download</a>
-                      {% endif %}
-                      <button class="app-btn app-btn-secondary text-xs px-2 py-1"
-                              data-reanalyze
-                              data-url="{{ url_for('products.reanalyze_model', asset_id=asset.id) }}"
-                              data-asset-id="{{ asset.id }}">
-                        Re-analyze
-                      </button>
-                      <form method="post" action="{{ url_for('products.delete_model', asset_id=asset.id) }}" class="inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="app-btn text-xs px-2 py-1" style="color: var(--color-danger);" onclick="return confirm('Delete this model asset?')">Remove</button>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-                {% else %}
-                <div class="rounded-2xl border border-dashed p-4 text-sm text-center" style="border-color: var(--color-border); color: var(--color-text-muted);">
-                  No primary model files yet.
-                </div>
-                {% endfor %}
-              </div>
-            </div>
-
-            <div class="app-card p-4 space-y-3">
-              <h3 class="text-base font-semibold" style="color: var(--color-text);">Primary Images</h3>
-              <form class="image-upload-form space-y-3" data-product-id="{{ product.id }}">
-                <div class="image-drop-zone border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer" style="border-color: var(--color-border);">
-                  <p class="text-sm" style="color: var(--color-text-muted);">Drop product images here or click to browse</p>
-                  <p class="text-xs mt-1" style="color: var(--color-text-muted);">JPG, PNG, WebP, GIF</p>
-                  <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp,.gif" class="hidden">
-                  <input type="hidden" name="alt_text" value="">
-                </div>
-                <button type="submit" class="app-btn app-btn-primary text-sm w-full">Upload Image</button>
-              </form>
-              <div id="product-image-gallery" class="grid grid-cols-2 gap-3">
-                {% for img in product_images %}
-                <div class="app-card p-2">
-                  <img src="{{ url_for('products.serve_product_image', image_id=img.id) }}"
-                       alt="{{ img.alt_text or 'Product image' }}"
-                       class="w-full h-32 object-cover rounded-xl">
-                  <p class="mt-2 text-xs font-mono truncate" style="color: var(--color-text-muted);">{{ storage_reference_name(img.file_path) }}</p>
-                  <div class="mt-2 flex gap-1 flex-wrap">
-                    {% if not img.is_default %}
-                    <button class="app-btn text-xs px-2 py-1 set-default-image" data-image-id="{{ img.id }}">Default</button>
-                    {% else %}
-                    <span class="text-xs px-2 py-1 text-success">★ Default</span>
-                    {% endif %}
-                    {% if not img.is_pos %}
-                    <button class="app-btn text-xs px-2 py-1 set-pos-image" data-image-id="{{ img.id }}">POS</button>
-                    {% else %}
-                    <span class="text-xs px-2 py-1 text-info">◆ POS</span>
-                    {% endif %}
-                    <form method="post" action="{{ url_for('products.delete_product_image', image_id=img.id) }}" class="inline ml-auto">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" class="app-btn text-xs px-2 py-1" style="color: var(--color-danger);" onclick="return confirm('Delete this image?')">Remove</button>
-                    </form>
-                  </div>
-                </div>
-                {% else %}
-                <div class="col-span-full rounded-2xl border border-dashed p-4 text-sm text-center" style="border-color: var(--color-border); color: var(--color-text-muted);">
-                  No primary images uploaded yet.
-                </div>
-                {% endfor %}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </details>
-
-    {% for variant in variants %}
-    {% set variant_form = variant_forms[variant.id] %}
-    {% set variant_assets = variant.model_assets %}
-    {% set variant_viewer_asset = variant_assets | first if variant_assets else none %}
-    <details class="app-card overflow-hidden">
-      <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
-        <div>
-          <p class="text-lg font-semibold" style="color: var(--color-text);">{{ variant.name }}</p>
-          <p class="text-sm" style="color: var(--color-text-muted);">
-            {{ variant.sku }}{% if variant.size %} · {{ variant.size }}{% endif %}{% if variant.colorway %} · {{ variant.colorway }}{% endif %}
-          </p>
-        </div>
-        <div class="text-right text-xs" style="color: var(--color-text-muted);">
-          <p>{{ variant_assets|length }} file{{ "" if variant_assets|length == 1 else "s" }}</p>
-          <p>{{ variant.images|length }} image{{ "" if variant.images|length == 1 else "s" }}</p>
-        </div>
-      </summary>
-      <div class="border-t px-5 py-5 space-y-6" style="border-color: var(--color-border);">
-        <div class="flex items-center justify-end">
-          <form method="post" action="{{ url_for('products.delete_variant', variant_id=variant.id) }}" class="inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="app-btn text-sm px-3 py-2" style="color: var(--color-danger);" onclick="return confirm('Delete this variant?')">Remove Variant</button>
-          </form>
-        </div>
-
-        <form method="post" action="{{ url_for('products.update_variant', variant_id=variant.id) }}" class="app-card p-4 space-y-4">
-          {{ variant_form.hidden_tag() }}
-          <div class="flex items-center justify-between gap-3">
-            <h3 class="text-base font-semibold" style="color: var(--color-text);">Variant Fields</h3>
-            <button type="submit" class="app-btn app-btn-primary text-sm">Save Variant</button>
-          </div>
-          <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.sku.label.text }}</label>
-              {{ variant_form.sku(class="app-input font-mono text-sm") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.name.label.text }}</label>
-              {{ variant_form.name(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.colorway.label.text }}</label>
-              {{ variant_form.colorway(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.size.label.text }}</label>
-              {{ variant_form.size(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.material_type.label.text }}</label>
-              {{ variant_form.material_type(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.price.label.text }}</label>
-              {{ variant_form.price(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.material_cost.label.text }}</label>
-              {{ variant_form.material_cost(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.estimated_filament_grams.label.text }}</label>
-              {{ variant_form.estimated_filament_grams(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.estimated_print_minutes.label.text }}</label>
-              {{ variant_form.estimated_print_minutes(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.pos_sort_order.label.text }}</label>
-              {{ variant_form.pos_sort_order(class="app-input") }}
-            </div>
-            <div class="md:col-span-2">
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ variant_form.pos_button_label.label.text }}</label>
-              {{ variant_form.pos_button_label(class="app-input") }}
-            </div>
-            <div class="md:col-span-2 xl:col-span-2">
-              <label class="flex h-full items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-                {{ variant_form.active(class="app-checkbox") }}
-                <span>{{ variant_form.active.label.text }}</span>
-              </label>
-            </div>
-          </div>
-        </form>
-
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.95fr)]">
-          <div class="space-y-4">
-            <div class="app-card p-4" style="min-height: 560px;">
-              {% if variant_viewer_asset and variant_viewer_asset.file_location %}
-              <model-viewer
-                src="{{ url_for('products.view_model', asset_id=variant_viewer_asset.id) }}"
-                alt="{{ variant_viewer_asset.title }}"
-                camera-controls
-                auto-rotate
-                shadow-intensity="1"
-                exposure="0.8"
-                style="width: 100%; height: 520px;"
-              ></model-viewer>
-              {% else %}
-              <div class="flex h-[520px] items-center justify-center rounded-2xl border-2 border-dashed text-center" style="border-color: var(--color-border);">
-                <div class="space-y-3">
-                  <div class="text-5xl">🧩</div>
-                  <p class="text-sm" style="color: var(--color-text-muted);">Upload a model for {{ variant.name }} to preview it here.</p>
-                </div>
-              </div>
+              {% if product.analysis_error %}
+              <p class="text-xs" style="color: var(--color-danger);">{{ product.analysis_error }}</p>
               {% endif %}
             </div>
-
-            <div id="cost-{{ variant.id }}" class="grid gap-4 md:grid-cols-3">
-              <div class="app-card p-4 text-center">
-                <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Material Cost</p>
-                <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">${{ "%.2f"|format(variant.material_cost or 0) }}</p>
-              </div>
-              <div class="app-card p-4 text-center">
-                <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Filament</p>
-                <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ variant.estimated_filament_grams or 0 }} g</p>
-              </div>
-              <div class="app-card p-4 text-center">
-                <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Print Time</p>
-                <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ (variant.estimated_print_minutes or 0)|duration_minutes }}</p>
-              </div>
-            </div>
+            {% endif %}
           </div>
 
-          <div class="space-y-4">
-            <div class="app-card p-4 space-y-4">
-              <div class="flex items-center justify-between gap-3">
-                <h3 class="text-base font-semibold" style="color: var(--color-text);">{{ variant.name }} Files</h3>
-                <button class="app-btn app-btn-secondary text-sm"
-                        data-calc-costs
-                        data-url="{{ url_for('products.calculate_variant_cost', variant_id=variant.id) }}"
-                        data-result-target="cost-{{ variant.id }}"
-                        data-variant-id="{{ variant.id }}">
-                  Calculate Variant Cost
-                </button>
+          <div class="app-card p-4 space-y-3">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Images</h3>
+            <form class="image-upload-form space-y-3" data-product-id="{{ product.id }}">
+              <div class="image-drop-zone border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer" style="border-color: var(--color-border);">
+                <p class="text-sm" style="color: var(--color-text-muted);">Drop product images here or click to browse</p>
+                <p class="text-xs mt-1" style="color: var(--color-text-muted);">JPG, PNG, WebP, GIF</p>
+                <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp,.gif" class="hidden">
+                <input type="hidden" name="alt_text" value="">
               </div>
-
-              <form class="variant-model-upload-form space-y-3"
-                    data-variant-id="{{ variant.id }}"
-                    data-product-id="{{ product.id }}">
-                <div class="variant-drop-zone border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer" style="border-color: var(--color-border);">
-                  <p class="text-sm" style="color: var(--color-text-muted);">Drop a model for {{ variant.name }} or click to browse</p>
-                  <input type="file" name="model_file" accept=".stl,.glb,.gltf,.3mf,.obj" class="hidden">
-                  <input type="hidden" name="variant_id" value="{{ variant.id }}">
-                  <input type="hidden" name="title" value="{{ variant.name }} Model">
-                  <input type="hidden" name="source_type" value="self_designed">
-                  <input type="hidden" name="status" value="unknown">
+              <button type="submit" class="app-btn app-btn-primary text-sm w-full">Upload Image</button>
+            </form>
+            <div class="grid grid-cols-2 gap-3">
+              {% for img in product_images %}
+              <div class="app-card p-2">
+                <img src="{{ url_for('products.serve_product_image', image_id=img.id) }}" alt="{{ img.alt_text or 'Product image' }}" class="w-full h-32 object-cover rounded-xl">
+                <p class="mt-2 text-xs font-mono truncate" style="color: var(--color-text-muted);">{{ storage_reference_name(img.file_path) }}</p>
+                <div class="mt-2 flex gap-1 flex-wrap">
+                  {% if not img.is_default %}
+                  <button class="app-btn text-xs px-2 py-1 set-default-image" data-image-id="{{ img.id }}">Default</button>
+                  {% else %}
+                  <span class="text-xs px-2 py-1 text-success">★ Default</span>
+                  {% endif %}
+                  {% if not img.is_pos %}
+                  <button class="app-btn text-xs px-2 py-1 set-pos-image" data-image-id="{{ img.id }}">POS</button>
+                  {% else %}
+                  <span class="text-xs px-2 py-1 text-info">◆ POS</span>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('products.delete_product_image', image_id=img.id) }}" class="inline ml-auto">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="app-btn text-xs px-2 py-1" style="color: var(--color-danger);" onclick="return confirm('Delete this image?')">Remove</button>
+                  </form>
                 </div>
-                <button type="submit" class="app-btn app-btn-primary text-sm w-full">Upload Variant Model</button>
-              </form>
-
-              <div id="variant-model-list-{{ variant.id }}" class="space-y-3">
-                {% for asset in variant_assets %}
-                <div class="app-card p-3" data-file-id="{{ asset.id }}" data-file-type="model">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0 flex-1">
-                      <p class="text-sm font-medium file-title truncate" style="color: var(--color-text);">{{ asset.title }}</p>
-                      <input class="file-title-input app-input hidden text-sm font-medium py-0.5 mt-2" type="text" value="{{ asset.title }}">
-                      <div class="mt-2 flex flex-wrap gap-2">
-                        {% if asset.file_location %}
-                        <span class="rounded-full px-2 py-1 text-xs font-mono" style="background: var(--color-bg-surface-soft); color: var(--color-text-muted);">
-                          STL · {{ storage_reference_name(asset.file_location) }}
-                        </span>
-                        {% endif %}
-                        {% if asset.converted_model_path %}
-                        <span class="rounded-full px-2 py-1 text-xs font-mono" style="background: var(--color-bg-surface-soft); color: var(--color-text-muted);">
-                          GLB · {{ storage_reference_name(asset.converted_model_path) }}
-                        </span>
-                        {% endif %}
-                        {% if asset.gcode_path %}
-                        <span class="rounded-full px-2 py-1 text-xs font-mono" style="background: var(--color-bg-surface-soft); color: var(--color-text-muted);">
-                          GCODE · {{ storage_reference_name(asset.gcode_path) }}
-                        </span>
-                        {% endif %}
-                      </div>
-                      <p class="text-xs mt-1" style="color: var(--color-text-muted);">
-                        {% if asset.analysis_status == "complete" %}
-                        <span class="text-success">Analyzed</span>
-                        {% elif asset.analysis_status == "analyzing" %}
-                        <span class="text-warning">Validating...</span>
-                        {% elif asset.analysis_status == "slicing" %}
-                        <span class="text-warning">Slicing...</span>
-                        {% elif asset.analysis_status == "failed" %}
-                        <span class="text-danger">Failed</span>
-                        {% else %}
-                        <span class="text-muted">Pending</span>
-                        {% endif %}
-                        {% if asset.parsed_filament_grams %} — {{ "%.1f"|format(asset.parsed_filament_grams) }}g{% endif %}
-                        {% if asset.parsed_print_minutes %} / {{ asset.parsed_print_minutes|duration_minutes }}{% endif %}
-                      </p>
-                    </div>
-                    <div class="flex flex-wrap justify-end gap-2 shrink-0">
-                      <button class="app-btn text-xs px-2 py-1 file-rename-btn">Rename</button>
-                      {% if asset.file_location %}
-                      <a href="{{ url_for('products.download_model', asset_id=asset.id) }}" class="app-btn text-xs px-2 py-1">Download</a>
-                      {% endif %}
-                      <button class="app-btn app-btn-secondary text-xs px-2 py-1"
-                              data-reanalyze
-                              data-url="{{ url_for('products.reanalyze_model', asset_id=asset.id) }}"
-                              data-asset-id="{{ asset.id }}">
-                        Re-analyze
-                      </button>
-                      <form method="post" action="{{ url_for('products.delete_model', asset_id=asset.id) }}" class="inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="app-btn text-xs px-2 py-1" style="color: var(--color-danger);" onclick="return confirm('Delete this model?')">Remove</button>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-                {% else %}
-                <div class="rounded-2xl border border-dashed p-4 text-sm text-center" style="border-color: var(--color-border); color: var(--color-text-muted);">
-                  No files uploaded for {{ variant.name }} yet.
-                </div>
-                {% endfor %}
               </div>
-            </div>
-
-            <div class="app-card p-4 space-y-3">
-              <h3 class="text-base font-semibold" style="color: var(--color-text);">{{ variant.name }} Images</h3>
-              <form class="image-upload-form variant-image-upload space-y-3" data-product-id="{{ product.id }}">
-                <input type="hidden" name="variant_id" value="{{ variant.id }}">
-                <div class="image-drop-zone border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer" style="border-color: var(--color-border);">
-                  <p class="text-sm" style="color: var(--color-text-muted);">Drop images for {{ variant.name }} or click to browse</p>
-                  <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp,.gif" class="hidden">
-                  <input type="hidden" name="alt_text" value="{{ variant.name }}">
-                </div>
-                <button type="submit" class="app-btn app-btn-primary text-sm w-full">Upload Variant Image</button>
-              </form>
-              <div class="grid grid-cols-2 gap-3">
-                {% for img in variant.images %}
-                <div class="app-card p-2">
-                  <img src="{{ url_for('products.serve_product_image', image_id=img.id) }}"
-                       alt="{{ img.alt_text or variant.name }}"
-                       class="w-full h-32 object-cover rounded-xl">
-                  <p class="mt-2 text-xs font-mono truncate" style="color: var(--color-text-muted);">{{ storage_reference_name(img.file_path) }}</p>
-                  <div class="mt-2 flex gap-1 flex-wrap">
-                    {% if not img.is_default %}
-                    <button class="app-btn text-xs px-2 py-1 set-default-image" data-image-id="{{ img.id }}">Default</button>
-                    {% else %}
-                    <span class="text-xs px-2 py-1 text-success">★ Default</span>
-                    {% endif %}
-                    {% if not img.is_pos %}
-                    <button class="app-btn text-xs px-2 py-1 set-pos-image" data-image-id="{{ img.id }}">POS</button>
-                    {% else %}
-                    <span class="text-xs px-2 py-1 text-info">◆ POS</span>
-                    {% endif %}
-                    <form method="post" action="{{ url_for('products.delete_product_image', image_id=img.id) }}" class="inline ml-auto">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" class="app-btn text-xs px-2 py-1" style="color: var(--color-danger);" onclick="return confirm('Delete this image?')">Remove</button>
-                    </form>
-                  </div>
-                </div>
-                {% else %}
-                <div class="col-span-full rounded-2xl border border-dashed p-4 text-sm text-center" style="border-color: var(--color-border); color: var(--color-text-muted);">
-                  No images uploaded for {{ variant.name }} yet.
-                </div>
-                {% endfor %}
+              {% else %}
+              <div class="col-span-full rounded-2xl border border-dashed p-4 text-sm text-center" style="border-color: var(--color-border); color: var(--color-text-muted);">
+                No images uploaded yet.
               </div>
+              {% endfor %}
             </div>
           </div>
         </div>
       </div>
-    </details>
-    {% else %}
-    <div class="app-empty text-center py-8">
-      <p style="color: var(--color-text-muted);">No variants yet. Click "Add Variant" to create one.</p>
-    </div>
-    {% endfor %}
-  </div>
-
-  <div class="app-card p-6 space-y-6">
-    <div class="flex items-center justify-between">
-      <h2 class="text-xl font-semibold" style="color: var(--color-text);">Add Variant</h2>
-      {% set remaining = 20 - variants|length %}
-      {% if remaining > 0 %}
-      <button id="add-variant-btn" class="app-btn app-btn-primary text-sm">+ Add Variant</button>
       {% endif %}
     </div>
-
-    <form id="variant-form"
-          class="app-card p-4 space-y-4 hidden"
-          data-product-id="{{ product.id }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="grid gap-4 md:grid-cols-2">
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">SKU *</label>
-          <input type="text" name="sku" class="app-input font-mono text-sm" required>
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Name *</label>
-          <input type="text" name="name" class="app-input" required>
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Colorway</label>
-          <input type="text" name="colorway" class="app-input">
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Size</label>
-          <input type="text" name="size" class="app-input">
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Material Type</label>
-          <input type="text" name="material_type" class="app-input" placeholder="e.g. PLA Silk">
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Price ($)</label>
-          <input type="number" name="price" class="app-input" step="0.01" min="0">
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Filament Grams</label>
-          <input type="number" name="estimated_filament_grams" class="app-input" min="0">
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">Print Minutes</label>
-          <input type="number" name="estimated_print_minutes" class="app-input" min="0">
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">POS Label</label>
-          <input type="text" name="pos_button_label" class="app-input">
-        </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">POS Sort Order</label>
-          <input type="number" name="pos_sort_order" class="app-input" min="0" value="0">
-        </div>
-      </div>
-      <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-        <input type="checkbox" name="active" class="app-checkbox" checked value="y">
-        <span>Active</span>
-      </label>
-      <div class="flex gap-3">
-        <button type="submit" class="app-btn app-btn-primary">Save Variant</button>
-        <button type="button" class="app-btn app-btn-secondary"
-                onclick="document.getElementById('variant-form').classList.add('hidden');document.getElementById('add-variant-btn').classList.remove('hidden');">
-          Cancel
-        </button>
-      </div>
-    </form>
   </div>
-  {% endif %}
 </section>
-{% endblock %}
-{% block scripts %}
-<script src="{{ url_for('static', filename='src/js/studio.js') }}"></script>
 {% endblock %}

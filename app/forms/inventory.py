@@ -22,7 +22,6 @@ from app.models import (
     InventoryLocation,
     InventoryRecord,
     Product,
-    ProductVariant,
 )
 
 
@@ -97,7 +96,6 @@ class InventoryLocationForm(FlaskForm):
 
 class InventoryRecordForm(FlaskForm):
     product_id = SelectField("Product", coerce=int, validators=[DataRequired()])
-    variant_id = OptionalSelectField("Variant", coerce=int, validators=[Optional()])
     location_id = SelectField("Location", coerce=int, validators=[DataRequired()])
     quantity_on_hand = IntegerField(
         "Quantity On Hand", validators=[Optional(), NumberRange(min=0)], default=0
@@ -121,12 +119,6 @@ class InventoryRecordForm(FlaskForm):
         self.product_id.choices = [
             (item.id, item.name) for item in Product.query.order_by(Product.name)
         ]
-        self.variant_id.choices = [(0, "No variant")] + [
-            (item.id, f"{item.product.name} · {item.name}")
-            for item in ProductVariant.query.join(Product).order_by(
-                Product.name, ProductVariant.name
-            )
-        ]
         self.location_id.choices = [
             (item.id, item.name)
             for item in InventoryLocation.query.order_by(InventoryLocation.name)
@@ -134,7 +126,6 @@ class InventoryRecordForm(FlaskForm):
 
     def apply(self, record: InventoryRecord) -> InventoryRecord:
         record.product_id = self.product_id.data
-        record.variant_id = self.variant_id.data or None
         record.location_id = self.location_id.data
         record.quantity_on_hand = self.quantity_on_hand.data or 0
         record.quantity_reserved = self.quantity_reserved.data or 0

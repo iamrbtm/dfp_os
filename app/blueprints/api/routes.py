@@ -41,7 +41,6 @@ from app.models import (
     MarketTimelineEvent,
     MarketTimelineEventType,
     MarketWeatherSnapshot,
-    ModelAsset,
     ModelSourceType,
     Order,
     OrderFulfillmentMethod,
@@ -65,7 +64,6 @@ from app.models import (
     Product,
     ProductStatus,
     ProductType,
-    ProductVariant,
 )
 from app.models.receipt import (
     Receipt,
@@ -93,7 +91,6 @@ from app.schemas import (
     MarketTaskSchema,
     MarketTimelineEventSchema,
     MarketWeatherSnapshotSchema,
-    ModelAssetSchema,
     OrderItemSchema,
     OrderSchema,
     PaymentSchema,
@@ -104,7 +101,6 @@ from app.schemas import (
     PrinterSchema,
     PrintJobSchema,
     ProductSchema,
-    ProductVariantSchema,
     ResourceListEnvelope,
 )
 from app.schemas.receipt import ReceiptSchema, ReceiptLineItemSchema
@@ -170,8 +166,6 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "categories": ("catalog",),
     "collections": ("catalog",),
     "products": ("catalog",),
-    "variants": ("catalog",),
-    "model-assets": ("catalog",),
     "printers": ("inventory",),
     "ams-units": ("inventory",),
     "filament-spools": ("inventory",),
@@ -273,38 +267,15 @@ def _apply_product(instance: Product, data: dict):
     instance.license_status = LicenseStatus(data["license_status"])
     instance.design_source = data.get("design_source")
     instance.commercial_license_notes = data.get("commercial_license_notes")
-
-
-def _apply_variant(instance: ProductVariant, data: dict):
-    instance.product_id = data["product_id"]
-    instance.sku = data["sku"].strip()
-    instance.name = data["name"].strip()
-    instance.colorway = data.get("colorway")
-    instance.size = data.get("size")
-    instance.material_type = data.get("material_type")
-    instance.price = data.get("price", 0) or 0
-    instance.material_cost = data.get("material_cost", 0) or 0
-    instance.estimated_print_minutes = data.get("estimated_print_minutes", 0) or 0
-    instance.estimated_filament_grams = data.get("estimated_filament_grams", 0) or 0
-    instance.active = data.get("active", True)
-    instance.pos_button_label = data.get("pos_button_label")
-    instance.pos_sort_order = data.get("pos_sort_order", 0) or 0
-    instance.barcode_or_qr_code = data.get("barcode_or_qr_code")
-
-
-def _apply_model_asset(instance: ModelAsset, data: dict):
-    instance.title = data["title"].strip()
-    instance.source_type = ModelSourceType(data["source_type"])
-    instance.source_url = data.get("source_url")
-    instance.designer_name = data.get("designer_name")
-    instance.license_type = data.get("license_type")
-    instance.commercial_use_allowed = data.get("commercial_use_allowed", False)
-    instance.license_expiration = data.get("license_expiration")
-    instance.proof_of_license_path = data.get("proof_of_license_path")
-    instance.file_location = data.get("file_location")
-    instance.related_product_id = data.get("related_product_id")
-    instance.notes = data.get("notes")
-    instance.status = LicenseStatus(data["status"])
+    if data.get("model_source_type"):
+        instance.model_source_type = ModelSourceType(data["model_source_type"])
+    instance.model_source_url = data.get("model_source_url")
+    instance.model_designer_name = data.get("model_designer_name")
+    instance.model_license_type = data.get("model_license_type")
+    instance.model_commercial_use_allowed = data.get("model_commercial_use_allowed", False)
+    instance.model_license_expiration = data.get("model_license_expiration")
+    instance.model_file_path = data.get("model_file_path")
+    instance.model_notes = data.get("model_notes")
 
 
 def _apply_printer(instance: Printer, data: dict):
@@ -381,7 +352,6 @@ def _apply_feature_flag(instance: FeatureFlag, data: dict):
 
 def _apply_inventory_record(instance: InventoryRecord, data: dict):
     instance.product_id = data["product_id"]
-    instance.variant_id = data.get("variant_id")
     instance.location_id = data["location_id"]
     instance.quantity_on_hand = data.get("quantity_on_hand", 0) or 0
     instance.quantity_reserved = data.get("quantity_reserved", 0) or 0
@@ -453,7 +423,6 @@ def _apply_order(instance: Order, data: dict):
 def _apply_order_item(instance: OrderItem, data: dict):
     instance.order_id = data["order_id"]
     instance.product_id = data.get("product_id")
-    instance.variant_id = data.get("variant_id")
     instance.quantity = data.get("quantity", 1) or 1
     instance.unit_price = data.get("unit_price", 0) or 0
     instance.line_total = data.get("line_total", 0) or 0
@@ -557,7 +526,6 @@ def _apply_market(instance: Market, data: dict):
 def _apply_market_packing_list(instance: MarketPackingList, data: dict):
     instance.market_id = data["market_id"]
     instance.product_id = data["product_id"]
-    instance.variant_id = data.get("variant_id")
     instance.planned_quantity = data.get("planned_quantity", 0) or 0
     instance.packed_quantity = data.get("packed_quantity", 0) or 0
     instance.sold_quantity = data.get("sold_quantity", 0) or 0
@@ -684,12 +652,6 @@ API_RESOURCES = {
         ["name", "slug", "sku_base"],
         _apply_product,
         list_filters=lambda stmt: stmt.where(Product.deleted_at.is_(None)),
-    ),
-    "variants": ApiResourceConfig(
-        "variants", ProductVariant, ProductVariantSchema, ["name", "sku"], _apply_variant
-    ),
-    "model-assets": ApiResourceConfig(
-        "model-assets", ModelAsset, ModelAssetSchema, ["title", "designer_name"], _apply_model_asset
     ),
     "printers": ApiResourceConfig(
         "printers", Printer, PrinterSchema, ["name", "model", "serial_number"], _apply_printer
@@ -1103,11 +1065,11 @@ class MarketPackingListsExport(MethodView):
         import io
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["id", "market_id", "product_id", "variant_id", "planned_quantity", "packed_quantity", "sold_quantity", "returned_quantity"])
+        writer.writerow(["id", "market_id", "product_id", "planned_quantity", "packed_quantity", "sold_quantity", "returned_quantity"])
         items = MarketPackingList.query.order_by(MarketPackingList.market_id).all()
         for i in items:
             writer.writerow([
-                i.id, i.market_id, i.product_id, i.variant_id or "",
+                i.id, i.market_id, i.product_id,
                 i.planned_quantity or 0, i.packed_quantity or 0, i.sold_quantity or 0, i.returned_quantity or 0
             ])
         from flask import Response
@@ -1422,11 +1384,9 @@ class CostEngineProduct(MethodView):
         product = db.session.get(Product, product_id)
         if product is None:
             return {"error": {"code": "not_found", "message": "Product not found.", "details": {}}}, 404
-        variant_id = request.args.get("variant_id", type=int)
-        variant = db.session.get(ProductVariant, variant_id) if variant_id else None
-        breakdown = calculate_product_cost(product=product, variant=variant)
+        breakdown = calculate_product_cost(product=product)
         data = {key: str(value) for key, value in breakdown.as_dict().items()}
-        data["pricing_scenarios"] = build_pricing_scenarios(product=product, variant=variant)
+        data["pricing_scenarios"] = build_pricing_scenarios(product=product)
         return {"data": data}
 
 

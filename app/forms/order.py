@@ -13,7 +13,7 @@ from wtforms import (
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
 from app.forms.common import OptionalSelectField, decimal_or_zero, enum_choices
-from app.models import Customer, Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod, Product, ProductVariant
+from app.models import Customer, Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod, Product
 
 
 class OrderForm(FlaskForm):
@@ -56,7 +56,6 @@ class OrderForm(FlaskForm):
 
 class OrderItemForm(FlaskForm):
     product_id = OptionalSelectField("Product", coerce=int, validators=[Optional()])
-    variant_id = OptionalSelectField("Variant", coerce=int, validators=[Optional()])
     quantity = IntegerField("Quantity", validators=[Optional(), NumberRange(min=1)], default=1)
     unit_price = DecimalField("Unit Price", places=2, validators=[Optional()])
     line_total = DecimalField("Line Total", places=2, validators=[Optional()])
@@ -70,16 +69,9 @@ class OrderItemForm(FlaskForm):
         self.product_id.choices = [(0, "No product")] + [
             (item.id, item.name) for item in Product.query.order_by(Product.name)
         ]
-        self.variant_id.choices = [(0, "No variant")] + [
-            (item.id, f"{item.product.name} · {item.name}")
-            for item in ProductVariant.query.join(Product).order_by(
-                Product.name, ProductVariant.name
-            )
-        ]
 
     def apply(self, item: OrderItem) -> OrderItem:
         item.product_id = self.product_id.data or None
-        item.variant_id = self.variant_id.data or None
         item.quantity = self.quantity.data or 1
         item.unit_price = decimal_or_zero(self.unit_price.data)
         item.line_total = decimal_or_zero(self.line_total.data)

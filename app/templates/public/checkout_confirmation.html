@@ -38,7 +38,7 @@
       {% for item in order.items %}
         <div class="flex items-center justify-between gap-3">
           <div>
-            <p class="font-medium" style="color: var(--color-text);">{{ item.variant.name if item.variant else item.product.name if item.product else item.custom_description }}</p>
+            <p class="font-medium" style="color: var(--color-text);">{{ item.product.name if item.product else item.custom_description }}</p>
             <p class="text-sm" style="color: var(--color-text-muted);">Qty {{ item.quantity }}</p>
           </div>
           <span style="color: var(--color-text);">${{ '%.2f'|format(item.line_total) }}</span>

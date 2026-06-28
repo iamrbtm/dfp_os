@@ -19,7 +19,6 @@ def create_print_job_from_order_item(
     job = PrintJob(
         order_item=order_item,
         product_id=order_item.product_id,
-        variant_id=order_item.variant_id,
         status=PrintJobStatus.QUEUED,
         priority=priority,
         estimated_minutes=estimated_minutes,

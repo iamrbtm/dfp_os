@@ -70,11 +70,11 @@ MODULES: dict[str, ModuleDefinition] = {
     "products": ModuleDefinition(
         key="products",
         display_name="Products",
-        description="Products, variants, categories, collections, and license tracking.",
+        description="Product Studio, categories, collections, and product license tracking.",
         feature_flag_key="module.products.enabled",
         blueprint_names=("products",),
-        api_resources=("products", "categories", "collections", "variants", "model-assets"),
-        admin_nav_entries=(NavEntry("Products", "products.list_resource"),),
+        api_resources=("products", "categories", "collections"),
+        admin_nav_entries=(NavEntry("Product Studio", "products.studio"),),
     ),
     "inventory": ModuleDefinition(
         key="inventory",

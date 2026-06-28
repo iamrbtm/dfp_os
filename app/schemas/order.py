@@ -7,7 +7,6 @@ class OrderItemSchema(Schema):
     id = fields.Integer(dump_only=True)
     order_id = fields.Integer(dump_only=True)
     product_id = fields.Integer(allow_none=True)
-    variant_id = fields.Integer(allow_none=True)
     quantity = fields.Integer()
     unit_price = fields.Decimal(as_string=True)
     line_total = fields.Decimal(as_string=True)

@@ -10,13 +10,9 @@ from flask import current_app
 
 from app.celery_app import celery
 from app.extensions import db
-from app.models.catalog import ModelAsset
+from app.models.catalog import Product
 from app.services.cost_engine import calculate_product_cost, persist_cost_snapshot
-from app.services.model_analysis import (
-    convert_to_glb,
-    slice_with_prusaslicer,
-    validate_model_file,
-)
+from app.services.model_analysis import convert_to_glb, slice_with_prusaslicer, validate_model_file
 from app.services.storage import (
     converted_storage_key,
     download_storage_bytes,
@@ -30,81 +26,41 @@ from app.services.storage import (
 )
 
 
-def _preferred_gcode_filename(asset: ModelAsset) -> str:
-    if asset.variant is not None:
-        label = asset.variant.size or asset.variant.name or asset.variant.sku or f"variant-{asset.variant_id}"
-        return f"{storage_slug(label, fallback=f'variant-{asset.variant_id or asset.id or 0}')}.gcode"
-
-    if asset.product is not None:
-        label = asset.product.slug or asset.product.name or f"product-{asset.related_product_id or asset.id or 0}"
-        return f"{storage_slug(label, fallback=f'product-{asset.related_product_id or asset.id or 0}')}.gcode"
-
-    source_name = storage_reference_name(asset.file_location)
-    if source_name:
-        return f"{Path(source_name).stem}.gcode"
-    return f"asset-{asset.id or 0}.gcode"
+def _preferred_gcode_filename(product: Product) -> str:
+    label = product.slug or product.name or f"product-{product.id or 0}"
+    return f"{storage_slug(label, fallback=f'product-{product.id or 0}')}.gcode"
 
 
-def _preferred_converted_filename(asset: ModelAsset) -> str:
-    source_name = storage_reference_name(asset.file_location)
-    source_stem = Path(source_name).stem if source_name else f"asset-{asset.id or 0}"
-    if asset.variant_id is not None:
-        return normalize_storage_filename(f"{asset.variant_id}_{source_stem}.glb")
+def _preferred_converted_filename(product: Product) -> str:
+    source_name = storage_reference_name(product.model_file_path)
+    source_stem = Path(source_name).stem if source_name else f"product-{product.id or 0}"
     return normalize_storage_filename(f"{source_stem}.glb")
 
 
-def _apply_initial_cost_snapshot(asset: ModelAsset) -> None:
-    product = asset.product
-    if product is None:
-        return
-
-    if asset.variant is not None:
-        breakdown = calculate_product_cost(
-            product=product,
-            variant=asset.variant,
-            sale_price=asset.variant.price,
-        )
-        asset.variant.material_cost = breakdown.material_cost
-        asset.variant.estimated_filament_grams = int(round(float(breakdown.filament_grams)))
-        asset.variant.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
-        persist_cost_snapshot(
-            product=product,
-            variant=asset.variant,
-            breakdown=breakdown,
-            snapshot_reason="model_analysis.variant",
-        )
-        return
-
-    breakdown = calculate_product_cost(
-        product=product,
-    )
+def _apply_initial_cost_snapshot(product: Product) -> None:
+    breakdown = calculate_product_cost(product=product)
     product.estimated_material_cost = breakdown.material_cost
     product.estimated_profit = breakdown.margin_dollars
     product.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
-    persist_cost_snapshot(
-        product=product,
-        variant=None,
-        breakdown=breakdown,
-        snapshot_reason="model_analysis.product",
-    )
+    persist_cost_snapshot(product=product, breakdown=breakdown, snapshot_reason="model_analysis.product")
 
 
 @celery.task(bind=True, max_retries=2, default_retry_delay=30)
-def analyze_model_asset(self, asset_id: int) -> dict:
-    asset = db.session.get(ModelAsset, asset_id)
-    if asset is None:
-        return {"success": False, "error": "Asset not found"}
+def analyze_product_model(self, product_id: int) -> dict:
+    product = db.session.get(Product, product_id)
+    if product is None:
+        return {"success": False, "error": "Product not found"}
 
     work_dir: Path | None = None
     gcode_path: Path | None = None
 
     try:
-        asset.analysis_status = "analyzing"
+        product.analysis_status = "analyzing"
         db.session.commit()
 
-        file_location = asset.file_location
+        file_location = product.model_file_path
         if not file_location:
-            raise ValueError("No file location set on asset")
+            raise ValueError("No file location set on product")
 
         tmp_dir = Path(tempfile.mkdtemp(prefix="dfp-model-"))
         work_dir = tmp_dir
@@ -122,27 +78,22 @@ def analyze_model_asset(self, asset_id: int) -> dict:
 
         validation = validate_model_file(model_path)
         if not validation.success:
-            asset.analysis_status = "failed"
-            asset.analysis_error = validation.error
+            product.analysis_status = "failed"
+            product.analysis_error = validation.error
             db.session.commit()
             return {"success": False, "error": validation.error}
 
-        asset.parsed_volume_mm3 = Decimal(str(validation.volume_mm3))
-        asset.parsed_surface_area_mm2 = Decimal(str(validation.surface_area_mm2))
-        asset.parsed_triangle_count = validation.triangle_count
+        product.parsed_volume_mm3 = Decimal(str(validation.volume_mm3))
+        product.parsed_surface_area_mm2 = Decimal(str(validation.surface_area_mm2))
+        product.parsed_triangle_count = validation.triangle_count
         db.session.commit()
 
-        asset.analysis_status = "slicing"
+        product.analysis_status = "slicing"
         db.session.commit()
 
         gcode_out = tmp_dir / "quote.gcode"
         slicer_errors: list[str] = []
-
-        slicer_result = slice_with_prusaslicer(
-            model_path,
-            profile_name=None,
-            output_path=gcode_out,
-        )
+        slicer_result = slice_with_prusaslicer(model_path, profile_name=None, output_path=gcode_out)
 
         if not slicer_result.success:
             slicer_errors.append(f"centered: {slicer_result.error}")
@@ -155,46 +106,30 @@ def analyze_model_asset(self, asset_id: int) -> dict:
 
         if not slicer_result.success:
             slicer_errors.append(f"uncentered: {slicer_result.error}")
-            asset.analysis_status = "failed"
-            asset.analysis_error = (
-                "Could not slice this model with PrusaSlicer.\n"
-                + "\n".join(slicer_errors)
-            )
-            asset.analysis_completed_at = datetime.now(timezone.utc)
+            product.analysis_status = "failed"
+            product.analysis_error = "Could not slice this model with PrusaSlicer.\n" + "\n".join(slicer_errors)
+            product.analysis_completed_at = datetime.now(timezone.utc)
             db.session.commit()
             return {
                 "success": False,
-                "asset_id": asset.id,
+                "product_id": product.id,
                 "slicer_skipped": True,
                 "slicer_errors": slicer_errors,
-                "validation": {
-                    "volume_mm3": validation.volume_mm3,
-                    "surface_area_mm2": validation.surface_area_mm2,
-                    "triangle_count": validation.triangle_count,
-                    "is_watertight": validation.is_watertight,
-                },
             }
 
-        asset.parsed_filament_grams = slicer_result.filament_grams
-        asset.parsed_print_minutes = slicer_result.print_minutes
+        product.parsed_filament_grams = slicer_result.filament_grams
+        product.parsed_print_minutes = slicer_result.print_minutes
         from app.services.cost_engine import _best_spool_match
 
-        material_type = asset.variant.material_type if asset.variant is not None else None
-        cost_per_gram, _spool_id = _best_spool_match(material_type)
-        asset.parsed_material_cost = (
-            slicer_result.filament_grams * cost_per_gram
-        ).quantize(Decimal("0.01"))
+        cost_per_gram, _spool_id = _best_spool_match()
+        product.parsed_material_cost = (slicer_result.filament_grams * cost_per_gram).quantize(
+            Decimal("0.01")
+        )
         gcode_path = gcode_out
 
         if gcode_path and gcode_path.exists():
             try:
-                prod_id = asset.related_product_id or 0
-                var_id = asset.variant_id
-                gcode_key = gcode_storage_key(
-                    prod_id,
-                    _preferred_gcode_filename(asset),
-                    variant_id=var_id,
-                )
+                gcode_key = gcode_storage_key(product.id, _preferred_gcode_filename(product))
                 gcode_ref = upload_bytes_to_storage(
                     gcode_path.read_bytes(),
                     bucket=current_app.config.get("PRODUCT_ASSETS_BUCKET", "products"),
@@ -202,48 +137,36 @@ def analyze_model_asset(self, asset_id: int) -> dict:
                     local_root=current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products"),
                     content_type="text/plain",
                 )
-                asset.gcode_path = gcode_ref
+                product.gcode_path = gcode_ref
             except Exception as exc:
                 import logging
+
                 logging.getLogger(__name__).warning(
-                    "Failed to upload G-code for asset %s: %s", asset.id, exc
+                    "Failed to upload G-code for product %s: %s", product.id, exc
                 )
 
-        asset.analysis_status = "complete"
-        asset.analysis_completed_at = datetime.now(timezone.utc)
-        _apply_initial_cost_snapshot(asset)
-
+        product.analysis_status = "complete"
+        product.analysis_completed_at = datetime.now(timezone.utc)
+        _apply_initial_cost_snapshot(product)
         db.session.commit()
 
-        convert_task = convert_model_asset_for_viewer.delay(asset_id)
-
+        convert_task = convert_product_model_for_viewer.delay(product_id)
         return {
             "success": True,
-            "asset_id": asset.id,
+            "product_id": product.id,
             "filament_grams": str(slicer_result.filament_grams),
             "print_minutes": str(slicer_result.print_minutes),
             "slicer_profile": slicer_result.profile_used,
-            "validation": {
-                "volume_mm3": validation.volume_mm3,
-                "surface_area_mm2": validation.surface_area_mm2,
-                "triangle_count": validation.triangle_count,
-                "is_watertight": validation.is_watertight,
-                "printer_fit": validation.printer_fit,
-            },
             "convert_task_id": convert_task.id,
         }
-
     except Exception as exc:
-        if asset is not None:
-            asset.analysis_status = "failed"
-            asset.analysis_error = str(exc)
-            db.session.commit()
-        raise analyze_model_asset.retry(exc=exc)
-
+        product.analysis_status = "failed"
+        product.analysis_error = str(exc)
+        db.session.commit()
+        raise analyze_product_model.retry(exc=exc)
     finally:
         if work_dir and work_dir.exists():
             shutil.rmtree(work_dir, ignore_errors=True)
-
         if gcode_path and gcode_path.exists():
             try:
                 gcode_path.unlink()
@@ -252,20 +175,20 @@ def analyze_model_asset(self, asset_id: int) -> dict:
 
 
 @celery.task(bind=True, max_retries=1)
-def convert_model_asset_for_viewer(self, asset_id: int) -> dict:
-    asset = db.session.get(ModelAsset, asset_id)
-    if asset is None:
-        return {"success": False, "error": "Asset not found"}
+def convert_product_model_for_viewer(self, product_id: int) -> dict:
+    product = db.session.get(Product, product_id)
+    if product is None:
+        return {"success": False, "error": "Product not found"}
 
     try:
-        file_location = asset.file_location
+        file_location = product.model_file_path
         if not file_location:
             return {"success": False, "error": "No file location"}
 
         ext = Path(file_location).suffix.lower()
         if ext == ".glb":
-            asset.convert_status = "complete"
-            asset.converted_model_path = file_location
+            product.convert_status = "complete"
+            product.converted_model_path = file_location
             db.session.commit()
             return {"success": True, "converted_path": file_location}
 
@@ -277,21 +200,15 @@ def convert_model_asset_for_viewer(self, asset_id: int) -> dict:
         output_path = tmp_dir / "converted.glb"
         converted = convert_to_glb(source_path, output_path)
         if converted is None:
-            asset.convert_status = "failed"
-            asset.conversion_error = "Conversion to GLB failed"
+            product.convert_status = "failed"
+            product.conversion_error = "Conversion to GLB failed"
             db.session.commit()
             shutil.rmtree(tmp_dir, ignore_errors=True)
             return {"success": False, "error": "Conversion failed"}
 
         bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
         local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
-        prod_id = asset.related_product_id or 0
-        key = converted_storage_key(
-            prod_id,
-            _preferred_converted_filename(asset),
-            variant_id=asset.variant_id,
-        )
-
+        key = converted_storage_key(product.id, _preferred_converted_filename(product))
         storage_ref = upload_file_to_storage(
             output_path,
             bucket=bucket,
@@ -301,15 +218,12 @@ def convert_model_asset_for_viewer(self, asset_id: int) -> dict:
         )
 
         shutil.rmtree(tmp_dir, ignore_errors=True)
-
-        asset.convert_status = "complete"
-        asset.converted_model_path = storage_ref
+        product.convert_status = "complete"
+        product.converted_model_path = storage_ref
         db.session.commit()
-
         return {"success": True, "converted_path": storage_ref}
-
     except Exception as exc:
-        asset.convert_status = "failed"
-        asset.conversion_error = str(exc)
+        product.convert_status = "failed"
+        product.conversion_error = str(exc)
         db.session.commit()
         return {"success": False, "error": str(exc)}

@@ -8,26 +8,20 @@ from app import create_app
 from app.extensions import db
 from app.models import Category, Collection, Product, ProductStatus, ProductType, User, UserRole
 from app.services.api_tokens import create_api_token
+from tests.db_support import base_test_app_config, configured_test_database_url, ensure_database_exists
 
 
 @pytest.fixture()
 def app(tmp_path: Path):
-    database_path = tmp_path / "test.db"
-    upload_path = tmp_path / "uploads"
+    ensure_database_exists(configured_test_database_url())
 
     app = create_app(
         "testing",
-        {
-            "TESTING": True,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
-            "UPLOAD_FOLDER": str(upload_path),
-            "ADMIN_EMAIL": "admin@example.com",
-            "ADMIN_PASSWORD": "change-me-now",
-            "SERVER_NAME": "localhost.localdomain",
-        },
+        base_test_app_config(tmp_path),
     )
 
     with app.app_context():
+        db.drop_all()
         db.create_all()
         yield app
         db.session.remove()

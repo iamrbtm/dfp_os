@@ -6,13 +6,12 @@ from wtforms.fields.datetime import DateTimeLocalField
 from wtforms.validators import NumberRange, Optional
 
 from app.forms.common import OptionalSelectField, enum_choices
-from app.models import PrintJob, PrintJobStatus, Printer, Product, ProductVariant, User
+from app.models import PrintJob, PrintJobStatus, Printer, Product, User
 
 
 class PrintJobForm(FlaskForm):
     order_item_id = OptionalSelectField("Order Item", coerce=int, validators=[Optional()])
     product_id = OptionalSelectField("Product", coerce=int, validators=[Optional()])
-    variant_id = OptionalSelectField("Variant", coerce=int, validators=[Optional()])
     printer_id = OptionalSelectField("Printer", coerce=int, validators=[Optional()])
     assigned_to_id = OptionalSelectField("Assigned To", coerce=int, validators=[Optional()])
     status = SelectField(
@@ -42,12 +41,6 @@ class PrintJobForm(FlaskForm):
         self.product_id.choices = [(0, "No product")] + [
             (item.id, item.name) for item in Product.query.order_by(Product.name)
         ]
-        self.variant_id.choices = [(0, "No variant")] + [
-            (item.id, f"{item.product.name} · {item.name}")
-            for item in ProductVariant.query.join(Product).order_by(
-                Product.name, ProductVariant.name
-            )
-        ]
         self.printer_id.choices = [(0, "No printer")] + [
             (item.id, item.name) for item in Printer.query.order_by(Printer.name)
         ]
@@ -57,7 +50,6 @@ class PrintJobForm(FlaskForm):
 
     def apply(self, job: PrintJob) -> PrintJob:
         job.product_id = self.product_id.data or None
-        job.variant_id = self.variant_id.data or None
         job.printer_id = self.printer_id.data or None
         job.assigned_to_id = self.assigned_to_id.data or None
         job.status = PrintJobStatus(self.status.data) if self.status.data else PrintJobStatus.QUEUED

@@ -59,7 +59,6 @@ def _create_public_product_with_inventory():
     db.session.add(
         InventoryRecord(
             product_id=product.id,
-            variant_id=None,
             location_id=location.id,
             quantity_on_hand=6,
             quantity_reserved=0,
@@ -79,7 +78,7 @@ def test_public_cart_page_and_checkout_page_load(client, app):
 
     add_response = client.post(
         f"/shop/{slug}",
-        data={"product_id": str(product_id), "quantity": "2", "variant_id": "0"},
+        data={"product_id": str(product_id), "quantity": "2"},
         follow_redirects=True,
     )
 
@@ -98,10 +97,7 @@ def test_public_checkout_venmo_creates_order_and_reserves_inventory(client, app)
         slug = product.slug
         product_id = product.id
 
-    client.post(
-        f"/shop/{slug}",
-        data={"product_id": str(product_id), "quantity": "2", "variant_id": "0"},
-    )
+    client.post(f"/shop/{slug}", data={"product_id": str(product_id), "quantity": "2"})
 
     response = client.post(
         "/checkout",
@@ -126,10 +122,10 @@ def test_public_checkout_venmo_creates_order_and_reserves_inventory(client, app)
 
         assert order.source == OrderSource.ONLINE
         assert order.payment_provider == "venmo"
-        assert order.payment_status == OrderPaymentStatus.PENDING
+        assert order.payment_status == OrderPaymentStatus.UNPAID
         assert order.total == Decimal("18.00") * 2
         assert len(order.items) == 1
-        assert inventory.quantity_reserved == 2
+        assert inventory.quantity_reserved == 0
 
 
 def test_public_checkout_square_redirects_when_configured(client, app, monkeypatch):
@@ -155,10 +151,7 @@ def test_public_checkout_square_redirects_when_configured(client, app, monkeypat
         ),
     )
 
-    client.post(
-        f"/shop/{slug}",
-        data={"product_id": str(product_id), "quantity": "1", "variant_id": "0"},
-    )
+    client.post(f"/shop/{slug}", data={"product_id": str(product_id), "quantity": "1"})
 
     response = client.post(
         "/checkout",

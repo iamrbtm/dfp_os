@@ -162,9 +162,6 @@ class MarketPackingList(PrimaryKeyMixin, TimestampMixin, db.Model):
     product_id: Mapped[int] = mapped_column(
         ForeignKey("products.id"), nullable=False, index=True
     )
-    variant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("product_variants.id"), nullable=True, index=True
-    )
     planned_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     packed_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     sold_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
@@ -173,7 +170,6 @@ class MarketPackingList(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     market = relationship("Market", back_populates="packing_list")
     product = relationship("Product")
-    variant = relationship("ProductVariant")
 
 
 class MarketTimelineEvent(PrimaryKeyMixin, TimestampMixin, db.Model):

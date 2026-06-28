@@ -104,7 +104,6 @@ class MarketForm(FlaskForm):
 
 class MarketPackingListForm(FlaskForm):
     product_id = SelectField("Product", coerce=int, validators=[DataRequired()])
-    variant_id = SelectField("Variant", coerce=int, validators=[Optional()])
     planned_quantity = IntegerField("Planned Quantity", validators=[Optional(), NumberRange(min=0)], default=0)
     packed_quantity = IntegerField("Packed Quantity", validators=[Optional(), NumberRange(min=0)], default=0)
     sold_quantity = IntegerField("Sold Quantity", validators=[Optional(), NumberRange(min=0)], default=0)
@@ -114,17 +113,13 @@ class MarketPackingListForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from app.models import Product, ProductVariant
+        from app.models import Product
         self.product_id.choices = [
             (p.id, p.name) for p in Product.query.order_by(Product.name)
-        ]
-        self.variant_id.choices = [(0, "No variant")] + [
-            (v.id, f"{v.sku} - {v.name}") for v in ProductVariant.query.order_by(ProductVariant.sku)
         ]
 
     def apply(self, item: MarketPackingList) -> MarketPackingList:
         item.product_id = self.product_id.data
-        item.variant_id = self.variant_id.data or None
         item.planned_quantity = self.planned_quantity.data or 0
         item.packed_quantity = self.packed_quantity.data or 0
         item.sold_quantity = self.sold_quantity.data or 0

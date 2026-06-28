@@ -3,14 +3,11 @@ from app.forms.admin import BusinessForm, FeatureFlagForm, PrepTaskAdminForm, Pr
 from app.forms.catalog import (
     CategoryForm,
     CollectionForm,
-    ModelAssetForm,
     ProductForm,
-    ProductVariantForm,
 )
 from app.forms.studio import (
-    ModelAssetUploadForm,
+    ProductModelUploadForm,
     ProductStudioForm,
-    VariantInlineForm,
 )
 from app.forms.custom_request import CustomRequestForm, PublicCustomRequestForm
 from app.forms.expense import ExpenseForm
@@ -63,8 +60,6 @@ __all__ = [
     "MarketPackingListForm",
     "MarketTaskForm",
     "MarketTimelineEventForm",
-    "ModelAssetForm",
-    "ModelAssetUploadForm",
     "OrderForm",
     "OrderItemForm",
     "PaymentForm",
@@ -74,9 +69,8 @@ __all__ = [
     "PrepTaskTemplateForm",
     "PrinterForm",
     "PrintJobForm",
+    "ProductModelUploadForm",
     "ProductForm",
     "ProductStudioForm",
-    "ProductVariantForm",
     "PublicCustomRequestForm",
-    "VariantInlineForm",
 ]

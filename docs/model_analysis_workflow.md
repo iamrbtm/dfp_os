@@ -1,183 +1,62 @@
 # Model Analysis Workflow
 
-From file upload to finished cost calculation — what the program does at each step.
+From file upload to finished cost calculation in the product-studio-only catalog.
 
 ---
 
-## 1. User drops a file on a drop zone
+## 1. User drops a file in Product Studio
 
-**What happens:**
-- The drop zone (product-level or variant-level) captures the file
-- `initModelUpload()` or `initVariantModelUpload()` in `studio.js` handles the click/drag-and-drop
-- The file input's `change` event updates the drop zone label with the filename
+- `app/static/src/js/studio.js` handles click, drag-and-drop, and filename preview.
+- The browser posts `FormData` with only the model file to `/products/studio/{product_id}/upload-model`.
 
-## 2. User clicks "Upload" / "Upload for Variant"
+## 2. Flask stores the model on the product record
 
-**What happens:**
-- JS builds a `FormData` with the file, title, source type, license info, and optional `variant_id`
-- `fetch` POSTs to `/products/studio/{product_id}/upload-model`
-- The button is disabled and shows "Uploading..."
+**File:** `app/blueprints/products/studio_routes.py`
 
-## 3. Flask route `upload_model()` validates and saves
+- Validates the upload with `ProductModelUploadForm`.
+- Writes the file to product storage at `products/{product_id}/{filename}`.
+- Stores the path directly on `Product.model_file_path`.
+- Resets analysis/conversion status fields on the same product row.
+- Dispatches Celery task `analyze_product_model.delay(product_id)` when Celery is available.
 
-**File: `app/blueprints/products/studio_routes.py:132-195`**
+## 3. Browser polls task status
 
-What happens:
-1. Validates the `ModelAssetUploadForm` (file type, size, required fields)
-2. Generates a UUID filename (`{uuid}.stl`)
-3. Reads the file bytes
-4. Uploads to storage via `upload_bytes_to_storage()`:
-   - S3 mode → uploads to SeaweedFS bucket `products`
-   - Local mode → saves to `uploads/products/{product_id}/{uuid}.stl` for product-level files or `uploads/products/{product_id}/variants/{variant_id}/{uuid}.stl` for variant files
-5. Creates a `ModelAsset` DB row with:
-   - `status = "pending"`
-   - `analysis_status = "pending"`
-   - `variant_id` = the variant ID if uploading for a variant
-   - `related_product_id` = the product ID
-6. Dispatches Celery task `analyze_model_asset.delay(asset_id)`
-7. Returns JSON `{asset_id, task_id}` to the browser
+- `GET /products/studio/task-status/{task_id}` is polled until success or failure.
+- On success the page reloads and Product Studio shows the refreshed analysis/cost data.
 
-## 4. Browser starts polling
+## 4. Celery validates and slices the model
 
-**File: `app/static/src/js/studio.js:290-324`** (`pollTask()`)
+**File:** `app/tasks/model_analysis.py`
 
-- Polls every 1.5 seconds via `GET /products/studio/task-status/{task_id}`
-- Shows flash messages: "Model uploaded. Analysis started."
-- Continues until task state is `SUCCESS` or `FAILURE`
-- Timeout after 120 seconds
+- Loads the uploaded model from storage.
+- Runs `validate_model_file()` to extract:
+  - volume
+  - surface area
+  - triangle count
+- Runs `slice_with_prusaslicer()` to estimate:
+  - filament grams
+  - print minutes
+- Writes parsed values back onto the `Product` row.
+- Uploads generated G-code to `Product.gcode_path`.
+- Triggers GLB conversion and stores the result on `Product.converted_model_path`.
 
-## 5. Celery task `analyze_model_asset` runs
+## 5. Cost engine uses product-level analysis
 
-**File: `app/tasks/model_analysis.py:20-146`**
+**File:** `app/services/cost_engine.py`
 
-### 5a. Status → "analyzing"
+- Reads the latest parsed values directly from the product record.
+- Resolves spool cost from current filament inventory.
+- Calculates:
+  - material cost
+  - labor cost
+  - machine cost
+  - failure adjustment
+  - total cost
+  - suggested price
+  - margin
+- Stores a product-level `CostSnapshot`.
 
-- Sets `asset.analysis_status = "analyzing"`
-- Downloads the model file from storage to a temp directory
+## 6. Product Studio shows the result
 
-### 5b. Validation with trimesh
-
-**File: `app/services/model_analysis.py:64-141`** (`validate_model_file()`)
-
-- Loads the model with trimesh
-- Calculates: volume (mm³), surface area (mm²), triangle count
-- Checks if the mesh is **watertight** (no holes)
-- Calculates bounding box dimensions
-- Checks if the model fits on the printer bed (256mm³)
-- Detects inch-scale models (largest dimension < 10mm → suggests 25.4x scaling)
-- Saves validation results to the asset record (`parsed_volume_mm3`, `parsed_surface_area_mm2`, `parsed_triangle_count`)
-- If validation fails → status = "failed", returns error
-
-### 5c. Status → "slicing"
-
-- Sets `asset.analysis_status = "slicing"`
-
-### 5d. Attempt 1: PrusaSlicer with centering
-
-**File: `app/services/model_analysis.py:144-222`** (`slice_with_prusaslicer()`)
-
-- Runs: `prusa-slicer --export-gcode --load {profile} --output {gcode} --center 128,128 {model.stl}`
-- Profile: `bambu_a1.ini` (default) — 0.4mm nozzle, 0.2mm layer height, 20% infill, PLA
-- `--center 128,128` positions the model in the center of the 256mm³ bed
-- Timeout: 600 seconds
-
-### 5e. Attempt 2: PrusaSlicer without centering
-
-If Attempt 1 fails (no G-code produced): retry without `--center` flag. Some models with odd geometry fail when centering is applied.
-
-### 5f. Parse G-code
-
-**File: `app/services/model_analysis.py:228-289`** (`_parse_gcode_stats()`)
-
-- Reads the last 500 lines of the G-code file
-- Extracts `total filament used [g]` — if 0.00, falls back to `filament used [cm3]` × 1.24 (PLA density)
-- Extracts `estimated printing time (normal mode)` — parses `Xh Ym Zs` format
-- If both found → success, returns `{filament_grams, print_minutes}`
-
-### 5g. Calculate material cost
-
-- Default cost per gram: $0.025 (overridable via `cost_engine_cost_per_gram` setting)
-- `material_cost = filament_grams × cost_per_gram`
-
-### 5h. Save results
-
-- `parsed_filament_grams` — e.g. 70.97 (g)
-- `parsed_print_minutes` — e.g. 349.22 (min)
-- `parsed_material_cost` — e.g. $1.77
-- `analysis_status = "complete"`
-- Immediately updates the matching product or variant cost snapshot so the studio shows initial material/print-time cost data without needing a separate manual calculate action
-
-### 5i. Dispatch conversion task
-
-- Dispatches `convert_model_asset_for_viewer.delay(asset_id)`
-- Converts the model to GLB format for the 3D viewer
-
-## 6. Conversion task `convert_model_asset_for_viewer`
-
-**File: `app/tasks/model_analysis.py:155-213`**
-
-- If file is already `.glb` → uses it directly
-- Otherwise, loads with trimesh and exports as GLB
-- Uploads the converted GLB back into the same product or variant folder as the source asset
-- Sets `converted_model_path` and `convert_status = "complete"`
-
-## 7. Browser detects task completion
-
-- `pollTask()` sees state = `SUCCESS`
-- Calls `location.reload()` to refresh the page
-
-## 8. Page reload renders the 3D preview
-
-**File: `app/templates/products/studio.html`**
-
-- Template renders `<model-viewer>` with `src` pointing to `view_model` endpoint
-- Model viewer shows the 3D model with orbit controls and auto-rotate
-
-## 9. Cost Calculation
-
-**File: `app/services/cost_engine.py:60-110`** (`calculate_product_cost()`)
-
-1. Calls `_latest_model_analysis(product, variant)`:
-   - If a variant is provided → uses only that variant's most recently analyzed asset
-   - If no variant is provided → uses the product-level asset set only
-2. Gets `filament_grams` and `print_minutes` from model analysis (preferred) or from cached variant values
-3. Calculates material cost: `filament_grams × cost_per_gram`
-4. Calculates labor cost: `(labor_minutes / 60) × labor_rate`
-5. Calculates machine cost: `(print_minutes / 60) × machine_hour_rate`
-6. Calculates packaging cost (default $0.50)
-7. Calculates failure adjustment: `base_cost × failure_rate` (default 5%)
-8. Calculates payment fees (default 0%)
-9. `total_cost = material + labor + machine + packaging + failure + fees`
-10. `suggested_price = total_cost / (1 - target_margin_percent/100)`
-11. Returns `CostBreakdown` with all values
-
-The upload-analysis task now uses this service immediately after a successful slice so the initial studio view has real cost numbers. The manual calculate buttons remain available for re-runs after field changes.
-
-## 10. Task saves results back to variant record
-
-**File: `app/tasks/cost_calculation.py:84-128`** (`calculate_variant_cost_task()`)
-
-- `variant.material_cost = breakdown.material_cost`
-- `variant.estimated_filament_grams = round(breakdown.filament_grams)`
-- `variant.estimated_print_minutes = round(breakdown.print_minutes)`
-- Commits to database
-
-## 11. Browser reloads to show updated variant row
-
----
-
-## Bugfix: Wrong material cost on Medium variant
-
-**Root cause:** `calculate_product_cost()` checked cached `variant.estimated_filament_grams` first. When the Medium variant was calculated before its own model was uploaded, `_latest_model_analysis(variant=Medium)` fell back to product-level assets and picked up the Large model's values (206.60g). These got cached onto the Medium variant. Every subsequent calculation saw non-zero cached values and **skipped the model analysis lookup entirely**, so Medium kept using Large's wrong values forever.
-
-**Fix:** Model analysis data now always takes priority over cached values, and variant calculations read only variant-scoped analyzed assets. PrusaSlicer output is the source of truth when available:
-```python
-model_data = _latest_model_analysis(product, variant)
-if model_data:
-    filament_grams = model_data["filament_grams"]
-    print_minutes = model_data["print_minutes"]
-else:
-    # fall back to cached estimates
-    filament_grams = variant.estimated_filament_grams
-    print_minutes = variant.estimated_print_minutes
-```
+- Product Studio reads analysis, pricing, model preview, and images from the same `Product` record.
+- There is no separate variant or model-asset layer in the active workflow anymore.

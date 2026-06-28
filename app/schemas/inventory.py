@@ -36,7 +36,6 @@ class InventoryLocationSchema(Schema):
 class InventoryRecordSchema(Schema):
     id = fields.Integer(dump_only=True)
     product_id = fields.Integer(required=True)
-    variant_id = fields.Integer(allow_none=True)
     location_id = fields.Integer(required=True)
     quantity_on_hand = fields.Integer()
     quantity_reserved = fields.Integer()

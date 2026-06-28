@@ -3,10 +3,8 @@ from app.schemas.admin import BusinessSchema, FeatureFlagSchema, PrepTaskSchema,
 from app.schemas.catalog import (
     CategorySchema,
     CollectionSchema,
-    ModelAssetSchema,
     PaginationSchema,
     ProductSchema,
-    ProductVariantSchema,
     ResourceListEnvelope,
 )
 from app.schemas.custom_request import CustomRequestSchema
@@ -58,7 +56,6 @@ __all__ = [
     "MarketTimelineEventSchema",
     "MarketWeatherSnapshotSchema",
     "InventoryRecordSchema",
-    "ModelAssetSchema",
     "OrderItemSchema",
     "OrderSchema",
     "PaginationSchema",
@@ -74,6 +71,5 @@ __all__ = [
     "PrintJobSchema",
     "ProductSchema",
     "SettingSchema",
-    "ProductVariantSchema",
     "ResourceListEnvelope",
 ]

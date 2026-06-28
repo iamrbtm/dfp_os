@@ -174,8 +174,8 @@ Rules:
 
 Key cross-module interactions:
 
-- Products, categories, collections, and variants drive public catalog, POS visibility, and inventory records.
-- Inventory connects products or variants to physical locations and powers restock and POS deduction workflows.
+- Product Studio records, categories, and collections drive public catalog, POS visibility, and inventory records.
+- Inventory connects product records to physical locations and powers restock and POS deduction workflows.
 - Orders connect customers, line items, payments, channels, and fulfillment.
 - Custom requests may create deposits, customer records, and follow-on orders.
 - Markets and POS sessions provide market attribution for sales and analytics.

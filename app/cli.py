@@ -5,9 +5,7 @@ from flask import current_app
 from pathlib import Path
 
 from app.extensions import db
-from app.models.catalog import ModelAsset, ProductImage
-from app.services.demo_seed import seed_demo_data
-from app.services.events_seed import seed_events_2026
+from app.models.catalog import Product, ProductImage
 from app.services.storage import (
     converted_storage_key,
     delete_storage_reference,
@@ -52,6 +50,8 @@ def seed_admin() -> None:
 @seed_group.command("demo")
 def seed_demo() -> None:
     """Create Phase 3 demo data (catalog, fleet, orders, customers, print jobs)."""
+    from app.services.demo_seed import seed_demo_data
+
     counts = seed_demo_data(
         admin_email=current_app.config["ADMIN_EMAIL"],
         admin_password=current_app.config["ADMIN_PASSWORD"],
@@ -64,6 +64,8 @@ def seed_demo() -> None:
 @seed_group.command("events-2026")
 def seed_events_2026_command() -> None:
     """Seed 2026 Clarksville-area events and markets (dummy data based on web research)."""
+    from app.services.events_seed import seed_events_2026
+
     counts = seed_events_2026()
     click.echo("2026 events seed complete.")
     for key, value in counts.items():
@@ -80,9 +82,7 @@ def migrate_file_paths() -> None:
     """Migrate product asset file paths to the new structured layout.
 
     Old layout: products/{id}/models|converted|gcode|images/file.ext
-                products/{id}/variants/{vid}/models|converted|gcode|images/file.ext
     New layout: products/{id}/file.ext
-                products/{id}/variants/{vid}/file.ext
     """
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
@@ -94,7 +94,6 @@ def migrate_file_paths() -> None:
         ref: str | None,
         *,
         product_id: int,
-        variant_id: int | None,
         storage_key_fn,
     ) -> str | None:
         if not ref:
@@ -104,7 +103,7 @@ def migrate_file_paths() -> None:
         if not filename:
             return None
 
-        new_key = storage_key_fn(product_id, filename, variant_id=variant_id)
+        new_key = storage_key_fn(product_id, filename)
         new_ref = (
             f"s3://{bucket}/{new_key}"
             if ref.startswith("s3://")
@@ -124,41 +123,31 @@ def migrate_file_paths() -> None:
 
         return new_ref
 
-    click.echo("Migrating ModelAsset file paths...")
-    for asset in db.session.query(ModelAsset).all():
-        product_id = asset.related_product_id
-        if not product_id:
-            click.echo(
-                f"  Skipping ModelAsset {asset.id}: missing related_product_id.",
-                err=True,
-            )
-            continue
+    click.echo("Migrating Product model file paths...")
+    for product in db.session.query(Product).all():
         new_file = _migrate_ref(
-            asset.file_location,
-            product_id=product_id,
-            variant_id=asset.variant_id,
+            product.model_file_path,
+            product_id=product.id,
             storage_key_fn=product_storage_key,
         )
         new_converted = _migrate_ref(
-            asset.converted_model_path,
-            product_id=product_id,
-            variant_id=asset.variant_id,
+            product.converted_model_path,
+            product_id=product.id,
             storage_key_fn=converted_storage_key,
         )
         new_gcode = _migrate_ref(
-            asset.gcode_path,
-            product_id=product_id,
-            variant_id=asset.variant_id,
+            product.gcode_path,
+            product_id=product.id,
             storage_key_fn=gcode_storage_key,
         )
 
         if new_file or new_converted or new_gcode:
             if new_file:
-                asset.file_location = new_file
+                product.model_file_path = new_file
             if new_converted:
-                asset.converted_model_path = new_converted
+                product.converted_model_path = new_converted
             if new_gcode:
-                asset.gcode_path = new_gcode
+                product.gcode_path = new_gcode
             migrated += 1
 
     click.echo("Migrating ProductImage file paths...")
@@ -166,7 +155,6 @@ def migrate_file_paths() -> None:
         new_ref = _migrate_ref(
             img.file_path,
             product_id=img.product_id,
-            variant_id=img.variant_id,
             storage_key_fn=image_storage_key,
         )
         if new_ref:

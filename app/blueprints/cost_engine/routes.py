@@ -5,7 +5,7 @@ from decimal import Decimal
 from flask import flash, redirect, render_template, request, url_for
 
 from app.blueprints.cost_engine import bp
-from app.models import Market, Order, Product, ProductVariant, UserRole
+from app.models import Market, Order, Product, UserRole
 from app.services.cost_engine import (
     build_pricing_scenarios,
     calculate_product_cost,
@@ -44,7 +44,6 @@ def index():
     markets = Market.query.order_by(Market.event_date.desc()).limit(50).all()
 
     selected_product = request.args.get("product_id", type=int)
-    selected_variant = request.args.get("variant_id", type=int)
     selected_order = request.args.get("order_id", type=int)
     selected_market = request.args.get("market_id", type=int)
 
@@ -63,11 +62,9 @@ def index():
     pricing_scenarios = None
     if selected_product:
         product = Product.query.get(selected_product)
-        variant = ProductVariant.query.get(selected_variant) if selected_variant else None
         if product:
             product_breakdown = calculate_product_cost(
                 product=product,
-                variant=variant,
                 labor_rate=settings["labor_rate"],
                 packaging_cost=settings["packaging_cost"],
                 failure_rate=settings["failure_rate"],
@@ -75,8 +72,7 @@ def index():
             )
             pricing_scenarios = build_pricing_scenarios(
                 product=product,
-                variant=variant,
-                sale_price=variant.price if variant is not None else product.base_price,
+                sale_price=product.base_price,
             )
 
     order_profit = estimate_order_profit(selected_order) if selected_order else None
@@ -90,7 +86,6 @@ def index():
         settings=settings,
         product_breakdown=product_breakdown,
         selected_product=selected_product,
-        selected_variant=selected_variant,
         selected_order=selected_order,
         selected_market=selected_market,
         order_profit=order_profit,

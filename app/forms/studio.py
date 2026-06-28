@@ -6,8 +6,8 @@ from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField, FileSize
 from wtforms import (
     BooleanField,
+    DateTimeLocalField,
     DecimalField,
-    IntegerField,
     SelectField,
     StringField,
     SubmitField,
@@ -19,20 +19,18 @@ from app.forms.common import OptionalSelectField, enum_choices
 from app.models import (
     Category,
     Collection,
-    LicenseStatus,
-    ModelAsset,
     ModelSourceType,
     Product,
     ProductStatus,
     ProductType,
-    ProductVariant,
 )
+from app.models.catalog import LicenseStatus
 
 
 class ProductStudioForm(FlaskForm):
     name = StringField("Product Name", validators=[DataRequired(), Length(max=160)])
     slug = StringField("Slug", validators=[DataRequired(), Length(max=180)])
-    sku_base = StringField("Base SKU", validators=[Optional(), Length(max=80)])
+    sku_base = StringField("SKU", validators=[Optional(), Length(max=80)])
     short_description = TextAreaField("Short Description", validators=[Optional()])
     description = TextAreaField("Full Description", validators=[Optional()])
     category_id = SelectField("Category", coerce=int, validators=[DataRequired()])
@@ -44,10 +42,32 @@ class ProductStudioForm(FlaskForm):
     is_public = BooleanField("Publicly Visible", default=False)
     is_pos_visible = BooleanField("Visible In POS", default=True)
     is_featured = BooleanField("Featured", default=False)
-    base_price = DecimalField("Base Price ($)", places=2, validators=[Optional(), NumberRange(min=0)])
+    base_price = DecimalField(
+        "Base Price ($)", places=2, validators=[Optional(), NumberRange(min=0)]
+    )
     tags = TextAreaField("Tags", validators=[Optional()])
     care_instructions = TextAreaField("Care Instructions", validators=[Optional()])
     safety_notes = TextAreaField("Safety Notes", validators=[Optional()])
+    license_status = SelectField(
+        "License Status", choices=enum_choices(LicenseStatus), validators=[DataRequired()]
+    )
+    design_source = StringField("Design Source", validators=[Optional(), Length(max=255)])
+    commercial_license_notes = TextAreaField("Commercial License Notes", validators=[Optional()])
+    model_source_type = SelectField(
+        "Model Source Type",
+        choices=enum_choices(ModelSourceType),
+        validators=[DataRequired()],
+    )
+    model_source_url = StringField("Model Source URL", validators=[Optional(), Length(max=500)])
+    model_designer_name = StringField("Model Designer", validators=[Optional(), Length(max=160)])
+    model_license_type = StringField("Model License Type", validators=[Optional(), Length(max=160)])
+    model_commercial_use_allowed = BooleanField("Model Commercial Use Allowed", default=False)
+    model_license_expiration = DateTimeLocalField(
+        "Model License Expiration",
+        format="%Y-%m-%dT%H:%M",
+        validators=[Optional()],
+    )
+    model_notes = TextAreaField("Model Notes", validators=[Optional()])
     submit = SubmitField("Save Product")
 
     def __init__(self, *args, **kwargs):
@@ -63,6 +83,7 @@ class ProductStudioForm(FlaskForm):
         existing = Product.query.filter_by(slug=field.data.strip()).first()
         if existing and getattr(self, "instance_id", None) != existing.id:
             from wtforms.validators import ValidationError
+
             raise ValidationError("A product with that slug already exists.")
 
     def validate_sku_base(self, field):
@@ -71,7 +92,8 @@ class ProductStudioForm(FlaskForm):
         existing = Product.query.filter_by(sku_base=field.data.strip()).first()
         if existing and getattr(self, "instance_id", None) != existing.id:
             from wtforms.validators import ValidationError
-            raise ValidationError("A product with that base SKU already exists.")
+
+            raise ValidationError("A product with that SKU already exists.")
 
     def populate_product(self, product: Product) -> Product:
         product.name = self.name.data.strip()
@@ -90,6 +112,16 @@ class ProductStudioForm(FlaskForm):
         product.tags = self.tags.data
         product.care_instructions = self.care_instructions.data
         product.safety_notes = self.safety_notes.data
+        product.license_status = LicenseStatus(self.license_status.data)
+        product.design_source = self.design_source.data or None
+        product.commercial_license_notes = self.commercial_license_notes.data
+        product.model_source_type = ModelSourceType(self.model_source_type.data)
+        product.model_source_url = self.model_source_url.data or None
+        product.model_designer_name = self.model_designer_name.data or None
+        product.model_license_type = self.model_license_type.data or None
+        product.model_commercial_use_allowed = bool(self.model_commercial_use_allowed.data)
+        product.model_license_expiration = self.model_license_expiration.data
+        product.model_notes = self.model_notes.data
         return product
 
     def load_from_product(self, product: Product) -> None:
@@ -109,62 +141,19 @@ class ProductStudioForm(FlaskForm):
         self.tags.data = product.tags
         self.care_instructions.data = product.care_instructions
         self.safety_notes.data = product.safety_notes
+        self.license_status.data = product.license_status.value
+        self.design_source.data = product.design_source
+        self.commercial_license_notes.data = product.commercial_license_notes
+        self.model_source_type.data = product.model_source_type.value
+        self.model_source_url.data = product.model_source_url
+        self.model_designer_name.data = product.model_designer_name
+        self.model_license_type.data = product.model_license_type
+        self.model_commercial_use_allowed.data = product.model_commercial_use_allowed
+        self.model_license_expiration.data = product.model_license_expiration
+        self.model_notes.data = product.model_notes
 
 
-class VariantInlineForm(FlaskForm):
-    sku = StringField("SKU", validators=[DataRequired(), Length(max=100)])
-    name = StringField("Variant Name", validators=[DataRequired(), Length(max=160)])
-    colorway = StringField("Colorway", validators=[Optional(), Length(max=120)])
-    size = StringField("Size", validators=[Optional(), Length(max=120)])
-    material_type = StringField("Material Type", validators=[Optional(), Length(max=120)])
-    price = DecimalField("Price ($)", places=2, validators=[Optional(), NumberRange(min=0)])
-    material_cost = DecimalField(
-        "Material Cost ($)", places=2, validators=[Optional(), NumberRange(min=0)]
-    )
-    estimated_print_minutes = IntegerField(
-        "Print Minutes", validators=[Optional(), NumberRange(min=0)], default=0
-    )
-    estimated_filament_grams = IntegerField(
-        "Filament Grams", validators=[Optional(), NumberRange(min=0)], default=0
-    )
-    active = BooleanField("Active", default=True)
-    pos_button_label = StringField("POS Button Label", validators=[Optional(), Length(max=120)])
-    pos_sort_order = IntegerField(
-        "POS Sort Order", validators=[Optional(), NumberRange(min=0)], default=0
-    )
-
-    def populate_variant(self, variant: ProductVariant) -> ProductVariant:
-        variant.sku = self.sku.data.strip()
-        variant.name = self.name.data.strip()
-        variant.colorway = self.colorway.data or None
-        variant.size = self.size.data or None
-        variant.material_type = self.material_type.data or None
-        variant.price = self.price.data if self.price.data is not None else Decimal("0")
-        variant.material_cost = self.material_cost.data if self.material_cost.data is not None else Decimal("0")
-        variant.estimated_print_minutes = self.estimated_print_minutes.data or 0
-        variant.estimated_filament_grams = self.estimated_filament_grams.data or 0
-        variant.active = bool(self.active.data)
-        variant.pos_button_label = self.pos_button_label.data or None
-        variant.pos_sort_order = self.pos_sort_order.data or 0
-        return variant
-
-    def load_from_variant(self, variant: ProductVariant) -> None:
-        self.sku.data = variant.sku
-        self.name.data = variant.name
-        self.colorway.data = variant.colorway
-        self.size.data = variant.size
-        self.material_type.data = variant.material_type
-        self.price.data = variant.price
-        self.material_cost.data = variant.material_cost
-        self.estimated_print_minutes.data = variant.estimated_print_minutes
-        self.estimated_filament_grams.data = variant.estimated_filament_grams
-        self.active.data = variant.active
-        self.pos_button_label.data = variant.pos_button_label
-        self.pos_sort_order.data = variant.pos_sort_order
-
-
-class ModelAssetUploadForm(FlaskForm):
-    title = StringField("Model Title", validators=[DataRequired(), Length(max=160)])
+class ProductModelUploadForm(FlaskForm):
     model_file = FileField(
         "3D Model File",
         validators=[
@@ -176,26 +165,3 @@ class ModelAssetUploadForm(FlaskForm):
             FileSize(max_size=256 * 1024 * 1024, message="File must be under 256 MB."),
         ],
     )
-    source_type = SelectField(
-        "Source Type", choices=enum_choices(ModelSourceType), validators=[DataRequired()]
-    )
-    source_url = StringField("Source URL", validators=[Optional(), Length(max=500)])
-    designer_name = StringField("Designer Name", validators=[Optional(), Length(max=160)])
-    license_type = StringField("License Type", validators=[Optional(), Length(max=160)])
-    commercial_use_allowed = BooleanField("Commercial Use Allowed", default=False)
-    notes = TextAreaField("Notes", validators=[Optional()])
-    status = SelectField(
-        "License Status", choices=enum_choices(LicenseStatus), validators=[DataRequired()]
-    )
-
-    def populate_asset(self, asset: ModelAsset) -> ModelAsset:
-        asset.title = self.title.data.strip()
-        asset.source_type = ModelSourceType(self.source_type.data)
-        asset.source_url = self.source_url.data or None
-        asset.designer_name = self.designer_name.data or None
-        asset.license_type = self.license_type.data or None
-        asset.commercial_use_allowed = bool(self.commercial_use_allowed.data)
-        asset.notes = self.notes.data
-        asset.status = LicenseStatus(self.status.data)
-        asset.analysis_status = "pending"
-        return asset

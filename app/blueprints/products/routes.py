@@ -8,8 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.products import bp
-from app.forms import CategoryForm, CollectionForm, ModelAssetForm, ProductForm, ProductVariantForm
-from app.models import Category, Collection, ModelAsset, Product, ProductVariant, UserRole
+from app.forms import CategoryForm, CollectionForm
+from app.models import Category, Collection, Product, UserRole
 from app.services.crud import (
     apply_search,
     get_by_id,
@@ -50,21 +50,6 @@ def _bool_column(attr: str):
 
 
 PRODUCT_RESOURCES: dict[str, ResourceConfig] = {
-    "products": ResourceConfig(
-        key="products",
-        singular="Product",
-        plural="Products",
-        model=Product,
-        form_class=ProductForm,
-        search_fields=["name", "slug", "sku_base"],
-        columns=[
-            ("Name", lambda item: item.name),
-            ("Category", lambda item: item.category.name if item.category else "—"),
-            ("Status", lambda item: item.status),
-            ("Base Price", lambda item: item.base_price),
-            ("Public", _bool_column("is_public")),
-        ],
-    ),
     "categories": ResourceConfig(
         key="categories",
         singular="Category",
@@ -91,36 +76,6 @@ PRODUCT_RESOURCES: dict[str, ResourceConfig] = {
             ("Slug", lambda item: item.slug),
             ("Public", _bool_column("is_public")),
             ("Sort Order", lambda item: item.sort_order),
-        ],
-    ),
-    "variants": ResourceConfig(
-        key="variants",
-        singular="Variant",
-        plural="Variants",
-        model=ProductVariant,
-        form_class=ProductVariantForm,
-        search_fields=["name", "sku", "colorway"],
-        columns=[
-            ("Name", lambda item: item.name),
-            ("Product", lambda item: item.product.name if item.product else "—"),
-            ("SKU", lambda item: item.sku),
-            ("Price", lambda item: item.price),
-            ("Active", _bool_column("active")),
-        ],
-    ),
-    "model-assets": ResourceConfig(
-        key="model-assets",
-        singular="Model Asset",
-        plural="Model Assets",
-        model=ModelAsset,
-        form_class=ModelAssetForm,
-        search_fields=["title", "designer_name", "license_type"],
-        columns=[
-            ("Title", lambda item: item.title),
-            ("Source Type", lambda item: item.source_type),
-            ("Linked Product", lambda item: item.product.name if item.product else "—"),
-            ("Status", lambda item: item.status),
-            ("Commercial Use", _bool_column("commercial_use_allowed")),
         ],
     ),
 }
@@ -150,13 +105,13 @@ def _build_form(config: ResourceConfig, instance=None):
 
 
 def _resource_endpoint_suffix(resource_key: str) -> str:
-    return "" if resource_key == "products" else resource_key
+    return resource_key
 
 
 @bp.get("/")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def products_root():
-    return redirect(url_for("products.list_resource", resource_key="products"))
+    return redirect(url_for("products.studio"))
 
 
 @bp.route("/<resource_key>/")

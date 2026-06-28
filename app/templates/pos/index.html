@@ -161,15 +161,14 @@ function posApp() {
           }
         });
     },
-    addToCart(productId, name, price, variantId) {
-      let existing = this.cart.find(i => i.product_id === productId && (!variantId || i.variant_id === variantId));
+    addToCart(productId, name, price) {
+      let existing = this.cart.find(i => i.product_id === productId);
       if (existing) {
         existing.quantity += 1;
         existing.line_total = existing.quantity * existing.unit_price;
       } else {
         this.cart.push({
           product_id: productId,
-          variant_id: variantId || null,
           description: name,
           unit_price: parseFloat(price),
           quantity: 1,

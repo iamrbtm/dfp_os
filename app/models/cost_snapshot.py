@@ -22,12 +22,6 @@ class CostSnapshot(PrimaryKeyMixin, TimestampMixin, db.Model):
     product_id: Mapped[int] = mapped_column(
         ForeignKey("products.id"), nullable=False, index=True
     )
-    variant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("product_variants.id"), nullable=True, index=True
-    )
-    model_asset_id: Mapped[int | None] = mapped_column(
-        ForeignKey("model_assets.id"), nullable=True, index=True
-    )
     filament_spool_id: Mapped[int | None] = mapped_column(
         ForeignKey("filament_spools.id"), nullable=True, index=True
     )
@@ -41,6 +35,4 @@ class CostSnapshot(PrimaryKeyMixin, TimestampMixin, db.Model):
     outputs_json: Mapped[str] = mapped_column(Text, nullable=False)
 
     product = relationship("Product", back_populates="cost_snapshots")
-    variant = relationship("ProductVariant", back_populates="cost_snapshots")
-    model_asset = relationship("ModelAsset")
     filament_spool = relationship("FilamentSpool")

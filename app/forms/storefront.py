@@ -7,7 +7,6 @@ from wtforms.validators import DataRequired, Email, Length, NumberRange, Optiona
 
 class AddToCartForm(FlaskForm):
     product_id = HiddenField(validators=[DataRequired()])
-    variant_id = SelectField("Variant", coerce=int, validators=[Optional()])
     quantity = IntegerField("Quantity", validators=[DataRequired(), NumberRange(min=1, max=25)], default=1)
     submit = SubmitField("Add to cart")
 

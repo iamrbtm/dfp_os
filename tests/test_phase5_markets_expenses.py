@@ -29,8 +29,27 @@ from app.models import (
     ProductType,
 )
 from app.services.admin_mutations import create_resource
+from app.services.api_tokens import create_api_token
 from app.services.markets import fetch_weather_snapshot
 from app.services.expenses import create_expense
+
+
+def _scoped_token(client, *scopes: str) -> str:
+    from app.models import User, UserRole
+
+    with client.application.app_context():
+        user = User(
+            email=f"{'-'.join(scopes)}-api@example.com",
+            first_name="Scoped",
+            last_name="API",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
+        user.set_password("secret")
+        db.session.add(user)
+        db.session.commit()
+        _token, raw = create_api_token(user, "Scoped API Token", scopes=list(scopes))
+        return raw
 
 
 def test_market_model_can_be_created(app):
@@ -281,10 +300,11 @@ def test_market_api_requires_token(client):
     assert resp.status_code == 401
 
 
-def test_market_api_returns_data_with_token(api_token, client):
+def test_market_api_returns_data_with_token(client):
+    raw = _scoped_token(client, "markets")
     resp = client.get(
         "/api/v1/markets",
-        headers={"Authorization": f"Bearer {api_token}"},
+        headers={"Authorization": f"Bearer {raw}"},
     )
     assert resp.status_code == 200
     data = resp.get_json()
@@ -292,30 +312,33 @@ def test_market_api_returns_data_with_token(api_token, client):
     assert "pagination" in data
 
 
-def test_expense_api_returns_data_with_token(api_token, client):
+def test_expense_api_returns_data_with_token(client):
+    raw = _scoped_token(client, "receipts")
     resp = client.get(
         "/api/v1/expenses",
-        headers={"Authorization": f"Bearer {api_token}"},
+        headers={"Authorization": f"Bearer {raw}"},
     )
     assert resp.status_code == 200
     data = resp.get_json()
     assert "data" in data
 
 
-def test_markets_csv_export(api_token, client):
+def test_markets_csv_export(client):
+    raw = _scoped_token(client, "markets")
     resp = client.get(
         "/api/v1/exports/markets.csv",
-        headers={"Authorization": f"Bearer {api_token}"},
+        headers={"Authorization": f"Bearer {raw}"},
     )
     assert resp.status_code == 200
     assert resp.mimetype == "text/csv"
     assert "markets.csv" in resp.headers.get("Content-Disposition", "")
 
 
-def test_expenses_csv_export(api_token, client):
+def test_expenses_csv_export(client):
+    raw = _scoped_token(client, "receipts")
     resp = client.get(
         "/api/v1/exports/expenses.csv",
-        headers={"Authorization": f"Bearer {api_token}"},
+        headers={"Authorization": f"Bearer {raw}"},
     )
     assert resp.status_code == 200
     assert resp.mimetype == "text/csv"
@@ -421,7 +444,6 @@ def test_market_timeline_hotel_and_packing_quick_add_htmx(login_admin, client, a
         f"/markets/{market_id}/packing-list/quick-add",
         data={
             "product_id": catalog_product,
-            "variant_id": 0,
             "planned_quantity": 12,
             "packed_quantity": 5,
             "sold_quantity": 0,
@@ -532,10 +554,11 @@ def test_new_market_api_resources_require_token(client):
         assert resp.status_code == 401
 
 
-def test_market_tasks_api_returns_data_with_token(api_token, client):
+def test_market_tasks_api_returns_data_with_token(client):
+    raw = _scoped_token(client, "markets")
     resp = client.get(
         "/api/v1/market-tasks",
-        headers={"Authorization": f"Bearer {api_token}"},
+        headers={"Authorization": f"Bearer {raw}"},
     )
     assert resp.status_code == 200
     assert "data" in resp.get_json()

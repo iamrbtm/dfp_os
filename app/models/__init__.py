@@ -4,13 +4,11 @@ from app.models.catalog import (
     Category,
     Collection,
     LicenseStatus,
-    ModelAsset,
     ModelSourceType,
     Product,
     ProductImage,
     ProductStatus,
     ProductType,
-    ProductVariant,
 )
 from app.models.cost_snapshot import CostSnapshot, CostSnapshotConfidence
 from app.models.custom_request import CustomRequest, CustomRequestStatus
@@ -106,7 +104,6 @@ __all__ = [
     "MarketTimelineEvent",
     "MarketTimelineEventType",
     "MarketWeatherSnapshot",
-    "ModelAsset",
     "ModelSourceType",
     "Order",
     "OrderFulfillmentMethod",
@@ -135,7 +132,6 @@ __all__ = [
     "Setting",
     "ProductStatus",
     "ProductType",
-    "ProductVariant",
     "User",
     "UserRole",
 ]

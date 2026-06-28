@@ -26,9 +26,6 @@ class InventoryMovement(PrimaryKeyMixin, TimestampMixin, db.Model):
         ForeignKey("inventory_records.id"), nullable=True, index=True
     )
     product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True, index=True)
-    variant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("product_variants.id"), nullable=True, index=True
-    )
     from_location_id: Mapped[int | None] = mapped_column(
         ForeignKey("inventory_locations.id"), nullable=True, index=True
     )

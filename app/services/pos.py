@@ -136,7 +136,6 @@ def create_sale(
 
         pos_item = PosSaleItem(
             product_id=item_data.get("product_id"),
-            variant_id=item_data.get("variant_id"),
             quantity=item_data["quantity"],
             unit_price=unit_price,
             discount_amount=discount,
@@ -172,7 +171,6 @@ def create_sale(
         order_item = OrderItem(
             order_id=order.id,
             product_id=item_data.get("product_id"),
-            variant_id=item_data.get("variant_id"),
             quantity=item_data["quantity"],
             unit_price=Decimal(str(item_data["unit_price"])),
             line_total=pos_item.line_total,
@@ -240,7 +238,6 @@ def _deduct_inventory_for_sale(
             continue
         deduct_finished_goods(
             product_id=item.product_id,
-            variant_id=item.variant_id,
             quantity=item.quantity,
             location_id=inventory_location_id,
             reference_type="pos_sale",
@@ -329,7 +326,6 @@ def refund_sale(
                 continue
             return_inventory(
                 product_id=item.product_id,
-                variant_id=item.variant_id,
                 quantity=item.quantity,
                 location_id=session.inventory_location_id,
                 reference_type="pos_refund",

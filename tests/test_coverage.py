@@ -254,14 +254,14 @@ def test_api_token_x_header(client, api_token):
 # API POST (create) for all resource types
 # ---------------------------------------------------------------------------
 
-def _api_token_header(client):
+def _api_token_header(client, scopes=None):
     with client.application.app_context():
         user = User(email="api-post-user@example.com", first_name="API", last_name="Post",
                     role=UserRole.ADMIN, is_active=True)
         user.set_password("secret")
         db.session.add(user)
         db.session.commit()
-        _, raw = create_api_token(user, "Coverage Test Token", scopes=["catalog"])
+        _, raw = create_api_token(user, "Coverage Test Token", scopes=scopes or ["catalog"])
         return raw
 
 
@@ -295,44 +295,28 @@ def test_api_post_product(client):
     assert r.status_code == 201
 
 
-def test_api_post_variant(client):
+def test_api_post_product_studio_fields(client):
     token = _api_token_header(client)
     with client.application.app_context():
-        cat = Category(name="VarCat", slug="var-cat")
+        cat = Category(name="StudioCat", slug="studio-cat")
         db.session.add(cat)
-        db.session.flush()
-        p = Product(name="Var Prod", slug="var-prod", category=cat,
-                     product_type=ProductType.FINISHED_GOOD, status=ProductStatus.DRAFT)
-        db.session.add(p)
         db.session.commit()
-        pid = p.id
-    r = client.post("/api/v1/variants", json={
-        "product_id": pid, "sku": "VAR-001", "name": "Variant One",
-    }, headers={"Authorization": f"Bearer {token}"})
-    assert r.status_code == 201
-
-
-def test_api_post_model_asset(client):
-    token = _api_token_header(client)
-    with client.application.app_context():
-        cat = Category(name="MACat", slug="ma-cat")
-        db.session.add(cat)
-        db.session.flush()
         cid = cat.id
-        p = Product(name="MA Prod", slug="ma-prod", category_id=cid,
-                     product_type=ProductType.FINISHED_GOOD, status=ProductStatus.DRAFT)
-        db.session.add(p)
-        db.session.commit()
-        pid = p.id
-    r = client.post("/api/v1/model-assets", json={
-        "title": "Test Model", "source_type": "self_designed",
-        "status": "commercial_allowed", "related_product_id": pid,
+    r = client.post("/api/v1/products", json={
+        "name": "Studio Product",
+        "slug": "studio-product",
+        "category_id": cid,
+        "product_type": "finished_good",
+        "status": "draft",
+        "license_status": "unknown",
+        "model_source_type": "self_designed",
+        "model_file_path": "/tmp/studio-product.stl",
     }, headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 201
 
 
 def test_api_post_printer(client):
-    token = _api_token_header(client)
+    token = _api_token_header(client, scopes=["inventory"])
     r = client.post("/api/v1/printers", json={
         "name": "Test Printer", "model": "Bambu A1", "status": "active",
     }, headers={"Authorization": f"Bearer {token}"})
@@ -340,7 +324,7 @@ def test_api_post_printer(client):
 
 
 def test_api_post_ams_unit(client):
-    token = _api_token_header(client)
+    token = _api_token_header(client, scopes=["inventory"])
     r = client.post("/api/v1/ams-units", json={
         "name": "Test AMS", "type": "ams_lite", "status": "active",
     }, headers={"Authorization": f"Bearer {token}"})
@@ -348,7 +332,7 @@ def test_api_post_ams_unit(client):
 
 
 def test_api_post_filament_spool(client):
-    token = _api_token_header(client)
+    token = _api_token_header(client, scopes=["inventory"])
     r = client.post("/api/v1/filament-spools", json={
         "brand": "TestBrand", "material_type": "PLA",
         "color_name": "Test Color", "status": "new",
@@ -357,7 +341,7 @@ def test_api_post_filament_spool(client):
 
 
 def test_api_post_inventory_location(client):
-    token = _api_token_header(client)
+    token = _api_token_header(client, scopes=["inventory"])
     r = client.post("/api/v1/inventory-locations", json={
         "name": "API Location", "type": "Storage",
     }, headers={"Authorization": f"Bearer {token}"})
@@ -365,7 +349,7 @@ def test_api_post_inventory_location(client):
 
 
 def test_api_post_customer(client):
-    token = _api_token_header(client)
+    token = _api_token_header(client, scopes=["orders"])
     r = client.post("/api/v1/customers", json={
         "first_name": "API", "last_name": "Customer",
     }, headers={"Authorization": f"Bearer {token}"})
@@ -373,7 +357,7 @@ def test_api_post_customer(client):
 
 
 def test_api_post_custom_request(client):
-    token = _api_token_header(client)
+    token = _api_token_header(client, scopes=["orders"])
     r = client.post("/api/v1/custom-requests", json={
         "name": "API Request", "email": "api-req@example.com",
         "description": "API test", "status": "new",
@@ -381,12 +365,13 @@ def test_api_post_custom_request(client):
     assert r.status_code == 201
 
 
-def test_api_get_orders_list(client, api_token):
-    r = client.get("/api/v1/orders", headers={"Authorization": f"Bearer {api_token}"})
+def test_api_get_orders_list(client):
+    token = _api_token_header(client, scopes=["orders"])
+    r = client.get("/api/v1/orders", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
 
 def test_api_post_print_job(client):
-    token = _api_token_header(client)
+    token = _api_token_header(client, scopes=["orders"])
     r = client.post("/api/v1/print-jobs", json={
         "status": "queued", "label": "API Print Job",
     }, headers={"Authorization": f"Bearer {token}"})
@@ -601,6 +586,3 @@ def test_convert_request_no_email_no_existing_customer(app):
         order = order_svc.convert_custom_request_to_order(req, Decimal("20.00"))
         assert order.total == Decimal("20.00")
         assert req.converted_to_order_id == order.id
-
-
-

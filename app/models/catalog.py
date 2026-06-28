@@ -124,96 +124,24 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     )
     design_source: Mapped[str | None] = mapped_column(String(255), nullable=True)
     commercial_license_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-    category = relationship("Category", back_populates="products")
-    collection = relationship("Collection", back_populates="products")
-    variants = relationship(
-        "ProductVariant",
-        back_populates="product",
-        cascade="all, delete-orphan",
-        order_by="ProductVariant.pos_sort_order",
-    )
-    model_assets = relationship(
-        "ModelAsset", back_populates="product", cascade="all, delete-orphan"
-    )
-    images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
-    inventory_records = relationship("InventoryRecord", back_populates="product")
-    cost_snapshots = relationship(
-        "CostSnapshot",
-        back_populates="product",
-        cascade="all, delete-orphan",
-        order_by="CostSnapshot.created_at.desc()",
-    )
-
-
-class ProductVariant(PrimaryKeyMixin, TimestampMixin, db.Model):
-    __tablename__ = "product_variants"
-
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
-    business_id: Mapped[int | None] = mapped_column(
-        ForeignKey("businesses.id"), nullable=True, index=True
-    )
-    sku: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
-    name: Mapped[str] = mapped_column(String(160), nullable=False)
-    colorway: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    size: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    material_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
-    material_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
-    estimated_print_minutes: Mapped[int] = mapped_column(default=0, nullable=False)
-    estimated_filament_grams: Mapped[int] = mapped_column(default=0, nullable=False)
-    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    pos_button_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    pos_sort_order: Mapped[int] = mapped_column(default=0, nullable=False)
-    barcode_or_qr_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    product = relationship("Product", back_populates="variants")
-    inventory_records = relationship("InventoryRecord", back_populates="variant")
-    model_assets = relationship("ModelAsset", back_populates="variant", cascade="all, delete-orphan")
-    images = relationship("ProductImage", back_populates="variant", cascade="all, delete-orphan")
-    cost_snapshots = relationship(
-        "CostSnapshot",
-        back_populates="variant",
-        cascade="all, delete-orphan",
-        order_by="CostSnapshot.created_at.desc()",
-    )
-
-
-class ModelAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
-    __tablename__ = "model_assets"
-
-    title: Mapped[str] = mapped_column(String(160), nullable=False)
-    source_type: Mapped[ModelSourceType] = mapped_column(
+    model_source_type: Mapped[ModelSourceType] = mapped_column(
         Enum(ModelSourceType, native_enum=False, length=40),
         default=ModelSourceType.UNKNOWN,
         nullable=False,
     )
-    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    designer_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    license_type: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    commercial_use_allowed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    license_expiration: Mapped[datetime | None] = mapped_column(
+    model_source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    model_designer_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    model_license_type: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    model_commercial_use_allowed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    model_license_expiration: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    proof_of_license_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    file_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    related_product_id: Mapped[int | None] = mapped_column(
-        ForeignKey("products.id"), nullable=True, index=True
-    )
-    variant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("product_variants.id"), nullable=True, index=True
-    )
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[LicenseStatus] = mapped_column(
-        Enum(LicenseStatus, native_enum=False, length=40),
-        default=LicenseStatus.UNKNOWN,
-        nullable=False,
-    )
-
-    analysis_status: Mapped[str | None] = mapped_column(
-        String(30), default=None, nullable=True
-    )
+    model_proof_of_license_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    model_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    model_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    analysis_status: Mapped[str | None] = mapped_column(String(30), default=None, nullable=True)
     analysis_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     analysis_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -221,9 +149,7 @@ class ModelAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
     analysis_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    parsed_volume_mm3: Mapped[Decimal | None] = mapped_column(
-        Numeric(12, 4), nullable=True
-    )
+    parsed_volume_mm3: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     parsed_surface_area_mm2: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 4), nullable=True
     )
@@ -237,17 +163,22 @@ class ModelAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
     parsed_material_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), nullable=True
     )
-    convert_status: Mapped[str | None] = mapped_column(
-        String(30), default=None, nullable=True
-    )
+    convert_status: Mapped[str | None] = mapped_column(String(30), default=None, nullable=True)
     conversion_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    converted_model_path: Mapped[str | None] = mapped_column(
-        String(500), nullable=True
-    )
+    converted_model_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     gcode_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    product = relationship("Product", back_populates="model_assets")
-    variant = relationship("ProductVariant", back_populates="model_assets")
+    category = relationship("Category", back_populates="products")
+    collection = relationship("Collection", back_populates="products")
+    images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
+    inventory_records = relationship("InventoryRecord", back_populates="product")
+    cost_snapshots = relationship(
+        "CostSnapshot",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="CostSnapshot.created_at.desc()",
+    )
 
 
 class ProductImage(PrimaryKeyMixin, TimestampMixin, db.Model):
@@ -256,9 +187,6 @@ class ProductImage(PrimaryKeyMixin, TimestampMixin, db.Model):
     product_id: Mapped[int] = mapped_column(
         ForeignKey("products.id"), nullable=False, index=True
     )
-    variant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("product_variants.id"), nullable=True, index=True
-    )
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -266,7 +194,6 @@ class ProductImage(PrimaryKeyMixin, TimestampMixin, db.Model):
     alt_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     product = relationship("Product", back_populates="images")
-    variant = relationship("ProductVariant", back_populates="images")
 
 
 @event.listens_for(ProductImage, "after_delete")
@@ -282,10 +209,15 @@ def _cleanup_product_image_storage(mapper, connection, target: ProductImage) -> 
             )
 
 
-@event.listens_for(ModelAsset, "after_delete")
-def _cleanup_model_asset_storage(mapper, connection, target: ModelAsset) -> None:
+@event.listens_for(Product, "after_delete")
+def _cleanup_product_model_storage(mapper, connection, target: Product) -> None:
     from app.services.storage import delete_storage_reference
-    for ref in (target.file_location, target.converted_model_path, target.gcode_path):
+    for ref in (
+        target.model_file_path,
+        target.model_proof_of_license_path,
+        target.converted_model_path,
+        target.gcode_path,
+    ):
         if ref:
             try:
                 delete_storage_reference(ref)

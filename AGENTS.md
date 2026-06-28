@@ -661,8 +661,8 @@ Build these modules:
 6. Products
 7. Categories
 8. Collections
-9. Product variants / SKUs
-10. Design/model asset and license tracking
+9. Product Studio / SKU-based product records
+10. Product design, model file, and license tracking
 11. Printer fleet
 12. AMS / multicolor unit tracking
 13. Filament/material inventory
@@ -1045,8 +1045,6 @@ Required API resources:
 - products
 - categories
 - collections
-- variants
-- model-assets
 - printers
 - ams-units
 - filament-spools

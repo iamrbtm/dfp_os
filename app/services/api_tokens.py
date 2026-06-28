@@ -12,7 +12,7 @@ from app.models.base import utc_now
 from app.services.audit import record_audit_event
 
 AVAILABLE_API_TOKEN_SCOPES: tuple[tuple[str, str], ...] = (
-    ("catalog", "Catalog: products, categories, collections, variants, model assets"),
+    ("catalog", "Catalog: products, categories, collections, and product studio data"),
     ("inventory", "Inventory: finished goods, filament, and locations"),
     ("orders", "Orders: orders, items, payments, and customers"),
     ("pos", "POS: sessions and sales"),

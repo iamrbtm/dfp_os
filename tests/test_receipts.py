@@ -22,30 +22,20 @@ from app.models.receipt import (
 from app.services.receipts import approve_receipt, reject_receipt, get_receipt_dashboard
 from app.services.receipt_allocations import allocate_taxes_and_fees, set_line_allocation, bulk_assign_line_items, get_reconciliation_summary
 from app.services.receipt_duplicates import check_duplicates, resolve_duplicate
+from tests.db_support import base_test_app_config, configured_test_database_url, ensure_database_exists
 
 
 @pytest.fixture()
 def app_with_receipts(tmp_path):
-    database_path = tmp_path / "test.db"
-    upload_path = tmp_path / "uploads"
-    receipt_path = tmp_path / "receipts"
+    ensure_database_exists(configured_test_database_url())
 
     app = create_app(
         "testing",
-        {
-            "TESTING": True,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
-            "UPLOAD_FOLDER": str(upload_path),
-            "RECEIPT_STORAGE_PATH": str(receipt_path),
-            "ADMIN_EMAIL": "admin@example.com",
-            "ADMIN_PASSWORD": "change-me-now",
-            "SERVER_NAME": "localhost.localdomain",
-            "WTF_CSRF_ENABLED": False,
-            "AUDIT_LOG_ENABLED": False,
-        },
+        base_test_app_config(tmp_path),
     )
 
     with app.app_context():
+        db.drop_all()
         db.create_all()
         yield app
         db.session.remove()

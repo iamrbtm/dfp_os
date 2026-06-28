@@ -11,7 +11,6 @@ from app.services.custom_requests import create_custom_request
 from app.services.square_checkout import SquareCheckoutError, create_payment_link
 from app.services.storefront import (
     StorefrontError,
-    active_variants,
     add_to_cart,
     available_stock_label,
     build_cart_summary,
@@ -21,7 +20,6 @@ from app.services.storefront import (
     remove_cart_line,
     square_checkout_available,
     update_cart_line,
-    variant_choices,
 )
 
 
@@ -118,7 +116,6 @@ def shop():
         selected_collection=collection_slug,
         search_term=search_term,
         available_stock_label=available_stock_label,
-        active_variants=active_variants,
     )
 
 
@@ -130,15 +127,10 @@ def product_detail(slug: str):
 
     form = AddToCartForm()
     form.product_id.data = str(product.id)
-    form.variant_id.choices = [(0, "Choose an option")] + variant_choices(product)
-
-    product_variants = active_variants(product)
-    if product_variants and not form.variant_id.data:
-        form.variant_id.data = product_variants[0].id
 
     if form.validate_on_submit():
         try:
-            add_to_cart(product, form.variant_id.data or None, form.quantity.data or 1)
+            add_to_cart(product, form.quantity.data or 1)
         except StorefrontError as exc:
             flash(str(exc), "danger")
         else:
@@ -150,7 +142,6 @@ def product_detail(slug: str):
         product=product,
         form=form,
         stock_label=available_stock_label(product),
-        product_variants=product_variants,
         available_stock_label=available_stock_label,
     )
 

@@ -59,11 +59,14 @@ def upgrade():
         "inventory_movements",
         sa.Column("inventory_record_id", sa.Integer(), nullable=True),
         sa.Column("product_id", sa.Integer(), nullable=True),
-        sa.Column("variant_id", sa.Integer(), nullable=True),
         sa.Column("from_location_id", sa.Integer(), nullable=True),
         sa.Column("to_location_id", sa.Integer(), nullable=True),
         sa.Column("quantity", sa.Integer(), nullable=False),
-        sa.Column("movement_type", sa.Enum("ADJUSTMENT", "TRANSFER_IN", "TRANSFER_OUT", "RESERVATION", "RELEASE", "DEDUCTION", "RETURN", native_enum=False, length=40), nullable=False),
+        sa.Column(
+            "movement_type",
+            sa.Enum("ADJUSTMENT", "TRANSFER_IN", "TRANSFER_OUT", "RESERVATION", "RELEASE", "DEDUCTION", "RETURN", native_enum=False, length=40),
+            nullable=False,
+        ),
         sa.Column("reference_type", sa.String(length=80), nullable=True),
         sa.Column("reference_id", sa.String(length=80), nullable=True),
         sa.Column("actor_id", sa.Integer(), nullable=True),
@@ -76,16 +79,28 @@ def upgrade():
         sa.ForeignKeyConstraint(["inventory_record_id"], ["inventory_records.id"]),
         sa.ForeignKeyConstraint(["product_id"], ["products.id"]),
         sa.ForeignKeyConstraint(["to_location_id"], ["inventory_locations.id"]),
-        sa.ForeignKeyConstraint(["variant_id"], ["product_variants.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    for column in ("actor_id", "from_location_id", "inventory_record_id", "movement_type", "product_id", "reference_id", "reference_type", "to_location_id", "variant_id"):
+    for column in (
+        "actor_id",
+        "from_location_id",
+        "inventory_record_id",
+        "movement_type",
+        "product_id",
+        "reference_id",
+        "reference_type",
+        "to_location_id",
+    ):
         op.create_index(op.f(f"ix_inventory_movements_{column}"), "inventory_movements", [column], unique=False)
 
     op.create_table(
         "prep_task_templates",
         sa.Column("title", sa.String(length=200), nullable=False),
-        sa.Column("category", sa.Enum("INVENTORY", "REPRINT", "SUPPLY", "CASH_BOX", "SIGNAGE", "PAYMENT_DEVICE", "STAFFING", "GENERAL", native_enum=False, length=40), nullable=False),
+        sa.Column(
+            "category",
+            sa.Enum("INVENTORY", "REPRINT", "SUPPLY", "CASH_BOX", "SIGNAGE", "PAYMENT_DEVICE", "STAFFING", "GENERAL", native_enum=False, length=40),
+            nullable=False,
+        ),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("default_due_days_before", sa.Integer(), nullable=False),
         sa.Column("default_enabled", sa.Boolean(), nullable=False),
@@ -101,8 +116,16 @@ def upgrade():
         sa.Column("market_id", sa.Integer(), nullable=True),
         sa.Column("template_id", sa.Integer(), nullable=True),
         sa.Column("title", sa.String(length=200), nullable=False),
-        sa.Column("category", sa.Enum("INVENTORY", "REPRINT", "SUPPLY", "CASH_BOX", "SIGNAGE", "PAYMENT_DEVICE", "STAFFING", "GENERAL", native_enum=False, length=40), nullable=False),
-        sa.Column("status", sa.Enum("OPEN", "IN_PROGRESS", "COMPLETED", "REOPENED", "CANCELED", native_enum=False, length=40), nullable=False),
+        sa.Column(
+            "category",
+            sa.Enum("INVENTORY", "REPRINT", "SUPPLY", "CASH_BOX", "SIGNAGE", "PAYMENT_DEVICE", "STAFFING", "GENERAL", native_enum=False, length=40),
+            nullable=False,
+        ),
+        sa.Column(
+            "status",
+            sa.Enum("OPEN", "IN_PROGRESS", "COMPLETED", "REOPENED", "CANCELED", native_enum=False, length=40),
+            nullable=False,
+        ),
         sa.Column("assigned_user_id", sa.Integer(), nullable=True),
         sa.Column("due_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
@@ -121,7 +144,6 @@ def upgrade():
 
     for table in (
         "products",
-        "product_variants",
         "filament_spools",
         "inventory_locations",
         "inventory_records",
@@ -152,7 +174,6 @@ def downgrade():
         "inventory_records",
         "inventory_locations",
         "filament_spools",
-        "product_variants",
         "products",
     ):
         with op.batch_alter_table(table) as batch_op:

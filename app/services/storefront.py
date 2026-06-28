@@ -18,11 +18,9 @@ from app.models import (
     OrderStatus,
     Product,
     ProductType,
-    ProductVariant,
 )
 
 CART_SESSION_KEY = "public_cart"
-UNLIMITED_STOCK = 9999
 
 
 class StorefrontError(RuntimeError):
@@ -33,7 +31,6 @@ class StorefrontError(RuntimeError):
 class CartLine:
     key: str
     product: Product
-    variant: ProductVariant | None
     quantity: int
     unit_price: Decimal
     line_total: Decimal
@@ -41,8 +38,6 @@ class CartLine:
 
     @property
     def display_name(self) -> str:
-        if self.variant:
-            return f"{self.product.name} - {self.variant.name}"
         return self.product.name
 
 
@@ -58,8 +53,8 @@ class CartSummary:
         return sum(line.quantity for line in self.lines)
 
 
-def cart_item_key(product_id: int, variant_id: int | None) -> str:
-    return f"{product_id}:{variant_id or 0}"
+def cart_item_key(product_id: int) -> str:
+    return str(product_id)
 
 
 def square_checkout_available(config: dict) -> bool:
@@ -67,38 +62,17 @@ def square_checkout_available(config: dict) -> bool:
 
 
 def is_product_purchasable(product: Product) -> bool:
-    return (
-        product.is_public
-        and product.deleted_at is None
-        and product.status.value == "active"
-    )
+    return product.is_public and product.deleted_at is None and product.status.value == "active"
 
 
-def active_variants(product: Product) -> list[ProductVariant]:
-    return [variant for variant in product.variants if variant.active]
-
-
-def variant_choices(product: Product) -> list[tuple[int, str]]:
-    return [(variant.id, variant.name) for variant in active_variants(product)]
-
-
-def product_stock(product: Product, variant: ProductVariant | None = None) -> int | None:
-    query = (
-        select(func.coalesce(func.sum(InventoryRecord.quantity_on_hand - InventoryRecord.quantity_reserved), 0))
-        .where(InventoryRecord.product_id == product.id)
-    )
-    if variant is None:
-        query = query.where(InventoryRecord.variant_id.is_(None))
-    else:
-        query = query.where(InventoryRecord.variant_id == variant.id)
-
+def product_stock(product: Product) -> int | None:
+    query = select(
+        func.coalesce(func.sum(InventoryRecord.quantity_on_hand - InventoryRecord.quantity_reserved), 0)
+    ).where(InventoryRecord.product_id == product.id)
     available = db.session.scalar(query)
-    has_records_query = select(func.count(InventoryRecord.id)).where(InventoryRecord.product_id == product.id)
-    if variant is None:
-        has_records_query = has_records_query.where(InventoryRecord.variant_id.is_(None))
-    else:
-        has_records_query = has_records_query.where(InventoryRecord.variant_id == variant.id)
-    record_count = db.session.scalar(has_records_query) or 0
+    record_count = db.session.scalar(
+        select(func.count(InventoryRecord.id)).where(InventoryRecord.product_id == product.id)
+    ) or 0
 
     if record_count == 0 or product.product_type in {
         ProductType.MADE_TO_ORDER_PRODUCT,
@@ -106,12 +80,11 @@ def product_stock(product: Product, variant: ProductVariant | None = None) -> in
         ProductType.B2B_PRODUCT,
     }:
         return None
-
     return int(available or 0)
 
 
-def available_stock_label(product: Product, variant: ProductVariant | None = None) -> str:
-    available = product_stock(product, variant)
+def available_stock_label(product: Product) -> str:
+    available = product_stock(product)
     if available is None:
         return "Made in small batches"
     if available <= 0:
@@ -144,24 +117,16 @@ def resolve_cart_lines(raw_items: list[dict] | None = None) -> list[CartLine]:
         if product is None or not is_product_purchasable(product):
             continue
 
-        variant = None
-        variant_id = int(item.get("variant_id") or 0)
-        if variant_id:
-            variant = db.session.get(ProductVariant, variant_id)
-            if variant is None or variant.product_id != product.id or not variant.active:
-                continue
-
-        unit_price = variant.price if variant else product.base_price
         quantity = max(1, int(item.get("quantity", 1)))
+        unit_price = product.base_price
         lines.append(
             CartLine(
-                key=cart_item_key(product.id, variant.id if variant else None),
+                key=cart_item_key(product.id),
                 product=product,
-                variant=variant,
                 quantity=quantity,
                 unit_price=unit_price,
                 line_total=unit_price * quantity,
-                available_stock=product_stock(product, variant),
+                available_stock=product_stock(product),
             )
         )
 
@@ -180,27 +145,18 @@ def build_cart_summary(config: dict, fulfillment_method: str = "pickup") -> Cart
     return CartSummary(lines=lines, subtotal=subtotal, shipping_total=shipping_total, total=total)
 
 
-def add_to_cart(product: Product, variant_id: int | None, quantity: int) -> None:
+def add_to_cart(product: Product, quantity: int) -> None:
     if not is_product_purchasable(product):
         raise StorefrontError("That product is not available right now.")
 
-    variant = None
-    product_variants = active_variants(product)
-    if product_variants:
-        if not variant_id:
-            raise StorefrontError("Please choose an option before adding this item to your cart.")
-        variant = db.session.get(ProductVariant, variant_id)
-        if variant is None or variant.product_id != product.id or not variant.active:
-            raise StorefrontError("That product option is no longer available.")
-
-    available = product_stock(product, variant)
+    available = product_stock(product)
     if available is not None and quantity > available:
         raise StorefrontError("We don't have that many available right now.")
 
     cart = get_raw_cart()
-    key = cart_item_key(product.id, variant.id if variant else None)
+    key = cart_item_key(product.id)
     for item in cart:
-        if cart_item_key(int(item["product_id"]), int(item.get("variant_id") or 0) or None) == key:
+        if cart_item_key(int(item["product_id"])) == key:
             new_quantity = int(item.get("quantity", 1)) + quantity
             if available is not None and new_quantity > available:
                 raise StorefrontError("We don't have that many available right now.")
@@ -208,7 +164,7 @@ def add_to_cart(product: Product, variant_id: int | None, quantity: int) -> None
             store_raw_cart(cart)
             return
 
-    cart.append({"product_id": product.id, "variant_id": variant.id if variant else None, "quantity": quantity})
+    cart.append({"product_id": product.id, "quantity": quantity})
     store_raw_cart(cart)
 
 
@@ -216,15 +172,14 @@ def update_cart_line(line_key: str, quantity: int) -> None:
     cart = get_raw_cart()
     updated: list[dict] = []
     for item in cart:
-        current_key = cart_item_key(int(item["product_id"]), int(item.get("variant_id") or 0) or None)
+        current_key = cart_item_key(int(item["product_id"]))
         if current_key == line_key:
             if quantity <= 0:
                 continue
             product = db.session.get(Product, int(item["product_id"]))
-            variant = db.session.get(ProductVariant, int(item["variant_id"])) if item.get("variant_id") else None
             if product is None or not is_product_purchasable(product):
                 continue
-            available = product_stock(product, variant)
+            available = product_stock(product)
             if available is not None and quantity > available:
                 raise StorefrontError("We don't have that many available right now.")
             item["quantity"] = quantity
@@ -233,11 +188,7 @@ def update_cart_line(line_key: str, quantity: int) -> None:
 
 
 def remove_cart_line(line_key: str) -> None:
-    cart = [
-        item
-        for item in get_raw_cart()
-        if cart_item_key(int(item["product_id"]), int(item.get("variant_id") or 0) or None) != line_key
-    ]
+    cart = [item for item in get_raw_cart() if cart_item_key(int(item["product_id"])) != line_key]
     store_raw_cart(cart)
 
 
@@ -260,40 +211,56 @@ def upsert_customer(first_name: str, last_name: str, email: str, phone: str | No
     customer.last_name = last_name.strip()
     customer.email = email.strip().lower()
     customer.phone = phone.strip() if phone else None
-    customer.address_line_1 = shipping.get("shipping_address_line_1")
-    customer.address_line_2 = shipping.get("shipping_address_line_2")
-    customer.city = shipping.get("shipping_city")
-    customer.state = shipping.get("shipping_state")
-    customer.zip_code = shipping.get("shipping_postal_code")
+    customer.shipping_name = shipping.get("shipping_name") or f"{first_name.strip()} {last_name.strip()}".strip()
+    customer.shipping_address_line_1 = shipping.get("shipping_address_line_1")
+    customer.shipping_address_line_2 = shipping.get("shipping_address_line_2")
+    customer.shipping_city = shipping.get("shipping_city")
+    customer.shipping_state = shipping.get("shipping_state")
+    customer.shipping_postal_code = shipping.get("shipping_postal_code")
     db.session.flush()
     return customer
 
 
-def reserve_inventory(lines: list[CartLine]) -> None:
-    for line in lines:
-        if line.available_stock is None:
-            continue
-        remaining = line.quantity
-        records = (
-            InventoryRecord.query.filter_by(
-                product_id=line.product.id,
-                variant_id=line.variant.id if line.variant else None,
-            )
-            .order_by(InventoryRecord.quantity_on_hand.desc())
-            .all()
-        )
-        for record in records:
-            if remaining <= 0:
-                break
-            available_here = max(0, record.quantity_on_hand - record.quantity_reserved)
-            if available_here <= 0:
-                continue
-            reserve = min(available_here, remaining)
-            record.quantity_reserved += reserve
-            remaining -= reserve
+def create_order_from_cart(*, customer: Customer, summary: CartSummary, fulfillment_method: str, notes: str | None = None) -> Order:
+    if not summary.lines:
+        raise StorefrontError("Your cart is empty.")
 
-        if remaining > 0:
-            raise StorefrontError("One of the items in your cart just sold out. Please review your cart and try again.")
+    order = Order(
+        customer_id=customer.id,
+        status=OrderStatus.PENDING,
+        source=OrderSource.ONLINE,
+        payment_status=OrderPaymentStatus.UNPAID,
+        fulfillment_method=OrderFulfillmentMethod(fulfillment_method),
+        customer_name=f"{customer.first_name} {customer.last_name}".strip(),
+        customer_email=customer.email,
+        customer_phone=customer.phone,
+        shipping_name=customer.shipping_name,
+        shipping_address_line_1=customer.shipping_address_line_1,
+        shipping_address_line_2=customer.shipping_address_line_2,
+        shipping_city=customer.shipping_city,
+        shipping_state=customer.shipping_state,
+        shipping_postal_code=customer.shipping_postal_code,
+        subtotal=summary.subtotal,
+        shipping_total=summary.shipping_total,
+        total=summary.total,
+        notes=notes,
+    )
+    db.session.add(order)
+    db.session.flush()
+
+    for line in summary.lines:
+        db.session.add(
+            OrderItem(
+                order_id=order.id,
+                product_id=line.product.id,
+                quantity=line.quantity,
+                unit_price=line.unit_price,
+                line_total=line.line_total,
+            )
+        )
+
+    db.session.commit()
+    return order
 
 
 def create_online_order(
@@ -312,51 +279,15 @@ def create_online_order(
     if not summary.lines:
         raise StorefrontError("Your cart is empty.")
 
-    for line in summary.lines:
-        if line.available_stock is not None and line.quantity > line.available_stock:
-            raise StorefrontError(f"{line.display_name} is no longer available in that quantity.")
-
     customer = upsert_customer(first_name, last_name, email, phone, shipping)
-    order = Order(
+    order = create_order_from_cart(
         customer=customer,
-        status=OrderStatus.PENDING,
-        source=OrderSource.ONLINE,
-        payment_status=OrderPaymentStatus.PENDING,
-        fulfillment_method=OrderFulfillmentMethod(fulfillment_method),
-        notes=notes.strip() if notes else None,
-        customer_name=f"{first_name.strip()} {last_name.strip()}".strip(),
-        customer_email=email.strip().lower(),
-        customer_phone=phone.strip() if phone else None,
-        shipping_name=shipping.get("shipping_name"),
-        shipping_address_line_1=shipping.get("shipping_address_line_1"),
-        shipping_address_line_2=shipping.get("shipping_address_line_2"),
-        shipping_city=shipping.get("shipping_city"),
-        shipping_state=shipping.get("shipping_state"),
-        shipping_postal_code=shipping.get("shipping_postal_code"),
-        subtotal=summary.subtotal,
-        shipping_total=summary.shipping_total,
-        total=summary.total,
-        paid_amount=Decimal("0.00"),
-        payment_provider=payment_option,
-        external_payment_reference=config.get("SHOP_VENMO_HANDLE") if payment_option == "venmo" else None,
+        summary=summary,
+        fulfillment_method=fulfillment_method,
+        notes=notes,
     )
-    db.session.add(order)
-    db.session.flush()
-
-    for line in summary.lines:
-        db.session.add(
-            OrderItem(
-                order=order,
-                product_id=line.product.id,
-                variant_id=line.variant.id if line.variant else None,
-                quantity=line.quantity,
-                unit_price=line.unit_price,
-                line_total=line.line_total,
-                is_custom_item=False,
-                notes="Public storefront checkout",
-            )
-        )
-
-    reserve_inventory(summary.lines)
+    order.payment_provider = payment_option
+    if payment_option != "square":
+        order.external_payment_reference = config.get("SHOP_VENMO_HANDLE")
     db.session.commit()
     return order

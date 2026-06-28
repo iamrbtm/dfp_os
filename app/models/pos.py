@@ -135,9 +135,6 @@ class PosSaleItem(PrimaryKeyMixin, TimestampMixin, db.Model):
     product_id: Mapped[int | None] = mapped_column(
         ForeignKey("products.id"), nullable=True, index=True
     )
-    variant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("product_variants.id"), nullable=True, index=True
-    )
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
@@ -152,4 +149,3 @@ class PosSaleItem(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     sale = relationship("PosSale", back_populates="items")
     product = relationship("Product")
-    variant = relationship("ProductVariant")

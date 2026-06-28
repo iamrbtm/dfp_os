@@ -264,12 +264,9 @@ def register_context_processors(app: Flask) -> None:
                 ("New Session", url_for("pos.session_new")),
             ],
             "products": [
-                ("Products", url_for("products.list_resource", resource_key="products")),
                 ("Product Studio", url_for("products.studio")),
                 ("Categories", url_for("products.list_resource", resource_key="categories")),
                 ("Collections", url_for("products.list_resource", resource_key="collections")),
-                ("Variants", url_for("products.list_resource", resource_key="variants")),
-                ("Model Assets", url_for("products.list_resource", resource_key="model-assets")),
             ],
             "inventory": [
                 ("Records", url_for("inventory.list_resource", resource_key="records")),

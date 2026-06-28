@@ -20,12 +20,10 @@ from app.models import (
     Category,
     Collection,
     LicenseStatus,
-    ModelAsset,
     ModelSourceType,
     Product,
     ProductStatus,
     ProductType,
-    ProductVariant,
 )
 
 
@@ -161,102 +159,3 @@ class ProductForm(FlaskForm):
         product.design_source = self.design_source.data or None
         product.commercial_license_notes = self.commercial_license_notes.data
         return product
-
-
-class ProductVariantForm(FlaskForm):
-    product_id = SelectField("Product", coerce=int, validators=[DataRequired()])
-    sku = StringField("SKU", validators=[DataRequired(), Length(max=100)])
-    name = StringField("Variant Name", validators=[DataRequired(), Length(max=160)])
-    colorway = StringField("Colorway", validators=[Optional(), Length(max=120)])
-    size = StringField("Size", validators=[Optional(), Length(max=120)])
-    material_type = StringField("Material Type", validators=[Optional(), Length(max=120)])
-    price = DecimalField("Price", places=2, validators=[Optional(), NumberRange(min=0)])
-    material_cost = DecimalField(
-        "Material Cost", places=2, validators=[Optional(), NumberRange(min=0)]
-    )
-    estimated_print_minutes = IntegerField(
-        "Estimated Print Minutes", validators=[Optional(), NumberRange(min=0)], default=0
-    )
-    estimated_filament_grams = IntegerField(
-        "Estimated Filament Grams", validators=[Optional(), NumberRange(min=0)], default=0
-    )
-    active = BooleanField("Active", default=True)
-    pos_button_label = StringField("POS Button Label", validators=[Optional(), Length(max=120)])
-    pos_sort_order = IntegerField(
-        "POS Sort Order", validators=[Optional(), NumberRange(min=0)], default=0
-    )
-    barcode_or_qr_code = StringField("Barcode or QR Code", validators=[Optional(), Length(max=255)])
-    submit = SubmitField("Save variant")
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.product_id.choices = [
-            (item.id, item.name) for item in Product.query.order_by(Product.name)
-        ]
-
-    def validate_sku(self, field):
-        existing = ProductVariant.query.filter_by(sku=field.data.strip()).first()
-        if existing and getattr(self, "instance_id", None) != existing.id:
-            raise ValidationError("A variant with that SKU already exists.")
-
-    def apply(self, variant: ProductVariant) -> ProductVariant:
-        variant.product_id = self.product_id.data
-        variant.sku = self.sku.data.strip()
-        variant.name = self.name.data.strip()
-        variant.colorway = self.colorway.data or None
-        variant.size = self.size.data or None
-        variant.material_type = self.material_type.data or None
-        variant.price = decimal_or_zero(self.price.data)
-        variant.material_cost = decimal_or_zero(self.material_cost.data)
-        variant.estimated_print_minutes = self.estimated_print_minutes.data or 0
-        variant.estimated_filament_grams = self.estimated_filament_grams.data or 0
-        variant.active = bool(self.active.data)
-        variant.pos_button_label = self.pos_button_label.data or None
-        variant.pos_sort_order = self.pos_sort_order.data or 0
-        variant.barcode_or_qr_code = self.barcode_or_qr_code.data or None
-        return variant
-
-
-class ModelAssetForm(FlaskForm):
-    title = StringField("Title", validators=[DataRequired(), Length(max=160)])
-    source_type = SelectField(
-        "Source Type", choices=enum_choices(ModelSourceType), validators=[DataRequired()]
-    )
-    source_url = StringField("Source URL", validators=[Optional(), URL(), Length(max=500)])
-    designer_name = StringField("Designer Name", validators=[Optional(), Length(max=160)])
-    license_type = StringField("License Type", validators=[Optional(), Length(max=160)])
-    commercial_use_allowed = BooleanField("Commercial Use Allowed", default=False)
-    license_expiration = DateTimeLocalField(
-        "License Expiration",
-        format="%Y-%m-%dT%H:%M",
-        validators=[Optional()],
-    )
-    proof_of_license_path = StringField(
-        "Proof Of License Path", validators=[Optional(), Length(max=255)]
-    )
-    file_location = StringField("File Location", validators=[Optional(), Length(max=255)])
-    related_product_id = OptionalSelectField("Related Product", coerce=int, validators=[Optional()])
-    notes = TextAreaField("Notes", validators=[Optional()])
-    status = SelectField("Status", choices=enum_choices(LicenseStatus), validators=[DataRequired()])
-    submit = SubmitField("Save model asset")
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.related_product_id.choices = [(0, "No linked product")] + [
-            (item.id, item.name) for item in Product.query.order_by(Product.name)
-        ]
-
-    def apply(self, asset: ModelAsset) -> ModelAsset:
-        asset.title = self.title.data.strip()
-        asset.source_type = ModelSourceType(self.source_type.data)
-        asset.source_url = self.source_url.data or None
-        asset.designer_name = self.designer_name.data or None
-        asset.license_type = self.license_type.data or None
-        asset.commercial_use_allowed = bool(self.commercial_use_allowed.data)
-        asset.license_expiration = self.license_expiration.data
-        asset.proof_of_license_path = self.proof_of_license_path.data or None
-        asset.file_location = self.file_location.data or None
-        asset.related_product_id = self.related_product_id.data or None
-        asset.notes = self.notes.data
-        asset.status = LicenseStatus(self.status.data)
-        return asset

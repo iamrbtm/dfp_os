@@ -26,7 +26,6 @@ def record_movement(
     quantity: int,
     inventory_record: InventoryRecord | None = None,
     product_id: int | None = None,
-    variant_id: int | None = None,
     from_location_id: int | None = None,
     to_location_id: int | None = None,
     reference_type: str | None = None,
@@ -37,7 +36,6 @@ def record_movement(
     movement = InventoryMovement(
         inventory_record_id=inventory_record.id if inventory_record else None,
         product_id=product_id if product_id is not None else getattr(inventory_record, "product_id", None),
-        variant_id=variant_id if variant_id is not None else getattr(inventory_record, "variant_id", None),
         from_location_id=from_location_id,
         to_location_id=to_location_id,
         quantity=quantity,
@@ -54,18 +52,15 @@ def record_movement(
 def get_or_create_inventory_record(
     *,
     product_id: int,
-    variant_id: int | None,
     location_id: int,
 ) -> InventoryRecord:
     record = InventoryRecord.query.filter_by(
         product_id=product_id,
-        variant_id=variant_id,
         location_id=location_id,
     ).with_for_update().first()
     if record is None:
         record = InventoryRecord(
             product_id=product_id,
-            variant_id=variant_id,
             location_id=location_id,
             quantity_on_hand=0,
             quantity_reserved=0,
@@ -78,7 +73,6 @@ def get_or_create_inventory_record(
 def deduct_finished_goods(
     *,
     product_id: int,
-    variant_id: int | None,
     quantity: int,
     location_id: int | None,
     reference_type: str,
@@ -92,8 +86,6 @@ def deduct_finished_goods(
         InventoryRecord.product_id == product_id,
         InventoryRecord.quantity_on_hand > 0,
     )
-    if variant_id is not None:
-        query = query.filter(InventoryRecord.variant_id == variant_id)
     if location_id is not None:
         query = query.filter(InventoryRecord.location_id == location_id)
 
@@ -144,7 +136,6 @@ def deduct_finished_goods(
         if record is None:
             record = InventoryRecord(
                 product_id=product_id,
-                variant_id=variant_id,
                 location_id=location_id,
                 quantity_on_hand=0,
                 quantity_reserved=0,
@@ -236,7 +227,6 @@ def transfer_inventory(
     }
     destination = get_or_create_inventory_record(
         product_id=source.product_id,
-        variant_id=source.variant_id,
         location_id=to_location_id,
     )
     dest_before = {
@@ -388,7 +378,6 @@ def release_inventory(
 def return_inventory(
     *,
     product_id: int,
-    variant_id: int | None,
     quantity: int,
     location_id: int | None,
     reference_type: str,
@@ -403,7 +392,6 @@ def return_inventory(
 
     record = get_or_create_inventory_record(
         product_id=product_id,
-        variant_id=variant_id,
         location_id=location_id,
     )
     before = {

@@ -7,6 +7,7 @@ from flask_migrate import upgrade
 from app import create_app
 from app.extensions import db
 from app.models import User
+from tests.db_support import base_test_app_config, migration_database_url, recreate_database
 
 
 def test_seed_admin_command_is_idempotent(app, runner):
@@ -23,16 +24,15 @@ def test_seed_admin_command_is_idempotent(app, runner):
 
 
 def test_initial_migration_upgrades_successfully(tmp_path: Path):
-    database_path = tmp_path / "migration.db"
-    upload_path = tmp_path / "uploads"
+    database_url = migration_database_url()
+    recreate_database(database_url)
     app = create_app(
         "testing",
-        {
-            "TESTING": True,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
-            "UPLOAD_FOLDER": str(upload_path),
-            "MIGRATIONS_DIR": str(Path(__file__).resolve().parent.parent / "migrations"),
-        },
+        base_test_app_config(
+            tmp_path,
+            SQLALCHEMY_DATABASE_URI=database_url,
+            MIGRATIONS_DIR=str(Path(__file__).resolve().parent.parent / "migrations"),
+        ),
     )
 
     with app.app_context():

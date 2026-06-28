@@ -5,6 +5,8 @@ from pathlib import Path
 from decimal import Decimal
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_DOCKER_DATABASE_URL = "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os"
+DEFAULT_DOCKER_TEST_DATABASE_URL = "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test"
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -19,7 +21,7 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DATABASE_URL",
-        f"sqlite:///{(BASE_DIR / 'instance' / 'dfp_os.db').as_posix()}",
+        DEFAULT_DOCKER_DATABASE_URL,
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
@@ -136,7 +138,7 @@ class TestingConfig(Config):
     TESTING = True
     ENVIRONMENT = "testing"
     WTF_CSRF_ENABLED = False
-    SQLALCHEMY_DATABASE_URI = "sqlite://"
+    SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL", DEFAULT_DOCKER_TEST_DATABASE_URL)
 
 
 class ProductionConfig(Config):

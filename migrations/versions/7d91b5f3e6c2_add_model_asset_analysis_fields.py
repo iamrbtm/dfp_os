@@ -1,4 +1,4 @@
-"""add model asset analysis and conversion fields
+"""Add product studio analysis and conversion fields
 
 Revision ID: 7d91b5f3e6c2
 Revises: 4a6a5e4c2d11
@@ -16,15 +16,11 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table("model_assets", schema=None) as batch_op:
+    with op.batch_alter_table("products", schema=None) as batch_op:
         batch_op.add_column(sa.Column("analysis_status", sa.String(length=30), nullable=True))
         batch_op.add_column(sa.Column("analysis_error", sa.Text(), nullable=True))
-        batch_op.add_column(
-            sa.Column("analysis_requested_at", sa.DateTime(timezone=True), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("analysis_completed_at", sa.DateTime(timezone=True), nullable=True)
-        )
+        batch_op.add_column(sa.Column("analysis_requested_at", sa.DateTime(timezone=True), nullable=True))
+        batch_op.add_column(sa.Column("analysis_completed_at", sa.DateTime(timezone=True), nullable=True))
         batch_op.add_column(sa.Column("parsed_volume_mm3", sa.Numeric(12, 4), nullable=True))
         batch_op.add_column(sa.Column("parsed_surface_area_mm2", sa.Numeric(12, 4), nullable=True))
         batch_op.add_column(sa.Column("parsed_triangle_count", sa.Integer(), nullable=True))
@@ -37,7 +33,7 @@ def upgrade():
 
 
 def downgrade():
-    with op.batch_alter_table("model_assets", schema=None) as batch_op:
+    with op.batch_alter_table("products", schema=None) as batch_op:
         batch_op.drop_column("converted_model_path")
         batch_op.drop_column("conversion_error")
         batch_op.drop_column("convert_status")

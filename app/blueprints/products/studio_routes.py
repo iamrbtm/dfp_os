@@ -3,14 +3,12 @@ from __future__ import annotations
 import io
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 
 from flask import (
     abort,
     current_app,
     flash,
-    g,
     jsonify,
     redirect,
     render_template,
@@ -23,17 +21,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.products import bp
 from app.extensions import db
-from app.forms.studio import ModelAssetUploadForm, ProductStudioForm, VariantInlineForm
-from app.models import (
-    Category,
-    Collection,
-    ModelAsset,
-    Product,
-    ProductImage,
-    ProductStatus,
-    ProductVariant,
-    UserRole,
-)
+from app.forms.studio import ProductModelUploadForm, ProductStudioForm
+from app.models import Category, Collection, Product, ProductImage, ProductStatus, UserRole
 from app.services.admin_mutations import (
     create_resource as create_admin_resource,
     snapshot_instance,
@@ -55,7 +44,16 @@ from app.utils.auth import roles_required
 
 def _get_celery():
     from app.celery_app import celery as _celery_instance
+
     return _celery_instance
+
+
+def _load_products() -> list[Product]:
+    return (
+        Product.query.filter(Product.deleted_at.is_(None))
+        .order_by(Product.updated_at.desc(), Product.name.asc())
+        .all()
+    )
 
 
 def _unique_storage_filename(existing_names: set[str], desired_name: str) -> str:
@@ -74,19 +72,30 @@ def _unique_storage_filename(existing_names: set[str], desired_name: str) -> str
         counter += 1
 
 
-def _preferred_image_filename(product: Product, original_filename: str, *, variant_id: int | None) -> str:
+def _preferred_image_filename(product: Product, original_filename: str) -> str:
     existing_names = {
         storage_reference_name(image.file_path)
         for image in product.images
-        if image.variant_id == variant_id and image.file_path
+        if image.file_path
     }
     return _unique_storage_filename(existing_names, original_filename)
 
 
-def _variant_form_for(variant: ProductVariant) -> VariantInlineForm:
-    form = VariantInlineForm(prefix=f"variant-{variant.id}")
-    form.load_from_variant(variant)
-    return form
+def _render_studio(product: Product | None, form: ProductStudioForm, mode: str, status_code: int = 200):
+    return (
+        render_template(
+            "products/studio.html",
+            form=form,
+            product=product,
+            mode=mode,
+            categories=Category.query.order_by(Category.name).all(),
+            collections=Collection.query.order_by(Collection.name).all(),
+            products=_load_products(),
+            product_images=list(product.images) if product else [],
+            storage_reference_name=storage_reference_name,
+        ),
+        status_code,
+    )
 
 
 @bp.route("/studio", methods=["GET", "POST"])
@@ -97,8 +106,8 @@ def studio(product_id: int | None = None):
     form = ProductStudioForm()
     mode = "edit" if product else "create"
 
-    categories = Category.query.order_by(Category.name).all()
-    collections = Collection.query.order_by(Collection.name).all()
+    if product:
+        form.instance_id = product.id
 
     if form.validate_on_submit():
         if product is None:
@@ -110,64 +119,28 @@ def studio(product_id: int | None = None):
             except IntegrityError:
                 db.session.rollback()
                 flash("Unable to save that product. Please check for duplicates.", "danger")
-                return render_template(
-                    "products/studio.html",
-                    form=form,
-                    product=product,
-                    mode=mode,
-                    categories=categories,
-                    collections=collections,
-                    model_assets=[],
-                    variants=[],
-                )
+                return _render_studio(product, form, mode, 400)
             flash("Product created successfully.", "success")
             return redirect(url_for("products.studio", product_id=product.id))
+
+        before_state = snapshot_instance(product)
+        form.populate_product(product)
+        try:
+            update_admin_resource(product, before_state=before_state, actor_id=current_user.id)
+        except IntegrityError:
+            db.session.rollback()
+            flash("Unable to save that product. Please check for duplicates.", "danger")
+            return _render_studio(product, form, mode, 400)
+        flash("Product updated successfully.", "success")
+        return redirect(url_for("products.studio", product_id=product.id))
+
+    if request.method == "GET":
+        if product:
+            form.load_from_product(product)
         else:
-            before_state = snapshot_instance(product)
-            form.populate_product(product)
-            try:
-                update_admin_resource(product, before_state=before_state, actor_id=current_user.id)
-            except IntegrityError:
-                db.session.rollback()
-                flash("Unable to save that product. Please check for duplicates.", "danger")
-                return render_template(
-                    "products/studio.html",
-                    form=form,
-                    product=product,
-                    mode=mode,
-                    categories=categories,
-                    collections=collections,
-                    model_assets=product.model_assets,
-                    variants=product.variants,
-                )
-            flash("Product updated successfully.", "success")
-            return redirect(url_for("products.studio", product_id=product.id))
+            form.status.data = ProductStatus.DRAFT.value
 
-    if product:
-        form.load_from_product(product)
-    else:
-        form.status.data = ProductStatus.DRAFT.value
-
-    model_assets = product.model_assets if product else []
-    variants = product.variants if product else []
-    product_images = [img for img in (product.images if product else []) if img.variant_id is None]
-    primary_assets = [asset for asset in model_assets if asset.variant_id is None]
-    variant_forms = {variant.id: _variant_form_for(variant) for variant in variants}
-
-    return render_template(
-        "products/studio.html",
-        form=form,
-        product=product,
-        mode=mode,
-        categories=categories,
-        collections=collections,
-        model_assets=model_assets,
-        variants=variants,
-        product_images=product_images,
-        primary_assets=primary_assets,
-        variant_forms=variant_forms,
-        storage_reference_name=storage_reference_name,
-    )
+    return _render_studio(product, form, mode)
 
 
 @bp.route("/studio/<int:product_id>/upload-model", methods=["POST"])
@@ -177,110 +150,52 @@ def upload_model(product_id: int):
     if product is None:
         abort(404)
 
-    upload_form = ModelAssetUploadForm()
+    upload_form = ProductModelUploadForm()
     if not upload_form.validate_on_submit():
         errors = []
         for field, field_errors in upload_form.errors.items():
             for err in field_errors:
                 errors.append(f"{field}: {err}")
-        return (
-            jsonify({"success": False, "error": "; ".join(errors)}),
-            400,
-        )
+        return jsonify({"success": False, "error": "; ".join(errors)}), 400
 
     file = upload_form.model_file.data
     if not file:
         return jsonify({"success": False, "error": "No file provided"}), 400
 
-    variant_id = request.form.get("variant_id", type=int)
-    if variant_id is not None:
-        v = db.session.get(ProductVariant, variant_id)
-        if v is None or v.product_id != product.id:
-            return jsonify({"success": False, "error": "Invalid variant"}), 400
-
     ext = Path(file.filename).suffix.lower()
     safe_filename = normalize_storage_filename(f"{uuid.uuid4().hex}{ext}")
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
-    key = product_storage_key(product.id, safe_filename, variant_id=variant_id)
-
-    data = file.read()
+    key = product_storage_key(product.id, safe_filename)
     content_type = content_type_for_name(file.filename, "application/octet-stream")
-
     storage_ref = upload_bytes_to_storage(
-        data,
+        file.read(),
         bucket=bucket,
         key=key,
         local_root=local_root,
         content_type=content_type,
     )
 
-    asset = ModelAsset()
-    upload_form.populate_asset(asset)
-    asset.file_location = storage_ref
-    asset.related_product_id = product.id
-    asset.variant_id = variant_id
-    asset.analysis_status = "pending"
-    asset.analysis_requested_at = datetime.now(timezone.utc)
-    db.session.add(asset)
+    product.model_file_path = storage_ref
+    product.analysis_status = "pending"
+    product.analysis_error = None
+    product.analysis_requested_at = datetime.now(timezone.utc)
+    product.analysis_completed_at = None
+    product.convert_status = None
+    product.conversion_error = None
+    product.converted_model_path = None
+    product.gcode_path = None
     db.session.commit()
 
     celery = _get_celery()
+    task_id = None
     if celery is not None:
-        from app.tasks.model_analysis import analyze_model_asset
-        task = analyze_model_asset.delay(asset.id)
+        from app.tasks.model_analysis import analyze_product_model
+
+        task = analyze_product_model.delay(product.id)
         task_id = task.id
-    else:
-        task_id = None
 
-    return jsonify(
-        {
-            "success": True,
-            "asset_id": asset.id,
-            "task_id": task_id,
-            "file_location": storage_ref,
-        }
-    )
-
-
-@bp.route("/studio/variant-cost/<int:variant_id>", methods=["POST"])
-@roles_required(UserRole.ADMIN, UserRole.STAFF)
-def calculate_variant_cost(variant_id: int):
-    variant = get_by_id(ProductVariant, variant_id)
-    if variant is None:
-        return jsonify({"success": False, "error": "Variant not found"}), 404
-
-    celery = _get_celery()
-    if celery is not None:
-        from app.tasks.cost_calculation import calculate_variant_cost_task
-        task = calculate_variant_cost_task.delay(variant_id)
-        return jsonify({"success": True, "task_id": task.id})
-    else:
-        breakdown = calculate_product_cost(
-            product=variant.product,
-            variant=variant,
-            sale_price=variant.price,
-        )
-        variant.material_cost = breakdown.material_cost
-        variant.estimated_filament_grams = int(round(float(breakdown.filament_grams)))
-        variant.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
-        persist_cost_snapshot(
-            product=variant.product,
-            variant=variant,
-            breakdown=breakdown,
-            snapshot_reason="studio.variant",
-        )
-        db.session.commit()
-        return jsonify(
-            {
-                "success": True,
-                "total_cost": str(breakdown.total_cost),
-                "suggested_price": str(breakdown.suggested_price),
-                "margin_percent": str(breakdown.margin_percent),
-                "material_cost": str(breakdown.material_cost),
-                "snapshot_id": breakdown.snapshot_id,
-            }
-        )
+    return jsonify({"success": True, "product_id": product.id, "task_id": task_id, "file_location": storage_ref})
 
 
 @bp.route("/studio/<int:product_id>/calculate-costs", methods=["POST"])
@@ -293,167 +208,29 @@ def calculate_product_costs(product_id: int):
     celery = _get_celery()
     if celery is not None:
         from app.tasks.cost_calculation import calculate_product_cost_task
+
         task = calculate_product_cost_task.delay(product_id)
         return jsonify({"success": True, "task_id": task.id})
-    else:
-        breakdown = calculate_product_cost(product=product)
-        product.estimated_material_cost = breakdown.material_cost
-        product.estimated_profit = breakdown.margin_dollars
-        product.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
-        persist_cost_snapshot(
-            product=product,
-            variant=None,
-            breakdown=breakdown,
-            snapshot_reason="studio.product",
-        )
-        db.session.commit()
-        return jsonify(
-            {
-                "success": True,
-                "total_cost": str(breakdown.total_cost),
-                "suggested_price": str(breakdown.suggested_price),
-                "margin_percent": str(breakdown.margin_percent),
-                "material_cost": str(breakdown.material_cost),
-                "labor_cost": str(breakdown.labor_cost),
-                "machine_cost": str(breakdown.machine_cost),
-                "snapshot_id": breakdown.snapshot_id,
-            }
-        )
 
-
-@bp.route("/studio/create-variant/<int:product_id>", methods=["POST"])
-@roles_required(UserRole.ADMIN, UserRole.STAFF)
-def create_variant(product_id: int):
-    product = get_by_id(Product, product_id)
-    if product is None:
-        abort(404)
-
-    form = VariantInlineForm()
-    if form.validate_on_submit():
-        variant = ProductVariant()
-        variant.product_id = product.id
-        variant.business_id = product.business_id or 1
-        form.populate_variant(variant)
-
-        try:
-            create_admin_resource(variant, actor_id=current_user.id)
-        except IntegrityError:
-            db.session.rollback()
-            return jsonify({"success": False, "error": "A variant with that SKU already exists."}), 400
-
-        breakdown = calculate_product_cost(product=product, variant=variant)
-        variant.material_cost = breakdown.material_cost
-        variant.estimated_filament_grams = int(round(float(breakdown.filament_grams)))
-        variant.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
-        persist_cost_snapshot(
-            product=product,
-            variant=variant,
-            breakdown=breakdown,
-            snapshot_reason="studio.create_variant",
-        )
-        db.session.commit()
-
-        return jsonify(
-            {
-                "success": True,
-                "variant_id": variant.id,
-                "sku": variant.sku,
-                "name": variant.name,
-                "price": str(variant.price),
-                "material_cost": str(breakdown.material_cost),
-                "total_cost": str(breakdown.total_cost),
-                "margin_percent": str(breakdown.margin_percent),
-                "suggested_price": str(breakdown.suggested_price),
-                "active": variant.active,
-                "snapshot_id": breakdown.snapshot_id,
-            }
-        )
-
-    errors = []
-    for field, field_errors in form.errors.items():
-        for err in field_errors:
-            errors.append(f"{field}: {err}")
-    return jsonify({"success": False, "error": "; ".join(errors)}), 400
-
-
-@bp.route("/studio/update-variant/<int:variant_id>", methods=["POST"])
-@roles_required(UserRole.ADMIN, UserRole.STAFF)
-def update_variant(variant_id: int):
-    variant = get_by_id(ProductVariant, variant_id)
-    if variant is None:
-        abort(404)
-
-    form = VariantInlineForm(prefix=f"variant-{variant.id}")
-    if not form.validate_on_submit():
-        errors = []
-        for field, field_errors in form.errors.items():
-            for err in field_errors:
-                errors.append(f"{field}: {err}")
-        flash("; ".join(errors) or "Unable to update variant.", "danger")
-        return redirect(url_for("products.studio", product_id=variant.product_id))
-
-    before_state = snapshot_instance(variant)
-    form.populate_variant(variant)
-    try:
-        update_admin_resource(variant, before_state=before_state, actor_id=current_user.id)
-    except IntegrityError:
-        db.session.rollback()
-        flash("Unable to save that variant. Please check for duplicate SKUs.", "danger")
-        return redirect(url_for("products.studio", product_id=variant.product_id))
-
-    flash(f"{variant.name} updated.", "success")
-    return redirect(url_for("products.studio", product_id=variant.product_id))
-
-
-@bp.route("/studio/delete-variant/<int:variant_id>", methods=["POST"])
-@roles_required(UserRole.ADMIN, UserRole.STAFF)
-def delete_variant(variant_id: int):
-    variant = get_by_id(ProductVariant, variant_id)
-    if variant is None:
-        return jsonify({"success": False, "error": "Variant not found"}), 404
-
-    product_id = variant.product_id
-    db.session.delete(variant)
+    breakdown = calculate_product_cost(product=product)
+    product.estimated_material_cost = breakdown.material_cost
+    product.estimated_profit = breakdown.margin_dollars
+    product.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
+    persist_cost_snapshot(product=product, breakdown=breakdown, snapshot_reason="studio.product")
     db.session.commit()
-    flash("Variant deleted.", "success")
-    return redirect(url_for("products.studio", product_id=product_id))
-
-
-@bp.route("/studio/delete-model/<int:asset_id>", methods=["POST"])
-@roles_required(UserRole.ADMIN, UserRole.STAFF)
-def delete_model(asset_id: int):
-    asset = get_by_id(ModelAsset, asset_id)
-    if asset is None:
-        return jsonify({"success": False, "error": "Model asset not found"}), 404
-
-    product_id = asset.related_product_id
-    db.session.delete(asset)
-    db.session.commit()
-    flash("Model asset deleted.", "success")
-    return redirect(url_for("products.studio", product_id=product_id))
-
-
-@bp.route("/studio/reanalyze/<int:asset_id>", methods=["POST"])
-@roles_required(UserRole.ADMIN, UserRole.STAFF)
-def reanalyze_model(asset_id: int):
-    asset = get_by_id(ModelAsset, asset_id)
-    if asset is None:
-        return jsonify({"success": False, "error": "Model asset not found"}), 404
-
-    asset.analysis_status = "pending"
-    asset.analysis_error = None
-    asset.analysis_completed_at = None
-    asset.analysis_requested_at = datetime.now(timezone.utc)
-    db.session.commit()
-
-    celery = _get_celery()
-    task_id = None
-    if celery is not None:
-        from app.tasks.model_analysis import analyze_model_asset
-        task = analyze_model_asset.delay(asset.id)
-        task_id = task.id
-
-    return jsonify({"success": True, "task_id": task_id, "asset_id": asset.id})
+    return jsonify(
+        {
+            "success": True,
+            "total_cost": str(breakdown.total_cost),
+            "suggested_price": str(breakdown.suggested_price),
+            "margin_percent": str(breakdown.margin_percent),
+            "margin_dollars": str(breakdown.margin_dollars),
+            "material_cost": str(breakdown.material_cost),
+            "filament_grams": str(breakdown.filament_grams),
+            "print_minutes": str(breakdown.print_minutes),
+            "snapshot_id": breakdown.snapshot_id,
+        }
+    )
 
 
 @bp.route("/studio/task-status/<task_id>")
@@ -464,11 +241,7 @@ def task_status(task_id: str):
         return jsonify({"state": "NO_CELERY", "result": None})
 
     result = celery.AsyncResult(task_id)
-    response = {
-        "task_id": task_id,
-        "state": result.state,
-    }
-
+    response = {"task_id": task_id, "state": result.state}
     if result.state == "SUCCESS":
         response["result"] = result.result
     elif result.state == "FAILURE":
@@ -476,81 +249,93 @@ def task_status(task_id: str):
         response["traceback"] = str(result.traceback) if result.traceback else None
     elif result.state == "PENDING":
         response["info"] = "Task has not started yet."
-    elif result.state == "PROGRESS" or result.state == "STARTED":
+    elif result.state in {"PROGRESS", "STARTED"}:
         response["info"] = result.info if result.info else "Processing..."
-
     return jsonify(response)
 
 
-@bp.route("/studio/<int:asset_id>/download-model")
+@bp.route("/studio/<int:product_id>/download-model")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
-def download_model(asset_id: int):
-    asset = get_by_id(ModelAsset, asset_id)
-    if asset is None or not asset.file_location:
+def download_model(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None or not product.model_file_path:
         abort(404)
 
-    ref = asset.converted_model_path or asset.file_location
+    ref = product.converted_model_path or product.model_file_path
     download_name = storage_reference_name(ref)
+    mime = content_type_for_name(download_name, "application/octet-stream")
 
     if is_s3_reference(ref):
         from app.services.storage import download_storage_bytes
+
         data = download_storage_bytes(ref)
-        mime = content_type_for_name(download_name, "model/gltf-binary" if download_name.endswith(".glb") else "application/octet-stream")
-        return send_file(
-            io.BytesIO(data),
-            download_name=download_name,
-            mimetype=mime,
-        )
-    else:
-        mime = content_type_for_name(download_name)
-        return send_file(ref, download_name=download_name, mimetype=mime)
+        return send_file(io.BytesIO(data), download_name=download_name, mimetype=mime)
+    return send_file(ref, download_name=download_name, mimetype=mime)
 
 
-@bp.route("/studio/<int:asset_id>/view-model")
+@bp.route("/studio/<int:product_id>/view-model")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
-def view_model(asset_id: int):
-    asset = get_by_id(ModelAsset, asset_id)
-    if asset is None or not asset.file_location:
+def view_model(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None or not product.model_file_path:
         abort(404)
 
-    ref = asset.converted_model_path or asset.file_location
+    ref = product.converted_model_path or product.model_file_path
     download_name = storage_reference_name(ref)
     mime = content_type_for_name(download_name)
-
     if is_s3_reference(ref):
         from app.services.storage import download_storage_bytes
-        import io
+
         data = download_storage_bytes(ref)
-        return send_file(
-            io.BytesIO(data),
-            mimetype=mime,
-            download_name=download_name,
-        )
-    else:
-        return send_file(ref, mimetype=mime)
+        return send_file(io.BytesIO(data), mimetype=mime, download_name=download_name)
+    return send_file(ref, mimetype=mime)
 
 
-@bp.route("/studio/<int:asset_id>/analysis-result")
+@bp.route("/studio/reanalyze/<int:product_id>", methods=["POST"])
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
-def analysis_result(asset_id: int):
-    asset = get_by_id(ModelAsset, asset_id)
-    if asset is None:
+def reanalyze_model(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return jsonify({"success": False, "error": "Product not found"}), 404
+
+    product.analysis_status = "pending"
+    product.analysis_error = None
+    product.analysis_completed_at = None
+    product.analysis_requested_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    celery = _get_celery()
+    task_id = None
+    if celery is not None:
+        from app.tasks.model_analysis import analyze_product_model
+
+        task = analyze_product_model.delay(product.id)
+        task_id = task.id
+
+    return jsonify({"success": True, "task_id": task_id, "product_id": product.id})
+
+
+@bp.route("/studio/<int:product_id>/analysis-result")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def analysis_result(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
         return jsonify({"success": False, "error": "Not found"}), 404
 
     return jsonify(
         {
             "success": True,
-            "asset_id": asset.id,
-            "status": asset.analysis_status,
-            "error": asset.analysis_error,
-            "volume_mm3": float(asset.parsed_volume_mm3) if asset.parsed_volume_mm3 else None,
-            "surface_area_mm2": float(asset.parsed_surface_area_mm2) if asset.parsed_surface_area_mm2 else None,
-            "triangle_count": asset.parsed_triangle_count,
-            "filament_grams": float(asset.parsed_filament_grams) if asset.parsed_filament_grams else None,
-            "print_minutes": float(asset.parsed_print_minutes) if asset.parsed_print_minutes else None,
-            "material_cost": str(asset.parsed_material_cost) if asset.parsed_material_cost else None,
-            "convert_status": asset.convert_status,
-            "converted_model_path": asset.converted_model_path,
+            "product_id": product.id,
+            "status": product.analysis_status,
+            "error": product.analysis_error,
+            "volume_mm3": float(product.parsed_volume_mm3) if product.parsed_volume_mm3 else None,
+            "surface_area_mm2": float(product.parsed_surface_area_mm2) if product.parsed_surface_area_mm2 else None,
+            "triangle_count": product.parsed_triangle_count,
+            "filament_grams": float(product.parsed_filament_grams) if product.parsed_filament_grams else None,
+            "print_minutes": float(product.parsed_print_minutes) if product.parsed_print_minutes else None,
+            "material_cost": str(product.parsed_material_cost) if product.parsed_material_cost else None,
+            "convert_status": product.convert_status,
+            "converted_model_path": product.converted_model_path,
         }
     )
 
@@ -563,7 +348,6 @@ def cost_result(product_id: int):
         return jsonify({"success": False, "error": "Not found"}), 404
 
     breakdown = calculate_product_cost(product=product)
-
     return jsonify(
         {
             "success": True,
@@ -596,12 +380,6 @@ def upload_product_image(product_id: int):
     if product is None:
         abort(404)
 
-    variant_id = request.form.get("variant_id", type=int)
-    if variant_id is not None:
-        v = db.session.get(ProductVariant, variant_id)
-        if v is None or v.product_id != product.id:
-            return jsonify({"success": False, "error": "Invalid variant"}), 400
-
     file = request.files.get("image")
     if not file:
         return jsonify({"success": False, "error": "No image file provided"}), 400
@@ -610,38 +388,27 @@ def upload_product_image(product_id: int):
     if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
         return jsonify({"success": False, "error": "Unsupported image type. Use JPG, PNG, WebP, or GIF."}), 400
 
-    safe_filename = _preferred_image_filename(
-        product,
-        file.filename or f"image{ext}",
-        variant_id=variant_id,
-    )
+    safe_filename = _preferred_image_filename(product, file.filename or f"image{ext}")
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
-    key = image_storage_key(product.id, safe_filename, variant_id=variant_id)
-
-    data = file.read()
-    content_type = content_type_for_name(file.filename, "image/jpeg")
-
+    key = image_storage_key(product.id, safe_filename)
     storage_ref = upload_bytes_to_storage(
-        data,
+        file.read(),
         bucket=bucket,
         key=key,
         local_root=local_root,
-        content_type=content_type,
+        content_type=content_type_for_name(file.filename, "image/jpeg"),
     )
 
     img = ProductImage(
         product_id=product.id,
-        variant_id=variant_id,
         file_path=storage_ref,
         alt_text=request.form.get("alt_text", ""),
     )
-
-    is_first = not ProductImage.query.filter_by(product_id=product.id, variant_id=variant_id).first()
+    is_first = not ProductImage.query.filter_by(product_id=product.id).first()
     if is_first:
         img.is_default = True
         img.is_pos = True
-
     db.session.add(img)
     db.session.commit()
 
@@ -651,14 +418,16 @@ def upload_product_image(product_id: int):
         product.pos_image_path = storage_ref
     db.session.commit()
 
-    return jsonify({
-        "success": True,
-        "image_id": img.id,
-        "file_path": storage_ref,
-        "is_default": img.is_default,
-        "is_pos": img.is_pos,
-        "url": url_for("products.serve_product_image", image_id=img.id),
-    })
+    return jsonify(
+        {
+            "success": True,
+            "image_id": img.id,
+            "file_path": storage_ref,
+            "is_default": img.is_default,
+            "is_pos": img.is_pos,
+            "url": url_for("products.serve_product_image", image_id=img.id),
+        }
+    )
 
 
 @bp.route("/studio/set-default-image/<int:image_id>", methods=["POST"])
@@ -668,11 +437,10 @@ def set_default_image(image_id: int):
     if img is None:
         return jsonify({"success": False, "error": "Image not found"}), 404
 
-    ProductImage.query.filter_by(product_id=img.product_id, variant_id=img.variant_id).update({"is_default": False})
+    ProductImage.query.filter_by(product_id=img.product_id).update({"is_default": False})
     img.is_default = True
-    product = img.product
-    if product:
-        product.default_image_path = img.file_path
+    if img.product:
+        img.product.default_image_path = img.file_path
     db.session.commit()
     return jsonify({"success": True})
 
@@ -684,11 +452,10 @@ def set_pos_image(image_id: int):
     if img is None:
         return jsonify({"success": False, "error": "Image not found"}), 404
 
-    ProductImage.query.filter_by(product_id=img.product_id, variant_id=img.variant_id).update({"is_pos": False})
+    ProductImage.query.filter_by(product_id=img.product_id).update({"is_pos": False})
     img.is_pos = True
-    product = img.product
-    if product:
-        product.pos_image_path = img.file_path
+    if img.product:
+        img.product.pos_image_path = img.file_path
     db.session.commit()
     return jsonify({"success": True})
 
@@ -722,16 +489,11 @@ def serve_product_image(image_id: int):
     ref = img.file_path
     download_name = storage_reference_name(ref)
     mime = content_type_for_name(download_name)
-
     if is_s3_reference(ref):
         from app.services.storage import download_storage_bytes
-        import io
+
         data = download_storage_bytes(ref)
-        return send_file(
-            io.BytesIO(data),
-            mimetype=mime,
-            download_name=download_name,
-        )
+        return send_file(io.BytesIO(data), mimetype=mime, download_name=download_name)
     return send_file(ref, mimetype=mime)
 
 
@@ -740,17 +502,16 @@ def serve_product_image(image_id: int):
 def rename_file():
     data = request.get_json(force=True)
     file_type = data.get("type")
-    file_id = data.get("id", type=int)
+    file_id = int(data.get("id") or 0)
     new_title = (data.get("title") or "").strip()
-
     if not file_type or not file_id or not new_title:
         return jsonify({"success": False, "error": "type, id, and title are required"}), 400
 
     if file_type == "model":
-        asset = db.session.get(ModelAsset, file_id)
-        if not asset:
-            return jsonify({"success": False, "error": "Model asset not found"}), 404
-        asset.title = new_title
+        product = db.session.get(Product, file_id)
+        if not product:
+            return jsonify({"success": False, "error": "Product not found"}), 404
+        product.model_notes = new_title
     elif file_type == "image":
         img = db.session.get(ProductImage, file_id)
         if not img:
@@ -761,49 +522,3 @@ def rename_file():
 
     db.session.commit()
     return jsonify({"success": True})
-
-
-@bp.route("/studio/<int:product_id>/files")
-@roles_required(UserRole.ADMIN, UserRole.STAFF)
-def product_file_list(product_id: int):
-    product = get_by_id(Product, product_id)
-    if product is None:
-        return jsonify({"success": False, "error": "Not found"}), 404
-
-    files = []
-
-    for asset in product.model_assets:
-        entry = {
-            "id": asset.id,
-            "type": "model",
-            "title": asset.title,
-            "variant_id": asset.variant_id,
-        }
-        if asset.file_location:
-            entry["file_path"] = asset.file_location
-            entry["filename"] = storage_reference_name(asset.file_location)
-            entry["download_url"] = url_for("products.download_model", asset_id=asset.id)
-            entry["view_url"] = url_for("products.view_model", asset_id=asset.id) if asset.file_location else None
-        if asset.converted_model_path:
-            entry["converted_path"] = asset.converted_model_path
-        if asset.gcode_path:
-            entry["gcode_path"] = asset.gcode_path
-            entry["gcode_filename"] = storage_reference_name(asset.gcode_path)
-        entry["analysis_status"] = asset.analysis_status
-        files.append(entry)
-
-    for img in product.images:
-        files.append({
-            "id": img.id,
-            "type": "image",
-            "variant_id": img.variant_id,
-            "file_path": img.file_path,
-            "filename": storage_reference_name(img.file_path),
-            "is_default": img.is_default,
-            "is_pos": img.is_pos,
-            "alt_text": img.alt_text,
-            "view_url": url_for("products.serve_product_image", image_id=img.id),
-            "download_url": url_for("products.serve_product_image", image_id=img.id),
-        })
-
-    return jsonify({"success": True, "files": files})

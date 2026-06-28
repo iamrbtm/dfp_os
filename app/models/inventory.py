@@ -74,18 +74,14 @@ class InventoryRecord(PrimaryKeyMixin, TimestampMixin, db.Model):
     __table_args__ = (
         UniqueConstraint(
             "product_id",
-            "variant_id",
             "location_id",
-            name="uq_inventory_records_product_variant_location",
+            name="uq_inventory_records_product_location",
         ),
     )
 
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
     business_id: Mapped[int | None] = mapped_column(
         ForeignKey("businesses.id"), nullable=True, index=True
-    )
-    variant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("product_variants.id"), nullable=True, index=True
     )
     location_id: Mapped[int] = mapped_column(
         ForeignKey("inventory_locations.id"), nullable=False, index=True
@@ -97,7 +93,6 @@ class InventoryRecord(PrimaryKeyMixin, TimestampMixin, db.Model):
     last_counted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     product = relationship("Product", back_populates="inventory_records")
-    variant = relationship("ProductVariant", back_populates="inventory_records")
     location = relationship("InventoryLocation", back_populates="inventory_records")
 
     @property

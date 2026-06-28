@@ -160,9 +160,6 @@ class OrderItem(PrimaryKeyMixin, TimestampMixin, db.Model):
     product_id: Mapped[int | None] = mapped_column(
         ForeignKey("products.id"), nullable=True, index=True
     )
-    variant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("product_variants.id"), nullable=True, index=True
-    )
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
@@ -172,7 +169,6 @@ class OrderItem(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     order = relationship("Order", back_populates="items")
     product = relationship("Product")
-    variant = relationship("ProductVariant")
     print_jobs = relationship(
         "PrintJob", back_populates="order_item", cascade="all, delete-orphan"
     )

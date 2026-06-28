@@ -24,7 +24,6 @@
         <option value="">Choose product</option>
         {% for product in products %}<option value="{{ product.id }}" {% if selected_product == product.id %}selected{% endif %}>{{ product.name }}</option>{% endfor %}
       </select>
-      <input class="app-input w-full" name="variant_id" value="{{ selected_variant or '' }}" placeholder="Optional variant ID">
       <button class="app-btn app-btn-secondary" type="submit">Calculate</button>
       {% if product_breakdown %}
       <div class="space-y-2 text-sm">

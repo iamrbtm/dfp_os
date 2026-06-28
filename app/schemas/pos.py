@@ -27,7 +27,6 @@ class PosCloseSessionSchema(Schema):
 class PosSaleItemSchema(Schema):
     pos_sale_id = fields.Integer(dump_only=True)
     product_id = fields.Integer(allow_none=True)
-    variant_id = fields.Integer(allow_none=True)
     quantity = fields.Integer(required=True, validate=validate.Range(min=1))
     unit_price = fields.Decimal(places=2, as_string=True)
     discount_amount = fields.Decimal(places=2, as_string=True, load_default=0)

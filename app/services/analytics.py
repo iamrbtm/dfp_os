@@ -22,7 +22,6 @@ from app.models import (
     PrintJobStatus,
     Printer,
     Product,
-    ProductVariant,
 )
 
 
@@ -352,9 +351,9 @@ def inventory_analytics() -> dict:
 
     total_inventory_value = (
         db.session.query(
-            func.sum(InventoryRecord.quantity_on_hand * ProductVariant.price)
+            func.sum(InventoryRecord.quantity_on_hand * Product.base_price)
         )
-        .join(ProductVariant, InventoryRecord.variant_id == ProductVariant.id)
+        .join(Product, InventoryRecord.product_id == Product.id)
         .scalar() or Decimal(0)
     )
 

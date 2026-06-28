@@ -28,9 +28,6 @@ class PrintJob(PrimaryKeyMixin, TimestampMixin, db.Model):
     product_id: Mapped[int | None] = mapped_column(
         ForeignKey("products.id"), nullable=True, index=True
     )
-    variant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("product_variants.id"), nullable=True, index=True
-    )
     printer_id: Mapped[int | None] = mapped_column(
         ForeignKey("printers.id"), nullable=True, index=True
     )
@@ -55,6 +52,5 @@ class PrintJob(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     order_item = relationship("OrderItem", back_populates="print_jobs")
     product = relationship("Product")
-    variant = relationship("ProductVariant")
     printer = relationship("Printer")
     assigned_to = relationship("User")
