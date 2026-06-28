@@ -17,8 +17,11 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` Refactored product asset storage so uploaded model/image/generated files follow the per-product and per-variant folder layout used in production file management.
 - `done` Rebuilt Product Studio into isolated primary and variant accordions so each section owns its own fields, assets, previews, and cost calculations.
 - `in-progress` Replace placeholder product pricing with evidence-backed cost snapshots, spool-aware material costing, historical print-job failure rates, and multi-axis profitability metrics.
-- `todo` Keep `ARCHITECTURE.md` aligned with the real codebase as modules and services evolve.
-- `todo` Keep `PROMPTS.md` aligned with the team’s preferred build workflow and review habits.
+- `done` **Phase 1: AI Design Trend Scout — Database & Foundation** — Created `TrendSnapshot` and `TrendReport` models, generated migration, set up `app/services/ai/trend_scout/` directory structure.
+- `todo` **Phase 2: AI Design Trend Scout — Source Integrations (The Fetchers)** — Build individual data fetchers for MyMiniFactory, Etsy, BGG, MakerWorld, Printables, Reddit, etc.
+- `todo` **Phase 3: AI Design Trend Scout — Pipeline & Celery Task** — Orchestration, Celery Beat schedule, graceful degradation.
+- `todo` **Phase 4: AI Design Trend Scout — Analysis & NLP Discovery** — Trend detection, NLP clustering, GPT synthesis into TrendReport.
+- `todo` **Phase 5: AI Design Trend Scout — Flask Blueprint & Dashboard** — API endpoints and admin dashboard UI.
 
 ## Next Priorities
 
