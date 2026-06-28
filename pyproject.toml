@@ -5,6 +5,7 @@ description = "Dude Fish OS foundation for Dude Fish Printing."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "beautifulsoup4>=4.15.0",
     "boto3>=1.39.0",
     "celery>=5.5.0",
     "click>=8.1.8",

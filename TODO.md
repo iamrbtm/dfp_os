@@ -18,7 +18,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` Rebuilt Product Studio into isolated primary and variant accordions so each section owns its own fields, assets, previews, and cost calculations.
 - `in-progress` Replace placeholder product pricing with evidence-backed cost snapshots, spool-aware material costing, historical print-job failure rates, and multi-axis profitability metrics.
 - `done` **Phase 1: AI Design Trend Scout — Database & Foundation** — Created `TrendSnapshot` and `TrendReport` models, generated migration, set up `app/services/ai/trend_scout/` directory structure.
-- `todo` **Phase 2: AI Design Trend Scout — Source Integrations (The Fetchers)** — Build individual data fetchers for MyMiniFactory, Etsy, BGG, MakerWorld, Printables, Reddit, etc.
+- `done` **Phase 2: AI Design Trend Scout — Source Integrations (The Fetchers)** — Built base utility (`_base.py` with rate limiter, UA rotation, `ScoutResult`), API fetchers (MyMiniFactory, Etsy, BGG), scrapers (MakerWorld, Printables, Reddit). All return standardized `ScoutResult` dicts. Pipeline orchestration in `trend_scout/__init__.py`.
 - `todo` **Phase 3: AI Design Trend Scout — Pipeline & Celery Task** — Orchestration, Celery Beat schedule, graceful degradation.
 - `todo` **Phase 4: AI Design Trend Scout — Analysis & NLP Discovery** — Trend detection, NLP clustering, GPT synthesis into TrendReport.
 - `todo` **Phase 5: AI Design Trend Scout — Flask Blueprint & Dashboard** — API endpoints and admin dashboard UI.
