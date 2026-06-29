@@ -18,6 +18,7 @@ from app.services.ai.trend_scout.sources import (
     fetch_makerworld,
     fetch_printables,
     fetch_reddit,
+    fetch_pinterest,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,15 +30,19 @@ FETCHERS = {
     "printables": fetch_printables,
     "reddit": fetch_reddit,
     "etsy": fetch_etsy,
+    "pinterest": fetch_pinterest,
 }
 
 
 def _run_fetcher(name: str, fetcher, limiter: RateLimiter) -> list[ScoutResult]:
     try:
         with requests.Session() as session:
-            return fetcher(session, limiter)
+            logger.info("[%s] Fetcher starting...", name)
+            result = fetcher(session, limiter)
+            logger.info("[%s] Fetcher completed: %d results", name, len(result))
+            return result
     except Exception as exc:
-        logger.warning("Fetcher %s failed: %s", name, exc)
+        logger.warning("[%s] Fetcher FAILED: %s", name, exc)
         return [
             ScoutResult(
                 source=name,
@@ -47,22 +52,31 @@ def _run_fetcher(name: str, fetcher, limiter: RateLimiter) -> list[ScoutResult]:
         ]
 
 
-def run_all_sources() -> list[dict[str, Any]]:
+def run_all_sources(progress_callback=None) -> list[dict[str, Any]]:
     limiter = RateLimiter()
     all_results: list[ScoutResult] = []
+    total = len(FETCHERS)
+    completed = 0
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         future_map = {
-            executor.submit(_run_fetcher, name, fn, limiter): name
-            for name, fn in FETCHERS.items()
+            executor.submit(_run_fetcher, name, fn, limiter): name for name, fn in FETCHERS.items()
         }
         for future in as_completed(future_map):
             name = future_map[future]
+            completed += 1
             try:
                 batch = future.result(timeout=120)
                 all_results.extend(batch)
+                logger.info("[%s] Fetcher completed successfully (%d/%d)", name, completed, total)
+                if progress_callback:
+                    progress_callback(completed, total, name, "completed")
             except Exception as exc:
-                logger.error("Fetcher %s timed out or crashed: %s", name, exc)
+                logger.error(
+                    "[%s] Fetcher timed out or crashed: %s (%d/%d)", name, exc, completed, total
+                )
+                if progress_callback:
+                    progress_callback(completed, total, name, "failed")
                 all_results.append(
                     ScoutResult(
                         source=name,
@@ -77,14 +91,16 @@ def run_all_sources() -> list[dict[str, Any]]:
 def run_full_pipeline(
     openai_api_key: str = "",
     openai_model: str = "gpt-4o-mini",
+    progress_callback=None,
 ) -> dict[str, Any]:
-    now = __import__("datetime").datetime.now(
-        __import__("datetime").timezone.utc
-    )
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
     total_inserted = 0
     failed_sources: list[str] = []
 
-    scraped = run_all_sources()
+    if progress_callback:
+        progress_callback(0, len(FETCHERS) + 1, "initializing", "running")
+
+    scraped = run_all_sources(progress_callback=progress_callback)
 
     for snapshot in scraped:
         source = snapshot.get("source", "unknown")
@@ -120,6 +136,9 @@ def run_full_pipeline(
         total_inserted,
         len(failed_sources),
     )
+
+    if progress_callback:
+        progress_callback(len(FETCHERS) + 1, len(FETCHERS) + 1, "analysis", "running")
 
     report = run_analysis(
         db_session=db.session,

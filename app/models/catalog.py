@@ -118,14 +118,14 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     care_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     safety_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     license_status: Mapped[LicenseStatus] = mapped_column(
-        Enum(LicenseStatus, native_enum=False, length=40),
+        Enum(LicenseStatus, values_callable=lambda e: [m.value for m in e], length=40),
         default=LicenseStatus.UNKNOWN,
         nullable=False,
     )
     design_source: Mapped[str | None] = mapped_column(String(255), nullable=True)
     commercial_license_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     model_source_type: Mapped[ModelSourceType] = mapped_column(
-        Enum(ModelSourceType, native_enum=False, length=40),
+        Enum(ModelSourceType, values_callable=lambda e: [m.value for m in e], length=40),
         default=ModelSourceType.UNKNOWN,
         nullable=False,
     )

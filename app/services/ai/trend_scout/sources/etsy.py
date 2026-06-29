@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import requests
 
 from app.services.ai.trend_scout.sources._base import ScoutResult
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://openapi.etsy.com/v3"
 APPLICATION_API_KEY = os.getenv("ETSY_API_KEY", "")
@@ -33,7 +36,24 @@ SEED_QUERIES = [
 
 def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]:
     results: list[ScoutResult] = []
-    headers = {"x-api-key": APPLICATION_API_KEY} if APPLICATION_API_KEY else {}
+
+    if not APPLICATION_API_KEY:
+        logger.warning(
+            "ETSY_API_KEY not configured. Etsy source requires an API key "
+            "from https://developers.etsy.com/. Skipping Etsy queries."
+        )
+        result = ScoutResult(
+            source="etsy",
+            keyword_or_category="not_configured",
+            errors=["ETSY_API_KEY environment variable not set"],
+        )
+        result.metadata["note"] = (
+            "Set ETSY_API_KEY in your environment to enable Etsy trend data"
+        )
+        results.append(result)
+        return results
+
+    headers = {"x-api-key": APPLICATION_API_KEY}
 
     for query in SEED_QUERIES:
         limiter.wait()
@@ -53,27 +73,45 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
             if resp.status_code == 200:
                 data = resp.json()
                 for item in data.get("results", []):
+                    price = None
+                    currency = ""
+                    if "price" in item and isinstance(item["price"], dict):
+                        amount = item["price"].get("amount")
+                        divisor = item["price"].get("divisor", 1)
+                        if amount is not None:
+                            price = float(amount) / (10 ** divisor)
+                        currency = item["price"].get("currency_code", "")
+
                     result.items.append(
                         {
                             "title": item.get("title", ""),
-                            "url": item.get("url", item.get("listing_id", "")),
+                            "url": item.get("url", str(item.get("listing_id", ""))),
                             "thumbnail": (
                                 item.get("images", [{}])[0].get("url_570xN", "")
                                 if item.get("images")
                                 else ""
                             ),
-                            "price": float(item["price"]["amount"]) / (10 ** item["price"]["divisor"]) if "price" in item else None,
-                            "currency": item.get("price", {}).get("currency_code", ""),
+                            "price": price,
+                            "currency": currency,
                             "tags": item.get("tags", []),
                             "views": item.get("views", 0),
                             "num_favorers": item.get("num_favorers", 0),
                             "category": item.get("taxonomy_path", []),
                             "is_customizable": item.get("is_customizable", False),
-                            "shop_name": item.get("Shop", {}).get("shop_name", "") if isinstance(item.get("Shop"), dict) else "",
+                            "shop_name": (
+                                item.get("Shop", {}).get("shop_name", "")
+                                if isinstance(item.get("Shop"), dict)
+                                else ""
+                            ),
                         }
                     )
                 result.metadata["total_results"] = len(result.items)
                 result.metadata["query"] = query
+            elif resp.status_code == 401:
+                result.errors.append(
+                    "HTTP 401 - Invalid or missing Etsy API key. "
+                    "Verify ETSY_API_KEY is correct."
+                )
             else:
                 result.errors.append(f"HTTP {resp.status_code}")
         except requests.RequestException as e:

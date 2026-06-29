@@ -1,72 +1,145 @@
 from __future__ import annotations
 
+import logging
+import re
+import subprocess
+import time
 from typing import Any
 
-import requests
+import feedparser
 
-from app.services.ai.trend_scout.sources._base import (
-    ScoutResult,
-)
+from app.services.ai.trend_scout.sources._base import ScoutResult
+
+logger = logging.getLogger(__name__)
 
 SUBREDDITS = [
     "3Dprinting",
     "functionalprint",
-    "boardgameupgrades",
     "Gridfinity",
-    "PrintedMinis",
-    "3Dprintmything",
     "BambuLab",
+    "3Dprintmything",
+    "3Dprinting_help",
+    "FDMPrinted",
+    "AdditiveManufacturing",
+    "3Dprintedart",
+    "resinprinting",
+    "3Dprintingdeals",
+    "fixmyprint",
 ]
 
-JSON_BASE = "https://www.reddit.com/r/{subreddit}/{sort}.json"
+FEED_TYPES = [
+    ("hot", "https://www.reddit.com/r/{subreddit}/.rss"),
+    ("new", "https://www.reddit.com/r/{subreddit}/new/.rss"),
+]
 
-SORTS = ["hot", "top", "rising"]
+REDDIT_REQUEST_INTERVAL = 15.0
+
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
 
 
-def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]:
+def _fetch_feed_via_curl(url: str, timeout: int = 30) -> tuple[int, bytes]:
+    """Use curl to bypass TLS fingerprint blocking.
+    Returns (http_status_code, body_bytes)."""
+    result = subprocess.run(
+        [
+            "curl",
+            "-s",
+            "-L",
+            "-w",
+            "%{http_code}",
+            "--max-time",
+            str(timeout),
+            "-H",
+            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15",
+            "-H",
+            "Accept: application/rss+xml, application/xml, text/xml, */*",
+            url,
+        ],
+        capture_output=True,
+        timeout=timeout + 5,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace")[:200]
+        raise RuntimeError(f"curl failed (exit {result.returncode}): {stderr}")
+    stdout = result.stdout
+    if len(stdout) < 3:
+        return (0, stdout)
+    status_bytes = stdout[-3:]
+    body = stdout[:-3] if len(stdout) > 3 else b""
+    try:
+        status = int(status_bytes)
+    except ValueError:
+        return (0, stdout)
+    return (status, body)
+
+
+def extract_entry_text(html: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:500]
+
+
+def fetch_trending(session: Any, limiter: Any) -> list[ScoutResult]:
     results: list[ScoutResult] = []
-    headers = {"User-Agent": "DFPosTrendScout/1.0 (research; contact@dudefishprinting.com)"}
+    last_fetch: float = 0.0
 
     for subreddit in SUBREDDITS:
-        for sort in SORTS:
-            limiter.wait()
-            result = ScoutResult(source="reddit", keyword_or_category=f"{subreddit}_{sort}")
+        seen_urls: set[str] = set()
+
+        for feed_label, feed_url_template in FEED_TYPES:
+            elapsed = time.monotonic() - last_fetch
+            if elapsed < REDDIT_REQUEST_INTERVAL:
+                time.sleep(REDDIT_REQUEST_INTERVAL - elapsed)
+
+            result = ScoutResult(
+                source="reddit",
+                keyword_or_category=f"{subreddit}/{feed_label}",
+            )
+
             try:
-                url = JSON_BASE.format(subreddit=subreddit, sort=sort)
-                resp = session.get(
-                    url,
-                    headers=headers,
-                    params={"limit": 25, "t": "week"} if sort == "top" else {"limit": 25},
-                    timeout=30,
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    for child in data.get("data", {}).get("children", []):
-                        post = child.get("data", {})
+                url = feed_url_template.format(subreddit=subreddit)
+                status, content = _fetch_feed_via_curl(url)
+                last_fetch = time.monotonic()
+
+                if status != 200:
+                    result.errors.append(f"HTTP {status}")
+                else:
+                    feed = feedparser.parse(content)
+
+                    for entry in feed.entries:
+                        link = entry.get("link", "")
+                        if not link or link in seen_urls:
+                            continue
+                        seen_urls.add(link)
+
+                        thumbnail = ""
+                        media = entry.get("media_thumbnail", [])
+                        if media:
+                            thumbnail = media[0].get("url", "")
+
+                        author = (entry.get("author") or "").lstrip("/u/")
+
+                        summary_html = entry.get("summary", "")
+                        selftext = extract_entry_text(summary_html)
+
                         result.items.append(
                             {
-                                "title": post.get("title", ""),
-                                "url": post.get("url", ""),
-                                "permalink": f"https://www.reddit.com{post.get('permalink', '')}",
-                                "score": post.get("score", 0),
-                                "upvote_ratio": post.get("upvote_ratio"),
-                                "num_comments": post.get("num_comments", 0),
-                                "created_utc": post.get("created_utc"),
-                                "domain": post.get("domain", ""),
-                                "is_self": post.get("is_self", False),
-                                "selftext": (post.get("selftext", "") or "")[:500],
-                                "thumbnail": post.get("thumbnail", "") if post.get("thumbnail") and post["thumbnail"] not in ("self", "default", "nsfw") else "",
-                                "spoiler": post.get("spoiler", False),
-                                "over_18": post.get("over_18", False),
-                                "link_flair_text": post.get("link_flair_text"),
+                                "title": entry.get("title", ""),
+                                "url": link,
+                                "feed": feed_label,
+                                "author": author,
+                                "published": entry.get("published", ""),
+                                "selftext": selftext,
+                                "thumbnail": thumbnail,
                             }
                         )
+
                     result.metadata["total_results"] = len(result.items)
                     result.metadata["subreddit"] = subreddit
-                    result.metadata["sort"] = sort
-                else:
-                    result.errors.append(f"HTTP {resp.status_code}")
-            except (requests.RequestException, ValueError) as e:
+                    result.metadata["feed_type"] = feed_label
+                    result.metadata["feed_url"] = url
+
+            except (RuntimeError, OSError) as e:
                 result.errors.append(str(e))
 
             results.append(result)

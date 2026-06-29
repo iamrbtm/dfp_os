@@ -14,6 +14,7 @@
       id="runBtn"
       class="app-btn app-btn-primary"
       hx-post="{{ url_for('trend_scout.run_pipeline') }}"
+      hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
       hx-target="#runStatus"
       hx-swap="innerHTML"
       hx-disabled-elt="#runBtn"
@@ -38,7 +39,7 @@
 
     {% if latest.summary %}
     <div class="mt-4 p-4 rounded" style="background-color: var(--color-surface);">
-      <p class="text-sm whitespace-pre-line" style="color: var(--color-text);">{{ latest.summary }}</p>
+      {{ latest.summary | render_markdown | safe }}
     </div>
     {% endif %}
 

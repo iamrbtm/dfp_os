@@ -202,6 +202,12 @@ def register_error_handlers(app: Flask) -> None:
 
 
 def register_context_processors(app: Flask) -> None:
+    from app.config_markdown import render_markdown
+
+    @app.template_filter("render_markdown")
+    def _render_markdown(text: str) -> str:
+        return render_markdown(text)
+
     @app.template_filter("duration_minutes")
     def duration_minutes(value: object) -> str:
         try:

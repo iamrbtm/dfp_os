@@ -119,6 +119,7 @@ from app.services.audit import record_audit_event
 from app.services.api_tokens import revoke_api_token
 from app.services.inventory import release_inventory, reserve_inventory, transfer_inventory
 from app.services.pos import refund_sale
+from app.utils import slugify
 from app.utils.auth import api_token_required, require_api_scopes
 
 catalog_blp = Blueprint("catalog_api", __name__, url_prefix="/api/v1")
@@ -227,7 +228,7 @@ def _instance_state(instance) -> dict:
 
 def _apply_category(instance: Category, data: dict):
     instance.name = data["name"].strip()
-    instance.slug = data["slug"].strip()
+    instance.slug = slugify(data.get("slug", "")) or slugify(data["name"].strip())
     instance.description = data.get("description")
     instance.sort_order = data.get("sort_order", 0) or 0
     instance.is_public = data.get("is_public", True)
@@ -236,7 +237,7 @@ def _apply_category(instance: Category, data: dict):
 
 def _apply_collection(instance: Collection, data: dict):
     instance.name = data["name"].strip()
-    instance.slug = data["slug"].strip()
+    instance.slug = slugify(data.get("slug", "")) or slugify(data["name"].strip())
     instance.description = data.get("description")
     instance.is_public = data.get("is_public", True)
     instance.sort_order = data.get("sort_order", 0) or 0
@@ -244,7 +245,7 @@ def _apply_collection(instance: Collection, data: dict):
 
 def _apply_product(instance: Product, data: dict):
     instance.name = data["name"].strip()
-    instance.slug = data["slug"].strip()
+    instance.slug = slugify(data.get("slug", "")) or slugify(data["name"].strip())
     instance.sku_base = data.get("sku_base")
     instance.short_description = data.get("short_description")
     instance.description = data.get("description")
@@ -327,7 +328,7 @@ def _apply_location(instance: InventoryLocation, data: dict):
 
 def _apply_business(instance: Business, data: dict):
     instance.name = data["name"].strip()
-    instance.slug = data["slug"].strip()
+    instance.slug = slugify(data.get("slug", "")) or slugify(data["name"].strip())
     instance.legal_name = data.get("legal_name")
     instance.public_name = data.get("public_name")
     instance.contact_email = data.get("contact_email")

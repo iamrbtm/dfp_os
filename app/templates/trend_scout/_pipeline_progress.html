@@ -1,0 +1,23 @@
+<div id="pipeline-progress"
+     style="background-color: var(--color-nav-bg); border-bottom: 1px solid var(--color-nav-border);">
+  <div class="flex items-center gap-3 px-4 py-2">
+    <div class="flex-1">
+      <div class="w-full h-2 rounded-full" style="background-color: var(--color-surface);">
+        <div class="h-2 rounded-full transition-all duration-500 ease-out"
+             style="width: {{ percent }}%; background-color: var(--color-primary);"></div>
+      </div>
+    </div>
+    <div class="text-xs whitespace-nowrap font-mono" style="color: var(--color-text-muted);">
+      {{ current }}/{{ total }}
+    </div>
+    <div class="text-xs" style="color: var(--color-text-muted);">
+      {% if step == "analysis" %}
+        Analyzing trends&hellip;
+      {% elif step == "initializing" %}
+        Starting&hellip;
+      {% else %}
+        {{ step }}
+      {% endif %}
+    </div>
+  </div>
+</div>
