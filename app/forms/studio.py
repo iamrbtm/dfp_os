@@ -25,11 +25,12 @@ from app.models import (
     ProductType,
 )
 from app.models.catalog import LicenseStatus
+from app.utils import slugify
 
 
 class ProductStudioForm(FlaskForm):
     name = StringField("Product Name", validators=[DataRequired(), Length(max=160)])
-    slug = StringField("Slug", validators=[DataRequired(), Length(max=180)])
+    slug = StringField("Slug", validators=[Optional(), Length(max=180)])
     sku_base = StringField("SKU", validators=[Optional(), Length(max=80)])
     short_description = TextAreaField("Short Description", validators=[Optional()])
     description = TextAreaField("Full Description", validators=[Optional()])
@@ -80,7 +81,13 @@ class ProductStudioForm(FlaskForm):
         ]
 
     def validate_slug(self, field):
-        existing = Product.query.filter_by(slug=field.data.strip()).first()
+        raw = (field.data or "").strip()
+        if not raw:
+            raw = slugify((self.name.data or "").strip())
+            field.data = raw
+        if not raw:
+            return
+        existing = Product.query.filter_by(slug=raw).first()
         if existing and getattr(self, "instance_id", None) != existing.id:
             from wtforms.validators import ValidationError
 
@@ -97,7 +104,7 @@ class ProductStudioForm(FlaskForm):
 
     def populate_product(self, product: Product) -> Product:
         product.name = self.name.data.strip()
-        product.slug = self.slug.data.strip()
+        product.slug = slugify(self.slug.data or "") or slugify(self.name.data.strip())
         product.sku_base = self.sku_base.data.strip() if self.sku_base.data else None
         product.short_description = self.short_description.data
         product.description = self.description.data

@@ -20,16 +20,16 @@ from app.models import (
     Category,
     Collection,
     LicenseStatus,
-    ModelSourceType,
     Product,
     ProductStatus,
     ProductType,
 )
+from app.utils import slugify
 
 
 class CategoryForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired(), Length(max=120)])
-    slug = StringField("Slug", validators=[DataRequired(), Length(max=160)])
+    slug = StringField("Slug", validators=[Optional(), Length(max=160)])
     description = TextAreaField("Description", validators=[Optional()])
     sort_order = IntegerField("Sort Order", validators=[Optional(), NumberRange(min=0)], default=0)
     is_public = BooleanField("Publicly Visible", default=True)
@@ -37,13 +37,19 @@ class CategoryForm(FlaskForm):
     submit = SubmitField("Save category")
 
     def validate_slug(self, field):
-        existing = Category.query.filter_by(slug=field.data.strip()).first()
+        raw = (field.data or "").strip()
+        if not raw:
+            raw = slugify((self.name.data or "").strip())
+            field.data = raw
+        if not raw:
+            return
+        existing = Category.query.filter_by(slug=raw).first()
         if existing and getattr(self, "instance_id", None) != existing.id:
             raise ValidationError("A category with that slug already exists.")
 
     def apply(self, category: Category) -> Category:
         category.name = self.name.data.strip()
-        category.slug = self.slug.data.strip()
+        category.slug = slugify(self.slug.data or "") or slugify(self.name.data.strip())
         category.description = self.description.data
         category.sort_order = self.sort_order.data or 0
         category.is_public = bool(self.is_public.data)
@@ -53,20 +59,26 @@ class CategoryForm(FlaskForm):
 
 class CollectionForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired(), Length(max=120)])
-    slug = StringField("Slug", validators=[DataRequired(), Length(max=160)])
+    slug = StringField("Slug", validators=[Optional(), Length(max=160)])
     description = TextAreaField("Description", validators=[Optional()])
     sort_order = IntegerField("Sort Order", validators=[Optional(), NumberRange(min=0)], default=0)
     is_public = BooleanField("Publicly Visible", default=True)
     submit = SubmitField("Save collection")
 
     def validate_slug(self, field):
-        existing = Collection.query.filter_by(slug=field.data.strip()).first()
+        raw = (field.data or "").strip()
+        if not raw:
+            raw = slugify((self.name.data or "").strip())
+            field.data = raw
+        if not raw:
+            return
+        existing = Collection.query.filter_by(slug=raw).first()
         if existing and getattr(self, "instance_id", None) != existing.id:
             raise ValidationError("A collection with that slug already exists.")
 
     def apply(self, collection: Collection) -> Collection:
         collection.name = self.name.data.strip()
-        collection.slug = self.slug.data.strip()
+        collection.slug = slugify(self.slug.data or "") or slugify(self.name.data.strip())
         collection.description = self.description.data
         collection.sort_order = self.sort_order.data or 0
         collection.is_public = bool(self.is_public.data)
@@ -75,7 +87,7 @@ class CollectionForm(FlaskForm):
 
 class ProductForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired(), Length(max=160)])
-    slug = StringField("Slug", validators=[DataRequired(), Length(max=180)])
+    slug = StringField("Slug", validators=[Optional(), Length(max=180)])
     sku_base = StringField("Base SKU", validators=[Optional(), Length(max=80)])
     short_description = TextAreaField("Short Description", validators=[Optional()])
     description = TextAreaField("Description", validators=[Optional()])
@@ -122,7 +134,13 @@ class ProductForm(FlaskForm):
         ]
 
     def validate_slug(self, field):
-        existing = Product.query.filter_by(slug=field.data.strip()).first()
+        raw = (field.data or "").strip()
+        if not raw:
+            raw = slugify((self.name.data or "").strip())
+            field.data = raw
+        if not raw:
+            return
+        existing = Product.query.filter_by(slug=raw).first()
         if existing and getattr(self, "instance_id", None) != existing.id:
             raise ValidationError("A product with that slug already exists.")
 
@@ -135,7 +153,7 @@ class ProductForm(FlaskForm):
 
     def apply(self, product: Product) -> Product:
         product.name = self.name.data.strip()
-        product.slug = self.slug.data.strip()
+        product.slug = slugify(self.slug.data or "") or slugify(self.name.data.strip())
         product.sku_base = self.sku_base.data.strip() if self.sku_base.data else None
         product.short_description = self.short_description.data
         product.description = self.description.data

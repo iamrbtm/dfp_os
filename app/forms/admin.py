@@ -7,11 +7,12 @@ from wtforms.validators import DataRequired, Length, NumberRange, Optional, URL,
 
 from app.forms.common import enum_choices
 from app.models import Business, FeatureFlag, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate, User
+from app.utils import slugify
 
 
 class BusinessForm(FlaskForm):
     name = StringField("Business Name", validators=[DataRequired(), Length(max=160)])
-    slug = StringField("Slug", validators=[DataRequired(), Length(max=180)])
+    slug = StringField("Slug", validators=[Optional(), Length(max=180)])
     legal_name = StringField("Legal Name", validators=[Optional(), Length(max=200)])
     public_name = StringField("Public Name", validators=[Optional(), Length(max=200)])
     contact_email = StringField("Contact Email", validators=[Optional(), Length(max=255)])
@@ -28,13 +29,19 @@ class BusinessForm(FlaskForm):
     submit = SubmitField("Save business")
 
     def validate_slug(self, field):
-        existing = Business.query.filter_by(slug=field.data.strip()).first()
+        raw = (field.data or "").strip()
+        if not raw:
+            raw = slugify((self.name.data or "").strip())
+            field.data = raw
+        if not raw:
+            return
+        existing = Business.query.filter_by(slug=raw).first()
         if existing and getattr(self, "instance_id", None) != existing.id:
             raise ValidationError("A business with that slug already exists.")
 
     def apply(self, business: Business) -> Business:
         business.name = self.name.data.strip()
-        business.slug = self.slug.data.strip()
+        business.slug = slugify(self.slug.data or "") or slugify(self.name.data.strip())
         business.legal_name = self.legal_name.data or None
         business.public_name = self.public_name.data or None
         business.contact_email = self.contact_email.data or None

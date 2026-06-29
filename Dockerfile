@@ -31,4 +31,4 @@ RUN npm run build:css || true
 
 EXPOSE 5000
 
-CMD ["uv", "run", "gunicorn", "-b", "0.0.0.0:5000", "app:create_app()"]
+CMD ["uv", "run", "gunicorn", "-b", "0.0.0.0:5000", "--timeout", "120", "app:create_app()"]

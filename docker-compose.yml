@@ -1,6 +1,7 @@
 services:
   web:
     build: .
+    mem_limit: 1024m
     env_file:
       - .env
     environment:
@@ -55,7 +56,7 @@ services:
         uv run flask --app app:create_app db upgrade && break;
         echo 'Waiting for database...' && sleep 2;
       done &&
-      uv run gunicorn -b 0.0.0.0:5000 'app:create_app()'"
+      uv run gunicorn -b 0.0.0.0:5000 --timeout 120 'app:create_app()'"
 
   db:
     image: mariadb:11
@@ -92,32 +93,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  seaweedfs-init:
-    image: amazon/aws-cli:2.27.50
-    environment:
-      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-change-me-access-key}
-      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-change-me-secret-key}
-      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
-      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
-      RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
-      MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
-      PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
-    depends_on:
-      seaweedfs:
-        condition: service_started
-    restart: "no"
-    command: >
-      /bin/sh -c "
-      until aws --endpoint-url $$S3_ENDPOINT_URL s3api list-buckets >/dev/null 2>&1; do
-        echo 'Waiting for SeaweedFS S3 endpoint...';
-        sleep 2;
-      done;
-      aws --endpoint-url $$S3_ENDPOINT_URL s3api create-bucket --bucket $$RECEIPT_STORAGE_BUCKET 2>/dev/null || true;
-      aws --endpoint-url $$S3_ENDPOINT_URL s3api create-bucket --bucket $$MARKET_DOCUMENTS_BUCKET 2>/dev/null || true;
-      aws --endpoint-url $$S3_ENDPOINT_URL s3api create-bucket --bucket $$PRODUCT_ASSETS_BUCKET 2>/dev/null || true;
-      aws --endpoint-url $$S3_ENDPOINT_URL s3api list-buckets
-      "
 
   audit-postgres:
     image: postgres:17
@@ -185,6 +160,45 @@ services:
         echo 'Waiting for database...' && sleep 2;
       done &&
       uv run celery -A app.celery_app.celery worker --loglevel=info"
+
+  beat:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: mysql+pymysql://username:password@db:3306/dudefish_os
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://audit-redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://audit-redis:6379/1}
+      AUDIT_LOG_BASE_URL: http://audit-log:8090
+      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:-change-me-audit-token}
+      FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-change-me-access-key}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-change-me-secret-key}
+      S3_USE_SSL: ${S3_USE_SSL:-false}
+      S3_AUTO_CREATE_BUCKETS: ${S3_AUTO_CREATE_BUCKETS:-true}
+      RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
+      MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
+      PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
+    volumes:
+      - .:/app
+      - web_venv:/opt/venv
+      - receipt_uploads:/app/uploads/receipts
+    depends_on:
+      db:
+        condition: service_healthy
+      audit-redis:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+    command: >
+      /bin/sh -c
+      "for i in $$(seq 1 30); do
+        uv run flask --app app:create_app db upgrade && break;
+        echo 'Waiting for database...' && sleep 2;
+      done &&
+      uv run celery -A app.celery_app.celery beat --loglevel=info"
 
   audit-log:
     build: services/audit-log

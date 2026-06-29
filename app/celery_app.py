@@ -3,11 +3,14 @@ from __future__ import annotations
 from celery import Celery as _Celery
 from flask import Flask
 
+from celery.schedules import crontab
+
 celery = _Celery(
     "dfp_os",
     include=[
         "app.tasks.model_analysis",
         "app.tasks.cost_calculation",
+        "app.tasks.trend_scout",
     ],
 )
 
@@ -47,6 +50,13 @@ def make_celery(app: Flask | None = None) -> _Celery:
             task_acks_late=True,
             worker_prefetch_multiplier=1,
             result_expires=3600,
+            beat_schedule={
+                "trend-scout-monday-6am": {
+                    "task": "app.tasks.trend_scout.trend_scout_pipeline",
+                    "schedule": crontab(hour=6, minute=0, day_of_week=1),
+                    "options": {"soft_time_limit": 900, "time_limit": 960},
+                },
+            },
         )
 
     return celery

@@ -178,6 +178,16 @@ MODULES: dict[str, ModuleDefinition] = {
         blueprint_names=("expenses",),
         api_resources=("expenses",),
     ),
+    "trend_scout": ModuleDefinition(
+        key="trend_scout",
+        display_name="AI Trend Scout",
+        description="Autonomous trend monitoring: scrapes marketplaces, communities, and social sources to detect rising product trends and business opportunities.",
+        feature_flag_key="module.trend_scout.enabled",
+        dependencies=(),
+        blueprint_names=("trend_scout",),
+        admin_nav_entries=(NavEntry("Trend Scout", "trend_scout.index"),),
+        docs_location="docs/AI Design Trend Scout Implementation.md",
+    ),
     "analytics": ModuleDefinition(
         key="analytics",
         display_name="Analytics",

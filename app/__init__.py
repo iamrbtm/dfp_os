@@ -30,6 +30,7 @@ from app.blueprints.products import bp as products_bp
 from app.blueprints.public import bp as public_bp
 from app.blueprints.receipts import bp as receipts_bp
 from app.blueprints.settings import bp as settings_bp
+from app.blueprints.trend_scout import bp as trend_scout_bp
 from app.cli import migrate_group, seed_group
 from app.extensions import api, csrf, db, login_manager, migrate
 from app.models import User
@@ -117,6 +118,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(analytics_bp)
     app.register_blueprint(cost_engine_bp)
     app.register_blueprint(expenses_bp)
+    app.register_blueprint(trend_scout_bp)
     app.register_blueprint(audit_logs_bp)
     app.register_blueprint(api_tokens_bp)
     register_api_blueprints(api)
@@ -200,6 +202,12 @@ def register_error_handlers(app: Flask) -> None:
 
 
 def register_context_processors(app: Flask) -> None:
+    from app.config_markdown import render_markdown
+
+    @app.template_filter("render_markdown")
+    def _render_markdown(text: str) -> str:
+        return render_markdown(text)
+
     @app.template_filter("duration_minutes")
     def duration_minutes(value: object) -> str:
         try:
@@ -239,6 +247,7 @@ def register_context_processors(app: Flask) -> None:
             "markets": "markets",
             "receipts": "expenses",
             "expenses": "expenses",
+            "trend_scout": "trend_scout",
             "api_tokens": "api_tokens",
             "settings": "settings",
             "auth": None,
@@ -293,6 +302,9 @@ def register_context_processors(app: Flask) -> None:
             ],
             "cost_engine": [
                 ("Overview", url_for("cost_engine.index")),
+            ],
+            "trend_scout": [
+                ("Dashboard", url_for("trend_scout.index")),
             ],
             "audit_logs": [
                 ("Audit Logs", url_for("audit_logs.index")),
