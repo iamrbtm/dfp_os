@@ -120,6 +120,13 @@ def test_product_studio_create_integrity_error_renders_create_form(client, login
     assert b"New Product" in response.data
 
 
+def test_product_studio_loads_upload_script(client, login_admin, catalog_product):
+    response = client.get(f"/products/studio/{catalog_product}")
+
+    assert response.status_code == 200
+    assert b"src/js/studio.js" in response.data
+
+
 def test_public_shop_page_loads_public_product(client, catalog_product):
     response = client.get("/shop")
 

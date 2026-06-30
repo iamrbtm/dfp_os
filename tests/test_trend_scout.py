@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.models import TrendSnapshot
+from app.extensions import db
+from app.models import Category, Product, ProductStatus, ProductType, TrendReport, TrendSnapshot
 from app.services.ai.trend_scout.analyzer.new_category_discovery import discover_new_categories
 from app.services.ai.trend_scout.analyzer.trend_detector import (
     OpportunityCandidate,
@@ -433,6 +434,52 @@ def test_source_health_model_creation():
     assert record.error_message == "API key not configured"
 
 
+def test_trend_scout_index_renders_legacy_opportunity_payload(client, login_admin):
+    report = TrendReport(
+        report_date=datetime.now(timezone.utc),
+        summary="Legacy report",
+        top_opportunities=[
+            {
+                "rank": 1,
+                "keyword": "dragon",
+                "title": "Dragon",
+                "score": 42,
+                "sources": ["legacy"],
+            }
+        ],
+        growing_categories=[],
+        declining_trends=[],
+        pipeline_meta={},
+    )
+    db.session.add(report)
+    db.session.commit()
+
+    response = client.get("/admin/trend-scout/")
+
+    assert response.status_code == 200
+    assert b"Dragon" in response.data
+    assert b"42" in response.data
+
+
+def test_product_studio_trend_score_uses_existing_user_name(client, login_admin):
+    category = Category(name="Trend Score Products", slug="trend-score-products")
+    product = Product(
+        name="Trend Score Dragon",
+        slug="trend-score-dragon",
+        category=category,
+        product_type=ProductType.FINISHED_GOOD,
+        status=ProductStatus.ACTIVE,
+        base_price=12,
+    )
+    db.session.add_all([category, product])
+    db.session.commit()
+
+    response = client.get(f"/products/studio/{product.id}/trend-score")
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+
+
 # ── Phase 2: Score breakdown tests ─────────────────────────────────────────
 
 def test_score_breakdown_includes_raw_inputs():
@@ -547,3 +594,158 @@ def test_score_breakdown_includes_match_confidence():
 
     scored = _score_candidate(candidate)
     assert scored.get("match_confidence") == "exact"
+
+
+def test_opportunity_candidate_phase6_fields_present():
+    candidate = OpportunityCandidate(
+        keyword="test dragon",
+        title="Test Dragon",
+        current_product=True,
+        product_id=1,
+        purchase_raw=50.0,
+        units_sold=10,
+        revenue=150.0,
+        base_price=15.0,
+        estimated_profit=6.0,
+        inventory_available=5,
+        sell_through_rate=0.6667,
+        days_since_last_sale=30,
+        inventory_age_days=120,
+        stockout_detected=False,
+        margin_pct=0.4,
+        last_sale_at="2026-05-30T14:00:00+00:00",
+    )
+    assert candidate.sell_through_rate == 0.6667
+    assert candidate.days_since_last_sale == 30
+    assert candidate.inventory_age_days == 120
+    assert candidate.stockout_detected is False
+    assert candidate.margin_pct == 0.4
+    assert candidate.last_sale_at == "2026-05-30T14:00:00+00:00"
+
+
+def test_score_candidate_phase6_output_fields():
+    candidate = OpportunityCandidate(
+        keyword="rainbow dragon",
+        title="Rainbow Dragon",
+        current_product=True,
+        product_id=1,
+        sources={"catalog", "etsy"},
+        purchase_raw=200.0,
+        units_sold=20,
+        revenue=300.0,
+        base_price=25.0,
+        estimated_profit=10.0,
+        estimated_print_minutes=120,
+        inventory_available=0,
+        reorder_target=5,
+        license_status="commercial_allowed",
+        is_public=True,
+        is_pos_visible=True,
+        sell_through_rate=1.0,
+        days_since_last_sale=5,
+        inventory_age_days=200,
+        stockout_detected=True,
+        margin_pct=0.4,
+        last_sale_at="2026-06-24T14:00:00+00:00",
+        match_confidence="exact",
+    )
+    candidate.prices.append(25.0)
+    scored = _score_candidate(candidate)
+    assert scored.get("sell_through_rate") == 1.0
+    assert scored.get("days_since_last_sale") == 5
+    assert scored.get("inventory_age_days") == 200
+    assert scored.get("stockout_detected") is True
+    assert scored.get("margin_pct") == 0.4
+    assert scored.get("last_sale_at") == "2026-06-24T14:00:00+00:00"
+
+
+def test_stockout_boosts_production_fit():
+    candidate = OpportunityCandidate(
+        keyword="fidget slider",
+        title="Fidget Slider",
+        current_product=True,
+        product_id=2,
+        purchase_raw=80.0,
+        units_sold=8,
+        revenue=120.0,
+        base_price=12.0,
+        estimated_profit=5.0,
+        estimated_print_minutes=45,
+        inventory_available=0,
+        stockout_detected=True,
+    )
+    candidate.prices.append(12.0)
+    scored = _score_candidate(candidate)
+    break_down = scored.get("score_breakdown", {})
+    prod_fit = break_down.get("production_fit", {})
+    assert prod_fit.get("stockout_detected") is True
+
+
+def test_stockout_recommends_print_now():
+    from app.services.ai.trend_scout.analyzer.trend_detector import _recommend_action
+
+    candidate = OpportunityCandidate(
+        keyword="dragon",
+        current_product=True,
+        product_id=3,
+        purchase_raw=60.0,
+        units_sold=6,
+        inventory_available=0,
+        stockout_detected=True,
+    )
+    scores = {"purchase_intent": 55, "trend_velocity": 30, "opportunity_score": 60, "license_risk": 10}
+    action = _recommend_action(candidate, scores)
+    assert action == "print_now"
+
+
+def test_sell_through_low_inventory_clearance():
+    from app.services.ai.trend_scout.analyzer.trend_detector import _recommend_action
+
+    candidate = OpportunityCandidate(
+        keyword="slow seller",
+        current_product=True,
+        product_id=4,
+        purchase_raw=5.0,
+        units_sold=1,
+        inventory_available=50,
+        sell_through_rate=0.02,
+    )
+    scores = {"purchase_intent": 20, "trend_velocity": 5, "opportunity_score": 30, "license_risk": 5}
+    action = _recommend_action(candidate, scores)
+    assert action == "clearance_candidate"
+
+
+def test_days_since_last_sale_high_retire():
+    from app.services.ai.trend_scout.analyzer.trend_detector import _recommend_action
+
+    candidate = OpportunityCandidate(
+        keyword="retired product",
+        current_product=True,
+        product_id=5,
+        purchase_raw=0,
+        units_sold=0,
+        inventory_available=0,
+        days_since_last_sale=200,
+    )
+    scores = {"purchase_intent": 5, "trend_velocity": 5, "opportunity_score": 15, "license_risk": 5}
+    action = _recommend_action(candidate, scores)
+    assert action == "retire_review"
+
+
+def test_score_breakdown_includes_margin_pct():
+    candidate = OpportunityCandidate(
+        keyword="margin item",
+        current_product=True,
+        product_id=6,
+        purchase_raw=30.0,
+        units_sold=3,
+        revenue=60.0,
+        base_price=20.0,
+        estimated_profit=10.0,
+        margin_pct=0.5,
+    )
+    candidate.prices.append(20.0)
+    scored = _score_candidate(candidate)
+    breakdown = scored.get("score_breakdown", {})
+    price_break = breakdown.get("price_resilience", {})
+    assert price_break.get("margin_pct") == 0.5

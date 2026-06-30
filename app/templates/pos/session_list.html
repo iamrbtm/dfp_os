@@ -34,7 +34,7 @@
               {{ s.status.value }}
             </span>
           </td>
-          <td>{{ s.opened_at.strftime('%Y-%m-%d %H:%M') if s.opened_at else '' }}</td>
+          <td>{{ s.opened_at|local_datetime or '' }}</td>
           <td>{{ s.opened_by.first_name if s.opened_by else '' }}</td>
           <td>{{ s.sales|length if s.sales else 0 }}</td>
           <td>${{ "%.2f"|format(s.sales|sum(attribute='total')) if s.sales else '0.00' }}</td>

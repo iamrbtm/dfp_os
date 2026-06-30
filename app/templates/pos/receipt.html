@@ -6,7 +6,7 @@
     <h1 class="text-xl font-bold" style="color: var(--color-text);">Dude Fish Printing</h1>
     <p class="text-sm" style="color: var(--color-text-muted);">Sale Complete</p>
     <div class="my-4 pt-4 text-left" style="border-top: 1px solid var(--color-divider);">
-      <p class="text-sm" style="color: var(--color-text);"><strong>Date:</strong> {{ sale.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+      <p class="text-sm" style="color: var(--color-text);"><strong>Date:</strong> {{ sale.created_at|local_datetime }}</p>
       <p class="text-sm" style="color: var(--color-text);"><strong>Sale:</strong> {{ sale.sale_number }}</p>
       <p class="text-sm" style="color: var(--color-text);"><strong>Session:</strong> {{ session.session_number }}</p>
       {% if sale.customer %}

@@ -27,8 +27,8 @@
         <span class="app-badge {% if instance.wifi_available %}app-badge-success{% else %}app-badge-info{% endif %}">Wi-Fi {{ "Yes" if instance.wifi_available else "No" }}</span>
         <span class="app-badge {% if instance.food_available %}app-badge-success{% else %}app-badge-info{% endif %}">Food {{ "Yes" if instance.food_available else "No" }}</span>
       </div>
-      <div><span style="color: var(--color-text-muted);">Load in:</span> {{ instance.load_in_at.strftime("%b %d, %Y %-I:%M %p") if instance.load_in_at else "TBD" }}</div>
-      <div><span style="color: var(--color-text-muted);">Load out:</span> {{ instance.load_out_at.strftime("%b %d, %Y %-I:%M %p") if instance.load_out_at else "TBD" }}</div>
+      <div><span style="color: var(--color-text-muted);">Load in:</span> {{ instance.load_in_at|local_datetime("%b %d, %Y %-I:%M %p") or "TBD" }}</div>
+      <div><span style="color: var(--color-text-muted);">Load out:</span> {{ instance.load_out_at|local_datetime("%b %d, %Y %-I:%M %p") or "TBD" }}</div>
       {% if instance.load_in_notes %}<p class="rounded-lg border p-3" style="border-color: var(--color-border);">{{ instance.load_in_notes }}</p>{% endif %}
       {% if instance.load_out_notes %}<p class="rounded-lg border p-3" style="border-color: var(--color-border);">{{ instance.load_out_notes }}</p>{% endif %}
     </div>

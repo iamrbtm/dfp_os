@@ -33,7 +33,7 @@
         Latest Report
       </h2>
       <time class="text-xs" style="color: var(--color-text-muted);">
-        {{ latest.report_date.strftime("%B %d, %Y at %H:%M UTC") }}
+        {{ latest.report_date|local_full }}
       </time>
     </div>
 
@@ -47,144 +47,250 @@
       <div>
         <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Opportunity Decision Matrix</h3>
         {% if latest.top_opportunities %}
+        <div class="flex flex-wrap gap-2 mb-3">
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full font-semibold"
+                  data-view="all" style="background:var(--color-primary);color:#fff;">All</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
+                  data-view="print_now" style="background:var(--color-success-bg, #d1fae5);color:var(--color-success,#059669);opacity:0.6;">Print Now</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
+                  data-view="clearance_candidate" style="background:var(--color-warning-bg,#fef3c7);color:var(--color-warning,#d97706);opacity:0.6;">Clearance</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
+                  data-view="retire_review" style="background:var(--color-danger-bg,#fee2e2);color:var(--color-danger,#dc2626);opacity:0.6;">Retire</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
+                  data-view="license_review" style="background:#fce7f3;color:#be185d;opacity:0.6;">License</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
+                  data-view="test_product" style="background:#dbeafe;color:#2563eb;opacity:0.6;">Test</button>
+        </div>
+        <div class="flex flex-wrap gap-2 mb-3">
+          <input id="ts-search" type="search" placeholder="Search products..."
+                 class="app-input text-xs flex-1 min-w-[160px]">
+          <select id="ts-filter-action" class="app-select text-xs">
+            <option value="all">All actions</option>
+            <option value="print_now">Print Now</option>
+            <option value="keep_selling">Keep Selling</option>
+            <option value="clearance_candidate">Clearance</option>
+            <option value="retire_review">Retire</option>
+            <option value="license_review">License Review</option>
+            <option value="test_product">Test Product</option>
+            <option value="monitor">Monitor</option>
+          </select>
+          <select id="ts-filter-type" class="app-select text-xs">
+            <option value="all">All types</option>
+            <option value="current">Current products</option>
+            <option value="potential">Potential products</option>
+          </select>
+        </div>
         <div class="overflow-x-auto">
           <table class="app-table text-xs" id="opportunity-matrix">
             <thead>
               <tr>
                 <th></th>
-                <th>Rank</th>
+                <th data-sort="2">Rank</th>
                 <th>Product / Idea</th>
                 <th>Action</th>
-                <th>Score</th>
-                <th>Intent</th>
-                <th>Velocity</th>
-                <th>Price</th>
-                <th>Low Sat.</th>
-                <th>Local</th>
-                <th>Prod.</th>
-                <th>License Risk</th>
-                <th>Inventory</th>
-                <th>Sources</th>
-                <th>Match</th>
+                <th data-sort="4" class="cursor-pointer">Score</th>
+                <th data-sort="5" class="hidden sm:table-cell cursor-pointer">Intent</th>
+                <th data-sort="6" class="hidden lg:table-cell cursor-pointer">Velocity</th>
+                <th data-sort="7" class="hidden lg:table-cell cursor-pointer">Price</th>
+                <th data-sort="8" class="hidden xl:table-cell cursor-pointer">Low Sat.</th>
+                <th data-sort="9" class="hidden xl:table-cell cursor-pointer">Local</th>
+                <th data-sort="10" class="hidden xl:table-cell cursor-pointer">Prod.</th>
+                <th data-sort="11" class="hidden lg:table-cell cursor-pointer">License Risk</th>
+                <th data-sort="12" class="hidden xl:table-cell cursor-pointer">Inventory</th>
+                <th class="hidden xl:table-cell">Sources</th>
+                <th class="hidden lg:table-cell">Match</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {% for opp in latest.top_opportunities[:50] %}
-              <tr class="cursor-pointer" onclick="toggleRow({{ opp.rank or loop.index }})">
+              {% set row_id = opp.get("rank") or loop.index %}
+              {% set rank = opp.get("rank") or loop.index %}
+              {% set title = opp.get("title") or opp.get("keyword") or "Untitled opportunity" %}
+              {% set action = opp.get("action") or "monitor" %}
+              {% set opportunity_score = opp.get("opportunity_score", opp.get("score", 0)) or 0 %}
+              {% set purchase_intent = opp.get("purchase_intent", 0) or 0 %}
+              {% set trend_velocity = opp.get("trend_velocity", 0) or 0 %}
+              {% set price_resilience = opp.get("price_resilience", 0) or 0 %}
+              {% set low_saturation = opp.get("low_saturation", 0) or 0 %}
+              {% set local_fit = opp.get("local_fit", 0) or 0 %}
+              {% set production_fit = opp.get("production_fit", 0) or 0 %}
+              {% set license_risk = opp.get("license_risk", 0) or 0 %}
+              {% set current_product = opp.get("current_product", false) %}
+              {% set product_status = opp.get("product_status") %}
+              {% set inventory_available = opp.get("inventory_available", 0) or 0 %}
+              {% set sources = opp.get("sources") or [] %}
+              {% set match_confidence = opp.get("match_confidence") %}
+              {% set breakdown = opp.get("score_breakdown") or {} %}
+              <tr class="cursor-pointer" onclick="toggleRow({{ row_id }})">
                 <td class="text-xs" style="color: var(--color-link);">&#9654;</td>
-                <td class="font-mono">{{ opp.rank }}</td>
+                <td class="font-mono">{{ rank }}</td>
                 <td>
                   <div class="font-semibold" style="color: var(--color-text);">
-                    {{ opp.title or opp.keyword }}
+                    {{ title }}
                   </div>
                   <div style="color: var(--color-text-muted);">
-                    {{ "Current product" if opp.current_product else "Potential product" }}
-                    {% if opp.product_status %} &middot; {{ opp.product_status|replace("_", " ")|title }}{% endif %}
+                    {{ "Current product" if current_product else "Potential product" }}
+                    {% if product_status %} &middot; {{ product_status|replace("_", " ")|title }}{% endif %}
                   </div>
                 </td>
                 <td>
-                  <span class="inline-flex rounded-full px-2 py-0.5 font-semibold"
+                  <span class="inline-flex rounded-full px-2 py-0.5 font-semibold text-xs"
                         style="background-color: var(--color-primary-bg); color: var(--color-primary);">
-                    {{ (opp.action or "monitor")|replace("_", " ")|title }}
+                    {{ action|replace("_", " ")|title }}
                   </span>
                 </td>
-                <td class="font-mono font-semibold">{{ opp.opportunity_score or opp.score }}</td>
-                <td class="font-mono">{{ opp.purchase_intent }}</td>
-                <td class="font-mono">{{ opp.trend_velocity }}</td>
-                <td class="font-mono">{{ opp.price_resilience }}</td>
-                <td class="font-mono">{{ opp.low_saturation }}</td>
-                <td class="font-mono">{{ opp.local_fit }}</td>
-                <td class="font-mono">{{ opp.production_fit }}</td>
-                <td class="font-mono" style="color: {{ 'var(--color-danger)' if opp.license_risk >= 70 else 'var(--color-text-muted)' }};">
-                  {{ opp.license_risk }}
+                <td class="font-mono font-semibold">{{ opportunity_score }}</td>
+                <td class="font-mono hidden sm:table-cell">{{ purchase_intent }}</td>
+                <td class="font-mono hidden lg:table-cell">{{ trend_velocity }}</td>
+                <td class="font-mono hidden lg:table-cell">{{ price_resilience }}</td>
+                <td class="font-mono hidden xl:table-cell">{{ low_saturation }}</td>
+                <td class="font-mono hidden xl:table-cell">{{ local_fit }}</td>
+                <td class="font-mono hidden xl:table-cell">{{ production_fit }}</td>
+                <td class="font-mono hidden lg:table-cell" style="color: {{ 'var(--color-danger)' if license_risk >= 70 else 'var(--color-text-muted)' }};">
+                  {{ license_risk }}
                 </td>
-                <td class="font-mono">
-                  {% if opp.current_product %}
-                    {{ opp.inventory_available }}
+                <td class="font-mono hidden xl:table-cell">
+                  {% if current_product %}
+                    {{ inventory_available }}
                   {% else %}
                     &mdash;
                   {% endif %}
                 </td>
-                <td style="color: var(--color-text-muted);">
-                  {% if opp.sources %}
-                    {{ opp.sources|join(", ") }}
+                <td class="hidden xl:table-cell" style="color: var(--color-text-muted);">
+                  {% if sources %}
+                    {{ sources if sources is string else sources|join(", ") }}
                   {% else %}
                     &mdash;
                   {% endif %}
                 </td>
-                <td>
-                  {% if opp.match_confidence %}
-                  <span class="text-xs font-mono">{{ opp.match_confidence }}</span>
+                <td class="hidden lg:table-cell">
+                  {% if match_confidence %}
+                  <span class="text-xs font-mono">{{ match_confidence }}</span>
                   {% else %}
                   &mdash;
                   {% endif %}
                 </td>
+                <td>
+                  <div class="flex flex-wrap gap-1">
+                    {% if action == "print_now" and product_id %}
+                    <button class="text-xs px-2 py-0.5 rounded"
+                            style="background: var(--color-success); color: #fff; border: none; cursor: pointer;"
+                            hx-post="{{ url_for('trend_scout.action_print_now') }}"
+                            hx-vals='{"product_id": {{ product_id }}, "keyword": "{{ title|e }}"}'
+                            hx-swap="outerHTML"
+                            hx-disabled-elt="closest button">
+                      Print Now
+                    </button>
+                    {% endif %}
+                    {% if action == "test_product" %}
+                    <form method="post" action="{{ url_for('trend_scout.action_create_product') }}" class="inline">
+                      <input type="hidden" name="keyword" value="{{ title|e }}">
+                      <input type="hidden" name="title" value="{{ title|e }}">
+                      <button type="submit" class="text-xs px-2 py-0.5 rounded"
+                              style="background: var(--color-primary); color: #fff; border: none; cursor: pointer;">
+                        Create
+                      </button>
+                    </form>
+                    {% endif %}
+                    {% if action == "clearance_candidate" and product_id %}
+                    <button class="text-xs px-2 py-0.5 rounded"
+                            style="background: var(--color-warning); color: #000; border: none; cursor: pointer;"
+                            hx-post="{{ url_for('trend_scout.action_flag_clearance') }}"
+                            hx-vals='{"product_id": {{ product_id }}, "keyword": "{{ title|e }}"}'
+                            hx-swap="outerHTML"
+                            hx-disabled-elt="closest button">
+                      Flag Clr
+                    </button>
+                    {% endif %}
+                    {% if action == "retire_review" and product_id %}
+                    <button class="text-xs px-2 py-0.5 rounded"
+                            style="background: var(--color-danger); color: #fff; border: none; cursor: pointer;"
+                            hx-post="{{ url_for('trend_scout.action_flag_retire') }}"
+                            hx-vals='{"product_id": {{ product_id }}, "keyword": "{{ title|e }}"}'
+                            hx-swap="outerHTML"
+                            hx-disabled-elt="closest button">
+                      Flag Retire
+                    </button>
+                    {% endif %}
+                    {% if action == "license_review" and product_id %}
+                    <button class="text-xs px-2 py-0.5 rounded"
+                            style="background: var(--color-danger); color: #fff; border: none; cursor: pointer;"
+                            hx-post="{{ url_for('trend_scout.action_flag_license_review') }}"
+                            hx-vals='{"product_id": {{ product_id }}, "keyword": "{{ title|e }}"}'
+                            hx-swap="outerHTML"
+                            hx-disabled-elt="closest button">
+                      License
+                    </button>
+                    {% endif %}
+                  </div>
+                </td>
               </tr>
-              <tr id="detail-{{ opp.rank or loop.index }}" class="hidden">
-                <td colspan="15" class="p-4" style="background-color: var(--color-surface);">
+              <tr id="detail-{{ row_id }}" class="hidden">
+                <td colspan="16" class="p-4" style="background-color: var(--color-surface);">
                   <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div class="space-y-1">
                       <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Purchase Intent</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ opp.purchase_intent }}/100</p>
-                      {% if opp.score_breakdown and opp.score_breakdown.purchase_intent %}
+                      <p class="text-sm" style="color: var(--color-text);">{{ purchase_intent }}/100</p>
+                      {% if breakdown.get("purchase_intent") %}
                       <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ opp.score_breakdown.purchase_intent.explanation }}
+                        {{ breakdown.get("purchase_intent", {}).get("explanation") }}
                       </p>
                       {% endif %}
                     </div>
                     <div class="space-y-1">
                       <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Trend Velocity</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ opp.trend_velocity }}/100</p>
-                      {% if opp.score_breakdown and opp.score_breakdown.trend_velocity %}
+                      <p class="text-sm" style="color: var(--color-text);">{{ trend_velocity }}/100</p>
+                      {% if breakdown.get("trend_velocity") %}
                       <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ opp.score_breakdown.trend_velocity.explanation }}
+                        {{ breakdown.get("trend_velocity", {}).get("explanation") }}
                       </p>
                       {% endif %}
                     </div>
                     <div class="space-y-1">
                       <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Price Resilience</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ opp.price_resilience }}/100</p>
-                      {% if opp.score_breakdown and opp.score_breakdown.price_resilience %}
+                      <p class="text-sm" style="color: var(--color-text);">{{ price_resilience }}/100</p>
+                      {% if breakdown.get("price_resilience") %}
                       <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ opp.score_breakdown.price_resilience.explanation }}
+                        {{ breakdown.get("price_resilience", {}).get("explanation") }}
                       </p>
                       {% endif %}
                     </div>
                     <div class="space-y-1">
                       <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Low Saturation</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ opp.low_saturation }}/100</p>
-                      {% if opp.score_breakdown and opp.score_breakdown.low_saturation %}
+                      <p class="text-sm" style="color: var(--color-text);">{{ low_saturation }}/100</p>
+                      {% if breakdown.get("low_saturation") %}
                       <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ opp.score_breakdown.low_saturation.explanation }}
+                        {{ breakdown.get("low_saturation", {}).get("explanation") }}
                       </p>
                       {% endif %}
                     </div>
                     <div class="space-y-1">
                       <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Local Fit</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ opp.local_fit }}/100</p>
-                      {% if opp.score_breakdown and opp.score_breakdown.local_fit %}
+                      <p class="text-sm" style="color: var(--color-text);">{{ local_fit }}/100</p>
+                      {% if breakdown.get("local_fit") %}
                       <p class="text-xs" style="color: var(--color-text-muted);">
-                        Matched: {{ opp.score_breakdown.local_fit.matched_terms|join(", ") or "none" }}
+                        Matched: {{ breakdown.get("local_fit", {}).get("matched_terms", [])|join(", ") or "none" }}
                       </p>
                       {% endif %}
                     </div>
                     <div class="space-y-1">
                       <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Production Fit</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ opp.production_fit }}/100</p>
-                      {% if opp.score_breakdown and opp.score_breakdown.production_fit %}
+                      <p class="text-sm" style="color: var(--color-text);">{{ production_fit }}/100</p>
+                      {% if breakdown.get("production_fit") %}
                       <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ opp.score_breakdown.production_fit.explanation }}
+                        {{ breakdown.get("production_fit", {}).get("explanation") }}
                       </p>
                       {% endif %}
                     </div>
                     <div class="space-y-1">
                       <p class="text-xs font-semibold" style="color: var(--color-text-muted);">License Risk</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ opp.license_risk }}/100</p>
-                      {% if opp.score_breakdown and opp.score_breakdown.license_risk %}
+                      <p class="text-sm" style="color: var(--color-text);">{{ license_risk }}/100</p>
+                      {% if breakdown.get("license_risk") %}
                       <p class="text-xs" style="color: var(--color-text-muted);">
-                        Status: {{ opp.score_breakdown.license_risk.license_status or "unknown" }}
-                        {% if opp.score_breakdown.license_risk.matched_risk_terms %}
-                        &middot; Risk terms: {{ opp.score_breakdown.license_risk.matched_risk_terms|join(", ") }}
+                        Status: {{ breakdown.get("license_risk", {}).get("license_status") or "unknown" }}
+                        {% if breakdown.get("license_risk", {}).get("matched_risk_terms") %}
+                        &middot; Risk terms: {{ breakdown.get("license_risk", {}).get("matched_risk_terms", [])|join(", ") }}
                         {% endif %}
                       </p>
                       {% endif %}
@@ -192,11 +298,11 @@
                     <div class="space-y-1">
                       <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Sales &amp; Inventory</p>
                       <p class="text-sm" style="color: var(--color-text);">
-                        {{ opp.units_sold }} sold &middot; ${{ "%.2f"|format(opp.revenue or 0) }} revenue
+                        {{ opp.get("units_sold", 0) or 0 }} sold &middot; ${{ "%.2f"|format(opp.get("revenue", 0) or 0) }} revenue
                       </p>
-                      {% if opp.match_confidence %}
+                      {% if match_confidence %}
                       <p class="text-xs" style="color: var(--color-text-muted);">
-                        Product match: {{ opp.match_confidence }}
+                        Product match: {{ match_confidence }}
                       </p>
                       {% endif %}
                     </div>
@@ -284,7 +390,7 @@
         <tbody>
           {% for report in all_reports %}
           <tr>
-            <td class="text-sm font-mono">{{ report.report_date.strftime("%Y-%m-%d %H:%M") }}</td>
+            <td class="text-sm font-mono">{{ report.report_date|local_datetime }}</td>
             <td class="text-sm max-w-md truncate">{{ (report.summary or "")[:120] }}</td>
             <td class="text-sm">{{ report.top_opportunities|length if report.top_opportunities else 0 }}</td>
             <td class="text-sm">{{ report.growing_categories|length if report.growing_categories else 0 }}</td>
@@ -299,6 +405,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='src/js/trend_scout.js') }}" defer></script>
 <script>
 function toggleRow(rank) {
   var row = document.getElementById('detail-' + rank);

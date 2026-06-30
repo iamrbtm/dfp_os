@@ -12,7 +12,7 @@
         <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3" style="border-color: var(--color-border);">
           <div>
             <a class="font-semibold" style="color: var(--color-link);" href="{{ url_for('markets.download_document', market_id=instance.id, document_id=doc.id) }}">{{ doc.original_filename }}</a>
-            <p class="text-xs" style="color: var(--color-text-muted);">{{ doc.document_type.value.title() }} &middot; {{ doc.file_size or 0 }} bytes &middot; {{ doc.created_at.strftime("%b %d, %Y") }}</p>
+            <p class="text-xs" style="color: var(--color-text-muted);">{{ doc.document_type.value.title() }} &middot; {{ doc.file_size or 0 }} bytes &middot; {{ doc.created_at|local_datetime("%b %d, %Y") }}</p>
             {% if doc.notes %}<p class="mt-1 text-sm">{{ doc.notes }}</p>{% endif %}
           </div>
           <form method="post" action="{{ url_for('markets.delete_document', market_id=instance.id, document_id=doc.id) }}" hx-post="{{ url_for('markets.delete_document', market_id=instance.id, document_id=doc.id) }}" hx-target="#market-documents" hx-swap="innerHTML">

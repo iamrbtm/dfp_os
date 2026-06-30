@@ -41,7 +41,7 @@
           <tr>
             <td>#{{ r.id }}</td>
             <td>{{ r.merchant_name or '—' }}</td>
-            <td>{{ r.date_time.strftime('%Y-%m-%d') if r.date_time else '—' }}</td>
+            <td>{{ r.date_time|local_date or '—' }}</td>
             <td>${{ "{:,.2f}".format(r.grand_total|float) if r.grand_total else '—' }}</td>
             <td>
               <span class="px-2 py-0.5 rounded text-xs font-medium"
@@ -66,7 +66,7 @@
                 {% endif %}
               </div>
             </td>
-            <td>{{ r.created_at.strftime('%Y-%m-%d') }}</td>
+            <td>{{ r.created_at|local_date }}</td>
             <td>
               <div class="flex gap-2">
                 <a href="{{ url_for('receipts.review', receipt_id=r.id) }}" class="app-link">Review</a>

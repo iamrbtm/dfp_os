@@ -99,7 +99,7 @@
         {% for sale in summary.sales %}
         <tr>
           <td class="font-mono text-sm">{{ sale.sale_number }}</td>
-          <td class="text-sm">{{ sale.created_at.strftime('%H:%M') if sale.created_at else '' }}</td>
+          <td class="text-sm">{{ sale.created_at|local_datetime("%H:%M") or '' }}</td>
           <td class="text-sm">{{ sale.items|length }}</td>
           <td class="text-sm">
             {{ sale.payment_method.replace('_', ' ').title() }}

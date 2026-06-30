@@ -609,7 +609,7 @@ def trend_score(product_id: int):
         entity_id=str(product.id),
         actor_id=str(current_user.id),
         actor_type="user",
-        actor_display_name=current_user.display_name or current_user.username,
+        actor_display_name=getattr(current_user, "full_name", None) or current_user.email,
         source_module="products.studio_routes",
         after_state={
             "product_name": product.name,

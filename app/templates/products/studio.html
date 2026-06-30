@@ -317,32 +317,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='src/js/studio.js') }}"></script>
 <script>
-  // cost calculation
-  document.querySelectorAll('[data-calc-costs]').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var url = this.getAttribute('data-url');
-      var target = document.getElementById(this.getAttribute('data-result-target'));
-      if (!url || !target) return;
-      var original = this.innerHTML;
-      this.disabled = true;
-      this.innerHTML = 'Calculating...';
-      fetch(url, { method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token() }}'} })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.success === false) { throw new Error(data.error || 'Unknown error'); }
-          location.reload();
-        })
-        .catch(function(err) {
-          alert('Cost calculation failed: ' + err.message);
-        })
-        .finally(function() {
-          btn.disabled = false;
-          btn.innerHTML = original;
-        });
-    });
-  });
-
   // trend score calculation
   var trendBtn = document.getElementById('trend-score-btn');
   if (trendBtn) {

@@ -1,11 +1,22 @@
 from __future__ import annotations
 
-from flask import jsonify, render_template, session
+from datetime import datetime, timezone
+
+from flask import jsonify, redirect, render_template, request, session, url_for
 
 from app.blueprints.trend_scout import bp
 from app.celery_app import celery
 from app.extensions import db
-from app.models import SourceHealthRecord, TrendOpportunityScore, TrendReport, UserRole
+from app.models import (
+    PrintJob,
+    PrintJobStatus,
+    Product,
+    SourceHealthRecord,
+    TrendOpportunityScore,
+    TrendReport,
+    UserRole,
+)
+from app.services.audit import record_audit_event
 from app.utils.auth import roles_required
 
 
@@ -204,3 +215,163 @@ def source_health():
             for r in records
         ],
     })
+
+
+@bp.post("/actions/print-now")
+@roles_required(UserRole.ADMIN)
+def action_print_now():
+    product_id = request.form.get("product_id", type=int)
+    keyword = request.form.get("keyword", "")
+    if not product_id:
+        record_audit_event(
+            action="trend_scout.print_now.skipped",
+            entity_type="trend_opportunity",
+            entity_id=keyword or "unknown",
+            metadata={"reason": "no_product_id", "keyword": keyword},
+            source_module=__name__,
+        )
+        return '<span class="text-xs" style="color:var(--color-text-muted);">No product</span>'
+
+    product = db.session.get(Product, product_id)
+    if not product:
+        return '<span class="text-xs" style="color:var(--color-danger);">Not found</span>'
+
+    job = PrintJob(
+        product_id=product.id,
+        status=PrintJobStatus.QUEUED,
+        priority=1,
+        estimated_minutes=product.parsed_print_minutes or product.estimated_print_minutes or 0,
+        label=f"Trend Scout: {product.name}",
+    )
+    db.session.add(job)
+    db.session.commit()
+
+    record_audit_event(
+        action="trend_scout.print_now.created",
+        entity_type="print_job",
+        entity_id=job.id,
+        metadata={
+            "product_id": product_id,
+            "product_name": product.name,
+            "keyword": keyword,
+            "source": "trend_scout",
+        },
+        source_module=__name__,
+    )
+
+    return (
+        f'<span class="text-xs" style="color:var(--color-success);">'
+        f'Queued #{job.id}</span>'
+    )
+
+
+@bp.post("/actions/create-product")
+@roles_required(UserRole.ADMIN)
+def action_create_product():
+    keyword = request.form.get("keyword", "").strip()
+    title = request.form.get("title", "").strip() or keyword
+    if not keyword:
+        return '<span class="text-xs" style="color:var(--color-danger);">No keyword</span>'
+
+    record_audit_event(
+        action="trend_scout.create_product.redirected",
+        entity_type="trend_opportunity",
+        entity_id=keyword,
+        metadata={"keyword": keyword, "title": title, "source": "trend_scout"},
+        source_module=__name__,
+    )
+
+    return redirect(url_for("products.studio", mode="create", name=title))
+
+
+@bp.post("/actions/flag-clearance")
+@roles_required(UserRole.ADMIN)
+def action_flag_clearance():
+    product_id = request.form.get("product_id", type=int)
+    keyword = request.form.get("keyword", "")
+    if not product_id:
+        return '<span class="text-xs" style="color:var(--color-text-muted);">No product</span>'
+
+    product = db.session.get(Product, product_id)
+    if not product:
+        return '<span class="text-xs" style="color:var(--color-danger);">Not found</span>'
+
+    existing = (product.admin_notes or "") + (
+        f"\n[Trend Scout - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}] "
+        f"Flagged for clearance review."
+    )
+    product.admin_notes = existing.strip()
+    db.session.add(product)
+    db.session.commit()
+
+    record_audit_event(
+        action="trend_scout.flag_clearance",
+        entity_type="product",
+        entity_id=product_id,
+        metadata={"product_name": product.name, "keyword": keyword, "source": "trend_scout"},
+        source_module=__name__,
+    )
+
+    return '<span class="text-xs" style="color:var(--color-warning);">Flagged clearance</span>'
+
+
+@bp.post("/actions/flag-retire")
+@roles_required(UserRole.ADMIN)
+def action_flag_retire():
+    product_id = request.form.get("product_id", type=int)
+    keyword = request.form.get("keyword", "")
+    if not product_id:
+        return '<span class="text-xs" style="color:var(--color-text-muted);">No product</span>'
+
+    product = db.session.get(Product, product_id)
+    if not product:
+        return '<span class="text-xs" style="color:var(--color-danger);">Not found</span>'
+
+    existing = (product.admin_notes or "") + (
+        f"\n[Trend Scout - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}] "
+        f"Flagged for retirement review."
+    )
+    product.admin_notes = existing.strip()
+    db.session.add(product)
+    db.session.commit()
+
+    record_audit_event(
+        action="trend_scout.flag_retire",
+        entity_type="product",
+        entity_id=product_id,
+        metadata={"product_name": product.name, "keyword": keyword, "source": "trend_scout"},
+        source_module=__name__,
+    )
+
+    return '<span class="text-xs" style="color:var(--color-danger);">Flagged retire</span>'
+
+
+@bp.post("/actions/flag-license-review")
+@roles_required(UserRole.ADMIN)
+def action_flag_license_review():
+    product_id = request.form.get("product_id", type=int)
+    keyword = request.form.get("keyword", "")
+    if not product_id:
+        return '<span class="text-xs" style="color:var(--color-text-muted);">No product</span>'
+
+    product = db.session.get(Product, product_id)
+    if not product:
+        return '<span class="text-xs" style="color:var(--color-danger);">Not found</span>'
+
+    existing = (product.admin_notes or "") + (
+        f"\n[Trend Scout - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}] "
+        f"Flagged for license review."
+    )
+    product.admin_notes = existing.strip()
+    db.session.add(product)
+    db.session.commit()
+
+    record_audit_event(
+        action="trend_scout.flag_license_review",
+        entity_type="product",
+        entity_id=product_id,
+        metadata={"product_name": product.name, "keyword": keyword, "source": "trend_scout"},
+        source_module=__name__,
+    )
+
+    return '<span class="text-xs" style="color:var(--color-warning);">Flagged license</span>'

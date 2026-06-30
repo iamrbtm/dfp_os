@@ -154,6 +154,12 @@ class OpportunityCandidate:
     category: str = ""
     tags: str = ""
     match_confidence: str = ""
+    sell_through_rate: float = 0.0
+    days_since_last_sale: int = 999
+    inventory_age_days: int = 0
+    stockout_detected: bool = False
+    margin_pct: float = 0.0
+    last_sale_at: str | None = None
 
     @property
     def text(self) -> str:
@@ -384,6 +390,7 @@ def _catalog_metrics(db_session: Session, cutoff: datetime) -> dict[str, dict[in
         "inventory": {},
         "orders": {},
         "pos": {},
+        "last_sale": {},
     }
     inventory_rows = (
         db_session.query(
@@ -408,6 +415,7 @@ def _catalog_metrics(db_session: Session, cutoff: datetime) -> dict[str, dict[in
             OrderItem.product_id,
             func.coalesce(func.sum(OrderItem.quantity), 0),
             func.coalesce(func.sum(OrderItem.line_total), 0),
+            func.max(Order.created_at),
         )
         .join(Order, Order.id == OrderItem.order_id)
         .filter(
@@ -419,8 +427,12 @@ def _catalog_metrics(db_session: Session, cutoff: datetime) -> dict[str, dict[in
         .all()
     )
     metrics["orders"] = {
-        product_id: {"units": int(units or 0), "revenue": _decimal_to_float(revenue)}
-        for product_id, units, revenue in order_rows
+        product_id: {
+            "units": int(units or 0),
+            "revenue": _decimal_to_float(revenue),
+            "last_sale": last_sale.isoformat() if last_sale else None,
+        }
+        for product_id, units, revenue, last_sale in order_rows
     }
 
     pos_rows = (
@@ -428,6 +440,7 @@ def _catalog_metrics(db_session: Session, cutoff: datetime) -> dict[str, dict[in
             PosSaleItem.product_id,
             func.coalesce(func.sum(PosSaleItem.quantity), 0),
             func.coalesce(func.sum(PosSaleItem.line_total), 0),
+            func.max(PosSale.created_at),
         )
         .join(PosSale, PosSale.id == PosSaleItem.pos_sale_id)
         .filter(
@@ -439,9 +452,23 @@ def _catalog_metrics(db_session: Session, cutoff: datetime) -> dict[str, dict[in
         .all()
     )
     metrics["pos"] = {
-        product_id: {"units": int(units or 0), "revenue": _decimal_to_float(revenue)}
-        for product_id, units, revenue in pos_rows
+        product_id: {
+            "units": int(units or 0),
+            "revenue": _decimal_to_float(revenue),
+            "last_sale": last_sale.isoformat() if last_sale else None,
+        }
+        for product_id, units, revenue, last_sale in pos_rows
     }
+
+    all_product_ids = set(metrics["orders"]) | set(metrics["pos"])
+    for pid in all_product_ids:
+        order_last = metrics["orders"].get(pid, {}).get("last_sale")
+        pos_last = metrics["pos"].get(pid, {}).get("last_sale")
+        metrics["last_sale"][pid] = max(
+            [d for d in [order_last, pos_last] if d is not None],
+            default=None,
+        )
+
     return metrics
 
 
@@ -457,6 +484,7 @@ def _catalog_candidates(db_session: Session, cutoff: datetime) -> dict[str, Oppo
     except Exception:
         return {}
 
+    now = datetime.now(timezone.utc)
     candidates: dict[str, OpportunityCandidate] = {}
     for product in products:
         keyword = _normalise_keyword(product.name)
@@ -467,6 +495,32 @@ def _catalog_candidates(db_session: Session, cutoff: datetime) -> dict[str, Oppo
         pos_metrics = metrics["pos"].get(product.id, {})
         units_sold = int(order_metrics.get("units", 0)) + int(pos_metrics.get("units", 0))
         revenue = float(order_metrics.get("revenue", 0.0)) + float(pos_metrics.get("revenue", 0.0))
+        available = int(inventory.get("available", 0))
+        base_price = _decimal_to_float(product.base_price)
+        estimated_profit = _decimal_to_float(product.estimated_profit)
+        total_units = units_sold + available
+
+        sell_through_rate = 0.0
+        if total_units > 0:
+            sell_through_rate = round(units_sold / total_units, 4)
+
+        last_sale_str = metrics["last_sale"].get(product.id)
+        days_since_last_sale = 999
+        if last_sale_str:
+            try:
+                last_dt = datetime.fromisoformat(last_sale_str)
+                days_since_last_sale = (now - last_dt).days
+            except (ValueError, TypeError):
+                pass
+
+        inventory_age_days = 0
+        if product.created_at:
+            inventory_age_days = (now - product.created_at).days
+
+        margin_pct = 0.0
+        if base_price > 0:
+            margin_pct = round(estimated_profit / base_price, 4)
+
         candidate = OpportunityCandidate(
             keyword=keyword,
             title=product.name,
@@ -478,12 +532,12 @@ def _catalog_candidates(db_session: Session, cutoff: datetime) -> dict[str, Oppo
             sources={"catalog"},
             item_count=1,
             purchase_raw=(units_sold * 10) + (revenue * 0.35),
-            inventory_available=int(inventory.get("available", 0)),
+            inventory_available=available,
             reorder_target=int(inventory.get("reorder_target", 0)),
             units_sold=units_sold,
             revenue=revenue,
-            base_price=_decimal_to_float(product.base_price),
-            estimated_profit=_decimal_to_float(product.estimated_profit),
+            base_price=base_price,
+            estimated_profit=estimated_profit,
             estimated_print_minutes=_decimal_to_float(
                 product.parsed_print_minutes or product.estimated_print_minutes
             ),
@@ -497,6 +551,12 @@ def _catalog_candidates(db_session: Session, cutoff: datetime) -> dict[str, Oppo
             is_pos_visible=bool(product.is_pos_visible),
             category=product.category.name if product.category else "",
             tags=product.tags or "",
+            sell_through_rate=sell_through_rate,
+            days_since_last_sale=days_since_last_sale,
+            inventory_age_days=inventory_age_days,
+            stockout_detected=(available <= 0 and units_sold > 0),
+            margin_pct=margin_pct,
+            last_sale_at=last_sale_str,
         )
         if candidate.base_price > 0:
             candidate.prices.append(candidate.base_price)
@@ -537,6 +597,12 @@ def _merge_catalog_candidates(
         existing.category = product_candidate.category
         existing.tags = product_candidate.tags
         existing.match_confidence = "exact"
+        existing.sell_through_rate = product_candidate.sell_through_rate
+        existing.days_since_last_sale = product_candidate.days_since_last_sale
+        existing.inventory_age_days = product_candidate.inventory_age_days
+        existing.stockout_detected = product_candidate.stockout_detected
+        existing.margin_pct = product_candidate.margin_pct
+        existing.last_sale_at = product_candidate.last_sale_at
 
     if products:
         product_by_id = {p.id: p for p in products}
@@ -583,6 +649,12 @@ def _merge_catalog_candidates(
                 signal_candidate.category = best_product.category
                 signal_candidate.tags = best_product.tags
                 signal_candidate.match_confidence = best_confidence
+                signal_candidate.sell_through_rate = best_product.sell_through_rate
+                signal_candidate.days_since_last_sale = best_product.days_since_last_sale
+                signal_candidate.inventory_age_days = best_product.inventory_age_days
+                signal_candidate.stockout_detected = best_product.stockout_detected
+                signal_candidate.margin_pct = best_product.margin_pct
+                signal_candidate.last_sale_at = best_product.last_sale_at
 
     for keyword, product_candidate in catalog_candidates.items():
         if keyword not in exact_matched_keys and keyword not in candidates:
@@ -593,7 +665,7 @@ def _merge_catalog_candidates(
 
 def _price_resilience(candidate: OpportunityCandidate) -> int:
     if candidate.current_product and candidate.base_price > 0:
-        margin = candidate.estimated_profit / candidate.base_price if candidate.base_price else 0
+        margin = candidate.margin_pct or (candidate.estimated_profit / candidate.base_price)
         price_score = 35 + min(candidate.base_price, 60) * 0.7
         margin_score = max(-20, min(35, margin * 70))
         return _clamp_score(price_score + margin_score)
@@ -646,6 +718,12 @@ def _production_fit(candidate: OpportunityCandidate) -> int:
         score += min(12, candidate.estimated_profit)
     if candidate.is_public or candidate.is_pos_visible:
         score += 4
+    if candidate.stockout_detected:
+        score += 8
+    if candidate.margin_pct > 0.5:
+        score += 6
+    elif candidate.margin_pct > 0.3:
+        score += 3
     return _clamp_score(score)
 
 
@@ -680,14 +758,25 @@ def _recommend_action(candidate: OpportunityCandidate, scores: dict[str, int]) -
     if candidate.current_product:
         demand = scores["purchase_intent"] + scores["trend_velocity"]
         low_inventory = candidate.inventory_available <= max(2, candidate.reorder_target)
+
+        if candidate.stockout_detected and scores["opportunity_score"] >= 50:
+            return "print_now"
+
         if scores["opportunity_score"] >= 70 and low_inventory:
             return "print_now"
         if scores["opportunity_score"] >= 65:
             return "keep_selling"
+
+        if candidate.sell_through_rate < 0.15 and candidate.inventory_available > 5:
+            return "clearance_candidate"
         if demand < 45 and candidate.inventory_available > 0:
             return "clearance_candidate"
+
+        if candidate.days_since_last_sale > 180 and candidate.inventory_available <= 0:
+            return "retire_review"
         if demand < 35 and candidate.inventory_available <= 0:
             return "retire_review"
+
         return "improve_or_monitor"
     if scores["opportunity_score"] >= 65:
         return "test_product"
@@ -705,6 +794,9 @@ def _build_score_breakdown(candidate: OpportunityCandidate, scores: dict[str, in
             "signal_total": round(candidate.signal_total, 2),
             "source_count": len(candidate.sources),
             "sources": sorted(candidate.sources),
+            "sell_through_rate": candidate.sell_through_rate,
+            "days_since_last_sale": candidate.days_since_last_sale,
+            "stockout_detected": candidate.stockout_detected,
             "explanation": (
                 f"Based on {candidate.units_sold} units sold, "
                 f"${candidate.revenue:.2f} revenue, "
@@ -723,9 +815,11 @@ def _build_score_breakdown(candidate: OpportunityCandidate, scores: dict[str, in
             "base_price": round(candidate.base_price, 2),
             "estimated_profit": round(candidate.estimated_profit, 2),
             "avg_price": round(sum(candidate.prices) / len(candidate.prices), 2) if candidate.prices else 0,
+            "margin_pct": candidate.margin_pct,
             "explanation": (
                 f"Base price ${candidate.base_price:.2f}, "
-                f"estimated profit ${candidate.estimated_profit:.2f}."
+                f"estimated profit ${candidate.estimated_profit:.2f}, "
+                f"margin {candidate.margin_pct*100:.1f}%."
             ),
         },
         "low_saturation": {
@@ -749,6 +843,7 @@ def _build_score_breakdown(candidate: OpportunityCandidate, scores: dict[str, in
             "is_public": candidate.is_public,
             "is_pos_visible": candidate.is_pos_visible,
             "inventory_available": candidate.inventory_available,
+            "stockout_detected": candidate.stockout_detected,
             "explanation": (
                 f"Print time {candidate.estimated_print_minutes:.0f} min, "
                 f"profit ${candidate.estimated_profit:.2f}."
@@ -836,6 +931,12 @@ def _score_candidate(candidate: OpportunityCandidate) -> dict[str, Any]:
         "base_price": round(candidate.base_price, 2),
         "license_status": candidate.license_status,
         "match_confidence": candidate.match_confidence or None,
+        "sell_through_rate": candidate.sell_through_rate,
+        "days_since_last_sale": candidate.days_since_last_sale,
+        "inventory_age_days": candidate.inventory_age_days,
+        "stockout_detected": candidate.stockout_detected,
+        "margin_pct": candidate.margin_pct,
+        "last_sale_at": candidate.last_sale_at,
         "score_breakdown": _build_score_breakdown(candidate, scores),
     }
 

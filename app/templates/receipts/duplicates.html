@@ -30,7 +30,7 @@
             <td>#{{ r.id }}</td>
             <td>{{ r.merchant_name or '—' }}</td>
             <td>${{ "{:,.2f}".format(r.grand_total|float) if r.grand_total else '—' }}</td>
-            <td>{{ r.date_time.strftime('%Y-%m-%d') if r.date_time else '—' }}</td>
+            <td>{{ r.date_time|local_date or '—' }}</td>
             <td>{{ row.analysis.score or r.duplicate_score or '—' }}</td>
             <td class="text-sm">
               {% if row.analysis.possible_duplicates %}

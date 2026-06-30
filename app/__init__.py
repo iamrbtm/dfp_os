@@ -203,6 +203,9 @@ def register_error_handlers(app: Flask) -> None:
 
 def register_context_processors(app: Flask) -> None:
     from app.config_markdown import render_markdown
+    from app.utils.timezone import register_template_filters
+
+    register_template_filters(app)
 
     @app.template_filter("render_markdown")
     def _render_markdown(text: str) -> str:
