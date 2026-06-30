@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.blueprints.settings import bp
 from app.extensions import db
 from app.forms.admin import BusinessForm, FeatureFlagForm
-from app.models import Business, FeatureFlag, Setting, UserRole
+from app.models import FeatureFlag, Setting, UserRole
 from app.services.admin_mutations import (
     create_resource as create_admin_resource,
     snapshot_instance,
@@ -152,10 +152,14 @@ def module_status_update():
     return redirect(url_for("settings.module_status"))
 
 
+TREND_SCOUT_PREFIXES = {"trend_weight.", "trend_source.", "trend_buyer.", "trend_metric."}
+
+
 def _group_settings(settings: list) -> dict[str, list]:
     groups: dict[str, list] = {
         "Store": [],
         "POS": [],
+        "Trend Scout": [],
         "System": [],
     }
     store_keys = {"store_name", "store_tagline", "store_email", "store_phone",
@@ -167,6 +171,8 @@ def _group_settings(settings: list) -> dict[str, list]:
             groups["Store"].append(s)
         elif s.key in pos_keys:
             groups["POS"].append(s)
+        elif any(s.key.startswith(p) for p in TREND_SCOUT_PREFIXES):
+            groups["Trend Scout"].append(s)
         else:
             groups["System"].append(s)
     return {k: v for k, v in groups.items() if v}

@@ -375,3 +375,14 @@ def action_flag_license_review():
     )
 
     return '<span class="text-xs" style="color:var(--color-warning);">Flagged license</span>'
+
+
+@bp.get("/backtest")
+@roles_required(UserRole.ADMIN)
+def backtest():
+    from app.services.trend_scout_backtest import run_backtest
+
+    lookback = request.args.get("lookback", 12, type=int)
+    window = request.args.get("window", 60, type=int)
+    result = run_backtest(db.session, lookback_reports=lookback, sales_window_days=window)
+    return render_template("trend_scout/backtest.html", result=result)

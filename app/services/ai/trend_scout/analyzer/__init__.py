@@ -14,6 +14,7 @@ from .trend_detector import (
     compute_top_opportunities,
     compute_velocity_and_momentum,
 )
+from app.services.trend_scout_weights import scoring_version as _scoring_version
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,7 @@ def run_analysis(
             "analysis_mode": "ai_synthesis" if used_ai_synthesis else "deterministic",
             "opportunity_scoring": {
                 "version": "buyer_intent_matrix_v1",
+                "scoring_weights_version": _scoring_version(),
                 "formula": (
                     "purchase_intent + trend_velocity + price_resilience + "
                     "low_saturation + local_fit + production_fit - license_risk"

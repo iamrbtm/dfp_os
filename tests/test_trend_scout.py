@@ -749,3 +749,204 @@ def test_score_breakdown_includes_margin_pct():
     breakdown = scored.get("score_breakdown", {})
     price_break = breakdown.get("price_resilience", {})
     assert price_break.get("margin_pct") == 0.5
+
+
+# ----- Phase 4: Weight Config Tests -----
+
+
+def test_load_score_weights_returns_defaults(app):
+    from app.services.trend_scout_weights import load_score_weights, DEFAULT_SCORE_WEIGHTS
+
+    weights = load_score_weights()
+    for key, default_val in DEFAULT_SCORE_WEIGHTS.items():
+        assert key in weights
+        assert weights[key] == default_val
+
+
+def test_save_and_load_custom_weight(app):
+    from app.services.trend_scout_weights import save_weight, load_score_weights, PREFIX_SCORE
+
+    save_weight(PREFIX_SCORE, "purchase_intent", 0.50)
+    weights = load_score_weights()
+    assert weights["purchase_intent"] == 0.50
+
+
+def test_validate_score_weights_passes(app):
+    from app.services.trend_scout_weights import validate_score_weights, DEFAULT_SCORE_WEIGHTS
+
+    errors = validate_score_weights(DEFAULT_SCORE_WEIGHTS)
+    assert errors == []
+
+
+def test_validate_score_weights_catches_missing(app):
+    from app.services.trend_scout_weights import validate_score_weights
+
+    errors = validate_score_weights({"purchase_intent": 0.5})
+    assert any("Missing" in e for e in errors)
+
+
+def test_validate_score_weights_catches_out_of_range(app):
+    from app.services.trend_scout_weights import validate_score_weights
+
+    bad = {k: 3.0 for k in ["purchase_intent", "trend_velocity", "price_resilience",
+                            "low_saturation", "local_fit", "production_fit", "license_risk"]}
+    errors = validate_score_weights(bad)
+    assert any("outside allowed range" in e for e in errors)
+
+
+def test_seed_default_weights_creates_settings(app):
+    from app.services.trend_scout_weights import seed_default_weights
+    from app.models.setting import Setting
+    from app.extensions import db
+
+    created = seed_default_weights()
+    assert len(created) > 0
+    for key in created:
+        assert db.session.query(Setting).filter(Setting.key == key).first() is not None
+
+
+def test_scoring_version_changes_with_weights(app):
+    from app.services.trend_scout_weights import scoring_version, save_weight, PREFIX_SCORE
+
+    v1 = scoring_version()
+    save_weight(PREFIX_SCORE, "purchase_intent", 0.45)
+    v2 = scoring_version()
+    assert v1 != v2
+
+
+# ----- Phase 8: Backtest Tests -----
+
+
+def test_backtest_no_data_returns_no_data_status(app):
+    from app.services.trend_scout_backtest import run_backtest
+    from app.extensions import db
+
+    result = run_backtest(db.session, lookback_reports=5, sales_window_days=30)
+    assert result["status"] in ("no_data", "no_product_scores")
+
+
+def test_backtest_with_mock_report_and_orders(app):
+    from datetime import datetime, timedelta, timezone
+    from decimal import Decimal
+    from app.extensions import db
+    from app.models.trend import TrendReport, TrendOpportunityScore
+    from app.models.order import Order, OrderItem, OrderStatus, OrderPaymentStatus, OrderSource
+    from app.models import Product, Category, ProductStatus, ProductType
+    from app.services.trend_scout_backtest import run_backtest
+
+    cat = Category(name="Test", slug="test", description="", sort_order=1)
+    db.session.add(cat)
+    db.session.flush()
+
+    product = Product(
+        name="Test Product",
+        slug="test-product",
+        category_id=cat.id,
+            product_type=ProductType.FINISHED_GOOD,
+        status=ProductStatus.ACTIVE,
+        base_price=Decimal("20.00"),
+    )
+    db.session.add(product)
+    db.session.flush()
+
+    report = TrendReport(
+        report_date=datetime.now(timezone.utc) - timedelta(days=90),
+        summary="Test report",
+        top_opportunities=[],
+        growing_categories=[],
+        declining_trends=[],
+        pipeline_meta={},
+    )
+    db.session.add(report)
+    db.session.flush()
+
+    score = TrendOpportunityScore(
+        report_id=report.id,
+        candidate_type="catalog",
+        product_id=product.id,
+        keyword="test keyword",
+        title="Test Product",
+        opportunity_score=80,
+        purchase_intent=75,
+        trend_velocity=60,
+        price_resilience=70,
+        low_saturation=50,
+        local_fit=65,
+        production_fit=55,
+        license_risk=10,
+        action="print_now",
+        inventory_available=10,
+        base_price=Decimal("20.00"),
+        rank=1,
+        match_confidence="high",
+    )
+    db.session.add(score)
+    db.session.flush()
+
+    order = Order(
+        customer_name="Test",
+        customer_email="test@example.com",
+        status=OrderStatus.COMPLETED,
+        payment_status=OrderPaymentStatus.PAID,
+        source=OrderSource.ONLINE,
+        created_at=datetime.now(timezone.utc) - timedelta(days=30),
+    )
+    db.session.add(order)
+    db.session.flush()
+
+    item = OrderItem(
+        order_id=order.id,
+        product_id=product.id,
+        quantity=5,
+        unit_price=Decimal("20.00"),
+        line_total=Decimal("100.00"),
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    result = run_backtest(db.session, lookback_reports=5, sales_window_days=180)
+    assert result["status"] == "ok"
+    assert result["score_count"] >= 1
+    assert result["stats"]["total_units_sold"] >= 5
+    assert any(p["product_id"] == product.id for p in result["predictions"])
+
+
+def test_backtest_route_returns_200(app, client, login_admin):
+    response = client.get("/admin/trend-scout/backtest")
+    assert response.status_code == 200
+
+
+def test_backtest_route_requires_admin(app, client):
+    response = client.get("/admin/trend-scout/backtest")
+    assert response.status_code == 302
+
+
+def test_backtest_route_respects_query_params(app, client, login_admin):
+    response = client.get("/admin/trend-scout/backtest?lookback=6&window=30")
+    assert response.status_code == 200
+
+
+def test_backtest_component_analysis_structure(app):
+    from app.services.trend_scout_backtest import run_backtest
+    from app.extensions import db
+
+    result = run_backtest(db.session)
+    if result["status"] == "ok":
+        assert "component_analysis" in result
+        for comp in result["component_analysis"]:
+            assert "component" in comp
+            assert "correlation" in comp
+            assert "predictive_ratio" in comp
+
+def test_backtest_tuning_hints_generated(app):
+    """Verify tuning_hints are generated when component data exists."""
+    from app.services.trend_scout_backtest import _generate_tuning_hints
+    from app.services.trend_scout_weights import load_score_weights
+
+    fake_components = [
+        {"component": "purchase_intent", "correlation": 0.45, "predictive_ratio": 3.0},
+        {"component": "license_risk", "correlation": 0.15, "predictive_ratio": 1.2},
+        {"component": "opportunity_score", "correlation": 0.05, "predictive_ratio": 1.1},
+    ]
+    hints = _generate_tuning_hints(fake_components, load_score_weights())
+    assert len(hints) > 0
