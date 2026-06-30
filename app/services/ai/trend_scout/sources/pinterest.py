@@ -11,7 +11,6 @@ from app.services.ai.trend_scout.sources._base import ScoutResult
 logger = logging.getLogger(__name__)
 
 API_BASE = "https://api.pinterest.com/v5"
-PINTEREST_API_KEY = os.getenv("PINTEREST_API_KEY", "")
 
 SEED_QUERIES = [
     "3D printed dragon",
@@ -34,19 +33,22 @@ SEED_QUERIES = [
 
 def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]:
     results: list[ScoutResult] = []
+    pinterest_api_key = os.getenv("PINTEREST_API_KEY", "")
 
-    if not PINTEREST_API_KEY:
+    if not pinterest_api_key:
         results.append(
             ScoutResult(
                 source="pinterest",
                 keyword_or_category="not_configured",
-                errors=["PINTEREST_API_KEY environment variable not set. "
-                        "Get a key at https://developers.pinterest.com/"],
+                errors=[
+                    "PINTEREST_API_KEY environment variable not set. "
+                    "Get a key at https://developers.pinterest.com/"
+                ],
             )
         )
         return results
 
-    headers = {"Authorization": f"Bearer {PINTEREST_API_KEY}"}
+    headers = {"Authorization": f"Bearer {pinterest_api_key}"}
 
     for query in SEED_QUERIES:
         limiter.wait()
@@ -91,8 +93,7 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
                 result.metadata["query"] = query
             elif resp.status_code == 401:
                 result.errors.append(
-                    "HTTP 401 - Invalid Pinterest API key. "
-                    "Verify PINTEREST_API_KEY is correct."
+                    "HTTP 401 - Invalid Pinterest API key. " "Verify PINTEREST_API_KEY is correct."
                 )
             elif resp.status_code == 403:
                 result.errors.append(

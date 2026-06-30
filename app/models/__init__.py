@@ -13,6 +13,7 @@ from app.models.catalog import (
 from app.models.cost_snapshot import CostSnapshot, CostSnapshotConfidence
 from app.models.custom_request import CustomRequest, CustomRequestStatus
 from app.models.customer import Customer
+from app.models.demand import InternalDemandEvent, InternalDemandEventType
 from app.models.expense import Expense, ExpenseCategory
 from app.models.receipt import (
     AdjustmentType,
@@ -44,7 +45,16 @@ from app.models.market import (
 )
 from app.models.inventory import FilamentSpool, FilamentStatus, InventoryLocation, InventoryRecord
 from app.models.inventory_movement import InventoryMovement, InventoryMovementType
-from app.models.order import Order, OrderFulfillmentMethod, OrderItem, OrderPaymentStatus, OrderSource, OrderStatus, Payment, PaymentMethod
+from app.models.order import (
+    Order,
+    OrderFulfillmentMethod,
+    OrderItem,
+    OrderPaymentStatus,
+    OrderSource,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+)
 from app.models.pos import (
     PosSale,
     PosSaleItem,
@@ -91,6 +101,8 @@ __all__ = [
     "InventoryMovementType",
     "InventoryLocation",
     "InventoryRecord",
+    "InternalDemandEvent",
+    "InternalDemandEventType",
     "LicenseStatus",
     "Market",
     "MarketDocument",

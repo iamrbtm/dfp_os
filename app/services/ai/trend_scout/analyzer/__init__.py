@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 SYNTHESIS_PROMPT = (
     "You are a trend analyst for a 3D printing business. "
     "Given the following trend data, velocity analysis, emerging category clusters, "
-    "and top opportunities, write a concise weekly report summary. "
+    "and top opportunities with buyer-intent decision-matrix scores, write a concise weekly report summary. "
     "Focus on:\n"
     "- What products/categories are rising in demand\n"
     "- What is declining\n"
@@ -37,9 +37,7 @@ def run_analysis(
 ) -> TrendReport | None:
     velocity_data = compute_velocity_and_momentum(db_session)
     opportunities = compute_top_opportunities(db_session)
-    clusters = discover_new_categories(
-        db_session, api_key=openai_api_key
-    )
+    clusters = discover_new_categories(db_session, api_key=openai_api_key)
 
     synthesis_data = {
         "velocity": velocity_data.get("velocity", {}),
@@ -50,33 +48,40 @@ def run_analysis(
     }
 
     summary = _synthesize_report(synthesis_data, openai_api_key, openai_model)
+    used_ai_synthesis = bool(summary)
 
     if not summary:
-        summary = (
-            "Analysis complete but AI synthesis was unavailable "
-            "(no API key or API error). Review the numeric trend data manually."
-        )
+        summary = _deterministic_summary(synthesis_data, clusters)
 
-    report = TrendReport(
-        report_date=__import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        ),
-        summary=summary,
-        top_opportunities=opportunities,
-        growing_categories=[
-            c["top_phrases"]
-            for c in clusters.get("clusters", [])
-        ],
-        declining_trends=[
+    declining = sorted(
+        {
             kw
             for source_mom in velocity_data.get("momentum", {}).values()
             for kw, info in source_mom.items()
             if info.get("direction") == "down"
-        ],
+        }
+    )[:20]
+
+    report = TrendReport(
+        report_date=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        summary=summary,
+        top_opportunities=opportunities,
+        growing_categories=[c["top_phrases"] for c in clusters.get("clusters", [])],
+        declining_trends=declining,
         pipeline_meta={
             "velocity_metadata": velocity_data.get("metadata", {}),
             "clusters_found": clusters.get("total_clusters_found", 0),
             "titles_analyzed": clusters.get("total_titles_analyzed", 0),
+            "cluster_notes": clusters.get("notes"),
+            "analysis_mode": "ai_synthesis" if used_ai_synthesis else "deterministic",
+            "opportunity_scoring": {
+                "version": "buyer_intent_matrix_v1",
+                "formula": (
+                    "purchase_intent + trend_velocity + price_resilience + "
+                    "low_saturation + local_fit + production_fit - license_risk"
+                ),
+                "includes_current_products": True,
+            },
         },
     )
     db_session.add(report)
@@ -103,9 +108,7 @@ def _synthesize_report(
             messages=[
                 {
                     "role": "user",
-                    "content": SYNTHESIS_PROMPT.format(
-                        data=json.dumps(data, indent=2)
-                    ),
+                    "content": SYNTHESIS_PROMPT.format(data=json.dumps(data, indent=2)),
                 }
             ],
             timeout=60,
@@ -115,3 +118,37 @@ def _synthesize_report(
     except Exception as exc:
         logger.warning("AI report synthesis failed: %s", exc)
         return ""
+
+
+def _deterministic_summary(data: dict[str, Any], clusters: dict[str, Any]) -> str:
+    opportunities = data.get("top_opportunities", [])[:5]
+    cross_source = data.get("cross_source", {}).get("appearing_across_multiple_sources", {})
+    cluster_list = clusters.get("clusters", [])[:5]
+
+    lines = [
+        "Trend Scout completed using deterministic scoring because AI synthesis is unavailable.",
+    ]
+    if opportunities:
+        formatted = ", ".join(f"{item['keyword']} ({item['score']})" for item in opportunities)
+        lines.append(f"Top scored opportunities: {formatted}.")
+    else:
+        lines.append("No actionable opportunities were found in snapshots with real item data.")
+
+    if cross_source:
+        confirmed = ", ".join(list(cross_source.keys())[:5])
+        lines.append(f"Cross-source confirmation appeared for: {confirmed}.")
+
+    if cluster_list:
+        phrases = ", ".join(
+            ", ".join(cluster.get("top_phrases", [])[:3])
+            for cluster in cluster_list
+            if cluster.get("top_phrases")
+        )
+        if phrases:
+            lines.append(f"Emerging title patterns: {phrases}.")
+
+    notes = clusters.get("notes")
+    if notes:
+        lines.append(f"Analysis note: {notes}.")
+
+    return "\n\n".join(lines)

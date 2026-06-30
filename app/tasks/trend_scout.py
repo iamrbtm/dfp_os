@@ -23,7 +23,12 @@ def trend_scout_pipeline(self) -> dict:
     logger.info("[Task %s] Trend Scout full pipeline starting...", task_id)
 
     api_key = current_app.config.get("OPENAI_API_KEY", "")
-    model = current_app.config.get("OPENAI_MODEL", "gpt-4o-mini")
+    model = current_app.config.get(
+        "OPENAI_MODEL_TREND_SCOUT",
+        current_app.config.get(
+            "OPENAI_MODEL_ANALYTICS", current_app.config.get("OPENAI_MODEL", "gpt-4o-mini")
+        ),
+    )
 
     total_steps = len(FETCHERS) + 1  # fetch sources + analysis
 

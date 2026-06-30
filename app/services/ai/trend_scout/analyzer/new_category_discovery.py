@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 EMBEDDING_MODEL = "text-embedding-3-small"
 MIN_CLUSTER_SIZE = 3
 EPS = 0.35
+MAX_EMBEDDING_PHRASES = 300
 
 
 def _extract_noun_phrases(text: str) -> list[str]:
@@ -25,10 +26,38 @@ def _extract_noun_phrases(text: str) -> list[str]:
     text = re.sub(r"[^a-z0-9\s\-]", " ", text)
     text = re.sub(r"\s+", " ", text)
     stop_words = {
-        "the", "a", "an", "this", "that", "for", "with", "and", "or",
-        "of", "to", "in", "on", "by", "is", "it", "its", "new", "set",
-        "mini", "large", "small", "tiny", "big", "printed", "printable",
-        "3d", "stl", "file", "model", "free", "custom",
+        "the",
+        "a",
+        "an",
+        "this",
+        "that",
+        "for",
+        "with",
+        "and",
+        "or",
+        "of",
+        "to",
+        "in",
+        "on",
+        "by",
+        "is",
+        "it",
+        "its",
+        "new",
+        "set",
+        "mini",
+        "large",
+        "small",
+        "tiny",
+        "big",
+        "printed",
+        "printable",
+        "3d",
+        "stl",
+        "file",
+        "model",
+        "free",
+        "custom",
     }
 
     candidates: list[str] = []
@@ -47,9 +76,7 @@ def _extract_noun_phrases(text: str) -> list[str]:
     return candidates
 
 
-def _get_embeddings(
-    texts: list[str], api_key: str
-) -> list[list[float]]:
+def _get_embeddings(texts: list[str], api_key: str) -> list[list[float]]:
     if not api_key:
         logger.warning("No OpenAI API key set; returning zero vectors")
         return [np.zeros(1536).tolist() for _ in texts]
@@ -58,13 +85,34 @@ def _get_embeddings(
         from openai import OpenAI
 
         client = OpenAI(api_key=api_key)
-        response = client.embeddings.create(
-            model=EMBEDDING_MODEL, input=texts
-        )
+        response = client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
         return [d.embedding for d in response.data]
     except Exception as exc:
         logger.warning("Embedding generation failed: %s", exc)
         return [np.zeros(1536).tolist() for _ in texts]
+
+
+def _frequency_clusters(
+    phrase_counter: Counter[str],
+    title_map: list[tuple[str, str]],
+    limit: int = 12,
+) -> list[dict[str, Any]]:
+    clusters: list[dict[str, Any]] = []
+    for idx, (phrase, frequency) in enumerate(phrase_counter.most_common(limit), start=1):
+        if frequency < 2:
+            continue
+        examples = [title for title, mapped_phrase in title_map if mapped_phrase == phrase][:5]
+        clusters.append(
+            {
+                "cluster_id": idx,
+                "total_phrases": 1,
+                "total_frequency": frequency,
+                "top_phrases": [phrase],
+                "representative_titles": examples,
+                "method": "frequency_fallback",
+            }
+        )
+    return clusters
 
 
 def discover_new_categories(
@@ -74,21 +122,17 @@ def discover_new_categories(
 ) -> dict[str, Any]:
     cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
 
-    rows = (
-        db_session.query(TrendSnapshot)
-        .filter(TrendSnapshot.scraped_at >= cutoff)
-        .all()
-    )
+    rows = db_session.query(TrendSnapshot).filter(TrendSnapshot.scraped_at >= cutoff).all()
 
-    titles: list[str] = []
+    titles_by_key: dict[str, str] = {}
     for row in rows:
         items = (row.raw_metadata or {}).get("items", [])
         for item in items:
-            title = item.get("title", "")
+            title = item.get("title") or item.get("name") or ""
             if title and len(title) > 5:
-                titles.append(title)
+                titles_by_key.setdefault(title.strip().lower(), title.strip())
 
-    titles = list(set(titles))
+    titles = list(titles_by_key.values())
 
     if not titles:
         return {
@@ -113,23 +157,30 @@ def discover_new_categories(
         }
 
     phrase_counter = Counter(phrases)
-    unique_phrases = list(phrase_counter.keys())
+    unique_phrases = [
+        phrase for phrase, _frequency in phrase_counter.most_common(MAX_EMBEDDING_PHRASES)
+    ]
 
     if len(unique_phrases) < MIN_CLUSTER_SIZE:
+        fallback = _frequency_clusters(phrase_counter, title_map)
         return {
-            "clusters": [],
+            "clusters": fallback,
             "total_titles_analyzed": len(titles),
-            "notes": f"Too few unique phrases ({len(unique_phrases)}) for clustering",
+            "total_clusters_found": len(fallback),
+            "notes": f"Too few unique phrases ({len(unique_phrases)}) for embedding clustering",
         }
 
     embeddings = _get_embeddings(unique_phrases, api_key)
     emb_array = np.array(embeddings)
 
     if np.all(emb_array == 0):
+        fallback = _frequency_clusters(phrase_counter, title_map)
         return {
-            "clusters": [],
+            "clusters": fallback,
             "total_titles_analyzed": len(titles),
-            "notes": "Embeddings unavailable (no API key or API error)",
+            "total_phrases_extracted": len(phrases),
+            "total_clusters_found": len(fallback),
+            "notes": "Embeddings unavailable; used frequency fallback",
         }
 
     dist_matrix = cosine_distances(emb_array)
@@ -144,15 +195,11 @@ def discover_new_categories(
             {
                 "phrase": phrase,
                 "frequency": phrase_counter[phrase],
-                "example_titles": [
-                    t for t, p in title_map if p == phrase
-                ][:3],
+                "example_titles": [t for t, p in title_map if p == phrase][:3],
             }
         )
 
-    sorted_clusters = sorted(
-        clusters.values(), key=lambda c: -sum(p["frequency"] for p in c)
-    )
+    sorted_clusters = sorted(clusters.values(), key=lambda c: -sum(p["frequency"] for p in c))
 
     emerging = [
         {
@@ -160,9 +207,7 @@ def discover_new_categories(
             "total_phrases": len(cluster),
             "total_frequency": sum(p["frequency"] for p in cluster),
             "top_phrases": [p["phrase"] for p in cluster[:5]],
-            "representative_titles": [
-                t for p in cluster[:3] for t in p["example_titles"]
-            ][:5],
+            "representative_titles": [t for p in cluster[:3] for t in p["example_titles"]][:5],
         }
         for i, cluster in enumerate(sorted_clusters)
     ]
@@ -171,6 +216,8 @@ def discover_new_categories(
         "clusters": emerging,
         "total_titles_analyzed": len(titles),
         "total_phrases_extracted": len(phrases),
+        "total_unique_phrases": len(phrase_counter),
+        "embedded_phrases": len(unique_phrases),
         "total_clusters_found": len(emerging),
         "embedding_model": EMBEDDING_MODEL,
     }

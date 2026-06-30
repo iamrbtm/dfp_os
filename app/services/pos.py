@@ -13,6 +13,7 @@ from app.models.order import (
     Payment,
     PaymentMethod,
 )
+from app.models.demand import InternalDemandEventType
 from app.models.pos import (
     PosSale,
     PosSaleItem,
@@ -22,6 +23,7 @@ from app.models.pos import (
     PosSessionStatus,
 )
 from app.services.audit import record_audit_event
+from app.services.internal_demand import record_demand_event
 from app.services.inventory import deduct_finished_goods, return_inventory
 
 
@@ -175,7 +177,9 @@ def create_sale(
             unit_price=Decimal(str(item_data["unit_price"])),
             line_total=pos_item.line_total,
             is_custom_item=item_data.get("item_type", "product") != "product",
-            custom_description=item_data.get("description") if item_data.get("item_type") != "product" else None,
+            custom_description=(
+                item_data.get("description") if item_data.get("item_type") != "product" else None
+            ),
         )
         db.session.add(order_item)
 
@@ -209,6 +213,23 @@ def create_sale(
     _deduct_inventory_for_sale(sale, session.inventory_location_id, session.opened_by_user_id)
 
     db.session.commit()
+    for item in sale.items:
+        if item.item_type != PosSaleItemType.PRODUCT or item.product_id is None:
+            continue
+        record_demand_event(
+            InternalDemandEventType.POS_SALE_COMPLETED,
+            source="pos",
+            product_id=item.product_id,
+            order_id=order.id,
+            quantity=item.quantity,
+            value=item.line_total,
+            metadata={
+                "pos_sale_id": sale.id,
+                "pos_session_id": session.id,
+                "market_id": session.market_id,
+                "payment_method": payment_method,
+            },
+        )
     record_audit_event(
         action="pos_sale.completed",
         entity_type="pos_sale",
@@ -267,7 +288,9 @@ def get_session_summary(session_id: int) -> dict:
     cash_refunds_total = sum(
         s.total for s in refunded_sales if s.payment_method == PaymentMethod.CASH.value
     )
-    expected_cash = session.opening_cash + Decimal(str(cash_sales_total)) - Decimal(str(cash_refunds_total))
+    expected_cash = (
+        session.opening_cash + Decimal(str(cash_sales_total)) - Decimal(str(cash_refunds_total))
+    )
 
     return {
         "session": session,

@@ -6,7 +6,9 @@ from decimal import Decimal
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DOCKER_DATABASE_URL = "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os"
-DEFAULT_DOCKER_TEST_DATABASE_URL = "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test"
+DEFAULT_DOCKER_TEST_DATABASE_URL = (
+    "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test"
+)
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -40,16 +42,20 @@ class Config:
     SHOP_DEFAULT_SHIPPING_RATE = Decimal(os.getenv("SHOP_DEFAULT_SHIPPING_RATE", "6.95"))
     SHOP_DEFAULT_CURRENCY = os.getenv("SHOP_DEFAULT_CURRENCY", "USD")
     SHOP_VENMO_HANDLE = os.getenv("SHOP_VENMO_HANDLE", "@dudefishprinting")
-    SHOP_SUPPORT_EMAIL = os.getenv("SHOP_SUPPORT_EMAIL", os.getenv("ADMIN_EMAIL", "admin@example.com"))
+    SHOP_SUPPORT_EMAIL = os.getenv(
+        "SHOP_SUPPORT_EMAIL", os.getenv("ADMIN_EMAIL", "admin@example.com")
+    )
     SQUARE_ENVIRONMENT = os.getenv("SQUARE_ENVIRONMENT", "sandbox")
     SQUARE_ACCESS_TOKEN = os.getenv("SQUARE_ACCESS_TOKEN")
     SQUARE_LOCATION_ID = os.getenv("SQUARE_LOCATION_ID")
     SQUARE_APPLICATION_ID = os.getenv("SQUARE_APPLICATION_ID")
     SQUARE_API_BASE_URL = os.getenv(
         "SQUARE_API_BASE_URL",
-        "https://connect.squareup.com"
-        if os.getenv("SQUARE_ENVIRONMENT") == "production"
-        else "https://connect.squareupsandbox.com",
+        (
+            "https://connect.squareup.com"
+            if os.getenv("SQUARE_ENVIRONMENT") == "production"
+            else "https://connect.squareupsandbox.com"
+        ),
     )
     API_TITLE = "Dude Fish OS API"
     API_VERSION = "v1"
@@ -98,6 +104,10 @@ class Config:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     OPENAI_MODEL_RECEIPTS = os.getenv("OPENAI_MODEL_RECEIPTS", OPENAI_MODEL)
     OPENAI_MODEL_ANALYTICS = os.getenv("OPENAI_MODEL_ANALYTICS", OPENAI_MODEL)
+    OPENAI_MODEL_TREND_SCOUT = os.getenv(
+        "OPENAI_MODEL_TREND_SCOUT",
+        os.getenv("OPENAI_MODEL_ANALYTICS", OPENAI_MODEL),
+    )
     AI_RECEIPT_PARSING_ENABLED = _as_bool(os.getenv("AI_RECEIPT_PARSING_ENABLED"), False)
     AI_ANALYTICS_INSIGHTS_ENABLED = _as_bool(os.getenv("AI_ANALYTICS_INSIGHTS_ENABLED"), False)
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -126,7 +136,6 @@ class Config:
     CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 
     DEFAULT_THEME = "dfp-github-light"
-
 
 
 class DevelopmentConfig(Config):

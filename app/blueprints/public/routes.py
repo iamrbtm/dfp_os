@@ -6,8 +6,20 @@ from sqlalchemy import select
 from app.blueprints.public import bp
 from app.extensions import db
 from app.forms import AddToCartForm, CheckoutForm, PublicCustomRequestForm
-from app.models import Category, Collection, CustomRequest, Market, MarketStatus, Order, OrderSource, Product, ProductStatus
+from app.models import (
+    Category,
+    Collection,
+    CustomRequest,
+    InternalDemandEventType,
+    Market,
+    MarketStatus,
+    Order,
+    OrderSource,
+    Product,
+    ProductStatus,
+)
 from app.services.custom_requests import create_custom_request
+from app.services.internal_demand import record_demand_event
 from app.services.square_checkout import SquareCheckoutError, create_payment_link
 from app.services.storefront import (
     StorefrontError,
@@ -37,17 +49,18 @@ def _cart_shipping_choice() -> str:
 
 @bp.get("/")
 def home():
-    featured = (
-        db.session.scalars(_public_product_query().where(Product.is_featured.is_(True)).order_by(Product.name).limit(6))
-        .all()
-    )
+    featured = db.session.scalars(
+        _public_product_query().where(Product.is_featured.is_(True)).order_by(Product.name).limit(6)
+    ).all()
     upcoming = (
         Market.query.filter(Market.status.in_([MarketStatus.ACCEPTED, MarketStatus.SCHEDULED]))
         .order_by(Market.event_date.asc())
         .limit(3)
         .all()
     )
-    latest = db.session.scalars(_public_product_query().order_by(Product.created_at.desc()).limit(4)).all()
+    latest = db.session.scalars(
+        _public_product_query().order_by(Product.created_at.desc()).limit(4)
+    ).all()
     return render_template(
         "public/home.html",
         featured=featured,
@@ -75,12 +88,23 @@ def contact():
             email=form.email.data.strip(),
             phone=form.phone.data.strip() if form.phone.data else None,
             description=form.description.data,
-            estimated_budget=form.estimated_budget.data.strip() if form.estimated_budget.data else None,
+            estimated_budget=(
+                form.estimated_budget.data.strip() if form.estimated_budget.data else None
+            ),
             source="website",
         )
         create_custom_request(custom_req, actor_type="anonymous")
+        record_demand_event(
+            InternalDemandEventType.CUSTOM_REQUEST_SUBMITTED,
+            source="public_contact",
+            text=custom_req.description,
+            custom_request_id=custom_req.id,
+            metadata={"estimated_budget": str(custom_req.estimated_budget or "")},
+        )
         flash("Thanks for reaching out! We'll get back to you soon.", "success")
-        return render_template("public/contact.html", form=PublicCustomRequestForm(), submitted=True)
+        return render_template(
+            "public/contact.html", form=PublicCustomRequestForm(), submitted=True
+        )
     return render_template("public/contact.html", form=form, submitted=False)
 
 
@@ -99,6 +123,17 @@ def shop():
         statement = statement.where(Product.name.ilike(f"%{search_term}%"))
 
     products = db.session.scalars(statement.order_by(Product.name.asc())).all()
+    if search_term:
+        record_demand_event(
+            InternalDemandEventType.STOREFRONT_SEARCH,
+            source="public_shop",
+            keyword=search_term,
+            metadata={
+                "result_count": len(products),
+                "category": category_slug,
+                "collection": collection_slug,
+            },
+        )
     categories = (
         Category.query.filter_by(is_public=True).order_by(Category.sort_order, Category.name).all()
     )
@@ -125,6 +160,14 @@ def product_detail(slug: str):
     if product is None or not is_product_purchasable(product):
         abort(404)
 
+    if request.method == "GET":
+        record_demand_event(
+            InternalDemandEventType.PRODUCT_VIEWED,
+            source="public_product_detail",
+            product=product,
+            metadata={"slug": slug},
+        )
+
     form = AddToCartForm()
     form.product_id.data = str(product.id)
 
@@ -134,6 +177,13 @@ def product_detail(slug: str):
         except StorefrontError as exc:
             flash(str(exc), "danger")
         else:
+            record_demand_event(
+                InternalDemandEventType.PRODUCT_ADDED_TO_CART,
+                source="public_product_detail",
+                product=product,
+                quantity=form.quantity.data or 1,
+                value=product.base_price * (form.quantity.data or 1),
+            )
             flash(f"{product.name} added to your cart.", "success")
             return redirect(url_for("public.cart"))
 
@@ -161,18 +211,34 @@ def cart():
 @bp.post("/cart/<line_key>/update")
 def cart_update(line_key: str):
     quantity = request.form.get("quantity", type=int, default=1)
+    product = db.session.get(Product, int(line_key)) if line_key.isdigit() else None
     try:
         update_cart_line(line_key, quantity)
     except StorefrontError as exc:
         flash(str(exc), "danger")
     else:
+        if product:
+            record_demand_event(
+                InternalDemandEventType.CART_UPDATED,
+                source="public_cart",
+                product=product,
+                quantity=quantity,
+                value=product.base_price * max(quantity, 0),
+            )
         flash("Your cart has been updated.", "success")
     return redirect(url_for("public.cart"))
 
 
 @bp.post("/cart/<line_key>/remove")
 def cart_remove(line_key: str):
+    product = db.session.get(Product, int(line_key)) if line_key.isdigit() else None
     remove_cart_line(line_key)
+    if product:
+        record_demand_event(
+            InternalDemandEventType.CART_REMOVED,
+            source="public_cart",
+            product=product,
+        )
     flash("Item removed from your cart.", "success")
     return redirect(url_for("public.cart"))
 
@@ -185,19 +251,44 @@ def checkout():
         form.payment_option.choices = [("venmo", "Reserve now, pay by Venmo")]
         form.payment_option.data = "venmo"
 
-    summary = build_cart_summary(current_app.config, fulfillment_method=form.fulfillment_method.data or "pickup")
+    summary = build_cart_summary(
+        current_app.config, fulfillment_method=form.fulfillment_method.data or "pickup"
+    )
     if not summary.lines:
         flash("Your cart is empty.", "warning")
         return redirect(url_for("public.shop"))
 
+    if request.method == "GET":
+        for line in summary.lines:
+            record_demand_event(
+                InternalDemandEventType.CHECKOUT_STARTED,
+                source="public_checkout",
+                product=line.product,
+                quantity=line.quantity,
+                value=line.line_total,
+                metadata={"fulfillment_method": form.fulfillment_method.data or "pickup"},
+            )
+
     if form.validate_on_submit():
         shipping = {
             "shipping_name": form.shipping_name.data.strip() if form.shipping_name.data else None,
-            "shipping_address_line_1": form.shipping_address_line_1.data.strip() if form.shipping_address_line_1.data else None,
-            "shipping_address_line_2": form.shipping_address_line_2.data.strip() if form.shipping_address_line_2.data else None,
+            "shipping_address_line_1": (
+                form.shipping_address_line_1.data.strip()
+                if form.shipping_address_line_1.data
+                else None
+            ),
+            "shipping_address_line_2": (
+                form.shipping_address_line_2.data.strip()
+                if form.shipping_address_line_2.data
+                else None
+            ),
             "shipping_city": form.shipping_city.data.strip() if form.shipping_city.data else None,
-            "shipping_state": form.shipping_state.data.strip() if form.shipping_state.data else None,
-            "shipping_postal_code": form.shipping_postal_code.data.strip() if form.shipping_postal_code.data else None,
+            "shipping_state": (
+                form.shipping_state.data.strip() if form.shipping_state.data else None
+            ),
+            "shipping_postal_code": (
+                form.shipping_postal_code.data.strip() if form.shipping_postal_code.data else None
+            ),
         }
         try:
             order = create_online_order(
@@ -214,6 +305,19 @@ def checkout():
         except StorefrontError as exc:
             flash(str(exc), "danger")
         else:
+            for item in order.items:
+                record_demand_event(
+                    InternalDemandEventType.ONLINE_ORDER_CREATED,
+                    source="public_checkout",
+                    product_id=item.product_id,
+                    order_id=order.id,
+                    quantity=item.quantity,
+                    value=item.line_total,
+                    metadata={
+                        "payment_option": form.payment_option.data,
+                        "fulfillment_method": form.fulfillment_method.data,
+                    },
+                )
             if form.payment_option.data == "square":
                 try:
                     payment_link = create_payment_link(order, current_app.config)
@@ -233,7 +337,9 @@ def checkout():
                     return redirect(payment_link.url)
 
             clear_cart()
-            return redirect(url_for("public.checkout_confirmation", order_number=order.order_number))
+            return redirect(
+                url_for("public.checkout_confirmation", order_number=order.order_number)
+            )
 
     summary = build_cart_summary(
         current_app.config,
@@ -265,12 +371,23 @@ def custom_orders():
             email=form.email.data.strip(),
             phone=form.phone.data.strip() if form.phone.data else None,
             description=form.description.data,
-            estimated_budget=form.estimated_budget.data.strip() if form.estimated_budget.data else None,
+            estimated_budget=(
+                form.estimated_budget.data.strip() if form.estimated_budget.data else None
+            ),
             source="website",
         )
         create_custom_request(custom_req, actor_type="anonymous")
+        record_demand_event(
+            InternalDemandEventType.CUSTOM_REQUEST_SUBMITTED,
+            source="public_custom_orders",
+            text=custom_req.description,
+            custom_request_id=custom_req.id,
+            metadata={"estimated_budget": str(custom_req.estimated_budget or "")},
+        )
         flash("Thanks! We'll review your request and get back to you soon.", "success")
-        return render_template("public/custom_orders.html", form=PublicCustomRequestForm(), submitted=True)
+        return render_template(
+            "public/custom_orders.html", form=PublicCustomRequestForm(), submitted=True
+        )
     return render_template("public/custom_orders.html", form=form, submitted=False)
 
 
@@ -286,9 +403,15 @@ def military_family_gifts():
 
 @bp.get("/market-schedule")
 def market_schedule():
-    markets = Market.query.filter(
-        Market.status.in_([MarketStatus.SCHEDULED, MarketStatus.ACCEPTED, MarketStatus.INTERESTED])
-    ).order_by(Market.event_date.asc()).all()
+    markets = (
+        Market.query.filter(
+            Market.status.in_(
+                [MarketStatus.SCHEDULED, MarketStatus.ACCEPTED, MarketStatus.INTERESTED]
+            )
+        )
+        .order_by(Market.event_date.asc())
+        .all()
+    )
     return render_template("public/market_schedule.html", markets=markets)
 
 
@@ -319,7 +442,9 @@ def terms():
 
 @bp.get("/gallery")
 def gallery():
-    products = db.session.scalars(_public_product_query().order_by(Product.name.asc()).limit(18)).all()
+    products = db.session.scalars(
+        _public_product_query().order_by(Product.name.asc()).limit(18)
+    ).all()
     return render_template("public/gallery.html", products=products)
 
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import time as time_module
 import xml.etree.ElementTree as ET
 from typing import Any
@@ -8,8 +7,6 @@ from typing import Any
 import requests
 
 from app.services.ai.trend_scout.sources._base import ScoutResult, build_xml_headers
-
-BGG_API_TOKEN = os.getenv("BGG_API_TOKEN", "")
 
 HOT_ITEMS_URL = "https://boardgamegeek.com/xmlapi2/hot"
 SEARCH_URL = "https://boardgamegeek.com/xmlapi2/search"
@@ -43,7 +40,6 @@ def _fetch_xml(
     for attempt in range(MAX_RETRIES):
         limiter.wait()
         headers = build_xml_headers()
-        headers["Authorization"] = f"Bearer {BGG_API_TOKEN}"
         try:
             resp = session.get(url, params=params, headers=headers, timeout=60)
             if resp.status_code == 200:
@@ -68,21 +64,9 @@ def _fetch_xml(
 def fetch_hot_items(session: requests.Session, limiter: Any) -> list[ScoutResult]:
     results: list[ScoutResult] = []
 
-    if not BGG_API_TOKEN:
-        results.append(
-            ScoutResult(
-                source="bgg",
-                keyword_or_category="not_configured",
-                errors=["BGG_API_TOKEN environment variable not set. Register at https://boardgamegeek.com/applications"],
-            )
-        )
-        return results
-
     for category in HOT_CATEGORIES:
         result = ScoutResult(source="bgg", keyword_or_category=f"hot_{category}")
-        xml_text, errors = _fetch_xml(
-            session, HOT_ITEMS_URL, {"type": category}, limiter
-        )
+        xml_text, errors = _fetch_xml(session, HOT_ITEMS_URL, {"type": category}, limiter)
         if xml_text is None:
             result.errors = errors
             results.append(result)
@@ -96,7 +80,7 @@ def fetch_hot_items(session: requests.Session, limiter: Any) -> list[ScoutResult
                 result.items.append(
                     {
                         "id": item_el.get("id"),
-                        "name": name_el.get("value") if name_el is not None else "",
+                        "title": name_el.get("value") if name_el is not None else "",
                         "year_published": year_el.get("value") if year_el is not None else None,
                         "rank": int(item_el.get("rank", 0)) if item_el.get("rank") else None,
                         "thumbnail": item_el.get("thumbnail", ""),
@@ -132,7 +116,7 @@ def fetch_hot_items(session: requests.Session, limiter: Any) -> list[ScoutResult
                 result.items.append(
                     {
                         "id": item_el.get("id"),
-                        "name": name_el.get("value") if name_el is not None else "",
+                        "title": name_el.get("value") if name_el is not None else "",
                         "year_published": year_el.get("value") if year_el is not None else None,
                         "type": item_el.get("type"),
                     }

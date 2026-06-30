@@ -11,7 +11,6 @@ from app.services.ai.trend_scout.sources._base import ScoutResult
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://openapi.etsy.com/v3"
-APPLICATION_API_KEY = os.getenv("ETSY_API_KEY", "")
 
 SEED_QUERIES = [
     "3D printed dragon",
@@ -36,8 +35,9 @@ SEED_QUERIES = [
 
 def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]:
     results: list[ScoutResult] = []
+    application_api_key = os.getenv("ETSY_API_KEY", "")
 
-    if not APPLICATION_API_KEY:
+    if not application_api_key:
         logger.warning(
             "ETSY_API_KEY not configured. Etsy source requires an API key "
             "from https://developers.etsy.com/. Skipping Etsy queries."
@@ -47,13 +47,11 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
             keyword_or_category="not_configured",
             errors=["ETSY_API_KEY environment variable not set"],
         )
-        result.metadata["note"] = (
-            "Set ETSY_API_KEY in your environment to enable Etsy trend data"
-        )
+        result.metadata["note"] = "Set ETSY_API_KEY in your environment to enable Etsy trend data"
         results.append(result)
         return results
 
-    headers = {"x-api-key": APPLICATION_API_KEY}
+    headers = {"x-api-key": application_api_key}
 
     for query in SEED_QUERIES:
         limiter.wait()
@@ -79,7 +77,11 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
                         amount = item["price"].get("amount")
                         divisor = item["price"].get("divisor", 1)
                         if amount is not None:
-                            price = float(amount) / (10 ** divisor)
+                            try:
+                                divisor_value = float(divisor or 1)
+                                price = float(amount) / divisor_value if divisor_value else None
+                            except TypeError, ValueError:
+                                price = None
                         currency = item["price"].get("currency_code", "")
 
                     result.items.append(
@@ -109,8 +111,7 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
                 result.metadata["query"] = query
             elif resp.status_code == 401:
                 result.errors.append(
-                    "HTTP 401 - Invalid or missing Etsy API key. "
-                    "Verify ETSY_API_KEY is correct."
+                    "HTTP 401 - Invalid or missing Etsy API key. " "Verify ETSY_API_KEY is correct."
                 )
             else:
                 result.errors.append(f"HTTP {resp.status_code}")

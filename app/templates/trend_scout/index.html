@@ -43,26 +43,84 @@
     </div>
     {% endif %}
 
-    <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="mt-6">
       <div>
-        <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Top Opportunities</h3>
+        <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Opportunity Decision Matrix</h3>
         {% if latest.top_opportunities %}
-        <ul class="space-y-2">
-          {% for opp in latest.top_opportunities[:10] %}
-          <li class="flex items-center gap-2">
-            <span class="w-5 h-5 rounded-full bg-teal-100 text-teal-800 text-xs font-semibold flex items-center justify-center flex-shrink-0">
-              {{ opp.rank }}
-            </span>
-            <span class="text-sm" style="color: var(--color-text);">{{ opp.keyword }}</span>
-            <span class="ml-auto text-xs font-mono" style="color: var(--color-text-muted);">{{ opp.score }}</span>
-          </li>
-          {% endfor %}
-        </ul>
+        <div class="overflow-x-auto">
+          <table class="app-table text-xs">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Product / Idea</th>
+                <th>Action</th>
+                <th>Score</th>
+                <th>Intent</th>
+                <th>Velocity</th>
+                <th>Price</th>
+                <th>Low Sat.</th>
+                <th>Local</th>
+                <th>Prod.</th>
+                <th>License Risk</th>
+                <th>Inventory</th>
+                <th>Sources</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for opp in latest.top_opportunities[:25] %}
+              <tr>
+                <td class="font-mono">{{ opp.rank }}</td>
+                <td>
+                  <div class="font-semibold" style="color: var(--color-text);">
+                    {{ opp.title or opp.keyword }}
+                  </div>
+                  <div style="color: var(--color-text-muted);">
+                    {{ "Current product" if opp.current_product else "Potential product" }}
+                    {% if opp.product_status %} &middot; {{ opp.product_status|replace("_", " ")|title }}{% endif %}
+                  </div>
+                </td>
+                <td>
+                  <span class="inline-flex rounded-full px-2 py-0.5 font-semibold"
+                        style="background-color: var(--color-primary-bg); color: var(--color-primary);">
+                    {{ (opp.action or "monitor")|replace("_", " ")|title }}
+                  </span>
+                </td>
+                <td class="font-mono font-semibold">{{ opp.opportunity_score or opp.score }}</td>
+                <td class="font-mono">{{ opp.purchase_intent }}</td>
+                <td class="font-mono">{{ opp.trend_velocity }}</td>
+                <td class="font-mono">{{ opp.price_resilience }}</td>
+                <td class="font-mono">{{ opp.low_saturation }}</td>
+                <td class="font-mono">{{ opp.local_fit }}</td>
+                <td class="font-mono">{{ opp.production_fit }}</td>
+                <td class="font-mono" style="color: {{ 'var(--color-danger)' if opp.license_risk >= 70 else 'var(--color-text-muted)' }};">
+                  {{ opp.license_risk }}
+                </td>
+                <td class="font-mono">
+                  {% if opp.current_product %}
+                    {{ opp.inventory_available }}
+                  {% else %}
+                    &mdash;
+                  {% endif %}
+                </td>
+                <td style="color: var(--color-text-muted);">
+                  {% if opp.sources %}
+                    {{ opp.sources|join(", ") }}
+                  {% else %}
+                    &mdash;
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
         {% else %}
         <p class="text-sm" style="color: var(--color-text-muted);">No opportunities data.</p>
         {% endif %}
       </div>
+    </div>
 
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
       <div>
         <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Growing Categories</h3>
         {% if latest.growing_categories %}
@@ -70,7 +128,7 @@
           {% for cat in latest.growing_categories %}
           <li class="inline-block mr-1 mb-1 px-2 py-0.5 rounded-full text-xs font-medium"
               style="background-color: var(--color-primary-bg); color: var(--color-primary);">
-            {{ cat|join(", ") if cat is string else (cat[0] if cat is iterable and cat|length > 0 else cat) }}
+            {{ cat if cat is string else (cat|join(", ") if cat is iterable and cat|length > 0 else cat) }}
           </li>
           {% endfor %}
         </ul>
