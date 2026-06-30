@@ -48,9 +48,10 @@
         <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Opportunity Decision Matrix</h3>
         {% if latest.top_opportunities %}
         <div class="overflow-x-auto">
-          <table class="app-table text-xs">
+          <table class="app-table text-xs" id="opportunity-matrix">
             <thead>
               <tr>
+                <th></th>
                 <th>Rank</th>
                 <th>Product / Idea</th>
                 <th>Action</th>
@@ -64,11 +65,13 @@
                 <th>License Risk</th>
                 <th>Inventory</th>
                 <th>Sources</th>
+                <th>Match</th>
               </tr>
             </thead>
             <tbody>
-              {% for opp in latest.top_opportunities[:25] %}
-              <tr>
+              {% for opp in latest.top_opportunities[:50] %}
+              <tr class="cursor-pointer" onclick="toggleRow({{ opp.rank or loop.index }})">
+                <td class="text-xs" style="color: var(--color-link);">&#9654;</td>
                 <td class="font-mono">{{ opp.rank }}</td>
                 <td>
                   <div class="font-semibold" style="color: var(--color-text);">
@@ -108,6 +111,96 @@
                   {% else %}
                     &mdash;
                   {% endif %}
+                </td>
+                <td>
+                  {% if opp.match_confidence %}
+                  <span class="text-xs font-mono">{{ opp.match_confidence }}</span>
+                  {% else %}
+                  &mdash;
+                  {% endif %}
+                </td>
+              </tr>
+              <tr id="detail-{{ opp.rank or loop.index }}" class="hidden">
+                <td colspan="15" class="p-4" style="background-color: var(--color-surface);">
+                  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Purchase Intent</p>
+                      <p class="text-sm" style="color: var(--color-text);">{{ opp.purchase_intent }}/100</p>
+                      {% if opp.score_breakdown and opp.score_breakdown.purchase_intent %}
+                      <p class="text-xs" style="color: var(--color-text-muted);">
+                        {{ opp.score_breakdown.purchase_intent.explanation }}
+                      </p>
+                      {% endif %}
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Trend Velocity</p>
+                      <p class="text-sm" style="color: var(--color-text);">{{ opp.trend_velocity }}/100</p>
+                      {% if opp.score_breakdown and opp.score_breakdown.trend_velocity %}
+                      <p class="text-xs" style="color: var(--color-text-muted);">
+                        {{ opp.score_breakdown.trend_velocity.explanation }}
+                      </p>
+                      {% endif %}
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Price Resilience</p>
+                      <p class="text-sm" style="color: var(--color-text);">{{ opp.price_resilience }}/100</p>
+                      {% if opp.score_breakdown and opp.score_breakdown.price_resilience %}
+                      <p class="text-xs" style="color: var(--color-text-muted);">
+                        {{ opp.score_breakdown.price_resilience.explanation }}
+                      </p>
+                      {% endif %}
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Low Saturation</p>
+                      <p class="text-sm" style="color: var(--color-text);">{{ opp.low_saturation }}/100</p>
+                      {% if opp.score_breakdown and opp.score_breakdown.low_saturation %}
+                      <p class="text-xs" style="color: var(--color-text-muted);">
+                        {{ opp.score_breakdown.low_saturation.explanation }}
+                      </p>
+                      {% endif %}
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Local Fit</p>
+                      <p class="text-sm" style="color: var(--color-text);">{{ opp.local_fit }}/100</p>
+                      {% if opp.score_breakdown and opp.score_breakdown.local_fit %}
+                      <p class="text-xs" style="color: var(--color-text-muted);">
+                        Matched: {{ opp.score_breakdown.local_fit.matched_terms|join(", ") or "none" }}
+                      </p>
+                      {% endif %}
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Production Fit</p>
+                      <p class="text-sm" style="color: var(--color-text);">{{ opp.production_fit }}/100</p>
+                      {% if opp.score_breakdown and opp.score_breakdown.production_fit %}
+                      <p class="text-xs" style="color: var(--color-text-muted);">
+                        {{ opp.score_breakdown.production_fit.explanation }}
+                      </p>
+                      {% endif %}
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">License Risk</p>
+                      <p class="text-sm" style="color: var(--color-text);">{{ opp.license_risk }}/100</p>
+                      {% if opp.score_breakdown and opp.score_breakdown.license_risk %}
+                      <p class="text-xs" style="color: var(--color-text-muted);">
+                        Status: {{ opp.score_breakdown.license_risk.license_status or "unknown" }}
+                        {% if opp.score_breakdown.license_risk.matched_risk_terms %}
+                        &middot; Risk terms: {{ opp.score_breakdown.license_risk.matched_risk_terms|join(", ") }}
+                        {% endif %}
+                      </p>
+                      {% endif %}
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Sales &amp; Inventory</p>
+                      <p class="text-sm" style="color: var(--color-text);">
+                        {{ opp.units_sold }} sold &middot; ${{ "%.2f"|format(opp.revenue or 0) }} revenue
+                      </p>
+                      {% if opp.match_confidence %}
+                      <p class="text-xs" style="color: var(--color-text-muted);">
+                        Product match: {{ opp.match_confidence }}
+                      </p>
+                      {% endif %}
+                    </div>
+                  </div>
                 </td>
               </tr>
               {% endfor %}
@@ -152,6 +245,10 @@
         {% endif %}
       </div>
     </div>
+
+    {% if source_health %}
+    {% include "trend_scout/_source_health.html" %}
+    {% endif %}
 
     {% if latest.pipeline_meta %}
     <div class="mt-6 pt-4 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);">
@@ -199,4 +296,15 @@
   </article>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleRow(rank) {
+  var row = document.getElementById('detail-' + rank);
+  if (row) {
+    row.classList.toggle('hidden');
+  }
+}
+</script>
 {% endblock %}

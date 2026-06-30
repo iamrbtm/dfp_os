@@ -1,0 +1,55 @@
+<div id="source-health" class="mt-6">
+  <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">
+    Source Health
+    <span class="text-xs font-normal" style="color: var(--color-text-muted);">(from latest pipeline run)</span>
+  </h3>
+  <div class="overflow-x-auto">
+    <table class="app-table text-xs">
+      <thead>
+        <tr>
+          <th>Source</th>
+          <th>Status</th>
+          <th>Items</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sh in source_health %}
+        <tr>
+          <td class="font-semibold">{{ sh.source }}</td>
+          <td>
+            {% if sh.status == "success" %}
+            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
+                  style="background-color: var(--color-success-bg, #d1fae5); color: var(--color-success, #059669);">
+              OK
+            </span>
+            {% elif sh.status == "error" %}
+            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
+                  style="background-color: var(--color-danger-bg, #fee2e2); color: var(--color-danger, #dc2626);">
+              Error
+            </span>
+            {% else %}
+            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
+                  style="background-color: var(--color-warning-bg, #fef3c7); color: var(--color-warning, #d97706);">
+              {{ sh.status }}
+            </span>
+            {% endif %}
+          </td>
+          <td class="font-mono">{{ sh.item_count }}</td>
+          <td>
+            {% if sh.error_message %}
+            <span class="text-xs" style="color: var(--color-danger);" title="{{ sh.error_message }}">
+              {{ sh.error_message[:80] }}{% if sh.error_message|length > 80 %}&hellip;{% endif %}
+            </span>
+            {% elif sh.keyword %}
+            <span style="color: var(--color-text-muted);">{{ sh.keyword }}</span>
+            {% else %}
+            <span style="color: var(--color-text-muted);">&mdash;</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

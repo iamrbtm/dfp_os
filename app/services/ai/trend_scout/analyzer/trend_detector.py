@@ -23,6 +23,9 @@ from app.models import (
     Product,
 )
 from app.models.trend import TrendSnapshot
+from app.services.trend_match import (  # noqa: F811
+    match_product_to_term,
+)
 
 INTERNAL_KEYWORDS = {
     "",
@@ -150,6 +153,7 @@ class OpportunityCandidate:
     is_pos_visible: bool = False
     category: str = ""
     tags: str = ""
+    match_confidence: str = ""
 
     @property
     def text(self) -> str:
@@ -503,12 +507,14 @@ def _catalog_candidates(db_session: Session, cutoff: datetime) -> dict[str, Oppo
 def _merge_catalog_candidates(
     candidates: dict[str, OpportunityCandidate],
     catalog_candidates: dict[str, OpportunityCandidate],
+    products: list[Product] | None = None,
 ) -> dict[str, OpportunityCandidate]:
+    exact_matched_keys: set[str] = set()
     for keyword, product_candidate in catalog_candidates.items():
         existing = candidates.get(keyword)
         if existing is None:
-            candidates[keyword] = product_candidate
             continue
+        exact_matched_keys.add(keyword)
         existing.current_product = True
         existing.product_id = product_candidate.product_id
         existing.product_status = product_candidate.product_status
@@ -530,6 +536,58 @@ def _merge_catalog_candidates(
         existing.is_pos_visible = product_candidate.is_pos_visible
         existing.category = product_candidate.category
         existing.tags = product_candidate.tags
+        existing.match_confidence = "exact"
+
+    if products:
+        product_by_id = {p.id: p for p in products}
+        for signal_key, signal_candidate in candidates.items():
+            if signal_candidate.current_product:
+                continue
+            best_product = None
+            best_confidence = ""
+            confidence_order = {
+                "exact": 0, "fuzzy": 1, "synonym": 2,
+                "category": 3, "tag": 4, "weak": 5,
+            }
+            for prod_candidate in catalog_candidates.values():
+                prod_obj = product_by_id.get(prod_candidate.product_id) if prod_candidate.product_id else None
+                if not prod_obj:
+                    continue
+                matches, confidence = match_product_to_term(signal_key, prod_obj)
+                if matches:
+                    current_best = confidence_order.get(best_confidence, 99)
+                    candidate_best = confidence_order.get(confidence.value, 99)
+                    if candidate_best < current_best:
+                        best_product = prod_candidate
+                        best_confidence = confidence.value
+
+            if best_product:
+                signal_candidate.current_product = True
+                signal_candidate.product_id = best_product.product_id
+                signal_candidate.product_status = best_product.product_status
+                signal_candidate.title = best_product.title or signal_candidate.title
+                signal_candidate.sources.update(best_product.sources)
+                signal_candidate.purchase_raw += best_product.purchase_raw
+                signal_candidate.prices.extend(best_product.prices)
+                signal_candidate.inventory_available = best_product.inventory_available
+                signal_candidate.reorder_target = best_product.reorder_target
+                signal_candidate.units_sold = best_product.units_sold
+                signal_candidate.revenue = best_product.revenue
+                signal_candidate.base_price = best_product.base_price
+                signal_candidate.estimated_profit = best_product.estimated_profit
+                signal_candidate.estimated_print_minutes = best_product.estimated_print_minutes
+                signal_candidate.license_status = best_product.license_status
+                signal_candidate.model_commercial_use_allowed = best_product.model_commercial_use_allowed
+                signal_candidate.is_public = best_product.is_public
+                signal_candidate.is_pos_visible = best_product.is_pos_visible
+                signal_candidate.category = best_product.category
+                signal_candidate.tags = best_product.tags
+                signal_candidate.match_confidence = best_confidence
+
+    for keyword, product_candidate in catalog_candidates.items():
+        if keyword not in exact_matched_keys and keyword not in candidates:
+            candidates[keyword] = product_candidate
+
     return candidates
 
 
@@ -638,6 +696,91 @@ def _recommend_action(candidate: OpportunityCandidate, scores: dict[str, int]) -
     return "low_priority"
 
 
+def _build_score_breakdown(candidate: OpportunityCandidate, scores: dict[str, int]) -> dict[str, Any]:
+    return {
+        "purchase_intent": {
+            "raw_purchase_score": round(candidate.purchase_raw, 2),
+            "units_sold": candidate.units_sold,
+            "revenue": round(candidate.revenue, 2),
+            "signal_total": round(candidate.signal_total, 2),
+            "source_count": len(candidate.sources),
+            "sources": sorted(candidate.sources),
+            "explanation": (
+                f"Based on {candidate.units_sold} units sold, "
+                f"${candidate.revenue:.2f} revenue, "
+                f"and trend signals from {len(candidate.sources)} source(s)."
+            ),
+        },
+        "trend_velocity": {
+            "raw_velocity": round(candidate.velocity_raw, 2),
+            "item_count": candidate.item_count,
+            "explanation": (
+                f"Velocity score based on {candidate.item_count} trend items "
+                f"with raw velocity {candidate.velocity_raw:.2f}."
+            ),
+        },
+        "price_resilience": {
+            "base_price": round(candidate.base_price, 2),
+            "estimated_profit": round(candidate.estimated_profit, 2),
+            "avg_price": round(sum(candidate.prices) / len(candidate.prices), 2) if candidate.prices else 0,
+            "explanation": (
+                f"Base price ${candidate.base_price:.2f}, "
+                f"estimated profit ${candidate.estimated_profit:.2f}."
+            ),
+        },
+        "low_saturation": {
+            "trend_item_count": candidate.trend_item_count,
+            "maker_signal_count": candidate.maker_signal_count,
+            "source_spread": len(candidate.sources),
+            "explanation": (
+                f"{candidate.trend_item_count} trend items across "
+                f"{candidate.maker_signal_count} maker sources."
+            ),
+        },
+        "local_fit": {
+            "matched_terms": _find_matched_local_terms(candidate.text),
+            "explanation": (
+                "Checked business-local terms like Clarksville, TN, teacher, military."
+            ),
+        },
+        "production_fit": {
+            "estimated_print_minutes": candidate.estimated_print_minutes,
+            "estimated_profit": round(candidate.estimated_profit, 2),
+            "is_public": candidate.is_public,
+            "is_pos_visible": candidate.is_pos_visible,
+            "inventory_available": candidate.inventory_available,
+            "explanation": (
+                f"Print time {candidate.estimated_print_minutes:.0f} min, "
+                f"profit ${candidate.estimated_profit:.2f}."
+            ),
+        },
+        "license_risk": {
+            "license_status": candidate.license_status,
+            "model_commercial_use_allowed": candidate.model_commercial_use_allowed,
+            "matched_risk_terms": _find_matched_risk_terms(candidate.text),
+            "explanation": (
+                f"License status: {candidate.license_status or 'unknown'}."
+            ),
+        },
+    }
+
+
+def _find_matched_local_terms(text: str) -> list[str]:
+    matched = []
+    for term in LOCAL_FIT_TERMS:
+        if term in text.lower():
+            matched.append(term)
+    return matched
+
+
+def _find_matched_risk_terms(text: str) -> list[str]:
+    matched = []
+    for term in LICENSE_RISK_TERMS:
+        if term in text.lower():
+            matched.append(term)
+    return matched
+
+
 def _score_candidate(candidate: OpportunityCandidate) -> dict[str, Any]:
     purchase_intent = _log_score(candidate.purchase_raw, scale=18.0)
     if candidate.current_product and candidate.units_sold == 0 and candidate.purchase_raw == 0:
@@ -692,6 +835,8 @@ def _score_candidate(candidate: OpportunityCandidate) -> dict[str, Any]:
         "revenue": round(candidate.revenue, 2),
         "base_price": round(candidate.base_price, 2),
         "license_status": candidate.license_status,
+        "match_confidence": candidate.match_confidence or None,
+        "score_breakdown": _build_score_breakdown(candidate, scores),
     }
 
 
@@ -765,7 +910,23 @@ def compute_top_opportunities(db_session: Session, lookback_weeks: int = 4) -> l
     signal_rows = _signal_rows(rows)
     candidates = _collect_signal_candidates(signal_rows)
     catalog_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
-    _merge_catalog_candidates(candidates, _catalog_candidates(db_session, catalog_cutoff))
+
+    products: list[Product] = []
+    try:
+        products = (
+            db_session.query(Product)
+            .filter(Product.deleted_at.is_(None))
+            .all()
+        )
+    except Exception:
+        pass
+
+    catalog_candidates = _catalog_candidates(db_session, catalog_cutoff) if products else {}
+    _merge_catalog_candidates(
+        candidates,
+        catalog_candidates,
+        products=products,
+    )
 
     scored = [_score_candidate(candidate) for candidate in candidates.values()]
     scored = [item for item in scored if item["opportunity_score"] > 0]

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.trend import TrendReport
+from app.models.trend import SourceHealthRecord, TrendOpportunityScore, TrendReport
 
 from .new_category_discovery import discover_new_categories
 from .trend_detector import (
@@ -30,10 +31,44 @@ SYNTHESIS_PROMPT = (
 )
 
 
+def _persist_opportunity_scores(
+    db_session: Session,
+    report: TrendReport,
+    opportunities: list[dict[str, Any]],
+) -> None:
+    for rank, opp in enumerate(opportunities, start=1):
+        score = TrendOpportunityScore(
+            report_id=report.id,
+            candidate_type=opp.get("candidate_type", "potential_product"),
+            product_id=opp.get("product_id"),
+            keyword=opp.get("keyword", ""),
+            title=opp.get("title", opp.get("keyword", "")),
+            opportunity_score=opp.get("opportunity_score", 0),
+            purchase_intent=opp.get("purchase_intent", 0),
+            trend_velocity=opp.get("trend_velocity", 0),
+            price_resilience=opp.get("price_resilience", 0),
+            low_saturation=opp.get("low_saturation", 0),
+            local_fit=opp.get("local_fit", 0),
+            production_fit=opp.get("production_fit", 0),
+            license_risk=opp.get("license_risk", 0),
+            action=opp.get("action", "monitor"),
+            inventory_available=opp.get("inventory_available", 0),
+            base_price=opp.get("base_price", 0),
+            license_status=opp.get("license_status"),
+            rank=rank,
+            sources=opp.get("sources"),
+            score_breakdown=opp.get("score_breakdown"),
+            source_health=opp.get("source_health"),
+            match_confidence=opp.get("match_confidence"),
+        )
+        db_session.add(score)
+
+
 def run_analysis(
     db_session: Session,
     openai_api_key: str = "",
     openai_model: str = "gpt-4o-mini",
+    source_health: list[dict[str, Any]] | None = None,
 ) -> TrendReport | None:
     velocity_data = compute_velocity_and_momentum(db_session)
     opportunities = compute_top_opportunities(db_session)
@@ -63,7 +98,7 @@ def run_analysis(
     )[:20]
 
     report = TrendReport(
-        report_date=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        report_date=datetime.now(timezone.utc),
         summary=summary,
         top_opportunities=opportunities,
         growing_categories=[c["top_phrases"] for c in clusters.get("clusters", [])],
@@ -85,8 +120,26 @@ def run_analysis(
         },
     )
     db_session.add(report)
+    db_session.flush()
+
+    _persist_opportunity_scores(db_session, report, opportunities)
+
+    if source_health:
+        for sh in source_health:
+            record = SourceHealthRecord(
+                report_id=report.id,
+                source=sh.get("source", "unknown"),
+                status=sh.get("status", "unknown"),
+                keyword=sh.get("keyword"),
+                item_count=sh.get("item_count", 0),
+                error_message=sh.get("error_message"),
+                scraped_at=sh.get("scraped_at"),
+                metadata_json=sh.get("metadata"),
+            )
+            db_session.add(record)
+
     db_session.commit()
-    logger.info("TrendReport #%d saved", report.id)
+    logger.info("TrendReport #%d saved with %d persisted scores", report.id, len(opportunities))
     return report
 
 

@@ -5,7 +5,7 @@ from flask import jsonify, render_template, session
 from app.blueprints.trend_scout import bp
 from app.celery_app import celery
 from app.extensions import db
-from app.models import TrendReport, UserRole
+from app.models import SourceHealthRecord, TrendOpportunityScore, TrendReport, UserRole
 from app.utils.auth import roles_required
 
 
@@ -16,10 +16,19 @@ def index():
     all_reports = (
         db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).limit(20).all()
     )
+    source_health = []
+    if latest:
+        source_health = (
+            db.session.query(SourceHealthRecord)
+            .filter(SourceHealthRecord.report_id == latest.id)
+            .order_by(SourceHealthRecord.source)
+            .all()
+        )
     return render_template(
         "trend_scout/index.html",
         latest=latest,
         all_reports=all_reports,
+        source_health=source_health,
     )
 
 
@@ -116,3 +125,82 @@ def report_list():
             for r in reports
         ]
     )
+
+
+@bp.get("/api/persisted-scores")
+@roles_required(UserRole.ADMIN)
+def persisted_scores():
+    report = db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).first()
+    if not report:
+        return jsonify({"found": False, "scores": []})
+
+    scores = (
+        db.session.query(TrendOpportunityScore)
+        .filter(TrendOpportunityScore.report_id == report.id)
+        .order_by(TrendOpportunityScore.rank.asc().nulls_last(), TrendOpportunityScore.opportunity_score.desc())
+        .all()
+    )
+
+    return jsonify({
+        "found": True,
+        "report_id": report.id,
+        "report_date": report.report_date.isoformat(),
+        "scores": [
+            {
+                "id": s.id,
+                "keyword": s.keyword,
+                "title": s.title or s.keyword,
+                "candidate_type": s.candidate_type,
+                "product_id": s.product_id,
+                "opportunity_score": s.opportunity_score,
+                "purchase_intent": s.purchase_intent,
+                "trend_velocity": s.trend_velocity,
+                "price_resilience": s.price_resilience,
+                "low_saturation": s.low_saturation,
+                "local_fit": s.local_fit,
+                "production_fit": s.production_fit,
+                "license_risk": s.license_risk,
+                "action": s.action,
+                "inventory_available": s.inventory_available,
+                "base_price": str(s.base_price),
+                "license_status": s.license_status,
+                "rank": s.rank,
+                "sources": s.sources,
+                "score_breakdown": s.score_breakdown,
+                "match_confidence": s.match_confidence,
+            }
+            for s in scores
+        ],
+    })
+
+
+@bp.get("/api/source-health")
+@roles_required(UserRole.ADMIN)
+def source_health():
+    report = db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).first()
+    if not report:
+        return jsonify({"found": False, "records": []})
+
+    records = (
+        db.session.query(SourceHealthRecord)
+        .filter(SourceHealthRecord.report_id == report.id)
+        .order_by(SourceHealthRecord.source)
+        .all()
+    )
+
+    return jsonify({
+        "found": True,
+        "report_id": report.id,
+        "records": [
+            {
+                "id": r.id,
+                "source": r.source,
+                "status": r.status,
+                "keyword": r.keyword,
+                "item_count": r.item_count,
+                "error_message": r.error_message,
+                "scraped_at": r.scraped_at.isoformat() if r.scraped_at else None,
+            }
+            for r in records
+        ],
+    })

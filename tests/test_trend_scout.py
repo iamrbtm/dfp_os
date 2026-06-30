@@ -30,10 +30,15 @@ class FakeQuery:
 class FakeSession:
     def __init__(self, rows: list[TrendSnapshot]):
         self._rows = rows
+        self._products: list = []
 
     def query(self, model):
-        assert model is TrendSnapshot
-        return FakeQuery(self._rows)
+        from app.models import Product
+        if model is TrendSnapshot:
+            return FakeQuery(self._rows)
+        if model is Product:
+            return FakeQuery(self._products)
+        raise AssertionError(f"Unexpected model: {model}")
 
 
 def _snapshot(
@@ -315,3 +320,230 @@ def test_etsy_price_uses_api_divisor(monkeypatch):
 
     assert results
     assert results[0].items[0]["price"] == 12.99
+
+
+# ── Phase 1: Fuzzy matching tests ──────────────────────────────────────────
+
+def test_trend_match_normalize_product_term():
+    from app.services.trend_match import normalize_product_term
+    assert normalize_product_term("3D Printed Dragon") == "dragon"
+    assert normalize_product_term("Custom Teacher Keychain") == "teacher keychain"
+    assert normalize_product_term("Personalized Name Tag") == "name tag"
+    assert normalize_product_term("Printable Fidget Toy") == "fidget toy"
+
+
+def test_trend_match_find_synonyms():
+    from app.services.trend_match import find_synonyms
+    syns = find_synonyms("keychain")
+    assert "key chain" in syns
+    syns2 = find_synonyms("desk sign")
+    assert "nameplate" in syns2
+
+
+def test_trend_match_fuzzy_keywords():
+    from app.services.trend_match import fuzzy_match_keywords
+    assert fuzzy_match_keywords("dragon", "articulated dragon")
+    assert fuzzy_match_keywords("fidget", "fidget slider")
+    assert fuzzy_match_keywords("keychain", "custom keychain")
+    assert not fuzzy_match_keywords("dragon", "turtle", threshold=0.9)
+
+
+def test_trend_match_match_product_to_term():
+    from app.services.trend_match import match_product_to_term, MatchConfidence
+    from app.models.catalog import Product, Category
+
+    cat = Category(name="Dragons")
+    product = Product(
+        name="Rainbow Dragon",
+        category=cat,
+        tags="dragon, articulated, rainbow",
+    )
+
+    matches, confidence = match_product_to_term("dragon", product)
+    assert matches
+    assert confidence in (MatchConfidence.EXACT, MatchConfidence.FUZZY)
+
+    matches2, confidence2 = match_product_to_term("fidget", product)
+    assert not matches2
+
+
+def test_trend_match_synonym_matches_potential_product():
+    from app.services.trend_match import match_product_to_term
+    from app.models.catalog import Product, Category
+
+    cat = Category(name="Keychains")
+    product = Product(
+        name="Custom Name Keychain",
+        category=cat,
+        tags="keychain, personalized, name",
+    )
+
+    matches, _ = match_product_to_term("name tag", product)
+    assert matches
+
+
+# ── Phase 3: Persistence tests ─────────────────────────────────────────────
+
+def test_opportunity_score_model_creation():
+    from app.models.trend import TrendOpportunityScore, TrendReport
+    from datetime import datetime, timezone
+
+    report = TrendReport(report_date=datetime.now(timezone.utc))
+    score = TrendOpportunityScore(
+        report=report,
+        candidate_type="current_product",
+        product_id=1,
+        keyword="test product",
+        title="Test Product",
+        opportunity_score=75,
+        purchase_intent=60,
+        trend_velocity=50,
+        price_resilience=70,
+        low_saturation=65,
+        local_fit=40,
+        production_fit=80,
+        license_risk=10,
+        action="print_now",
+        inventory_available=5,
+        base_price=15.00,
+        license_status="commercial_allowed",
+        rank=1,
+        sources=["catalog", "internal_demand"],
+        score_breakdown={"purchase_intent": {"explanation": "test"}},
+        match_confidence="exact",
+    )
+    assert score.opportunity_score == 75
+    assert score.action == "print_now"
+    assert score.match_confidence == "exact"
+    assert score.candidate_type == "current_product"
+
+
+def test_source_health_model_creation():
+    from app.models.trend import SourceHealthRecord
+    record = SourceHealthRecord(
+        report_id=1,
+        source="google_trends",
+        status="error",
+        keyword="dragon",
+        item_count=0,
+        error_message="API key not configured",
+    )
+    assert record.source == "google_trends"
+    assert record.status == "error"
+    assert record.error_message == "API key not configured"
+
+
+# ── Phase 2: Score breakdown tests ─────────────────────────────────────────
+
+def test_score_breakdown_includes_raw_inputs():
+    candidate = OpportunityCandidate(
+        keyword="test dragon",
+        title="Test Dragon",
+        current_product=True,
+        sources={"catalog", "etsy"},
+        purchase_raw=150.0,
+        velocity_raw=25.0,
+        units_sold=10,
+        revenue=200.0,
+        base_price=20.0,
+        estimated_profit=8.0,
+        estimated_print_minutes=45,
+        license_status="commercial_allowed",
+        is_public=True,
+        is_pos_visible=True,
+    )
+    candidate.prices.append(20.0)
+
+    scored = _score_candidate(candidate)
+    breakdown = scored.get("score_breakdown", {})
+
+    assert "purchase_intent" in breakdown
+    assert breakdown["purchase_intent"]["units_sold"] == 10
+    assert breakdown["purchase_intent"]["revenue"] == 200.0
+
+    assert "price_resilience" in breakdown
+    assert breakdown["price_resilience"]["base_price"] == 20.0
+
+    assert "local_fit" in breakdown
+    assert "matched_terms" in breakdown["local_fit"]
+
+    assert "license_risk" in breakdown
+    assert breakdown["license_risk"]["license_status"] == "commercial_allowed"
+
+
+def test_score_breakdown_matched_risk_terms():
+    from app.services.ai.trend_scout.analyzer.trend_detector import _find_matched_risk_terms
+
+    terms = _find_matched_risk_terms("pokemon dragon toy")
+    assert "pokemon" in terms
+
+    terms2 = _find_matched_risk_terms("rainbow dragon")
+    assert len(terms2) == 0
+
+
+def test_score_breakdown_matched_local_terms():
+    from app.services.ai.trend_scout.analyzer.trend_detector import _find_matched_local_terms
+
+    terms = _find_matched_local_terms("Clarksville TN custom gift")
+    assert "clarksville" in terms or "tn" in terms
+
+
+# ── Phase 7: Source health tests ───────────────────────────────────────────
+
+def test_source_health_from_results():
+    from app.services.ai.trend_scout import _source_health_from_results
+
+    results = [
+        {
+            "source": "etsy",
+            "keyword_or_category": "dragon",
+            "scraped_at": "2026-06-29T12:00:00+00:00",
+            "items": [{"title": "Dragon"}],
+            "errors": [],
+            "metadata": {"item_count": 1},
+        },
+        {
+            "source": "google_trends",
+            "keyword_or_category": "not_configured",
+            "scraped_at": "2026-06-29T12:00:00+00:00",
+            "items": [],
+            "errors": ["SERPAPI_API_KEY not set"],
+            "metadata": {"item_count": 0},
+        },
+    ]
+
+    health = _source_health_from_results(results)
+    assert len(health) == 2
+
+    etsy_health = next(h for h in health if h["source"] == "etsy")
+    assert etsy_health["status"] == "success"
+    assert etsy_health["item_count"] == 1
+
+    google_health = next(h for h in health if h["source"] == "google_trends")
+    assert google_health["status"] == "error"
+    assert "SERPAPI_API_KEY" in google_health["error_message"]
+
+
+# ── Score breakdown formatting in product-studio endpoint ──────────────────
+
+def test_score_breakdown_includes_match_confidence():
+    candidate = OpportunityCandidate(
+        keyword="dragon",
+        title="Rainbow Dragon",
+        current_product=True,
+        sources={"catalog", "etsy"},
+        purchase_raw=100.0,
+        units_sold=5,
+        revenue=75.0,
+        base_price=15.0,
+        estimated_profit=6.0,
+        estimated_print_minutes=60,
+        license_status="commercial_allowed",
+        is_public=True,
+        is_pos_visible=True,
+        match_confidence="exact",
+    )
+    candidate.prices.append(15.0)
+
+    scored = _score_candidate(candidate)
+    assert scored.get("match_confidence") == "exact"

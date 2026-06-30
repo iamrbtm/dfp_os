@@ -64,6 +64,34 @@ def _run_fetcher(name: str, fetcher, limiter: RateLimiter) -> list[ScoutResult]:
         ]
 
 
+def _source_health_from_results(
+    results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    source_map: dict[str, dict[str, Any]] = {}
+    for r in results:
+        source = r.get("source", "unknown")
+        if source not in source_map:
+            source_map[source] = {
+                "source": source,
+                "status": "success",
+                "keyword": None,
+                "item_count": 0,
+                "error_message": None,
+                "scraped_at": r.get("scraped_at"),
+                "metadata": r.get("metadata", {}),
+            }
+        errors = r.get("errors", [])
+        if errors:
+            source_map[source]["status"] = "error"
+            source_map[source]["error_message"] = "; ".join(errors)
+        items = r.get("items", [])
+        source_map[source]["item_count"] += len(items)
+        kw = r.get("keyword_or_category")
+        if kw and kw not in ("pipeline_error", "not_configured", "configured", "analysis", ""):
+            source_map[source]["keyword"] = kw
+    return list(source_map.values())
+
+
 def run_all_sources(progress_callback=None) -> list[dict[str, Any]]:
     all_results: list[ScoutResult] = []
     total_sources = len(FETCHERS)
@@ -198,10 +226,13 @@ def run_full_pipeline(
     if progress_callback:
         progress_callback(len(FETCHERS) + 1, len(FETCHERS) + 1, "analysis", "running")
 
+    source_health = _source_health_from_results(scraped)
+
     report = run_analysis(
         db_session=db.session,
         openai_api_key=openai_api_key,
         openai_model=openai_model,
+        source_health=source_health,
     )
 
     return {
@@ -210,4 +241,5 @@ def run_full_pipeline(
         "failed_sources": sorted(failed_sources),
         "successful_sources": sorted(successful_sources),
         "report_id": report.id if report else None,
+        "source_health": source_health,
     }

@@ -68,9 +68,15 @@ ok "All preflight checks passed."
 
 # ── Phase 1: Copy files ──────────────────────
 
-info "Creating remote directory (with sudo if needed)..."
-# -t flag needed here because sudo on breath requires a TTY
-ssh -t "${REMOTE_USER}@${REMOTE_HOST}" "sudo mkdir -p ${REMOTE_DIR} && sudo chown ${REMOTE_USER}:${REMOTE_USER} ${REMOTE_DIR}"
+info "Checking remote deploy directory..."
+if ${SSH_CMD} "test -d ${REMOTE_DIR} && test -w ${REMOTE_DIR}"; then
+  ok "Remote deploy directory is ready."
+else
+  info "Remote deploy directory needs setup. Sudo may prompt once."
+  # -t flag needed here because sudo on breath requires a TTY
+  ssh -t "${REMOTE_USER}@${REMOTE_HOST}" "sudo mkdir -p ${REMOTE_DIR} && sudo chown ${REMOTE_USER}:${REMOTE_USER} ${REMOTE_DIR} && test -w ${REMOTE_DIR}"
+  ok "Remote deploy directory created and assigned to ${REMOTE_USER}."
+fi
 
 if [ "$DRY_RUN" = true ]; then
   info "[DRY-RUN] Would rsync project to ${REMOTE_HOST}:${REMOTE_DIR}"
