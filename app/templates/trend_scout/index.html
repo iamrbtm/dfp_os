@@ -2,7 +2,7 @@
 {% block title %}Trend Scout | {{ app_name }}{% endblock %}
 {% block content %}
 <section class="space-y-6">
-  <div class="flex items-start justify-between">
+  <div class="flex items-start justify-between flex-wrap gap-4">
     <div>
       <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
       <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">AI Trend Scout</h1>
@@ -10,31 +10,42 @@
         Autonomous trend monitoring across 3D printing marketplaces, communities, and social sources.
       </p>
     </div>
-    <button
-      id="runBtn"
-      class="app-btn app-btn-primary"
-      hx-post="{{ url_for('trend_scout.run_pipeline') }}"
-      hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
-      hx-target="#runStatus"
-      hx-swap="innerHTML"
-      hx-disabled-elt="#runBtn"
-      _="on htmx:beforeSend add @disabled to #runBtn then set #runBtn.innerHTML to 'Running...'
-         on htmx:afterRequest remove @disabled from #runBtn then set #runBtn.innerHTML to 'Run Pipeline'"
-    >
-      Run Pipeline
-    </button>
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('trend_scout.settings') }}" class="app-btn text-sm py-1"
+         style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">Settings</a>
+      <a href="{{ url_for('trend_scout.task_monitor') }}" class="app-btn text-sm py-1"
+         style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">Task Monitor</a>
+      <button id="runBtn" class="app-btn app-btn-primary"
+         hx-post="{{ url_for('trend_scout.run_pipeline') }}"
+         hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
+         hx-target="#runStatus"
+         hx-swap="innerHTML"
+         hx-disabled-elt="#runBtn"
+         _="on htmx:beforeSend add @disabled to #runBtn then set #runBtn.innerHTML to 'Running...'
+            on htmx:afterRequest remove @disabled from #runBtn then set #runBtn.innerHTML to 'Run Pipeline'
+            on htmx:afterOnLoad wait 2s then call window.location.reload()">
+        Run Pipeline
+      </button>
+    </div>
   </div>
   <div id="runStatus"></div>
 
+  <div id="pipeline-progress-target" hx-get="{{ url_for('trend_scout.pipeline_progress') }}"
+       hx-trigger="load delay:1s" hx-swap="innerHTML"></div>
+
   {% if latest %}
   <article class="app-card p-5">
-    <div class="flex items-start justify-between">
-      <h2 class="text-lg font-semibold" style="color: var(--color-text);">
-        Latest Report
-      </h2>
-      <time class="text-xs" style="color: var(--color-text-muted);">
-        {{ latest.report_date|local_full }}
-      </time>
+    <div class="flex items-start justify-between flex-wrap gap-4">
+      <div>
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Latest Report</h2>
+        <time class="text-xs" style="color: var(--color-text-muted);">{{ latest.report_date|local_full }}</time>
+      </div>
+      <div class="flex gap-2">
+        <a href="{{ url_for('trend_scout.report_detail', report_id=latest.id) }}" class="app-btn text-sm py-1"
+           style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">View Full Report</a>
+        <a href="{{ url_for('trend_scout.report_csv', report_id=latest.id) }}" class="app-btn text-sm py-1"
+           style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">CSV</a>
+      </div>
     </div>
 
     {% if latest.summary %}
@@ -45,21 +56,28 @@
 
     <div class="mt-6">
       <div>
-        <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Opportunity Decision Matrix</h3>
-        {% if latest.top_opportunities %}
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold" style="color: var(--color-text);">Opportunity Decision Matrix</h3>
+          <div class="flex gap-2">
+            <a href="{{ url_for('trend_scout.api_biggest_movers') }}" class="text-xs" style="color:var(--color-primary);"
+               onclick="event.preventDefault(); loadBiggestMovers();">Biggest Movers</a>
+          </div>
+        </div>
+
+        {% if scores_pagination and scores_pagination.items %}
         <div class="flex flex-wrap gap-2 mb-3">
-          <button class="ts-view-pill text-xs px-3 py-1 rounded-full font-semibold"
-                  data-view="all" style="background:var(--color-primary);color:#fff;">All</button>
-          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
-                  data-view="print_now" style="background:var(--color-success-bg, #d1fae5);color:var(--color-success,#059669);opacity:0.6;">Print Now</button>
-          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
-                  data-view="clearance_candidate" style="background:var(--color-warning-bg,#fef3c7);color:var(--color-warning,#d97706);opacity:0.6;">Clearance</button>
-          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
-                  data-view="retire_review" style="background:var(--color-danger-bg,#fee2e2);color:var(--color-danger,#dc2626);opacity:0.6;">Retire</button>
-          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
-                  data-view="license_review" style="background:#fce7f3;color:#be185d;opacity:0.6;">License</button>
-          <button class="ts-view-pill text-xs px-3 py-1 rounded-full"
-                  data-view="test_product" style="background:#dbeafe;color:#2563eb;opacity:0.6;">Test</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full font-semibold" data-view="all"
+                  style="background:var(--color-primary);color:#fff;">All</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="print_now"
+                  style="background:var(--color-success-bg,#d1fae5);color:var(--color-success,#059669);opacity:0.6;">Print Now</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="clearance_candidate"
+                  style="background:var(--color-warning-bg,#fef3c7);color:var(--color-warning,#d97706);opacity:0.6;">Clearance</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="retire_review"
+                  style="background:var(--color-danger-bg,#fee2e2);color:var(--color-danger,#dc2626);opacity:0.6;">Retire</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="license_review"
+                  style="background:#fce7f3;color:#be185d;opacity:0.6;">License</button>
+          <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="test_product"
+                  style="background:#dbeafe;color:#2563eb;opacity:0.6;">Test</button>
         </div>
         <div class="flex flex-wrap gap-2 mb-3">
           <input id="ts-search" type="search" placeholder="Search products..."
@@ -81,11 +99,10 @@
           </select>
           <button id="ts-save-view" type="button"
                   class="app-btn text-xs px-3 py-1 rounded"
-                  style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">
-            Save View
-          </button>
+                  style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">Save View</button>
         </div>
-        <div class="overflow-x-auto">
+
+        <div class="overflow-x-auto" id="opportunity-matrix-wrapper">
           <table class="app-table text-xs" id="opportunity-matrix">
             <thead>
               <tr>
@@ -101,215 +118,144 @@
                 <th data-sort="9" class="hidden xl:table-cell cursor-pointer">Local</th>
                 <th data-sort="10" class="hidden xl:table-cell cursor-pointer">Prod.</th>
                 <th data-sort="11" class="hidden lg:table-cell cursor-pointer">License Risk</th>
-                <th data-sort="12" class="hidden xl:table-cell cursor-pointer">Inventory</th>
-                <th class="hidden xl:table-cell">Sources</th>
-                <th class="hidden lg:table-cell">Match</th>
+                <th class="hidden xl:table-cell">History</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {% for opp in latest.top_opportunities[:50] %}
-              {% set row_id = opp.get("rank") or loop.index %}
-              {% set rank = opp.get("rank") or loop.index %}
-              {% set title = opp.get("title") or opp.get("keyword") or "Untitled opportunity" %}
-              {% set action = opp.get("action") or "monitor" %}
-              {% set opportunity_score = opp.get("opportunity_score", opp.get("score", 0)) or 0 %}
-              {% set purchase_intent = opp.get("purchase_intent", 0) or 0 %}
-              {% set trend_velocity = opp.get("trend_velocity", 0) or 0 %}
-              {% set price_resilience = opp.get("price_resilience", 0) or 0 %}
-              {% set low_saturation = opp.get("low_saturation", 0) or 0 %}
-              {% set local_fit = opp.get("local_fit", 0) or 0 %}
-              {% set production_fit = opp.get("production_fit", 0) or 0 %}
-              {% set license_risk = opp.get("license_risk", 0) or 0 %}
-              {% set current_product = opp.get("current_product", false) %}
-              {% set product_status = opp.get("product_status") %}
-              {% set inventory_available = opp.get("inventory_available", 0) or 0 %}
-              {% set sources = opp.get("sources") or [] %}
-              {% set match_confidence = opp.get("match_confidence") %}
-              {% set breakdown = opp.get("score_breakdown") or {} %}
-              <tr class="cursor-pointer" onclick="toggleRow({{ row_id }})">
+              {% for s in scores_pagination.items %}
+              {% set keyword = s.keyword %}
+              {% set title = s.title or keyword %}
+              <tr class="cursor-pointer" onclick="toggleRow({{ s.id }})">
                 <td class="text-xs" style="color: var(--color-link);">&#9654;</td>
-                <td class="font-mono">{{ rank }}</td>
+                <td class="font-mono">{{ s.rank or loop.index }}</td>
                 <td>
-                  <div class="font-semibold" style="color: var(--color-text);">
-                    {{ title }}
-                  </div>
-                  <div style="color: var(--color-text-muted);">
-                    {{ "Current product" if current_product else "Potential product" }}
-                    {% if product_status %} &middot; {{ product_status|replace("_", " ")|title }}{% endif %}
-                  </div>
+                  <div class="font-semibold" style="color: var(--color-text);">{{ title }}</div>
+                  <div style="color: var(--color-text-muted);">{{ "Current product" if s.candidate_type == 'current' else "Potential product" }}</div>
                 </td>
                 <td>
                   <span class="inline-flex rounded-full px-2 py-0.5 font-semibold text-xs"
-                        style="background-color: var(--color-primary-bg); color: var(--color-primary);">
-                    {{ action|replace("_", " ")|title }}
+                        style="background:var(--color-primary-bg);color:var(--color-primary);">
+                    {{ s.action|replace("_", " ")|title }}
                   </span>
                 </td>
-                <td class="font-mono font-semibold">{{ opportunity_score }}</td>
-                <td class="font-mono hidden sm:table-cell">{{ purchase_intent }}</td>
-                <td class="font-mono hidden lg:table-cell">{{ trend_velocity }}</td>
-                <td class="font-mono hidden lg:table-cell">{{ price_resilience }}</td>
-                <td class="font-mono hidden xl:table-cell">{{ low_saturation }}</td>
-                <td class="font-mono hidden xl:table-cell">{{ local_fit }}</td>
-                <td class="font-mono hidden xl:table-cell">{{ production_fit }}</td>
-                <td class="font-mono hidden lg:table-cell" style="color: {{ 'var(--color-danger)' if license_risk >= 70 else 'var(--color-text-muted)' }};">
-                  {{ license_risk }}
+                <td class="font-mono font-semibold">{{ s.opportunity_score }}</td>
+                <td class="font-mono hidden sm:table-cell">{{ s.purchase_intent }}</td>
+                <td class="font-mono hidden lg:table-cell">{{ s.trend_velocity }}</td>
+                <td class="font-mono hidden lg:table-cell">{{ s.price_resilience }}</td>
+                <td class="font-mono hidden xl:table-cell">{{ s.low_saturation }}</td>
+                <td class="font-mono hidden xl:table-cell">{{ s.local_fit }}</td>
+                <td class="font-mono hidden xl:table-cell">{{ s.production_fit }}</td>
+                <td class="font-mono hidden lg:table-cell" style="color: {{ 'var(--color-danger)' if s.license_risk >= 70 else 'var(--color-text-muted)' }};">
+                  {{ s.license_risk }}
                 </td>
-                <td class="font-mono hidden xl:table-cell">
-                  {% if current_product %}
-                    {{ inventory_available }}
-                  {% else %}
-                    &mdash;
-                  {% endif %}
-                </td>
-                <td class="hidden xl:table-cell" style="color: var(--color-text-muted);">
-                  {% if sources %}
-                    {{ sources if sources is string else sources|join(", ") }}
-                  {% else %}
-                    &mdash;
-                  {% endif %}
-                </td>
-                <td class="hidden lg:table-cell">
-                  {% if match_confidence %}
-                  <span class="text-xs font-mono">{{ match_confidence }}</span>
-                  {% else %}
-                  &mdash;
-                  {% endif %}
+                <td class="hidden xl:table-cell">
+                  <a href="{{ url_for('trend_scout.score_history_page', keyword=keyword) }}"
+                     class="text-xs" style="color:var(--color-primary);">View</a>
                 </td>
                 <td>
-                  <div class="flex flex-wrap gap-1">
-                    {% if action == "print_now" and product_id %}
+                  <div class="flex flex-wrap gap-1 items-center">
+                    {% if s.action == "print_now" and s.product_id %}
                     <button class="text-xs px-2 py-0.5 rounded"
-                            style="background: var(--color-success); color: #fff; border: none; cursor: pointer;"
+                            style="background:var(--color-success);color:#fff;border:none;cursor:pointer;"
                             hx-post="{{ url_for('trend_scout.action_print_now') }}"
-                            hx-vals='{"product_id": {{ product_id }}, "keyword": "{{ title|e }}"}'
+                            hx-vals='{"product_id": {{ s.product_id }}, "keyword": "{{ keyword|e }}"}'
                             hx-swap="outerHTML"
-                            hx-disabled-elt="closest button">
-                      Print Now
-                    </button>
+                            hx-disabled-elt="closest button">Print Now</button>
                     {% endif %}
-                    {% if action == "test_product" %}
+                    {% if s.action == "test_product" %}
                     <form method="post" action="{{ url_for('trend_scout.action_create_product') }}" class="inline">
-                      <input type="hidden" name="keyword" value="{{ title|e }}">
+                      <input type="hidden" name="keyword" value="{{ keyword|e }}">
                       <input type="hidden" name="title" value="{{ title|e }}">
                       <button type="submit" class="text-xs px-2 py-0.5 rounded"
-                              style="background: var(--color-primary); color: #fff; border: none; cursor: pointer;">
-                        Create
-                      </button>
+                              style="background:var(--color-primary);color:#fff;border:none;cursor:pointer;">Create</button>
                     </form>
                     {% endif %}
-                    {% if action == "clearance_candidate" and product_id %}
-                    <button class="text-xs px-2 py-0.5 rounded"
-                            style="background: var(--color-warning); color: #000; border: none; cursor: pointer;"
-                            hx-post="{{ url_for('trend_scout.action_flag_clearance') }}"
-                            hx-vals='{"product_id": {{ product_id }}, "keyword": "{{ title|e }}"}'
-                            hx-swap="outerHTML"
-                            hx-disabled-elt="closest button">
-                      Flag Clr
-                    </button>
+                    {% if s.product_id %}
+                      {% if s.action in ("clearance_candidate",) %}
+                      <button class="text-xs px-2 py-0.5 rounded"
+                              style="background:var(--color-warning);color:#000;border:none;cursor:pointer;"
+                              hx-post="{{ url_for('trend_scout.action_flag_clearance') }}"
+                              hx-vals='{"product_id": {{ s.product_id }}, "keyword": "{{ keyword|e }}"}'
+                              hx-swap="outerHTML" hx-disabled-elt="closest button">Flag Clr</button>
+                      {% endif %}
+                      {% if s.action in ("retire_review",) %}
+                      <button class="text-xs px-2 py-0.5 rounded"
+                              style="background:var(--color-danger);color:#fff;border:none;cursor:pointer;"
+                              hx-post="{{ url_for('trend_scout.action_flag_retire') }}"
+                              hx-vals='{"product_id": {{ s.product_id }}, "keyword": "{{ keyword|e }}"}'
+                              hx-swap="outerHTML" hx-disabled-elt="closest button">Flag Retire</button>
+                      {% endif %}
+                      {% if s.action in ("license_review",) %}
+                      <button class="text-xs px-2 py-0.5 rounded"
+                              style="background:var(--color-danger);color:#fff;border:none;cursor:pointer;"
+                              hx-post="{{ url_for('trend_scout.action_flag_license_review') }}"
+                              hx-vals='{"product_id": {{ s.product_id }}, "keyword": "{{ keyword|e }}"}'
+                              hx-swap="outerHTML" hx-disabled-elt="closest button">License</button>
+                      {% endif %}
                     {% endif %}
-                    {% if action == "retire_review" and product_id %}
-                    <button class="text-xs px-2 py-0.5 rounded"
-                            style="background: var(--color-danger); color: #fff; border: none; cursor: pointer;"
-                            hx-post="{{ url_for('trend_scout.action_flag_retire') }}"
-                            hx-vals='{"product_id": {{ product_id }}, "keyword": "{{ title|e }}"}'
-                            hx-swap="outerHTML"
-                            hx-disabled-elt="closest button">
-                      Flag Retire
-                    </button>
-                    {% endif %}
-                    {% if action == "license_review" and product_id %}
-                    <button class="text-xs px-2 py-0.5 rounded"
-                            style="background: var(--color-danger); color: #fff; border: none; cursor: pointer;"
-                            hx-post="{{ url_for('trend_scout.action_flag_license_review') }}"
-                            hx-vals='{"product_id": {{ product_id }}, "keyword": "{{ title|e }}"}'
-                            hx-swap="outerHTML"
-                            hx-disabled-elt="closest button">
-                      License
-                    </button>
+                    {% if s.dismissed %}
+                    <button class="text-xs px-2 py-0.5 rounded undo-dismiss-btn"
+                            style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);cursor:pointer;"
+                            data-id="{{ s.id }}">Undo</button>
+                    {% else %}
+                    <button class="text-xs px-2 py-0.5 rounded dismiss-btn"
+                            style="background:transparent;color:var(--color-text-muted);border:1px solid var(--color-border);cursor:pointer;"
+                            data-id="{{ s.id }}">Dismiss</button>
                     {% endif %}
                   </div>
                 </td>
               </tr>
-              <tr id="detail-{{ row_id }}" class="hidden">
-                <td colspan="16" class="p-4" style="background-color: var(--color-surface);">
+              <tr id="detail-{{ s.id }}" class="hidden">
+                <td colspan="14" class="p-4" style="background-color: var(--color-surface);">
                   <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div class="space-y-1">
-                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Purchase Intent</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ purchase_intent }}/100</p>
-                      {% if breakdown.get("purchase_intent") %}
-                      <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ breakdown.get("purchase_intent", {}).get("explanation") }}
-                      </p>
-                      {% endif %}
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Purchase Intent</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.purchase_intent }}/100</p>
                     </div>
                     <div class="space-y-1">
-                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Trend Velocity</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ trend_velocity }}/100</p>
-                      {% if breakdown.get("trend_velocity") %}
-                      <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ breakdown.get("trend_velocity", {}).get("explanation") }}
-                      </p>
-                      {% endif %}
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Trend Velocity</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.trend_velocity }}/100</p>
                     </div>
                     <div class="space-y-1">
-                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Price Resilience</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ price_resilience }}/100</p>
-                      {% if breakdown.get("price_resilience") %}
-                      <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ breakdown.get("price_resilience", {}).get("explanation") }}
-                      </p>
-                      {% endif %}
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Price Resilience</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.price_resilience }}/100</p>
                     </div>
                     <div class="space-y-1">
-                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Low Saturation</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ low_saturation }}/100</p>
-                      {% if breakdown.get("low_saturation") %}
-                      <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ breakdown.get("low_saturation", {}).get("explanation") }}
-                      </p>
-                      {% endif %}
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Low Saturation</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.low_saturation }}/100</p>
                     </div>
                     <div class="space-y-1">
-                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Local Fit</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ local_fit }}/100</p>
-                      {% if breakdown.get("local_fit") %}
-                      <p class="text-xs" style="color: var(--color-text-muted);">
-                        Matched: {{ breakdown.get("local_fit", {}).get("matched_terms", [])|join(", ") or "none" }}
-                      </p>
-                      {% endif %}
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Local Fit</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.local_fit }}/100</p>
                     </div>
                     <div class="space-y-1">
-                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Production Fit</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ production_fit }}/100</p>
-                      {% if breakdown.get("production_fit") %}
-                      <p class="text-xs" style="color: var(--color-text-muted);">
-                        {{ breakdown.get("production_fit", {}).get("explanation") }}
-                      </p>
-                      {% endif %}
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Production Fit</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.production_fit }}/100</p>
                     </div>
                     <div class="space-y-1">
-                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">License Risk</p>
-                      <p class="text-sm" style="color: var(--color-text);">{{ license_risk }}/100</p>
-                      {% if breakdown.get("license_risk") %}
-                      <p class="text-xs" style="color: var(--color-text-muted);">
-                        Status: {{ breakdown.get("license_risk", {}).get("license_status") or "unknown" }}
-                        {% if breakdown.get("license_risk", {}).get("matched_risk_terms") %}
-                        &middot; Risk terms: {{ breakdown.get("license_risk", {}).get("matched_risk_terms", [])|join(", ") }}
-                        {% endif %}
-                      </p>
-                      {% endif %}
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">License Risk</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.license_risk }}/100</p>
                     </div>
                     <div class="space-y-1">
-                      <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Sales &amp; Inventory</p>
-                      <p class="text-sm" style="color: var(--color-text);">
-                        {{ opp.get("units_sold", 0) or 0 }} sold &middot; ${{ "%.2f"|format(opp.get("revenue", 0) or 0) }} revenue
-                      </p>
-                      {% if match_confidence %}
-                      <p class="text-xs" style="color: var(--color-text-muted);">
-                        Product match: {{ match_confidence }}
-                      </p>
-                      {% endif %}
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Sources</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.sources|join(", ") if s.sources else "—" }}</p>
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Inventory</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.inventory_available if s.inventory_available is not none else "—" }}</p>
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Base Price</p>
+                      <p class="text-sm" style="color:var(--color-text);">${{ "%.2f"|format(s.base_price) if s.base_price else "—" }}</p>
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">Match Confidence</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.match_confidence or "—" }}</p>
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-semibold" style="color:var(--color-text-muted);">License Status</p>
+                      <p class="text-sm" style="color:var(--color-text);">{{ s.license_status or "—" }}</p>
                     </div>
                   </div>
                 </td>
@@ -318,11 +264,182 @@
             </tbody>
           </table>
         </div>
+
+        {% if scores_pagination.pages > 1 %}
+        <div class="flex items-center justify-center gap-2 mt-4">
+          {% if scores_pagination.has_prev %}
+          <a href="?page={{ scores_pagination.prev_num }}&per_page={{ scores_pagination.per_page }}"
+             class="px-3 py-1 text-sm rounded"
+             style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">&laquo; Prev</a>
+          {% endif %}
+          {% for p in range(1, scores_pagination.pages + 1) %}
+            <a href="?page={{ p }}&per_page={{ scores_pagination.per_page }}"
+               class="px-3 py-1 text-sm rounded {% if p == scores_pagination.page %}"
+               style="background:var(--color-primary);color:white;{% else %}"
+               style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);{% endif %}">{{ p }}</a>
+          {% endfor %}
+          {% if scores_pagination.has_next %}
+          <a href="?page={{ scores_pagination.next_num }}&per_page={{ scores_pagination.per_page }}"
+             class="px-3 py-1 text-sm rounded"
+             style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">Next &raquo;</a>
+          {% endif %}
+        </div>
+        {% endif %}
+
         {% else %}
-        <p class="text-sm" style="color: var(--color-text-muted);">No opportunities data.</p>
+        <div id="legacy-matrix">
+          {% if latest.top_opportunities %}
+          <div class="flex flex-wrap gap-2 mb-3">
+            <button class="ts-view-pill text-xs px-3 py-1 rounded-full font-semibold" data-view="all"
+                    style="background:var(--color-primary);color:#fff;">All</button>
+            <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="print_now"
+                    style="background:var(--color-success-bg,#d1fae5);color:var(--color-success,#059669);opacity:0.6;">Print Now</button>
+            <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="clearance_candidate"
+                    style="background:var(--color-warning-bg,#fef3c7);color:var(--color-warning,#d97706);opacity:0.6;">Clearance</button>
+            <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="retire_review"
+                    style="background:var(--color-danger-bg,#fee2e2);color:var(--color-danger,#dc2626);opacity:0.6;">Retire</button>
+            <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="license_review"
+                    style="background:#fce7f3;color:#be185d;opacity:0.6;">License</button>
+            <button class="ts-view-pill text-xs px-3 py-1 rounded-full" data-view="test_product"
+                    style="background:#dbeafe;color:#2563eb;opacity:0.6;">Test</button>
+          </div>
+          <div class="flex flex-wrap gap-2 mb-3">
+            <input id="ts-search" type="search" placeholder="Search products..."
+                   class="app-input text-xs flex-1 min-w-[160px]">
+            <select id="ts-filter-action" class="app-select text-xs">
+              <option value="all">All actions</option>
+              <option value="print_now">Print Now</option>
+              <option value="keep_selling">Keep Selling</option>
+              <option value="clearance_candidate">Clearance</option>
+              <option value="retire_review">Retire</option>
+              <option value="license_review">License Review</option>
+              <option value="test_product">Test Product</option>
+              <option value="monitor">Monitor</option>
+            </select>
+            <select id="ts-filter-type" class="app-select text-xs">
+              <option value="all">All types</option>
+              <option value="current">Current products</option>
+              <option value="potential">Potential products</option>
+            </select>
+            <button id="ts-save-view" type="button"
+                    class="app-btn text-xs px-3 py-1 rounded"
+                    style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">Save View</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="app-table text-xs" id="opportunity-matrix-legacy">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th data-sort="2">Rank</th>
+                  <th>Product / Idea</th>
+                  <th>Action</th>
+                  <th data-sort="4" class="cursor-pointer">Score</th>
+                  <th data-sort="5" class="hidden sm:table-cell cursor-pointer">Intent</th>
+                  <th data-sort="6" class="hidden lg:table-cell cursor-pointer">Velocity</th>
+                  <th data-sort="7" class="hidden lg:table-cell cursor-pointer">Price</th>
+                  <th data-sort="8" class="hidden xl:table-cell cursor-pointer">Low Sat.</th>
+                  <th data-sort="9" class="hidden xl:table-cell cursor-pointer">Local</th>
+                  <th data-sort="10" class="hidden xl:table-cell cursor-pointer">Prod.</th>
+                  <th data-sort="11" class="hidden lg:table-cell cursor-pointer">License Risk</th>
+                  <th class="hidden xl:table-cell">Inventory</th>
+                  <th class="hidden xl:table-cell">Sources</th>
+                  <th class="hidden lg:table-cell">Match</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for opp in latest.top_opportunities[:50] %}
+                {% set row_id = opp.get("rank") or loop.index %}
+                {% set rank = opp.get("rank") or loop.index %}
+                {% set title = opp.get("title") or opp.get("keyword") or "Untitled" %}
+                {% set action = opp.get("action") or "monitor" %}
+                {% set opportunity_score = opp.get("opportunity_score", opp.get("score", 0)) or 0 %}
+                {% set purchase_intent = opp.get("purchase_intent", 0) or 0 %}
+                {% set trend_velocity = opp.get("trend_velocity", 0) or 0 %}
+                {% set price_resilience = opp.get("price_resilience", 0) or 0 %}
+                {% set low_saturation = opp.get("low_saturation", 0) or 0 %}
+                {% set local_fit = opp.get("local_fit", 0) or 0 %}
+                {% set production_fit = opp.get("production_fit", 0) or 0 %}
+                {% set license_risk = opp.get("license_risk", 0) or 0 %}
+                {% set current_product = opp.get("current_product", false) %}
+                {% set product_status = opp.get("product_status") %}
+                {% set inventory_available = opp.get("inventory_available", 0) or 0 %}
+                {% set sources = opp.get("sources") or [] %}
+                {% set match_confidence = opp.get("match_confidence") %}
+                {% set breakdown = opp.get("score_breakdown") or {} %}
+                {% set product_id = opp.get("product_id") %}
+                <tr class="cursor-pointer" onclick="toggleRowLegacy({{ row_id }})">
+                  <td class="text-xs" style="color:var(--color-link);">&#9654;</td>
+                  <td class="font-mono">{{ rank }}</td>
+                  <td>
+                    <div class="font-semibold" style="color:var(--color-text);">{{ title }}</div>
+                    <div style="color:var(--color-text-muted);">{{ "Current product" if current_product else "Potential product" }}{% if product_status %} &middot; {{ product_status|replace("_", " ")|title }}{% endif %}</div>
+                  </td>
+                  <td><span class="inline-flex rounded-full px-2 py-0.5 font-semibold text-xs" style="background:var(--color-primary-bg);color:var(--color-primary);">{{ action|replace("_", " ")|title }}</span></td>
+                  <td class="font-mono font-semibold">{{ opportunity_score }}</td>
+                  <td class="font-mono hidden sm:table-cell">{{ purchase_intent }}</td>
+                  <td class="font-mono hidden lg:table-cell">{{ trend_velocity }}</td>
+                  <td class="font-mono hidden lg:table-cell">{{ price_resilience }}</td>
+                  <td class="font-mono hidden xl:table-cell">{{ low_saturation }}</td>
+                  <td class="font-mono hidden xl:table-cell">{{ local_fit }}</td>
+                  <td class="font-mono hidden xl:table-cell">{{ production_fit }}</td>
+                  <td class="font-mono hidden lg:table-cell" style="color:{{ 'var(--color-danger)' if license_risk >= 70 else 'var(--color-text-muted)' }};">{{ license_risk }}</td>
+                  <td class="font-mono hidden xl:table-cell">{% if current_product %}{{ inventory_available }}{% else %}&mdash;{% endif %}</td>
+                  <td class="hidden xl:table-cell" style="color:var(--color-text-muted);">{{ sources if sources is string else sources|join(", ") if sources else "&mdash;" }}</td>
+                  <td class="hidden lg:table-cell">{% if match_confidence %}<span class="text-xs font-mono">{{ match_confidence }}</span>{% else %}&mdash;{% endif %}</td>
+                  <td>
+                    <div class="flex flex-wrap gap-1">
+                      {% if action == "print_now" and product_id %}
+                      <button class="text-xs px-2 py-0.5 rounded" style="background:var(--color-success);color:#fff;border:none;cursor:pointer;"
+                              hx-post="{{ url_for('trend_scout.action_print_now') }}"
+                              hx-vals='{"product_id":{{ product_id }},"keyword":"{{ title|e }}"}'
+                              hx-swap="outerHTML" hx-disabled-elt="closest button">Print Now</button>
+                      {% endif %}
+                      {% if action == "test_product" %}
+                      <form method="post" action="{{ url_for('trend_scout.action_create_product') }}" class="inline">
+                        <input type="hidden" name="keyword" value="{{ title|e }}">
+                        <input type="hidden" name="title" value="{{ title|e }}">
+                        <button type="submit" class="text-xs px-2 py-0.5 rounded" style="background:var(--color-primary);color:#fff;border:none;cursor:pointer;">Create</button>
+                      </form>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+                <tr id="detail-legacy-{{ row_id }}" class="hidden">
+                  <td colspan="16" class="p-4" style="background-color: var(--color-surface);">
+                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      <div class="space-y-1"><p class="text-xs font-semibold" style="color:var(--color-text-muted);">Purchase Intent</p><p class="text-sm" style="color:var(--color-text);">{{ purchase_intent }}/100</p>{% if breakdown.get("purchase_intent") %}<p class="text-xs" style="color:var(--color-text-muted);">{{ breakdown["purchase_intent"].get("explanation") }}</p>{% endif %}</div>
+                      <div class="space-y-1"><p class="text-xs font-semibold" style="color:var(--color-text-muted);">Trend Velocity</p><p class="text-sm" style="color:var(--color-text);">{{ trend_velocity }}/100</p>{% if breakdown.get("trend_velocity") %}<p class="text-xs" style="color:var(--color-text-muted);">{{ breakdown["trend_velocity"].get("explanation") }}</p>{% endif %}</div>
+                      <div class="space-y-1"><p class="text-xs font-semibold" style="color:var(--color-text-muted);">Price Resilience</p><p class="text-sm" style="color:var(--color-text);">{{ price_resilience }}/100</p>{% if breakdown.get("price_resilience") %}<p class="text-xs" style="color:var(--color-text-muted);">{{ breakdown["price_resilience"].get("explanation") }}</p>{% endif %}</div>
+                      <div class="space-y-1"><p class="text-xs font-semibold" style="color:var(--color-text-muted);">Low Saturation</p><p class="text-sm" style="color:var(--color-text);">{{ low_saturation }}/100</p>{% if breakdown.get("low_saturation") %}<p class="text-xs" style="color:var(--color-text-muted);">{{ breakdown["low_saturation"].get("explanation") }}</p>{% endif %}</div>
+                      <div class="space-y-1"><p class="text-xs font-semibold" style="color:var(--color-text-muted);">Local Fit</p><p class="text-sm" style="color:var(--color-text);">{{ local_fit }}/100</p>{% if breakdown.get("local_fit") %}<p class="text-xs" style="color:var(--color-text-muted);">Matched: {{ breakdown["local_fit"].get("matched_terms", [])|join(", ") or "none" }}</p>{% endif %}</div>
+                      <div class="space-y-1"><p class="text-xs font-semibold" style="color:var(--color-text-muted);">Production Fit</p><p class="text-sm" style="color:var(--color-text);">{{ production_fit }}/100</p>{% if breakdown.get("production_fit") %}<p class="text-xs" style="color:var(--color-text-muted);">{{ breakdown["production_fit"].get("explanation") }}</p>{% endif %}</div>
+                      <div class="space-y-1"><p class="text-xs font-semibold" style="color:var(--color-text-muted);">License Risk</p><p class="text-sm" style="color:var(--color-text);">{{ license_risk }}/100</p>{% if breakdown.get("license_risk") %}<p class="text-xs" style="color:var(--color-text-muted);">Status: {{ breakdown["license_risk"].get("license_status") or "unknown" }}{% if breakdown["license_risk"].get("matched_risk_terms") %} &middot; Risk terms: {{ breakdown["license_risk"]["matched_risk_terms"]|join(", ") }}{% endif %}</p>{% endif %}</div>
+                      <div class="space-y-1"><p class="text-xs font-semibold" style="color:var(--color-text-muted);">Sales &amp; Inventory</p><p class="text-sm" style="color:var(--color-text);">{{ opp.get("units_sold", 0) or 0 }} sold &middot; ${{ "%.2f"|format(opp.get("revenue", 0) or 0) }} revenue</p>{% if match_confidence %}<p class="text-xs" style="color:var(--color-text-muted);">Product match: {{ match_confidence }}</p>{% endif %}</div>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <p class="text-xs mt-2" style="color: var(--color-text-muted);">Showing up to 50 opportunities. <a href="{{ url_for('trend_scout.report_detail', report_id=latest.id) }}" style="color:var(--color-primary);">View full report &rarr;</a></p>
+          {% else %}
+          <p class="text-sm" style="color:var(--color-text-muted);">No opportunities data.</p>
+          {% endif %}
+        </div>
         {% endif %}
       </div>
     </div>
+
+    {% if scores_pagination and scores_pagination.items %}
+    <div id="biggest-movers-panel" class="mt-4 hidden">
+      <div class="app-card p-4">
+        <h3 class="text-sm font-semibold mb-3" style="color: var(--color-text);">Biggest Movers</h3>
+        <div id="biggest-movers-content" class="text-sm" style="color: var(--color-text-muted);">Loading...</div>
+      </div>
+    </div>
+    {% endif %}
 
     <div class="mt-6 grid gap-4 sm:grid-cols-2">
       <div>
@@ -331,28 +448,23 @@
         <ul class="space-y-1">
           {% for cat in latest.growing_categories %}
           <li class="inline-block mr-1 mb-1 px-2 py-0.5 rounded-full text-xs font-medium"
-              style="background-color: var(--color-primary-bg); color: var(--color-primary);">
-            {{ cat if cat is string else (cat|join(", ") if cat is iterable and cat|length > 0 else cat) }}
-          </li>
+              style="background-color: var(--color-primary-bg); color: var(--color-primary);">{{ cat if cat is string else cat|join(", ") if cat is iterable else cat }}</li>
           {% endfor %}
         </ul>
         {% else %}
-        <p class="text-sm" style="color: var(--color-text-muted);">No growing categories detected.</p>
+        <p class="text-sm" style="color:var(--color-text-muted);">No growing categories detected.</p>
         {% endif %}
       </div>
-
       <div>
         <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Declining Trends</h3>
         {% if latest.declining_trends %}
         <ul class="space-y-1">
           {% for trend in latest.declining_trends %}
-          <li class="text-sm flex items-center gap-1" style="color: var(--color-danger);">
-            <span>&#8595;</span> {{ trend }}
-          </li>
+          <li class="text-sm flex items-center gap-1" style="color:var(--color-danger);"><span>&#8595;</span> {{ trend }}</li>
           {% endfor %}
         </ul>
         {% else %}
-        <p class="text-sm" style="color: var(--color-text-muted);">No declining trends detected.</p>
+        <p class="text-sm" style="color:var(--color-text-muted);">No declining trends detected.</p>
         {% endif %}
       </div>
     </div>
@@ -362,10 +474,8 @@
     {% endif %}
 
     {% if latest.pipeline_meta %}
-    <div class="mt-6 pt-4 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);">
-      <span class="font-semibold">Pipeline:</span>
-      {{ latest.pipeline_meta.get("titles_analyzed", "?") }} titles analyzed,
-      {{ latest.pipeline_meta.get("clusters_found", "?") }} clusters found
+    <div class="mt-6 pt-4 border-t text-xs" style="border-color:var(--color-border);color:var(--color-text-muted);">
+      <span class="font-semibold">Pipeline:</span> {{ latest.pipeline_meta.get("titles_analyzed", "?") }} titles analyzed, {{ latest.pipeline_meta.get("clusters_found", "?") }} clusters found
     </div>
     {% endif %}
   </article>
@@ -373,9 +483,7 @@
   {% else %}
   <article class="app-card p-8 text-center">
     <h2 class="text-xl font-semibold mb-2" style="color: var(--color-text);">No Reports Yet</h2>
-    <p class="text-sm" style="color: var(--color-text-muted);">
-      The Trend Scout pipeline runs every Monday at 6:00 AM. Click <strong>Run Pipeline</strong> above to run it now.
-    </p>
+    <p class="text-sm" style="color: var(--color-text-muted);">The Trend Scout pipeline runs every Monday at 6:00 AM. Click <strong>Run Pipeline</strong> above to run it now.</p>
   </article>
   {% endif %}
 
@@ -390,6 +498,7 @@
             <th>Summary Preview</th>
             <th>Opportunities</th>
             <th>Growing</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -399,6 +508,7 @@
             <td class="text-sm max-w-md truncate">{{ (report.summary or "")[:120] }}</td>
             <td class="text-sm">{{ report.top_opportunities|length if report.top_opportunities else 0 }}</td>
             <td class="text-sm">{{ report.growing_categories|length if report.growing_categories else 0 }}</td>
+            <td><a href="{{ url_for('trend_scout.report_detail', report_id=report.id) }}" class="text-xs" style="color:var(--color-primary);">View</a></td>
           </tr>
           {% endfor %}
         </tbody>
@@ -412,11 +522,53 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='src/js/trend_scout.js') }}" defer></script>
 <script>
-function toggleRow(rank) {
-  var row = document.getElementById('detail-' + rank);
-  if (row) {
-    row.classList.toggle('hidden');
-  }
+function toggleRow(id) {
+  var row = document.getElementById('detail-' + id);
+  if (row) row.classList.toggle('hidden');
+}
+function toggleRowLegacy(id) {
+  var row = document.getElementById('detail-legacy-' + id);
+  if (row) row.classList.toggle('hidden');
+}
+
+document.querySelectorAll('.dismiss-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var id = this.dataset.id;
+    var self = this;
+    fetch('/admin/trend-scout/api/opportunities/' + id + '/dismiss', { method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token() }}'} })
+      .then(function() { self.textContent = 'Dismissed'; self.style.opacity = '0.5'; self.disabled = true; });
+  });
+});
+document.querySelectorAll('.undo-dismiss-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var id = this.dataset.id;
+    var self = this;
+    fetch('/admin/trend-scout/api/opportunities/' + id + '/undo-dismiss', { method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token() }}'} })
+      .then(function() { location.reload(); });
+  });
+});
+
+function loadBiggestMovers() {
+  var panel = document.getElementById('biggest-movers-panel');
+  var content = document.getElementById('biggest-movers-content');
+  panel.classList.remove('hidden');
+  content.innerHTML = 'Loading...';
+  fetch('/admin/trend-scout/api/biggest-movers?top_n=10')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.movers || data.movers.length === 0) {
+        content.innerHTML = '<p style="color:var(--color-text-muted);">No mover data available.</p>';
+        return;
+      }
+      var html = '<table class="app-table text-xs"><thead><tr><th>Keyword</th><th>Current</th><th>Change</th></tr></thead><tbody>';
+      data.movers.forEach(function(m) {
+        var cls = m.delta > 0 ? 'color:var(--color-success)' : (m.delta < 0 ? 'color:var(--color-danger)' : 'color:var(--color-text-muted)');
+        html += '<tr><td style="color:var(--color-text);">' + m.keyword + '</td><td class="font-mono">' + m.current_score + '</td><td class="font-mono" style="' + cls + '">' + (m.delta > 0 ? '+' : '') + m.delta + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      content.innerHTML = html;
+    })
+    .catch(function() { content.innerHTML = '<p style="color:var(--color-danger);">Failed to load.</p>'; });
 }
 </script>
 {% endblock %}

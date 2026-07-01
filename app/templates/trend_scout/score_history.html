@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Score History: {{ keyword }} | Trend Scout{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex items-start justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Trend Scout</p>
+      <h1 class="mt-2 text-2xl font-semibold" style="color: var(--color-text);">Score History: {{ keyword }}</h1>
+    </div>
+    <a href="{{ url_for('trend_scout.index') }}" class="app-btn app-btn-secondary text-sm py-1">Back to Matrix</a>
+  </div>
+
+  {% if history %}
+  <div class="app-card p-6">
+    <canvas id="scoreChart" height="100"></canvas>
+  </div>
+
+  <div class="app-card p-6">
+    <div class="overflow-x-auto">
+      <table class="app-table text-sm">
+        <thead>
+          <tr>
+            <th>Report Date</th>
+            <th>Score</th>
+            <th>Intent</th>
+            <th>Velocity</th>
+            <th>Price</th>
+            <th>Low Sat.</th>
+            <th>Local</th>
+            <th>Prod.</th>
+            <th>License Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in history %}
+          <tr>
+            <td class="font-mono text-xs">{{ h.report_date[:10] if h.report_date else "—" }}</td>
+            <td class="font-mono font-semibold">{{ h.opportunity_score }}</td>
+            <td class="font-mono">{{ h.purchase_intent }}</td>
+            <td class="font-mono">{{ h.trend_velocity }}</td>
+            <td class="font-mono">{{ h.price_resilience }}</td>
+            <td class="font-mono">{{ h.low_saturation }}</td>
+            <td class="font-mono">{{ h.local_fit }}</td>
+            <td class="font-mono">{{ h.production_fit }}</td>
+            <td class="font-mono" style="color: {{ 'var(--color-danger)' if h.license_risk >= 70 else 'var(--color-text-muted)' }};">{{ h.license_risk }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="app-card p-8 text-center">
+    <p style="color: var(--color-text-muted);">No history found for "{{ keyword }}".</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if history %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const ctx = document.getElementById('scoreChart').getContext('2d');
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: {{ history|map(attribute='report_date')|map('default', '')|map('truncate', 10)|list|tojson }},
+    datasets: [
+      { label: 'Opportunity Score', data: {{ history|map(attribute='opportunity_score')|list|tojson }}, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3 },
+      { label: 'Purchase Intent', data: {{ history|map(attribute='purchase_intent')|list|tojson }}, borderColor: '#14b8a6', backgroundColor: 'transparent', borderDash: [4,4], tension: 0.3 },
+      { label: 'Trend Velocity', data: {{ history|map(attribute='trend_velocity')|list|tojson }}, borderColor: '#8b5cf6', backgroundColor: 'transparent', borderDash: [6,3], tension: 0.3 },
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
+    },
+    scales: {
+      y: { beginAtZero: true, max: 100, title: { display: true, text: 'Score' } },
+      x: { title: { display: true, text: 'Report Date' } }
+    }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Report #{{ report.id }} | Trend Scout{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex items-start justify-between flex-wrap gap-4">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Trend Scout</p>
+      <h1 class="mt-2 text-2xl font-semibold" style="color: var(--color-text);">Report #{{ report.id }}</h1>
+      <p class="text-sm mt-1" style="color: var(--color-text-muted);">{{ report.report_date|local_full }}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('trend_scout.report_csv', report_id=report.id) }}"
+         class="app-btn text-sm py-1" style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">
+        Download CSV
+      </a>
+      <a href="{{ url_for('trend_scout.index') }}" class="app-btn app-btn-secondary text-sm py-1">Back to Matrix</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Report ID</p>
+      <p class="text-lg font-bold font-mono" style="color: var(--color-text);">#{{ report.id }}</p>
+    </div>
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Date</p>
+      <p class="text-sm font-mono" style="color: var(--color-text);">{{ report.report_date.strftime('%Y-%m-%d') }}</p>
+    </div>
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Opportunities</p>
+      <p class="text-lg font-bold" style="color: var(--color-text);">{{ scores_pagination.total }}</p>
+    </div>
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Growing</p>
+      <p class="text-lg font-bold" style="color: var(--color-success);">{{ report.growing_categories|length if report.growing_categories else 0 }}</p>
+    </div>
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Declining</p>
+      <p class="text-lg font-bold" style="color: var(--color-danger);">{{ report.declining_trends|length if report.declining_trends else 0 }}</p>
+    </div>
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Sources</p>
+      <p class="text-lg font-bold" style="color: var(--color-text);">{{ source_health|length }}</p>
+    </div>
+  </div>
+
+  <div class="flex flex-wrap gap-3 items-center">
+    <label class="text-sm" style="color: var(--color-text-muted);">Compare with:</label>
+    <select class="app-input text-sm" id="compare-select"
+            onchange="if(this.value) window.location.href='{{ url_for('trend_scout.report_detail', report_id=report.id) }}?compare='+this.value">
+      <option value="">— None —</option>
+      {% for r in all_reports %}
+        {% if r.id != report.id %}
+        <option value="{{ r.id }}" {% if compare_report and compare_report.id == r.id %}selected{% endif %}>
+          #{{ r.id }} — {{ r.report_date.strftime('%Y-%m-%d') }}
+        </option>
+        {% endif %}
+      {% endfor %}
+    </select>
+    <label class="text-sm ml-4" style="color: var(--color-text-muted);">Filter:</label>
+    <select class="app-input text-sm" id="action-filter"
+            onchange="window.location.href='{{ url_for('trend_scout.report_detail', report_id=report.id) }}{% if compare_report %}?compare={{ compare_report.id }}{% endif %}' + (this.value ? '&action=' + this.value : '')">
+      <option value="">All actions</option>
+      <option value="print_now" {% if request.args.get('action') == 'print_now' %}selected{% endif %}>Print Now</option>
+      <option value="keep_selling" {% if request.args.get('action') == 'keep_selling' %}selected{% endif %}>Keep Selling</option>
+      <option value="clearance_candidate" {% if request.args.get('action') == 'clearance_candidate' %}selected{% endif %}>Clearance</option>
+      <option value="retire_review" {% if request.args.get('action') == 'retire_review' %}selected{% endif %}>Retire</option>
+      <option value="license_review" {% if request.args.get('action') == 'license_review' %}selected{% endif %}>License</option>
+    </select>
+  </div>
+
+  {% if report.summary %}
+  <div class="app-card p-4">
+    <h2 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Summary</h2>
+    <div class="text-sm prose-sm" style="color: var(--color-text);">
+      {{ report.summary|render_markdown|safe }}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if scores_pagination.items %}
+  <div class="app-card p-5">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">
+      Opportunity Scores
+      {% if compare_report %}
+      <span class="text-sm font-normal" style="color: var(--color-text-muted);">
+        vs Report #{{ compare_report.id }} ({{ compare_report.report_date.strftime('%Y-%m-%d') }})
+      </span>
+      {% endif %}
+    </h2>
+    <div class="overflow-x-auto">
+      <table class="app-table text-xs">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Keyword</th>
+            <th>Action</th>
+            <th>Score</th>
+            {% if compare_report %}<th>Change</th>{% endif %}
+            <th>Intent</th>
+            <th>Velocity</th>
+            <th>Price</th>
+            <th>Low Sat.</th>
+            <th>Local</th>
+            <th>Prod.</th>
+            <th>License</th>
+            <th>Inventory</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in scores_pagination.items %}
+          {% set prev_score = compare_scores.get(s.keyword) if compare_scores else None %}
+          <tr class="cursor-pointer" onclick="toggleRow({{ s.id }})">
+            <td class="font-mono">{{ s.rank or loop.index }}</td>
+            <td class="font-semibold" style="color: var(--color-text);">{{ s.title or s.keyword }}</td>
+            <td>
+              <span class="inline-flex rounded-full px-2 py-0.5 font-semibold text-xs"
+                    style="background:var(--color-primary-bg);color:var(--color-primary);">
+                {{ s.action|replace('_', ' ')|title }}
+              </span>
+            </td>
+            <td class="font-mono font-semibold">{{ s.opportunity_score }}</td>
+            {% if compare_report %}
+            <td class="font-mono font-semibold" style="color:
+              {%- if prev_score is not none and prev_score > s.opportunity_score %}var(--color-danger)
+              {%- elif prev_score is not none and prev_score < s.opportunity_score %}var(--color-success)
+              {%- else %}var(--color-text-muted){% endif %};">
+              {% if prev_score is not none %}
+                {{ "%+d"|format(s.opportunity_score - prev_score) }}
+              {% else %}
+                &mdash;
+              {% endif %}
+            </td>
+            {% endif %}
+            <td class="font-mono">{{ s.purchase_intent }}</td>
+            <td class="font-mono">{{ s.trend_velocity }}</td>
+            <td class="font-mono">{{ s.price_resilience }}</td>
+            <td class="font-mono">{{ s.low_saturation }}</td>
+            <td class="font-mono">{{ s.local_fit }}</td>
+            <td class="font-mono">{{ s.production_fit }}</td>
+            <td class="font-mono" style="color: {{ 'var(--color-danger)' if s.license_risk >= 70 else 'var(--color-text-muted)' }};">{{ s.license_risk }}</td>
+            <td class="font-mono">{{ s.inventory_available if s.inventory_available is not none else '—' }}</td>
+          </tr>
+          <tr id="detail-{{ s.id }}" class="hidden">
+            <td colspan="{% if compare_report %}14{% else %}13{% endif %}" class="p-4" style="background:var(--color-surface);">
+              <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Candidate Type</p>
+                  <p class="text-sm" style="color: var(--color-text);">{{ s.candidate_type }}</p>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Match Confidence</p>
+                  <p class="text-sm" style="color: var(--color-text);">{{ s.match_confidence or '—' }}</p>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Base Price</p>
+                  <p class="text-sm" style="color: var(--color-text);">${{ "%.2f"|format(s.base_price) if s.base_price else '—' }}</p>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold" style="color: var(--color-text-muted);">License Status</p>
+                  <p class="text-sm" style="color: var(--color-text);">{{ s.license_status or '—' }}</p>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Sources</p>
+                  <p class="text-sm" style="color: var(--color-text);">{{ s.sources|join(', ') if s.sources else '—' }}</p>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Product ID</p>
+                  <p class="text-sm" style="color: var(--color-text);">{{ s.product_id or '—' }}</p>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Score Rank</p>
+                  <p class="text-sm" style="color: var(--color-text);">{{ s.rank or '—' }}</p>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold" style="color: var(--color-text-muted);">Dismissed</p>
+                  <p class="text-sm" style="color: var(--color-text);">{{ 'Yes' if s.dismissed else 'No' }}</p>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if scores_pagination.pages > 1 %}
+    <div class="flex items-center justify-center gap-2 mt-4">
+      {% for p in range(1, scores_pagination.pages + 1) %}
+        <a href="?page={{ p }}&per_page={{ scores_pagination.per_page }}{% if compare_report %}&compare={{ compare_report.id }}{% endif %}{% if request.args.get('action') %}&action={{ request.args.get('action') }}{% endif %}"
+           class="px-3 py-1 text-sm rounded {% if p == scores_pagination.page %}"
+           style="background:var(--color-primary);color:white;{% else %}"
+           style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);{% endif %}">
+          {{ p }}
+        </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="app-card p-8 text-center">
+    <p style="color: var(--color-text-muted);">No scored opportunities for this report.</p>
+  </div>
+  {% endif %}
+
+  {% if source_health %}
+  {% include "trend_scout/_source_health.html" %}
+  {% endif %}
+</section>
+
+<script>
+function toggleRow(id) {
+  var row = document.getElementById('detail-' + id);
+  if (row) row.classList.toggle('hidden');
+}
+</script>
+{% endblock %}

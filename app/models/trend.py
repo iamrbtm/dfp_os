@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
@@ -110,6 +111,8 @@ class TrendOpportunityScore(PrimaryKeyMixin, TimestampMixin, db.Model):
     score_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     source_health: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     match_confidence: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    dismissed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     report = relationship("TrendReport", back_populates="opportunity_scores")
 
