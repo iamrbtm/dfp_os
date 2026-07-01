@@ -159,7 +159,7 @@
                     <button class="text-xs px-2 py-0.5 rounded"
                             style="background:var(--color-success);color:#fff;border:none;cursor:pointer;"
                             hx-post="{{ url_for('trend_scout.action_print_now') }}"
-                            hx-vals='{"product_id": {{ s.product_id }}, "keyword": "{{ keyword|e }}"}'
+                            hx-vals='{"product_id": {{ s.product_id }}, "keyword": "{{ keyword|e }}", "trend_opportunity_id": {{ s.id }}}'
                             hx-swap="outerHTML"
                             hx-disabled-elt="closest button">Print Now</button>
                     {% endif %}
@@ -193,6 +193,16 @@
                               hx-vals='{"product_id": {{ s.product_id }}, "keyword": "{{ keyword|e }}"}'
                               hx-swap="outerHTML" hx-disabled-elt="closest button">License</button>
                       {% endif %}
+                    {% endif %}
+                    {% if s.product_id and s.action == "print_now" %}
+                    <a href="{{ url_for('trend_scout.action_add_to_market_prep') }}?product_id={{ s.product_id }}&keyword={{ keyword|urlencode }}&score={{ s.opportunity_score }}"
+                       class="text-xs px-2 py-0.5 rounded"
+                       style="background:var(--color-primary-bg);color:var(--color-primary);border:1px solid var(--color-border);text-decoration:none;">Prep</a>
+                    {% endif %}
+                    {% if s.id %}
+                    <a href="{{ url_for('print_jobs.list_resource', resource_key='print-jobs') }}?trend_opportunity_id={{ s.id }}"
+                       class="text-xs px-2 py-0.5 rounded"
+                       style="background:transparent;color:var(--color-link);border:1px solid var(--color-border);text-decoration:none;">Jobs</a>
                     {% endif %}
                     {% if s.dismissed %}
                     <button class="text-xs px-2 py-0.5 rounded undo-dismiss-btn"

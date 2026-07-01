@@ -11,6 +11,11 @@ from app.blueprints.trend_scout import bp
 from app.celery_app import celery
 from app.extensions import db
 from app.models import (
+    Market,
+    MarketPackingList,
+    MarketStatus,
+    PrepTask,
+    PrepTaskCategory,
     PrintJob,
     PrintJobStatus,
     Product,
@@ -752,6 +757,7 @@ def report_csv_alt(report_id: int):
 def action_print_now():
     product_id = request.form.get("product_id", type=int)
     keyword = request.form.get("keyword", "")
+    trend_opportunity_id = request.form.get("trend_opportunity_id", type=int)
     if not product_id:
         record_audit_event(
             action="trend_scout.print_now.skipped",
@@ -772,6 +778,7 @@ def action_print_now():
         priority=1,
         estimated_minutes=product.parsed_print_minutes or product.estimated_print_minutes or 0,
         label=f"Trend Scout: {product.name}",
+        trend_opportunity_id=trend_opportunity_id,
     )
     db.session.add(job)
     db.session.commit()
@@ -784,6 +791,7 @@ def action_print_now():
             "product_id": product_id,
             "product_name": product.name,
             "keyword": keyword,
+            "trend_opportunity_id": trend_opportunity_id,
             "source": "trend_scout",
         },
         source_module=__name__,
@@ -977,6 +985,165 @@ def task_monitor_retry(run_id: str):
         source_module=__name__,
     )
     return jsonify({"task_id": task.id, "status": "dispatched"})
+
+
+# -- Phase 11: Calibration History & Comparison --
+
+@bp.get("/calibration")
+@roles_required(UserRole.ADMIN)
+def calibration():
+    from app.services.trend_scout_calibration import get_calibration_history, run_and_store_calibration
+
+    if request.args.get("run") == "1":
+        result = run_and_store_calibration(trigger="manual")
+        record_audit_event(
+            action="trend_scout.calibration.manual_run",
+            entity_type="trend_calibration_result",
+            entity_id=str(result.id),
+            metadata={
+                "mae": result.mae,
+                "precision": result.precision_at_high_score,
+                "report_count": result.report_count,
+            },
+            source_module=__name__,
+        )
+        return redirect(url_for("trend_scout.calibration"))
+
+    history = get_calibration_history(limit=20)
+    comparison = None
+    regression = None
+    if len(history) >= 2:
+        prev, curr = history[1], history[0]
+        comparison = {
+            "prev_date": prev.run_date,
+            "curr_date": curr.run_date,
+            "mae_change": (curr.mae - prev.mae) if (curr.mae is not None and prev.mae is not None) else None,
+            "precision_change": (
+                (curr.precision_at_high_score - prev.precision_at_high_score)
+                if (curr.precision_at_high_score is not None and prev.precision_at_high_score is not None)
+                else None
+            ),
+            "f1_change": (curr.f1_score - prev.f1_score) if (curr.f1_score is not None and prev.f1_score is not None) else None,
+            "prev": prev,
+            "curr": curr,
+        }
+        from app.services.trend_scout_calibration import check_regression as _check_regression
+        regression = _check_regression()
+
+    return render_template(
+        "trend_scout/calibration.html",
+        history=history,
+        comparison=comparison,
+        regression=regression,
+    )
+
+
+@bp.get("/calibration/<int:cal_id>")
+@roles_required(UserRole.ADMIN)
+def calibration_detail(cal_id: int):
+    from app.models.trend import TrendCalibrationResult
+
+    cal = db.session.get(TrendCalibrationResult, cal_id)
+    if not cal:
+        abort(404)
+    return render_template("trend_scout/calibration_detail.html", cal=cal)
+
+
+# -- Phase 13: Market Prep Integration --
+
+@bp.route("/actions/add-to-market-prep", methods=["GET", "POST"])
+@roles_required(UserRole.ADMIN)
+def action_add_to_market_prep():
+    if request.method == "GET":
+        upcoming_markets = (
+            db.session.query(Market)
+            .filter(
+                Market.status.in_([MarketStatus.ACCEPTED, MarketStatus.SCHEDULED]),
+                Market.event_date.isnot(None),
+            )
+            .order_by(Market.event_date.asc())
+            .all()
+        )
+        product_id = request.args.get("product_id", type=int)
+        keyword = request.args.get("keyword", "")
+        score = request.args.get("score", type=int)
+        return render_template(
+            "trend_scout/add_to_market_prep.html",
+            upcoming_markets=upcoming_markets,
+            product_id=product_id,
+            keyword=keyword,
+            score=score,
+        )
+
+    market_id = request.form.get("market_id", type=int)
+    product_id = request.form.get("product_id", type=int)
+    keyword = request.form.get("keyword", "").strip()
+    score = request.form.get("score", type=int)
+
+    if not market_id or not product_id:
+        return jsonify({"error": "market_id and product_id required"}), 400
+
+    market = db.session.get(Market, market_id)
+    if not market:
+        return jsonify({"error": "market not found"}), 404
+    product = db.session.get(Product, product_id)
+    if not product:
+        return jsonify({"error": "product not found"}), 404
+
+    suggested_qty = 3
+    if score:
+        suggested_qty = max(1, round(score / 20))
+
+    existing = (
+        db.session.query(MarketPackingList)
+        .filter(
+            MarketPackingList.market_id == market_id,
+            MarketPackingList.product_id == product_id,
+        )
+        .first()
+    )
+    if existing:
+        existing.planned_quantity = (existing.planned_quantity or 0) + suggested_qty
+        packing = existing
+    else:
+        packing = MarketPackingList(
+            market_id=market_id,
+            product_id=product_id,
+            planned_quantity=suggested_qty,
+            notes=f"Trend Scout suggestion: {keyword}",
+        )
+        db.session.add(packing)
+    db.session.commit()
+
+    reprint_task = PrepTask(
+        market_id=market_id,
+        title=f"Print {suggested_qty} x {product.name}",
+        category=PrepTaskCategory.REPRINT,
+        status="open",
+        source="trend_scout",
+        notes=f"Suggested by Trend Scout for market '{market.name}'. Score: {score}. Keyword: {keyword}.",
+    )
+    db.session.add(reprint_task)
+    db.session.commit()
+
+    record_audit_event(
+        action="trend_scout.added_to_market_prep",
+        entity_type="market_packing_list",
+        entity_id=packing.id,
+        metadata={
+            "market_id": market_id,
+            "market_name": market.name,
+            "product_id": product_id,
+            "product_name": product.name,
+            "keyword": keyword,
+            "score": score,
+            "suggested_qty": suggested_qty,
+            "reprint_task_id": reprint_task.id,
+        },
+        source_module=__name__,
+    )
+
+    return redirect(url_for("trend_scout.index"))
 
 
 @bp.get("/backtest")

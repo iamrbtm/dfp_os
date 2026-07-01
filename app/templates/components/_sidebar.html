@@ -86,10 +86,16 @@
        style="{% if active_section == 'analytics' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Analytics
     </a>
-    <a href="{{ url_for('trend_scout.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'trend_scout' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Trend Scout
-    </a>
+    <div>
+      <a href="{{ url_for('trend_scout.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+         style="{% if active_section == 'trend_scout' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+        Trend Scout
+      </a>
+      {% if active_section == 'trend_scout' %}
+      <a href="{{ url_for('trend_scout.calibration') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">Calibration</a>
+      {% endif %}
+    </div>
     <a href="{{ url_for('cost_engine.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'cost_engine' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Cost Engine

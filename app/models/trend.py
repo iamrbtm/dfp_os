@@ -134,3 +134,27 @@ class SourceHealthRecord(PrimaryKeyMixin, TimestampMixin, db.Model):
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     report = relationship("TrendReport", back_populates="source_health_records")
+
+
+class TrendCalibrationResult(PrimaryKeyMixin, TimestampMixin, db.Model):
+    __tablename__ = "trend_calibration_results"
+
+    run_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    trigger: Mapped[str] = mapped_column(String(40), nullable=False, default="manual")
+    report_count: Mapped[int] = mapped_column(Integer, default=0)
+    score_count: Mapped[int] = mapped_column(Integer, default=0)
+    mae: Mapped[float | None] = mapped_column(nullable=True)
+    rmse: Mapped[float | None] = mapped_column(nullable=True)
+    precision_at_high_score: Mapped[float | None] = mapped_column(nullable=True)
+    recall_of_sellers: Mapped[float | None] = mapped_column(nullable=True)
+    f1_score: Mapped[float | None] = mapped_column(nullable=True)
+    zero_seller_rate: Mapped[float | None] = mapped_column(nullable=True)
+    avg_predicted_score: Mapped[float | None] = mapped_column(nullable=True)
+    total_units_sold: Mapped[int] = mapped_column(Integer, default=0)
+    component_analysis: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    top_k_analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    action_analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    tuning_hints: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    current_weights: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    predictions_sample: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

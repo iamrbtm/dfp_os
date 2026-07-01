@@ -67,7 +67,7 @@ from app.models.pos import (
 from app.models.prep_task import PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_job import PrintJob, PrintJobStatus
 from app.models.setting import Setting
-from app.models.trend import SourceHealthRecord, TrendOpportunityScore, TrendReport, TrendSnapshot, TrendTaskRun
+from app.models.trend import SourceHealthRecord, TrendCalibrationResult, TrendOpportunityScore, TrendReport, TrendSnapshot, TrendTaskRun
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -150,6 +150,7 @@ __all__ = [
     "TrendOpportunityScore",
     "TrendReport",
     "Notification",
+    "TrendCalibrationResult",
     "TrendTaskRun",
     "TrendSnapshot",
     "User",

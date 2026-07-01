@@ -49,6 +49,7 @@ class PrintJob(PrimaryKeyMixin, TimestampMixin, db.Model):
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    trend_opportunity_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     order_item = relationship("OrderItem", back_populates="print_jobs")
     product = relationship("Product")

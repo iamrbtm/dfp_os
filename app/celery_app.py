@@ -11,6 +11,7 @@ celery = _Celery(
         "app.tasks.model_analysis",
         "app.tasks.cost_calculation",
         "app.tasks.trend_scout",
+        "app.tasks.trend_calibration",
     ],
 )
 
@@ -55,6 +56,11 @@ def make_celery(app: Flask | None = None) -> _Celery:
                     "task": "app.tasks.trend_scout.trend_scout_pipeline",
                     "schedule": crontab(hour=6, minute=0, day_of_week=1),
                     "options": {"soft_time_limit": 900, "time_limit": 960},
+                },
+                "trend-scout-calibration-1st-of-month": {
+                    "task": "app.tasks.trend_calibration.calibrate_trend_scout",
+                    "schedule": crontab(hour=5, minute=0, day_of_month=1),
+                    "options": {"soft_time_limit": 600, "time_limit": 660},
                 },
             },
         )
