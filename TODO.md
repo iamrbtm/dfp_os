@@ -25,6 +25,9 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` **AI Design Trend Scout hardening pass** — Refactored trend scoring to ignore error-only snapshots, normalize keywords, weight source/item signal, preserve source timestamps, add deterministic no-AI summaries/category fallback, fix BGG/Etsy/Pinterest source issues, and add focused unit tests.
 - `done` **Trend Scout buyer-intent expansion** — Added internal demand events for storefront/POS/customer-request signals, made internal demand the highest-priority Trend Scout source, and added optional Google Trends/search-interest and TikTok Research API adapters with safe not-configured fallbacks.
 - `done` **Trend Scout opportunity decision matrix** — Split opportunity scoring into purchase intent, trend velocity, price resilience, low saturation, local fit, production fit, and license risk; included current catalog products alongside potential products with action recommendations.
+- `done` **Phase 7: Source Health Dashboard** — Added stale-data age column (shows time since last scrape), provider setup status indicator (configured vs unconfigured sources with env var checks), and data freshness score (0–100 color-coded) to the Source Health table.
+- `done` **Phase 9: Saved Views** — Added "Save View" button that persists current pill view, search query, filters, and sort column/direction to localStorage; auto-restores on page load.
+- `done` **Phase 11: Production Verification** — Created `docs/trend_scout_setup.md` with API key setup guide for all 10 sources, env var reference, migration verification steps, Celery worker/beat run instructions, pipeline architecture diagram, scoring weights reference, and development guide.
 
 ## Next Priorities
 

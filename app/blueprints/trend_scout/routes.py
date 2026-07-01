@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 
 from flask import jsonify, redirect, render_template, request, session, url_for
@@ -19,6 +20,60 @@ from app.models import (
 from app.services.audit import record_audit_event
 from app.utils.auth import roles_required
 
+_PROVIDER_CONFIG_CHECKS: dict[str, list[tuple[str, str]]] = {
+    "etsy": [("ETSY_API_KEY", "API key")],
+    "google_trends": [("SERPAPI_API_KEY", "SerpAPI key")],
+    "tiktok": [("TIKTOK_RESEARCH_ACCESS_TOKEN", "Research API token")],
+    "pinterest": [("PINTEREST_API_KEY", "API key")],
+    "makerworld": [],
+    "printables": [],
+    "myminifactory": [],
+    "reddit": [],
+    "bgg": [],
+    "internal_demand": [],
+}
+
+
+def _provider_setup_status() -> dict[str, dict]:
+    status: dict[str, dict] = {}
+    for source, checks in _PROVIDER_CONFIG_CHECKS.items():
+        if not checks:
+            status[source] = {"configured": True, "needs_env": [], "missing_env": []}
+        else:
+            missing = [label for env_name, label in checks if not os.getenv(env_name)]
+            status[source] = {
+                "configured": len(missing) == 0,
+                "needs_env": [env_name for env_name, _ in checks],
+                "missing_env": missing,
+            }
+    return status
+
+
+def _freshness_label(scraped_at: datetime | None) -> str:
+    if not scraped_at:
+        return "never"
+    delta = datetime.now(timezone.utc) - scraped_at
+    if delta.days > 0:
+        return f"{delta.days}d ago"
+    if delta.seconds >= 3600:
+        return f"{delta.seconds // 3600}h ago"
+    return f"{max(1, delta.seconds // 60)}m ago"
+
+
+def _freshness_score(scraped_at: datetime | None) -> int:
+    if not scraped_at:
+        return 0
+    delta = datetime.now(timezone.utc) - scraped_at
+    if delta.days == 0:
+        return 100
+    if delta.days <= 1:
+        return 80
+    if delta.days <= 3:
+        return 60
+    if delta.days <= 7:
+        return 40
+    return 20
+
 
 @bp.get("/")
 @roles_required(UserRole.ADMIN)
@@ -35,11 +90,15 @@ def index():
             .order_by(SourceHealthRecord.source)
             .all()
         )
+    provider_setup = _provider_setup_status()
     return render_template(
         "trend_scout/index.html",
         latest=latest,
         all_reports=all_reports,
         source_health=source_health,
+        provider_setup=provider_setup,
+        freshness_label=_freshness_label,
+        freshness_score=_freshness_score,
     )
 
 

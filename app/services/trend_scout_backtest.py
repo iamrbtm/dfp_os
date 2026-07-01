@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func
@@ -119,7 +119,7 @@ def _measure_actual_sales(
     if product_id is None:
         return {"quantity": 0, "revenue": 0.0, "order_count": 0}
 
-    end_date = after_date + __import__("datetime").timedelta(days=window_days)
+    end_date = after_date + timedelta(days=window_days)
 
     order_qty = (
         db_session.query(func.coalesce(func.sum(OrderItem.quantity), 0))

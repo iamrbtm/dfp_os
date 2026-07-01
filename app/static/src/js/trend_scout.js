@@ -1,6 +1,7 @@
 (function () {
   'use strict';
 
+  var STORAGE_KEY = 'ts_saved_view';
   var MATRIX = document.getElementById('opportunity-matrix');
   if (!MATRIX) return;
 
@@ -44,6 +45,62 @@
     if (filterType === 'current' && row.querySelector('td:nth-child(3)')?.textContent.indexOf('Current product') === -1) return false;
     if (filterType === 'potential' && row.querySelector('td:nth-child(3)')?.textContent.indexOf('Potential product') === -1) return false;
     return true;
+  }
+
+  function saveView() {
+    var state = {
+      view: ACTIVE_VIEW,
+      search: document.getElementById('ts-search')?.value || '',
+      filterAction: document.getElementById('ts-filter-action')?.value || 'all',
+      filterType: document.getElementById('ts-filter-type')?.value || 'all',
+      sortCol: SORT_STATE.col,
+      sortAsc: SORT_STATE.asc,
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      var btn = document.getElementById('ts-save-view');
+      if (btn) {
+        btn.textContent = 'Saved!';
+        setTimeout(function () { btn.textContent = 'Save View'; }, 2000);
+      }
+    } catch (e) {}
+  }
+
+  function restoreView() {
+    var raw;
+    try {
+      raw = localStorage.getItem(STORAGE_KEY);
+    } catch (e) { return; }
+    if (!raw) return;
+    var state;
+    try { state = JSON.parse(raw); } catch (e) { return; }
+    if (!state) return;
+
+    if (state.view) setView(state.view);
+    if (state.search) {
+      var el = document.getElementById('ts-search');
+      if (el) el.value = state.search;
+    }
+    if (state.filterAction) {
+      var el = document.getElementById('ts-filter-action');
+      if (el) el.value = state.filterAction;
+    }
+    if (state.filterType) {
+      var el = document.getElementById('ts-filter-type');
+      if (el) el.value = state.filterType;
+    }
+    if (state.sortCol !== null && state.sortCol !== undefined) {
+      SORT_STATE.col = state.sortCol;
+      SORT_STATE.asc = state.sortAsc !== false;
+      var th = MATRIX.querySelector('th[data-sort="' + state.sortCol + '"]');
+      if (th) {
+        document.querySelectorAll('[data-sort]').forEach(function (h) {
+          h.textContent = h.textContent.replace(/ [▲▼]$/, '');
+        });
+        th.textContent += SORT_STATE.asc ? ' ▲' : ' ▼';
+      }
+    }
+    applyFiltersAndSort();
   }
 
   function applyFiltersAndSort() {
@@ -132,5 +189,8 @@
   document.getElementById('ts-search')?.addEventListener('input', applyFiltersAndSort);
   document.getElementById('ts-filter-action')?.addEventListener('change', applyFiltersAndSort);
   document.getElementById('ts-filter-type')?.addEventListener('change', applyFiltersAndSort);
+  document.getElementById('ts-save-view')?.addEventListener('click', saveView);
+
+  restoreView();
 
 })();

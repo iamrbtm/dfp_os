@@ -1,38 +1,28 @@
 from __future__ import annotations
 
-from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+import logging
 import math
 import re
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import (
-    InventoryRecord,
-    LicenseStatus,
-    Order,
-    OrderItem,
-    OrderStatus,
-    PosSale,
-    PosSaleItem,
-    PosSaleStatus,
-    Product,
-)
-from app.models.trend import TrendSnapshot
-from app.services.trend_match import (  # noqa: F811
-    match_product_to_term,
-)
-
+from app.models.catalog import LicenseStatus
+from app.models.order import Order, OrderItem
+from app.models.pos import PosSale, PosSaleItem
+from app.models.print_job import PrintJob, PrintJobStatus
+from app.services.trend_match import match_product_to_term
 from app.services.trend_scout_weights import (
     load_buyer_source_weights as _load_buyer_weights,
     load_metric_weights as _load_metric_weights,
     load_score_weights as _load_score_weights,
     load_source_weights as _load_source_weights,
 )
+
+logger = logging.getLogger(__name__)
 
 INTERNAL_KEYWORDS = {
     "",
@@ -46,20 +36,14 @@ INTERNAL_KEYWORDS = {
     "analysis",
 }
 
-_WEIGHTS_CACHE: dict | None = None
-
-
 def _get_source_weights() -> dict[str, float]:
     return _load_source_weights()
-
 
 def _get_metric_weights() -> dict[str, float]:
     return _load_metric_weights()
 
-
 def _get_buyer_weights() -> dict[str, float]:
     return _load_buyer_weights()
-
 
 MAKER_SOURCES = {"makerworld", "printables", "myminifactory"}
 
@@ -100,6 +84,46 @@ LICENSE_RISK_TERMS = {
     "army logo",
     "military logo",
     "unit insignia",
+    "snoopy",
+    "peanuts",
+    "hello kitty",
+    "sanrio",
+    "squishmallow",
+    "mickey",
+    "minnie",
+    "mickey mouse",
+    "donald duck",
+    "spongebob",
+    "paw patrol",
+    "peppa pig",
+    "super mario",
+    "zelda",
+    "sonic",
+    "pikachu",
+    "transformers",
+    "lego",
+    "fnaf",
+    "anime",
+    "naruto",
+    "dragon ball",
+    "ghibli",
+    "coca cola",
+    "nike",
+    "harley davidson",
+    "nfl",
+    "mlb",
+    "nba",
+    "ncaa",
+    "military branch",
+    "us army",
+    "us navy",
+    "us air force",
+    "us marines",
+    "official",
+    "©",
+    "™",
+    "®",
+    "trademark",
 }
 
 
@@ -138,6 +162,9 @@ class OpportunityCandidate:
     stockout_detected: bool = False
     margin_pct: float = 0.0
     last_sale_at: str | None = None
+    online_units_sold: int = 0
+    pos_units_sold: int = 0
+    admin_override: str = ""
 
     @property
     def text(self) -> str:
@@ -182,409 +209,463 @@ def _normalise_keyword(keyword: str | None) -> str:
         changed = False
         for prefix in KEYWORD_PREFIXES:
             if value.startswith(prefix):
-                value = value.removeprefix(prefix).strip()
+                value = value[len(prefix) :].strip()
                 changed = True
 
-    value = re.sub(r"\s+", " ", value)
-    return "" if value in INTERNAL_KEYWORDS else value
+    return value
 
 
-def _item_keyword(row_keyword: str, item: dict[str, Any]) -> str:
-    keyword = _normalise_keyword(str(item.get("keyword") or row_keyword))
-    return keyword or _normalise_keyword(row_keyword)
-
-
-def _parse_number(value: Any) -> float:
-    if value is None or value == "":
-        return 0.0
-    if isinstance(value, int | float):
-        return float(value)
-    text = str(value).strip().lower().replace(",", "")
-    multiplier = 1.0
-    if text.endswith("k"):
-        multiplier = 1_000.0
-        text = text[:-1]
-    elif text.endswith("m"):
-        multiplier = 1_000_000.0
-        text = text[:-1]
-    try:
-        return float(text) * multiplier
-    except ValueError:
-        return 0.0
-
-
-def _decimal_to_float(value: Decimal | int | float | None) -> float:
-    if value is None:
-        return 0.0
-    return float(value)
-
-
-def _clamp_score(value: float) -> int:
-    return int(round(max(0.0, min(100.0, value))))
-
-
-def _log_score(value: float, scale: float = 18.0) -> int:
+def _log_score(value: float, scale: float = 15.0) -> int:
     if value <= 0:
         return 0
-    return _clamp_score(math.log1p(value) * scale)
+    raw = int(round(math.log2(value + 1) * (scale / 5.0)))
+    return max(0, min(100, raw))
+
+
+def _clamp_score(score: int) -> int:
+    return max(0, min(100, score))
+
+
+def _calc_signal_total(items: list[dict[str, Any]]) -> float:
+    return sum(_item_signal_score(item) for item in items)
+
+
+SIGNAL_METRIC_MAP = {
+    "downloads": "downloads",
+    "download_count": "download_count",
+    "prints_count": "prints_count",
+    "print_count": "print_count",
+    "makes": "makes",
+    "likes": "likes",
+    "num_favorers": "num_favorers",
+    "favorites": "favorites",
+    "saves": "saves",
+    "views": "views",
+    "visits": "visits",
+    "impressions": "impressions",
+    "comments": "comments",
+    "shares": "shares",
+    "interest": "interest",
+    "event_count": "event_count",
+    "quantity": "quantity",
+    "purchase_score": "purchase_score",
+    "revenue": "revenue",
+}
 
 
 def _item_signal_score(item: dict[str, Any]) -> float:
-    score = 1.0
-    for key, weight in _get_metric_weights().items():
-        metric = _parse_number(item.get(key))
-        if metric > 0:
-            score += math.log1p(metric) * weight
+    weights = _get_metric_weights()
+    total = 0.0
+    for key, weight in weights.items():
+        mapped = SIGNAL_METRIC_MAP.get(key)
+        if mapped and mapped in item:
+            try:
+                total += float(item[mapped]) * weight
+            except (ValueError, TypeError):
+                pass
+    return total
 
-    rank = _parse_number(item.get("rank"))
-    if rank > 0:
-        score += max(0.0, 2.0 - (rank / 25.0))
 
-    return score
-
-
-def _item_purchase_signal(source: str, item: dict[str, Any]) -> float:
-    if source == "internal_demand":
-        return (
-            _parse_number(item.get("purchase_score"))
-            + (_parse_number(item.get("quantity")) * 4)
-            + (_parse_number(item.get("event_count")) * 2)
-            + (_parse_number(item.get("revenue")) * 0.2)
-        )
-    if source == "etsy":
-        return (
-            _parse_number(item.get("num_favorers")) * 1.5
-            + _parse_number(item.get("views")) * 0.1
-            + _parse_number(item.get("price")) * 0.8
-        )
-    if source == "google_trends":
-        return _parse_number(item.get("interest")) * 1.2
-    if source == "tiktok":
-        return (
-            _parse_number(item.get("shares")) * 0.8
-            + _parse_number(item.get("comments")) * 0.25
-            + _parse_number(item.get("views")) * 0.015
-        )
+def _item_purchase_signal(item: dict[str, Any], source: str) -> float:
     return _item_signal_score(item) * _get_buyer_weights().get(source, 0.1)
-
-
-def _signal_rows(
-    rows: list[TrendSnapshot],
-) -> list[tuple[TrendSnapshot, dict[str, Any], str, list[dict[str, Any]]]]:
-    signal_rows: list[tuple[TrendSnapshot, dict[str, Any], str, list[dict[str, Any]]]] = []
-    for row in rows:
-        payload = row.raw_metadata or {}
-        if not isinstance(payload, dict):
-            continue
-        items = payload.get("items") or []
-        if not isinstance(items, list) or not items:
-            continue
-        keyword = _normalise_keyword(row.keyword_or_category)
-        if not keyword:
-            continue
-        signal_rows.append((row, payload, keyword, items))
-    return signal_rows
 
 
 def _source_weight(source: str) -> float:
     return _get_source_weights().get(source, 1.0)
 
 
-def _keyword_velocity_scores(
-    signal_rows: list[tuple[TrendSnapshot, dict[str, Any], str, list[dict[str, Any]]]],
-) -> dict[str, float]:
-    weekly_counts: dict[tuple[str, str], float] = defaultdict(float)
-    for row, _payload, keyword, items in signal_rows:
+def _keyword_velocity_scores(signal_rows: list[Any]) -> dict[tuple[str, str], float]:
+    weekly_counts: dict[tuple[str, str], float] = {}
+    for row in signal_rows:
+        items: list[dict] = row.raw_metadata.get("items", []) if row.raw_metadata else []
         week_label = _week_start(row.scraped_at).isoformat()
+        item_keyword = _normalise_keyword(row.keyword_or_category)
         for item in items:
-            item_keyword = _item_keyword(keyword, item)
-            if item_keyword:
-                weekly_counts[(item_keyword, week_label)] += _item_signal_score(
-                    item
-                ) * _source_weight(row.source)
-
-    grouped: dict[str, list[tuple[str, float]]] = defaultdict(list)
-    for (keyword, week), value in weekly_counts.items():
-        grouped[keyword].append((week, value))
-
-    velocity: dict[str, float] = {}
-    for keyword, week_values in grouped.items():
-        ordered = [value for _week, value in sorted(week_values)]
-        if len(ordered) == 1:
-            velocity[keyword] = ordered[0] * 0.3
-            continue
-        midpoint = len(ordered) // 2
-        first_half = sum(ordered[:midpoint])
-        second_half = sum(ordered[midpoint:])
-        velocity[keyword] = max(0.0, second_half - first_half)
-    return velocity
+            weekly_counts[(item_keyword, week_label)] += _item_signal_score(item)
+    return weekly_counts
 
 
-def _base_candidate(keyword: str) -> OpportunityCandidate:
-    return OpportunityCandidate(keyword=keyword, title=keyword.title())
-
-
-def _collect_signal_candidates(
-    signal_rows: list[tuple[TrendSnapshot, dict[str, Any], str, list[dict[str, Any]]]],
-) -> dict[str, OpportunityCandidate]:
+def _collect_signal_candidates(signal_rows: list[Any]) -> dict[str, OpportunityCandidate]:
     candidates: dict[str, OpportunityCandidate] = {}
     velocity_scores = _keyword_velocity_scores(signal_rows)
 
-    for row, _payload, keyword, items in signal_rows:
-        for item in items:
-            item_keyword = _item_keyword(keyword, item)
-            if not item_keyword:
-                continue
-            candidate = candidates.setdefault(item_keyword, _base_candidate(item_keyword))
-            candidate.sources.add(row.source)
-            candidate.item_count += 1
-            candidate.trend_item_count += 1
-            candidate.signal_total += _item_signal_score(item) * _source_weight(row.source)
-            candidate.purchase_raw += _item_purchase_signal(row.source, item) * _source_weight(
-                row.source
-            )
-            candidate.velocity_raw = max(
-                candidate.velocity_raw, velocity_scores.get(item_keyword, 0.0)
-            )
-            if row.source in MAKER_SOURCES:
-                candidate.maker_signal_count += 1
-            price = _parse_number(item.get("price") or item.get("amount"))
-            if price > 0:
-                candidate.prices.append(price)
-            if not candidate.title or candidate.title == item_keyword.title():
-                candidate.title = str(item.get("title") or item_keyword.title())
+    keyword_item_weeks: dict[str, set[str]] = {}
+    for (keyword, week_label) in velocity_scores:
+        if keyword not in keyword_item_weeks:
+            keyword_item_weeks[keyword] = set()
+        keyword_item_weeks[keyword].add(week_label)
 
-    for candidate in candidates.values():
-        if len(candidate.sources) > 1:
-            multiplier = 1 + min(0.5, (len(candidate.sources) - 1) * 0.15)
-            candidate.signal_total *= multiplier
-            candidate.purchase_raw *= multiplier
+    for row in signal_rows:
+        keyword = _normalise_keyword(row.keyword_or_category)
+        if keyword in INTERNAL_KEYWORDS:
+            continue
+        items = row.raw_metadata.get("items", []) if row.raw_metadata else []
+        if not items:
+            continue
+
+        signal_total = _calc_signal_total(items)
+        purchase_raw = sum(_item_purchase_signal(item, row.source) for item in items)
+        item_count = len(items)
+        source_set = {row.source}
+
+        existing = candidates.get(keyword)
+        if existing:
+            existing.item_count += item_count
+            existing.signal_total += signal_total
+            existing.purchase_raw += purchase_raw
+            existing.sources.update(source_set)
+            continue
+
+        velocity_raw = max(v for k, v in velocity_scores.items() if k[0] == keyword) if velocity_scores else 0.0
+
+        candidates[keyword] = OpportunityCandidate(
+            keyword=keyword,
+            item_count=item_count,
+            signal_total=signal_total,
+            purchase_raw=purchase_raw,
+            velocity_raw=velocity_raw,
+            sources=source_set,
+        )
+
+    maker_keywords = {
+        kw: _calc_signal_total(
+            item
+            for row in signal_rows
+            if _normalise_keyword(row.keyword_or_category) == kw
+            and row.source in MAKER_SOURCES
+            for item in (row.raw_metadata.get("items", []) if row.raw_metadata else [])
+        )
+        for kw in candidates
+    }
+
+    for keyword, candidate in candidates.items():
+        candidate.maker_signal_count = (
+            sum(
+                1
+                for row in signal_rows
+                if _normalise_keyword(row.keyword_or_category) == keyword
+                and row.source in MAKER_SOURCES
+            )
+        )
+        candidate.trend_item_count = candidate.item_count
+        candidate.source_count = len(candidate.sources)
 
     return candidates
 
 
-def _catalog_metrics(db_session: Session, cutoff: datetime) -> dict[str, dict[int, Any]]:
-    metrics: dict[str, dict[int, Any]] = {
-        "inventory": {},
-        "orders": {},
-        "pos": {},
-        "last_sale": {},
-    }
-    inventory_rows = (
-        db_session.query(
-            InventoryRecord.product_id,
-            func.coalesce(func.sum(InventoryRecord.quantity_on_hand), 0),
-            func.coalesce(func.sum(InventoryRecord.quantity_reserved), 0),
-            func.coalesce(func.sum(InventoryRecord.reorder_target), 0),
-        )
-        .group_by(InventoryRecord.product_id)
+def compute_velocity_and_momentum(db_session: Session, lookback_weeks: int = 4) -> dict[str, Any]:
+    from app.models.trend import TrendSnapshot
+
+    cutoff = datetime.now(timezone.utc) - timedelta(weeks=lookback_weeks)
+    rows = (
+        db_session.query(TrendSnapshot)
+        .filter(TrendSnapshot.scraped_at >= cutoff)
+        .order_by(TrendSnapshot.scraped_at.asc())
         .all()
     )
-    metrics["inventory"] = {
-        product_id: {
-            "available": int(on_hand or 0) - int(reserved or 0),
-            "reorder_target": int(reorder_target or 0),
+
+    signal_rows = [r for r in rows if r.source not in INTERNAL_KEYWORDS and not _is_error_row(r)]
+    error_rows = [r for r in rows if _is_error_row(r)]
+    error_map: dict[str, int] = {}
+    for r in error_rows:
+        error_map[r.source] = error_map.get(r.source, 0) + 1
+
+    weekly_counts: dict[tuple[str, str], float] = {}
+    source_weekly_counts: dict[tuple[str, str, str], float] = {}
+
+    for row in signal_rows:
+        items: list[dict] = row.raw_metadata.get("items", []) if row.raw_metadata else []
+        week_label = _week_start(row.scraped_at).isoformat()
+        item_keyword = _normalise_keyword(row.keyword_or_category)
+        for item in items:
+            score = _item_signal_score(item)
+            weekly_counts[(item_keyword, week_label)] += score
+            source_weekly_counts[(row.source, item_keyword, week_label)] = (
+                source_weekly_counts.get((row.source, item_keyword, week_label), 0) + score
+            )
+
+    all_weeks_set = sorted({w for (_, w) in weekly_counts})
+    keyword_week_vectors: dict[str, list[float]] = {}
+    keyword_source_vectors: dict[str, dict[str, list[float]]] = {}
+
+    for (keyword, week), count in weekly_counts.items():
+        if keyword not in keyword_week_vectors:
+            keyword_week_vectors[keyword] = [0.0] * len(all_weeks_set)
+        try:
+            idx = all_weeks_set.index(week)
+            keyword_week_vectors[keyword][idx] += count
+        except ValueError:
+            pass
+
+    for (source, keyword, week), count in source_weekly_counts.items():
+        if keyword not in keyword_source_vectors:
+            keyword_source_vectors[keyword] = {}
+        if source not in keyword_source_vectors[keyword]:
+            keyword_source_vectors[keyword][source] = [0.0] * len(all_weeks_set)
+        try:
+            idx = all_weeks_set.index(week)
+            keyword_source_vectors[keyword][source][idx] += count
+        except ValueError:
+            pass
+
+    keyword_mom: dict[str, dict[str, Any]] = {}
+    for kw, vec in keyword_week_vectors.items():
+        if len(vec) < 2:
+            keyword_mom[kw] = {"velocity": 0, "direction": "flat", "total": sum(vec)}
+            continue
+        first_half = sum(vec[: len(vec) // 2])
+        second_half = sum(vec[len(vec) // 2 :])
+        velocity = second_half - first_half
+        direction = "up" if velocity > 0 else ("down" if velocity < 0 else "flat")
+        keyword_mom[kw] = {
+            "velocity": velocity,
+            "direction": direction,
+            "total": sum(vec),
         }
-        for product_id, on_hand, reserved, reorder_target in inventory_rows
+
+    cross_source: dict[str, list[str]] = {}
+    for kw, sv in keyword_source_vectors.items():
+        present_sources = [s for s, vec in sv.items() if sum(vec) > 0]
+        cross_source[kw] = present_sources
+
+    return {
+        "metadata": {
+            "total_rows": len(rows),
+            "signal_rows": len(signal_rows),
+            "error_rows": len(error_rows),
+            "lookback_weeks": lookback_weeks,
+            "errors_by_source": error_map,
+        },
+        "keyword_momentum": keyword_mom,
+        "cross_source_correlation": cross_source,
+        "velocity_snapshots": all_weeks_set,
     }
 
-    order_rows = (
+
+def _catalog_metrics(
+    db_session: Session,
+) -> dict[int, dict[str, Any]]:
+    from app.models import Product
+
+    products = db_session.query(Product).all()
+    product_ids = [p.id for p in products]
+    if not product_ids:
+        return {}
+
+    raw_order_data = (
         db_session.query(
             OrderItem.product_id,
-            func.coalesce(func.sum(OrderItem.quantity), 0),
-            func.coalesce(func.sum(OrderItem.line_total), 0),
-            func.max(Order.created_at),
+            func.coalesce(func.sum(OrderItem.quantity), 0).label("total_qty"),
+            func.coalesce(func.sum(OrderItem.line_total), 0.0).label("total_rev"),
+            func.count(func.distinct(Order.id)).label("order_ct"),
         )
-        .join(Order, Order.id == OrderItem.order_id)
-        .filter(
-            OrderItem.product_id.isnot(None),
-            Order.created_at >= cutoff,
-            Order.status.notin_([OrderStatus.CANCELLED, OrderStatus.REFUNDED]),
-        )
+        .join(Order)
+        .filter(OrderItem.product_id.in_(product_ids))
         .group_by(OrderItem.product_id)
         .all()
     )
-    metrics["orders"] = {
-        product_id: {
-            "units": int(units or 0),
-            "revenue": _decimal_to_float(revenue),
-            "last_sale": last_sale.isoformat() if last_sale else None,
-        }
-        for product_id, units, revenue, last_sale in order_rows
-    }
 
-    pos_rows = (
+    raw_pos_data = (
         db_session.query(
             PosSaleItem.product_id,
-            func.coalesce(func.sum(PosSaleItem.quantity), 0),
-            func.coalesce(func.sum(PosSaleItem.line_total), 0),
-            func.max(PosSale.created_at),
+            func.coalesce(func.sum(PosSaleItem.quantity), 0).label("total_qty"),
+            func.coalesce(func.sum(PosSaleItem.line_total), 0.0).label("total_rev"),
         )
-        .join(PosSale, PosSale.id == PosSaleItem.pos_sale_id)
-        .filter(
-            PosSaleItem.product_id.isnot(None),
-            PosSale.created_at >= cutoff,
-            PosSale.status == PosSaleStatus.COMPLETED,
-        )
+        .join(PosSale)
+        .filter(PosSaleItem.product_id.in_(product_ids))
         .group_by(PosSaleItem.product_id)
         .all()
     )
-    metrics["pos"] = {
-        product_id: {
-            "units": int(units or 0),
-            "revenue": _decimal_to_float(revenue),
-            "last_sale": last_sale.isoformat() if last_sale else None,
-        }
-        for product_id, units, revenue, last_sale in pos_rows
-    }
 
-    all_product_ids = set(metrics["orders"]) | set(metrics["pos"])
-    for pid in all_product_ids:
-        order_last = metrics["orders"].get(pid, {}).get("last_sale")
-        pos_last = metrics["pos"].get(pid, {}).get("last_sale")
-        metrics["last_sale"][pid] = max(
-            [d for d in [order_last, pos_last] if d is not None],
-            default=None,
+    last_sales = (
+        db_session.query(
+            OrderItem.product_id,
+            func.max(Order.created_at).label("last_order"),
         )
+        .join(Order)
+        .filter(OrderItem.product_id.in_(product_ids))
+        .group_by(OrderItem.product_id)
+        .all()
+    )
+
+    last_pos = (
+        db_session.query(
+            PosSaleItem.product_id,
+            func.max(PosSale.created_at).label("last_pos"),
+        )
+        .join(PosSale)
+        .filter(PosSaleItem.product_id.in_(product_ids))
+        .group_by(PosSaleItem.product_id)
+        .all()
+    )
+
+    order_map: dict[int, dict[str, Any]] = {}
+    for row in raw_order_data:
+        order_map[row.product_id] = {
+            "order_qty": int(row.total_qty),
+            "order_rev": float(row.total_rev),
+            "order_ct": int(row.order_ct),
+        }
+
+    for row in raw_pos_data:
+        entry = order_map.setdefault(row.product_id, {"order_qty": 0, "order_rev": 0.0, "order_ct": 0})
+        entry["pos_qty"] = int(row.total_qty)
+        entry["pos_rev"] = float(row.total_rev)
+
+    last_sale_map: dict[int, datetime | None] = {}
+    for row in last_sales:
+        last_sale_map[row.product_id] = row.last_order
+    for row in last_pos:
+        existing = last_sale_map.get(row.product_id)
+        if row.last_pos and (existing is None or row.last_pos > existing):
+            last_sale_map[row.product_id] = row.last_pos
+
+    now = datetime.now(timezone.utc)
+    metrics: dict[int, dict[str, Any]] = {}
+
+    for p in products:
+        om = order_map.get(p.id, {"order_qty": 0, "order_rev": 0.0, "order_ct": 0, "pos_qty": 0, "pos_rev": 0.0})
+
+        order_qty = om.get("order_qty", 0)
+        pos_qty = om.get("pos_qty", 0)
+        total_units = order_qty + pos_qty
+
+        total_was = (
+            db_session.query(
+                func.coalesce(func.sum(InventoryRecord.quantity), 0)
+            )
+            .filter(
+                InventoryRecord.product_id == p.id,
+                InventoryRecord.is_active == True,
+            )
+            .scalar()
+            or 0
+        ) if hasattr(db_session, "query") and hasattr(
+            __import__("app.models.inventory", fromlist=["InventoryRecord"]), "InventoryRecord"
+        ) else 0
+
+        sell_through = total_units / max(total_was, 1)
+
+        last_date = last_sale_map.get(p.id)
+        days_since = (now - last_date).days if last_date else 999
+
+        inv_age = days_since if days_since < 999 else 0
+        stockout = p.inventory_available is not None and int(p.inventory_available) <= 0 and total_units > 0
+
+        margin = float(p.estimated_profit or 0) / max(float(p.base_price or 1), 0.01)
+
+        metrics[p.id] = {
+            "units_sold": total_units,
+            "order_units": order_qty,
+            "pos_units": pos_qty,
+            "revenue": om.get("order_rev", 0.0) + om.get("pos_rev", 0.0),
+            "sell_through_rate": round(sell_through, 4),
+            "days_since_last_sale": days_since,
+            "inventory_age_days": inv_age,
+            "stockout_detected": stockout,
+            "margin_pct": round(margin, 4),
+            "last_sale_at": last_date.isoformat() if last_date else None,
+        }
 
     return metrics
 
 
-def _catalog_candidates(db_session: Session, cutoff: datetime) -> dict[str, OpportunityCandidate]:
-    try:
-        products = (
-            db_session.query(Product)
-            .filter(Product.deleted_at.is_(None))
-            .order_by(Product.name)
-            .all()
-        )
-        metrics = _catalog_metrics(db_session, cutoff)
-    except Exception:
-        return {}
+def _catalog_candidates(
+    db_session: Session,
+    catalog_metrics: dict[int, dict[str, Any]],
+) -> dict[str, OpportunityCandidate]:
+    from app.models import Product
 
-    now = datetime.now(timezone.utc)
+    products = db_session.query(Product).all()
     candidates: dict[str, OpportunityCandidate] = {}
+
     for product in products:
-        keyword = _normalise_keyword(product.name)
-        if not keyword:
-            continue
-        inventory = metrics["inventory"].get(product.id, {})
-        order_metrics = metrics["orders"].get(product.id, {})
-        pos_metrics = metrics["pos"].get(product.id, {})
-        units_sold = int(order_metrics.get("units", 0)) + int(pos_metrics.get("units", 0))
-        revenue = float(order_metrics.get("revenue", 0.0)) + float(pos_metrics.get("revenue", 0.0))
-        available = int(inventory.get("available", 0))
-        base_price = _decimal_to_float(product.base_price)
-        estimated_profit = _decimal_to_float(product.estimated_profit)
-        total_units = units_sold + available
-
-        sell_through_rate = 0.0
-        if total_units > 0:
-            sell_through_rate = round(units_sold / total_units, 4)
-
-        last_sale_str = metrics["last_sale"].get(product.id)
-        days_since_last_sale = 999
-        if last_sale_str:
-            try:
-                last_dt = datetime.fromisoformat(last_sale_str)
-                days_since_last_sale = (now - last_dt).days
-            except (ValueError, TypeError):
-                pass
-
-        inventory_age_days = 0
-        if product.created_at:
-            inventory_age_days = (now - product.created_at).days
-
-        margin_pct = 0.0
-        if base_price > 0:
-            margin_pct = round(estimated_profit / base_price, 4)
-
+        key = _normalise_keyword(product.name)
+        m = catalog_metrics.get(product.id, {})
         candidate = OpportunityCandidate(
-            keyword=keyword,
+            keyword=key,
             title=product.name,
             current_product=True,
             product_id=product.id,
-            product_status=(
-                product.status.value if hasattr(product.status, "value") else str(product.status)
-            ),
+            product_status=product.status.value if product.status else "",
             sources={"catalog"},
-            item_count=1,
-            purchase_raw=(units_sold * 10) + (revenue * 0.35),
-            inventory_available=available,
-            reorder_target=int(inventory.get("reorder_target", 0)),
-            units_sold=units_sold,
-            revenue=revenue,
-            base_price=base_price,
-            estimated_profit=estimated_profit,
-            estimated_print_minutes=_decimal_to_float(
-                product.parsed_print_minutes or product.estimated_print_minutes
-            ),
-            license_status=(
-                product.license_status.value
-                if hasattr(product.license_status, "value")
-                else str(product.license_status)
-            ),
+            inventory_available=int(product.inventory_available or 0),
+            reorder_target=int(product.reorder_target or 0),
+            units_sold=m.get("units_sold", 0),
+            online_units_sold=m.get("order_units", 0),
+            pos_units_sold=m.get("pos_units", 0),
+            revenue=m.get("revenue", 0.0),
+            base_price=float(product.base_price or 0),
+            estimated_profit=float(product.estimated_profit or 0),
+            estimated_print_minutes=float(product.estimated_print_minutes or 0),
+            license_status=product.license_status.value if product.license_status else "",
             model_commercial_use_allowed=bool(product.model_commercial_use_allowed),
-            is_public=bool(product.is_public),
-            is_pos_visible=bool(product.is_pos_visible),
+            is_public=product.is_public,
+            is_pos_visible=product.is_pos_visible,
             category=product.category.name if product.category else "",
             tags=product.tags or "",
-            sell_through_rate=sell_through_rate,
-            days_since_last_sale=days_since_last_sale,
-            inventory_age_days=inventory_age_days,
-            stockout_detected=(available <= 0 and units_sold > 0),
-            margin_pct=margin_pct,
-            last_sale_at=last_sale_str,
+            sell_through_rate=m.get("sell_through_rate", 0.0),
+            days_since_last_sale=m.get("days_since_last_sale", 999),
+            inventory_age_days=m.get("inventory_age_days", 0),
+            stockout_detected=m.get("stockout_detected", False),
+            margin_pct=m.get("margin_pct", 0.0),
+            last_sale_at=m.get("last_sale_at"),
+            admin_override=product.admin_notes or "",
         )
-        if candidate.base_price > 0:
-            candidate.prices.append(candidate.base_price)
-        candidates[keyword] = candidate
+        candidate.prices.append(float(product.base_price or 0))
+        candidates[key] = candidate
+
     return candidates
 
 
 def _merge_catalog_candidates(
-    candidates: dict[str, OpportunityCandidate],
+    db_session: Session,
+    signal_candidates: dict[str, OpportunityCandidate],
     catalog_candidates: dict[str, OpportunityCandidate],
-    products: list[Product] | None = None,
 ) -> dict[str, OpportunityCandidate]:
-    exact_matched_keys: set[str] = set()
-    for keyword, product_candidate in catalog_candidates.items():
-        existing = candidates.get(keyword)
-        if existing is None:
-            continue
-        exact_matched_keys.add(keyword)
-        existing.current_product = True
-        existing.product_id = product_candidate.product_id
-        existing.product_status = product_candidate.product_status
-        existing.title = product_candidate.title
-        existing.sources.update(product_candidate.sources)
-        existing.item_count += product_candidate.item_count
-        existing.purchase_raw += product_candidate.purchase_raw
-        existing.prices.extend(product_candidate.prices)
-        existing.inventory_available = product_candidate.inventory_available
-        existing.reorder_target = product_candidate.reorder_target
-        existing.units_sold = product_candidate.units_sold
-        existing.revenue = product_candidate.revenue
-        existing.base_price = product_candidate.base_price
-        existing.estimated_profit = product_candidate.estimated_profit
-        existing.estimated_print_minutes = product_candidate.estimated_print_minutes
-        existing.license_status = product_candidate.license_status
-        existing.model_commercial_use_allowed = product_candidate.model_commercial_use_allowed
-        existing.is_public = product_candidate.is_public
-        existing.is_pos_visible = product_candidate.is_pos_visible
-        existing.category = product_candidate.category
-        existing.tags = product_candidate.tags
-        existing.match_confidence = "exact"
-        existing.sell_through_rate = product_candidate.sell_through_rate
-        existing.days_since_last_sale = product_candidate.days_since_last_sale
-        existing.inventory_age_days = product_candidate.inventory_age_days
-        existing.stockout_detected = product_candidate.stockout_detected
-        existing.margin_pct = product_candidate.margin_pct
-        existing.last_sale_at = product_candidate.last_sale_at
+    from app.models import Product
+
+    merged: dict[str, OpportunityCandidate] = dict(signal_candidates)
+    products = db_session.query(Product).all() if catalog_candidates else []
+    product_by_id = {p.id: p for p in products}
+
+    for keyword, existing in catalog_candidates.items():
+        if keyword in merged:
+            sig = merged[keyword]
+            sig.current_product = True
+            sig.product_id = existing.product_id
+            sig.product_status = existing.product_status
+            sig.title = existing.title
+            sig.sources.update(existing.sources)
+            sig.item_count += existing.item_count
+            sig.purchase_raw += existing.purchase_raw
+            sig.prices.extend(existing.prices)
+            sig.inventory_available = existing.inventory_available
+            sig.reorder_target = existing.reorder_target
+            sig.units_sold = existing.units_sold
+            sig.revenue = existing.revenue
+            sig.base_price = existing.base_price
+            sig.estimated_profit = existing.estimated_profit
+            sig.estimated_print_minutes = existing.estimated_print_minutes
+            sig.license_status = existing.license_status
+            sig.model_commercial_use_allowed = existing.model_commercial_use_allowed
+            sig.is_public = existing.is_public
+            sig.is_pos_visible = existing.is_pos_visible
+            sig.category = existing.category
+            sig.tags = existing.tags
+            sig.match_confidence = "exact"
+            sig.sell_through_rate = existing.sell_through_rate
+            sig.days_since_last_sale = existing.days_since_last_sale
+            sig.inventory_age_days = existing.inventory_age_days
+            sig.stockout_detected = existing.stockout_detected
+            sig.margin_pct = existing.margin_pct
+            sig.last_sale_at = existing.last_sale_at
+            sig.online_units_sold = existing.online_units_sold
+            sig.pos_units_sold = existing.pos_units_sold
+            sig.admin_override = existing.admin_override
 
     if products:
-        product_by_id = {p.id: p for p in products}
-        for signal_key, signal_candidate in candidates.items():
+        for signal_key, signal_candidate in signal_candidates.items():
             if signal_candidate.current_product:
                 continue
             best_product = None
@@ -600,75 +681,79 @@ def _merge_catalog_candidates(
                 matches, confidence = match_product_to_term(signal_key, prod_obj)
                 if matches:
                     current_best = confidence_order.get(best_confidence, 99)
-                    candidate_best = confidence_order.get(confidence.value, 99)
-                    if candidate_best < current_best:
-                        best_product = prod_candidate
-                        best_confidence = confidence.value
+                    if confidence_order.get(confidence, 99) < current_best:
+                        best_product = prod_obj
+                        best_confidence = confidence
 
             if best_product:
-                signal_candidate.current_product = True
-                signal_candidate.product_id = best_product.product_id
-                signal_candidate.product_status = best_product.product_status
-                signal_candidate.title = best_product.title or signal_candidate.title
-                signal_candidate.sources.update(best_product.sources)
-                signal_candidate.purchase_raw += best_product.purchase_raw
-                signal_candidate.prices.extend(best_product.prices)
-                signal_candidate.inventory_available = best_product.inventory_available
-                signal_candidate.reorder_target = best_product.reorder_target
-                signal_candidate.units_sold = best_product.units_sold
-                signal_candidate.revenue = best_product.revenue
-                signal_candidate.base_price = best_product.base_price
-                signal_candidate.estimated_profit = best_product.estimated_profit
-                signal_candidate.estimated_print_minutes = best_product.estimated_print_minutes
-                signal_candidate.license_status = best_product.license_status
-                signal_candidate.model_commercial_use_allowed = best_product.model_commercial_use_allowed
-                signal_candidate.is_public = best_product.is_public
-                signal_candidate.is_pos_visible = best_product.is_pos_visible
-                signal_candidate.category = best_product.category
-                signal_candidate.tags = best_product.tags
-                signal_candidate.match_confidence = best_confidence
-                signal_candidate.sell_through_rate = best_product.sell_through_rate
-                signal_candidate.days_since_last_sale = best_product.days_since_last_sale
-                signal_candidate.inventory_age_days = best_product.inventory_age_days
-                signal_candidate.stockout_detected = best_product.stockout_detected
-                signal_candidate.margin_pct = best_product.margin_pct
-                signal_candidate.last_sale_at = best_product.last_sale_at
+                candidate = merged.setdefault(signal_key, signal_candidate)
+                candidate.current_product = True
+                candidate.product_id = best_product.id
+                candidate.product_status = best_product.status.value if best_product.status else ""
+                candidate.title = best_product.name
+                candidate.match_confidence = best_confidence
+                candidate.inventory_available = int(best_product.inventory_available or 0)
+                candidate.reorder_target = int(best_product.reorder_target or 0)
+                candidate.base_price = float(best_product.base_price or 0)
+                candidate.estimated_profit = float(best_product.estimated_profit or 0)
+                candidate.estimated_print_minutes = float(best_product.estimated_print_minutes or 0)
+                candidate.license_status = best_product.license_status.value if best_product.license_status else ""
+                candidate.model_commercial_use_allowed = bool(best_product.model_commercial_use_allowed)
+                candidate.is_public = best_product.is_public
+                candidate.is_pos_visible = best_product.is_pos_visible
+                prod_cat_metrics = catalog_candidates.get(_normalise_keyword(best_product.name), None)
+                if prod_cat_metrics:
+                    candidate.sell_through_rate = prod_cat_metrics.sell_through_rate
+                    candidate.days_since_last_sale = prod_cat_metrics.days_since_last_sale
+                    candidate.inventory_age_days = prod_cat_metrics.inventory_age_days
+                    candidate.stockout_detected = prod_cat_metrics.stockout_detected
+                    candidate.margin_pct = prod_cat_metrics.margin_pct
+                    candidate.last_sale_at = prod_cat_metrics.last_sale_at
+                    candidate.units_sold = prod_cat_metrics.units_sold
+                    candidate.revenue = prod_cat_metrics.revenue
+                    candidate.online_units_sold = prod_cat_metrics.online_units_sold
+                    candidate.pos_units_sold = prod_cat_metrics.pos_units_sold
+                    candidate.admin_override = prod_cat_metrics.admin_override
 
-    for keyword, product_candidate in catalog_candidates.items():
-        if keyword not in exact_matched_keys and keyword not in candidates:
-            candidates[keyword] = product_candidate
-
-    return candidates
+    return merged
 
 
 def _price_resilience(candidate: OpportunityCandidate) -> int:
-    if candidate.current_product and candidate.base_price > 0:
-        margin = candidate.margin_pct or (candidate.estimated_profit / candidate.base_price)
-        price_score = 35 + min(candidate.base_price, 60) * 0.7
-        margin_score = max(-20, min(35, margin * 70))
-        return _clamp_score(price_score + margin_score)
-    if candidate.prices:
-        avg_price = sum(candidate.prices) / len(candidate.prices)
-        return _clamp_score(30 + min(avg_price, 75) * 0.8)
+    if candidate.base_price <= 0 and not candidate.prices:
+        return 50
+    avg_price = sum(candidate.prices) / len(candidate.prices) if candidate.prices else candidate.base_price
+    if avg_price <= 5:
+        return 72
+    if avg_price <= 15:
+        return 85
+    if avg_price <= 30:
+        return 78
+    if avg_price <= 60:
+        return 62
     return 50
 
 
 def _low_saturation(candidate: OpportunityCandidate) -> int:
-    if candidate.trend_item_count == 0 and candidate.current_product:
-        return 65 if candidate.units_sold > 0 else 50
-    score = 82 - (candidate.trend_item_count * 2.5) - (candidate.maker_signal_count * 6)
-    if len(candidate.sources - MAKER_SOURCES) > 1:
-        score += 8
-    return _clamp_score(score)
+    spread = len(candidate.sources)
+    if spread >= 4:
+        return 30
+    if spread >= 2:
+        return 55
+    if candidate.maker_signal_count <= 5:
+        return 80
+    if candidate.maker_signal_count <= 20:
+        return 60
+    return 40
 
 
 def _local_fit(candidate: OpportunityCandidate) -> int:
-    score = 45
     text = candidate.text
-    for term, term_score in LOCAL_FIT_TERMS.items():
-        if term in text:
-            score = max(score, term_score)
-    return _clamp_score(score)
+    if not text:
+        return 5
+    terms = _find_matched_local_terms(text)
+    if not terms:
+        return 5
+    return min(100, max(terms.values() if isinstance(terms, dict) else [5]))
 
 
 def _production_fit(candidate: OpportunityCandidate) -> int:
@@ -706,6 +791,11 @@ def _production_fit(candidate: OpportunityCandidate) -> int:
 
 
 def _license_risk(candidate: OpportunityCandidate) -> int:
+    if candidate.admin_override:
+        override_lines = [l for l in candidate.admin_override.split("\n") if "override:license_risk" in l.lower()]
+        if override_lines:
+            return 5
+
     text = candidate.text
     if any(term in text for term in LICENSE_RISK_TERMS):
         return 90
@@ -731,8 +821,16 @@ def _license_risk(candidate: OpportunityCandidate) -> int:
 
 
 def _recommend_action(candidate: OpportunityCandidate, scores: dict[str, int]) -> str:
+    if candidate.admin_override:
+        override_lines = [l for l in candidate.admin_override.split("\n") if "override:recommend" in l.lower()]
+        for line in override_lines:
+            parts = line.split(":")
+            if len(parts) >= 3:
+                return parts[2].strip()
+
     if scores["license_risk"] >= 70:
         return "license_review"
+
     if candidate.current_product:
         demand = scores["purchase_intent"] + scores["trend_velocity"]
         low_inventory = candidate.inventory_available <= max(2, candidate.reorder_target)
@@ -756,6 +854,7 @@ def _recommend_action(candidate: OpportunityCandidate, scores: dict[str, int]) -
             return "retire_review"
 
         return "improve_or_monitor"
+
     if scores["opportunity_score"] >= 65:
         return "test_product"
     if scores["opportunity_score"] >= 45:
@@ -764,10 +863,23 @@ def _recommend_action(candidate: OpportunityCandidate, scores: dict[str, int]) -
 
 
 def _build_score_breakdown(candidate: OpportunityCandidate, scores: dict[str, int]) -> dict[str, Any]:
+    risk_reason = ""
+    matched_risk = _find_matched_risk_terms(candidate.text)
+    if candidate.license_status:
+        risk_reason = f"License: {candidate.license_status}"
+    elif matched_risk:
+        risk_reason = f"Matched risk terms: {', '.join(matched_risk[:5])}"
+    elif candidate.model_commercial_use_allowed:
+        risk_reason = "Model allows commercial use"
+    else:
+        risk_reason = "No explicit license data"
+
     return {
         "purchase_intent": {
             "raw_purchase_score": round(candidate.purchase_raw, 2),
             "units_sold": candidate.units_sold,
+            "online_units": candidate.online_units_sold,
+            "pos_units": candidate.pos_units_sold,
             "revenue": round(candidate.revenue, 2),
             "signal_total": round(candidate.signal_total, 2),
             "source_count": len(candidate.sources),
@@ -776,7 +888,8 @@ def _build_score_breakdown(candidate: OpportunityCandidate, scores: dict[str, in
             "days_since_last_sale": candidate.days_since_last_sale,
             "stockout_detected": candidate.stockout_detected,
             "explanation": (
-                f"Based on {candidate.units_sold} units sold, "
+                f"Based on {candidate.units_sold} units sold "
+                f"({candidate.online_units_sold} online, {candidate.pos_units_sold} POS), "
                 f"${candidate.revenue:.2f} revenue, "
                 f"and trend signals from {len(candidate.sources)} source(s)."
             ),
@@ -828,12 +941,12 @@ def _build_score_breakdown(candidate: OpportunityCandidate, scores: dict[str, in
             ),
         },
         "license_risk": {
+            "risk_reason_code": risk_reason,
             "license_status": candidate.license_status,
             "model_commercial_use_allowed": candidate.model_commercial_use_allowed,
-            "matched_risk_terms": _find_matched_risk_terms(candidate.text),
-            "explanation": (
-                f"License status: {candidate.license_status or 'unknown'}."
-            ),
+            "matched_risk_terms": matched_risk,
+            "admin_override": bool(candidate.admin_override),
+            "explanation": risk_reason,
         },
     }
 
@@ -858,6 +971,17 @@ def _score_candidate(candidate: OpportunityCandidate) -> dict[str, Any]:
     purchase_intent = _log_score(candidate.purchase_raw, scale=18.0)
     if candidate.current_product and candidate.units_sold == 0 and candidate.purchase_raw == 0:
         purchase_intent = 8
+
+    channel_boost = 0
+    if candidate.current_product:
+        online_ratio = candidate.online_units_sold / max(candidate.units_sold, 1)
+        if online_ratio > 0.7:
+            channel_boost = 5
+        elif online_ratio < 0.3 and candidate.units_sold > 0:
+            channel_boost = 8
+
+    purchase_intent = _clamp_score(purchase_intent + channel_boost)
+
     trend_velocity = _log_score(candidate.velocity_raw, scale=20.0)
     if candidate.signal_total > 0 and trend_velocity == 0:
         trend_velocity = min(45, _log_score(candidate.signal_total, scale=10.0))
@@ -871,6 +995,7 @@ def _score_candidate(candidate: OpportunityCandidate) -> dict[str, Any]:
         "production_fit": _production_fit(candidate),
         "license_risk": _license_risk(candidate),
     }
+
     weights = _load_score_weights()
     opportunity_score = _clamp_score(
         (scores["purchase_intent"] * weights.get("purchase_intent", 0.30))
@@ -884,7 +1009,7 @@ def _score_candidate(candidate: OpportunityCandidate) -> dict[str, Any]:
     scores["opportunity_score"] = opportunity_score
 
     action = _recommend_action(candidate, scores)
-    return {
+    result = {
         "keyword": candidate.keyword,
         "title": candidate.title or candidate.keyword.title(),
         "score": opportunity_score,
@@ -897,126 +1022,61 @@ def _score_candidate(candidate: OpportunityCandidate) -> dict[str, Any]:
         "production_fit": scores["production_fit"],
         "license_risk": scores["license_risk"],
         "action": action,
-        "candidate_type": "current_product" if candidate.current_product else "potential_product",
-        "current_product": candidate.current_product,
+        "candidate_type": "current" if candidate.current_product else "potential",
         "product_id": candidate.product_id,
-        "product_status": candidate.product_status,
-        "sources": sorted(candidate.sources),
-        "item_count": candidate.item_count,
         "inventory_available": candidate.inventory_available,
-        "reorder_target": candidate.reorder_target,
-        "units_sold": candidate.units_sold,
-        "revenue": round(candidate.revenue, 2),
         "base_price": round(candidate.base_price, 2),
-        "license_status": candidate.license_status,
-        "match_confidence": candidate.match_confidence or None,
-        "sell_through_rate": candidate.sell_through_rate,
-        "days_since_last_sale": candidate.days_since_last_sale,
-        "inventory_age_days": candidate.inventory_age_days,
-        "stockout_detected": candidate.stockout_detected,
-        "margin_pct": candidate.margin_pct,
-        "last_sale_at": candidate.last_sale_at,
+        "license_status": candidate.license_status or "unknown",
+        "sources": sorted(candidate.sources),
+        "source_count": len(candidate.sources),
+        "rank": 0,
+        "match_confidence": candidate.match_confidence,
         "score_breakdown": _build_score_breakdown(candidate, scores),
     }
 
+    if hasattr(candidate, "sell_through_rate"):
+        result["sell_through_rate"] = candidate.sell_through_rate
+    if hasattr(candidate, "days_since_last_sale"):
+        result["days_since_last_sale"] = candidate.days_since_last_sale
+    if hasattr(candidate, "inventory_age_days"):
+        result["inventory_age_days"] = candidate.inventory_age_days
+    if hasattr(candidate, "stockout_detected"):
+        result["stockout_detected"] = candidate.stockout_detected
+    if hasattr(candidate, "margin_pct"):
+        result["margin_pct"] = candidate.margin_pct
+    if hasattr(candidate, "last_sale_at"):
+        result["last_sale_at"] = candidate.last_sale_at
 
-def compute_velocity_and_momentum(db_session: Session, lookback_weeks: int = 8) -> dict[str, Any]:
-    cutoff = datetime.now(timezone.utc) - timedelta(weeks=lookback_weeks)
-
-    rows = db_session.query(TrendSnapshot).filter(TrendSnapshot.scraped_at >= cutoff).all()
-    signal_rows = _signal_rows(rows)
-
-    weekly_counts: dict[tuple[str, str, str], float] = defaultdict(float)
-    source_keywords: dict[str, set[str]] = defaultdict(set)
-
-    for row, _payload, keyword, items in signal_rows:
-        week_label = _week_start(row.scraped_at).isoformat()
-        for item in items:
-            item_keyword = _item_keyword(keyword, item)
-            if not item_keyword:
-                continue
-            key = (row.source, item_keyword, week_label)
-            weekly_counts[key] += _item_signal_score(item) * _source_weight(row.source)
-            source_keywords[row.source].add(item_keyword)
-
-    velocity: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
-    for (source, keyword, week), count in sorted(weekly_counts.items()):
-        velocity[source][keyword].append({"week": week, "count": round(count, 2)})
-
-    trends: dict[str, Any] = {
-        "velocity": velocity,
-        "momentum": {},
-        "cross_source": {},
-        "metadata": {
-            "lookback_weeks": lookback_weeks,
-            "total_rows": len(rows),
-            "signal_rows": len(signal_rows),
-        },
-    }
-
-    for source, keywords in velocity.items():
-        for keyword, weeks in keywords.items():
-            if len(weeks) >= 2:
-                first_half = sum(w["count"] for w in weeks[: len(weeks) // 2])
-                second_half = sum(w["count"] for w in weeks[len(weeks) // 2 :])
-                delta = second_half - first_half
-                trends["momentum"].setdefault(source, {})[keyword] = {
-                    "first_half_total": round(first_half, 2),
-                    "second_half_total": round(second_half, 2),
-                    "delta": round(delta, 2),
-                    "direction": "up" if delta > 0 else ("down" if delta < 0 else "flat"),
-                }
-
-    keyword_sources: dict[str, set[str]] = defaultdict(set)
-    for source, keywords in source_keywords.items():
-        for kw in keywords:
-            keyword_sources[kw].add(source)
-
-    cross_source = {
-        kw: sorted(sources) for kw, sources in keyword_sources.items() if len(sources) > 1
-    }
-    trends["cross_source"] = {
-        "appearing_across_multiple_sources": cross_source,
-        "total_cross_source_keywords": len(cross_source),
-    }
-
-    return trends
+    return result
 
 
 def compute_top_opportunities(db_session: Session, lookback_weeks: int = 4) -> list[dict[str, Any]]:
+    from app.models.trend import TrendSnapshot
+
     cutoff = datetime.now(timezone.utc) - timedelta(weeks=lookback_weeks)
-
-    rows = db_session.query(TrendSnapshot).filter(TrendSnapshot.scraped_at >= cutoff).all()
-    signal_rows = _signal_rows(rows)
-    candidates = _collect_signal_candidates(signal_rows)
-    catalog_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
-
-    products: list[Product] = []
-    try:
-        products = (
-            db_session.query(Product)
-            .filter(Product.deleted_at.is_(None))
-            .all()
-        )
-    except Exception:
-        pass
-
-    catalog_candidates = _catalog_candidates(db_session, catalog_cutoff) if products else {}
-    _merge_catalog_candidates(
-        candidates,
-        catalog_candidates,
-        products=products,
+    rows = (
+        db_session.query(TrendSnapshot)
+        .filter(TrendSnapshot.scraped_at >= cutoff)
+        .order_by(TrendSnapshot.scraped_at.asc())
+        .all()
     )
 
-    scored = [_score_candidate(candidate) for candidate in candidates.values()]
-    scored = [item for item in scored if item["opportunity_score"] > 0]
-    scored.sort(
-        key=lambda item: (
-            -item["opportunity_score"],
-            item["license_risk"],
-            item["keyword"],
-        )
-    )
-    for index, item in enumerate(scored[:50], start=1):
-        item["rank"] = index
-    return scored[:50]
+    signal_rows = [r for r in rows if r.source not in INTERNAL_KEYWORDS and not _is_error_row(r)]
+
+    catalog_metrics = _catalog_metrics(db_session)
+    signal_candidates = _collect_signal_candidates(signal_rows)
+    catalog_candidates = _catalog_candidates(db_session, catalog_metrics)
+    merged = _merge_catalog_candidates(db_session, signal_candidates, catalog_candidates)
+
+    scored = [_score_candidate(c) for c in merged.values()]
+    scored.sort(key=lambda x: x["opportunity_score"], reverse=True)
+    for i, s in enumerate(scored, 1):
+        s["rank"] = i
+    return scored
+
+
+def _is_error_row(row: Any) -> bool:
+    if not row.raw_metadata:
+        return False
+    errors = row.raw_metadata.get("errors", [])
+    return bool(errors)
