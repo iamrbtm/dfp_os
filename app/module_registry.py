@@ -241,6 +241,15 @@ MODULES: dict[str, ModuleDefinition] = {
         default_enabled=True,
         blueprint_names=("audit_logs",),
     ),
+    "notifications": ModuleDefinition(
+        key="notifications",
+        display_name="Notifications",
+        description="In-app notification alerts for trends, system events, and workflow milestones.",
+        feature_flag_key="module.notifications.enabled",
+        default_enabled=True,
+        blueprint_names=("notifications",),
+        admin_nav_entries=(NavEntry("Notifications", "notifications.notification_list"),),
+    ),
     "feature_flags": ModuleDefinition(
         key="feature_flags",
         display_name="Feature Flags",

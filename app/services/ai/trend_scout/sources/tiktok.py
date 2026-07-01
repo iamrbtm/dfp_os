@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from app.services.ai.trend_scout.sources._base import ScoutResult, build_json_api_headers
+from app.services.ai.trend_scout.sources._base import ScoutResult, build_json_api_headers, request_with_retry
 
 RESEARCH_VIDEO_QUERY_URL = "https://open.tiktokapis.com/v2/research/video/query/"
 
@@ -96,7 +96,8 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
             "max_count": 20,
         }
         try:
-            resp = session.post(
+            resp = request_with_retry(
+                session, "POST",
                 RESEARCH_VIDEO_QUERY_URL,
                 params={"fields": fields},
                 json=body,

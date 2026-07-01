@@ -10,6 +10,25 @@ from app.extensions import db
 from app.models.base import PrimaryKeyMixin, TimestampMixin
 
 
+class TrendTaskRun(PrimaryKeyMixin, TimestampMixin, db.Model):
+    __tablename__ = "trend_task_runs"
+
+    task_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending", index=True)
+    trigger: Mapped[str] = mapped_column(String(40), nullable=False, default="manual")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(nullable=True)
+    total_steps: Mapped[int] = mapped_column(Integer, default=0)
+    completed_steps: Mapped[int] = mapped_column(Integer, default=0)
+    current_step: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_health_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    report_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
 class TrendSnapshot(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "trend_snapshots"
 

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Task {{ run.task_id[:16] }}&hellip; | Trend Scout | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex items-start justify-between">
+    <div>
+      <h1 class="text-2xl font-bold" style="color:var(--color-heading);">Task Detail</h1>
+      <p class="text-sm mt-1 font-mono" style="color:var(--color-text-muted);">{{ run.task_id }}</p>
+    </div>
+    <a href="{{ url_for('trend_scout.task_monitor') }}" class="app-btn" style="background:var(--color-surface);">&larr; All Tasks</a>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="app-card p-4">
+      <p class="text-xs" style="color:var(--color-text-muted);">Status</p>
+      {% set status_colors = {"pending": "var(--color-text-muted)", "running": "var(--color-info)", "completed": "var(--color-success)", "failed": "var(--color-danger)", "cancelled": "var(--color-warning)"} %}
+      <p class="text-lg font-semibold" style="color:{{ status_colors.get(run.status, 'var(--color-text-muted)') }};">{{ run.status }}</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-xs" style="color:var(--color-text-muted);">Trigger</p>
+      <p class="text-lg font-semibold">{{ run.trigger }}</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-xs" style="color:var(--color-text-muted);">Duration</p>
+      <p class="text-lg font-semibold">
+        {% if run.duration_seconds %}
+          {% if run.duration_seconds < 60 %}
+            {{ run.duration_seconds|int }}s
+          {% elif run.duration_seconds < 3600 %}
+            {{ (run.duration_seconds / 60)|int }}m {{ (run.duration_seconds % 60)|int }}s
+          {% else %}
+            {{ (run.duration_seconds / 3600)|int }}h {{ ((run.duration_seconds % 3600) / 60)|int }}m
+          {% endif %}
+        {% else %}
+          In progress
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="app-card p-4">
+    <h2 class="text-lg font-semibold mb-3" style="color:var(--color-heading);">Progress</h2>
+    <div class="flex items-center gap-3">
+      <div class="flex-1 h-3 rounded-full" style="background:var(--color-surface);">
+        <div class="h-3 rounded-full transition-all duration-500"
+             style="width:{{ (run.completed_steps / run.total_steps * 100) if run.total_steps > 0 else 0 }}%;background:var(--color-primary);"></div>
+      </div>
+      <span class="text-sm font-mono" style="color:var(--color-text-muted);">{{ run.completed_steps }}/{{ run.total_steps }}</span>
+    </div>
+    {% if run.current_step %}
+      <p class="text-xs mt-2" style="color:var(--color-text-muted);">Current step: {{ run.current_step }}</p>
+    {% endif %}
+  </div>
+
+  {% if run.error_message %}
+  <div class="app-card p-4" style="border-left: 3px solid var(--color-danger);">
+    <h2 class="text-sm font-semibold mb-2" style="color:var(--color-danger);">Error</h2>
+    <pre class="text-xs whitespace-pre-wrap font-mono" style="color:var(--color-text);">{{ run.error_message }}</pre>
+  </div>
+  {% endif %}
+
+  {% if run.source_health_summary %}
+  <div class="app-card p-4">
+    <h2 class="text-lg font-semibold mb-3" style="color:var(--color-heading);">Source Health</h2>
+    <div class="space-y-1 text-sm">
+      {% for h in run.source_health_summary %}
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-2 h-2 rounded-full {% if h.status == 'success' %}" style="background:var(--color-success);{% else %}" style="background:var(--color-danger);{% endif %}"></span>
+          <span>{{ h.source }}</span>
+          <span class="text-xs" style="color:var(--color-text-muted);">{{ h.status }} ({{ h.item_count }} items)</span>
+          {% if h.error_message %}
+            <span class="text-xs" style="color:var(--color-danger);">{{ h.error_message }}</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if report %}
+  <div class="app-card p-4">
+    <h2 class="text-lg font-semibold mb-2" style="color:var(--color-heading);">Report</h2>
+    <p class="text-sm">Report #{{ report.id }} &mdash; {{ report.report_date.strftime('%b %d, %Y %H:%M') }}</p>
+    {% if report.summary %}
+      <p class="text-xs mt-2" style="color:var(--color-text-muted);">{{ report.summary[:300] }}{% if report.summary|length > 300 %}&hellip;{% endif %}</p>
+    {% endif %}
+    <a href="{{ url_for('trend_scout.index') }}" class="app-btn text-xs mt-3 inline-block" style="background:var(--color-primary);color:white;">View in Dashboard</a>
+  </div>
+  {% endif %}
+
+  <div class="flex gap-3">
+    {% if run.status == "failed" %}
+      <form method="POST" action="{{ url_for('trend_scout.task_monitor_retry', run_id=run.task_id) }}">
+        <button class="app-btn app-btn-primary">Retry Pipeline</button>
+      </form>
+    {% endif %}
+    {% if run.status in ("pending", "running") %}
+      <form method="POST" action="{{ url_for('trend_scout.task_monitor_cancel', run_id=run.task_id) }}" onsubmit="return confirm('Cancel this pipeline run?')">
+        <button class="app-btn" style="background:var(--color-danger);color:white;">Cancel Pipeline</button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Task Monitor | Trend Scout | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex items-start justify-between">
+    <div>
+      <h1 class="text-2xl font-bold" style="color:var(--color-heading);">Task Monitor</h1>
+      <p class="text-sm mt-1" style="color:var(--color-text-muted);">Trend Scout pipeline run history</p>
+    </div>
+    <a href="{{ url_for('trend_scout.index') }}" class="app-btn" style="background:var(--color-surface);">Trend Scout</a>
+  </div>
+
+  {% if not runs %}
+    <div class="app-card p-8 text-center">
+      <p style="color:var(--color-text-muted);">No task runs recorded yet.</p>
+      <p class="text-sm mt-2">Run the pipeline from the <a href="{{ url_for('trend_scout.index') }}" style="color:var(--color-primary);">Trend Scout dashboard</a>.</p>
+    </div>
+  {% else %}
+    <div class="app-card overflow-x-auto">
+      <table class="app-table w-full text-sm">
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>Status</th>
+            <th>Trigger</th>
+            <th>Steps</th>
+            <th>Duration</th>
+            <th>Report</th>
+            <th>Started</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in runs %}
+          <tr>
+            <td class="font-mono text-xs">{{ run.task_id[:48] }}{% if run.task_id|length > 48 %}&hellip;{% endif %}</td>
+            <td>
+              {% set status_colors = {"pending": "var(--color-text-muted)", "running": "var(--color-info)", "completed": "var(--color-success)", "failed": "var(--color-danger)", "cancelled": "var(--color-warning)"} %}
+              <span class="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                    style="background:{{ status_colors.get(run.status, 'var(--color-text-muted)') }}20; color:{{ status_colors.get(run.status, 'var(--color-text-muted)') }};">
+                {{ run.status }}
+              </span>
+            </td>
+            <td><span class="text-xs">{{ run.trigger }}</span></td>
+            <td class="text-xs">{{ run.completed_steps }}/{{ run.total_steps }}</td>
+            <td class="text-xs">
+              {% if run.duration_seconds %}
+                {% if run.duration_seconds < 60 %}
+                  {{ run.duration_seconds|int }}s
+                {% elif run.duration_seconds < 3600 %}
+                  {{ (run.duration_seconds / 60)|int }}m {{ (run.duration_seconds % 60)|int }}s
+                {% else %}
+                  {{ (run.duration_seconds / 3600)|int }}h {{ ((run.duration_seconds % 3600) / 60)|int }}m
+                {% endif %}
+              {% else %}
+                &mdash;
+              {% endif %}
+            </td>
+            <td class="text-xs">
+              {% if run.report_id %}
+                <a href="{{ url_for('trend_scout.index') }}#report-{{ run.report_id }}" style="color:var(--color-primary);">#{{ run.report_id }}</a>
+              {% else %}
+                &mdash;
+              {% endif %}
+            </td>
+            <td class="text-xs" style="color:var(--color-text-muted);">
+              {% if run.started_at %}
+                {{ run.started_at.strftime('%b %d %H:%M') }}
+              {% else %}
+                {{ run.created_at.strftime('%b %d %H:%M') }}
+              {% endif %}
+            </td>
+            <td class="text-xs">
+              <a href="{{ url_for('trend_scout.task_monitor_detail', run_id=run.task_id) }}" class="app-btn text-xs px-2 py-1" style="background:var(--color-surface);">View</a>
+              {% if run.status == "failed" %}
+                <button class="app-btn text-xs px-2 py-1 retry-btn" style="background:var(--color-surface);color:var(--color-primary);" data-run-id="{{ run.task_id }}">Retry</button>
+              {% endif %}
+              {% if run.status in ("pending", "running") %}
+                <button class="app-btn text-xs px-2 py-1 cancel-btn" style="background:var(--color-surface);color:var(--color-danger);" data-run-id="{{ run.task_id }}">Cancel</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+
+<script>
+document.querySelectorAll('.retry-btn').forEach(btn => {
+  btn.addEventListener('click', async function() {
+    const runId = this.dataset.runId;
+    const resp = await fetch('{{ url_for("trend_scout.task_monitor") }}/' + runId + '/retry', { method: 'POST' });
+    if (resp.ok) location.reload();
+  });
+});
+document.querySelectorAll('.cancel-btn').forEach(btn => {
+  btn.addEventListener('click', async function() {
+    if (!confirm('Cancel this pipeline run?')) return;
+    const runId = this.dataset.runId;
+    const resp = await fetch('{{ url_for("trend_scout.task_monitor") }}/' + runId + '/cancel', { method: 'POST' });
+    if (resp.ok) location.reload();
+  });
+});
+</script>
+{% endblock %}

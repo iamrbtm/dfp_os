@@ -199,6 +199,10 @@ def trend_scout_run(openai_key: str, openai_model: str) -> None:
             click.echo(f"  Failed sources ({len(result['failed_sources'])}):")
             for src in result["failed_sources"]:
                 click.echo(f"    - {src}")
+        from app.services.trend_scout_prune import prune_old_data
+        prune_result = prune_old_data(dry_run=False)
+        if prune_result.get("status") == "pruned":
+            click.echo(f"  Auto-prune: removed {prune_result['pruned_reports']} old reports, {prune_result['pruned_snapshots']} snapshots")
     else:
         click.echo(f"\nPipeline failed: {result.get('error', 'unknown error')}", err=True)
         sys.exit(1)
@@ -300,3 +304,31 @@ def trend_scout_backtest(reports: int, sales_window: int) -> None:
         click.echo("  Action Analysis:")
         for action, data in result["action_analysis"].items():
             click.echo(f"    {action}: count={data.get('count', 0)}, precision={data.get('precision', 'N/A')}")
+
+
+@trend_scout_group.command("prune")
+@click.option("--keep-reports", default=52, help="Number of reports to retain")
+@click.option("--keep-days", default=365, help="Max age in days for snapshots")
+@click.option("--dry-run", is_flag=True, default=False, help="Show what would be pruned without deleting")
+def trend_scout_prune(keep_reports: int, keep_days: int, dry_run: bool) -> None:
+    """Prune old Trend Scout data (reports, snapshots, scores, health records)."""
+    from app.services.trend_scout_prune import prune_old_data
+
+    with current_app.app_context():
+        result = prune_old_data(
+            keep_reports=keep_reports,
+            keep_days=keep_days,
+            dry_run=dry_run,
+        )
+
+    if result.get("status") == "none":
+        click.echo("No data to prune.")
+        return
+
+    label = "Would prune" if dry_run else "Pruned"
+    click.echo(f"{label} {result['pruned_reports']} reports, "
+               f"{result['pruned_scores']} scores, "
+               f"{result['pruned_health_records']} health records, "
+               f"{result['pruned_snapshots']} snapshots")
+    if dry_run:
+        click.echo("(dry run — no data deleted)")

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from flask import jsonify, redirect, render_template, request, session, url_for
+from flask import abort, jsonify, redirect, render_template, request, session, url_for
 
 from app.blueprints.trend_scout import bp
 from app.celery_app import celery
@@ -126,10 +126,23 @@ def latest_report():
 @bp.post("/run")
 @roles_required(UserRole.ADMIN)
 def run_pipeline():
+    from app.services.ai.trend_scout import FETCHERS as _TS_FETCHERS
     from app.tasks.trend_scout import trend_scout_pipeline
+    from app.services.trend_scout_task_monitor import create_task_run
 
     task = trend_scout_pipeline.delay()
     session["trend_scout_task_id"] = task.id
+
+    try:
+        create_task_run(
+            task_id=f"manual-{task.id}",
+            trigger="manual",
+            total_steps=len(_TS_FETCHERS) + 1,
+            celery_task_id=task.id,
+        )
+    except Exception:
+        pass
+
     return jsonify({"task_id": task.id, "status": "dispatched"})
 
 
@@ -434,6 +447,78 @@ def action_flag_license_review():
     )
 
     return '<span class="text-xs" style="color:var(--color-warning);">Flagged license</span>'
+
+
+@bp.get("/monitor")
+@roles_required(UserRole.ADMIN)
+def task_monitor():
+    from app.services.trend_scout_task_monitor import get_recent_task_runs
+
+    runs = get_recent_task_runs(limit=100)
+    return render_template("trend_scout/monitor.html", runs=runs)
+
+
+@bp.get("/monitor/<run_id>")
+@roles_required(UserRole.ADMIN)
+def task_monitor_detail(run_id: str):
+    from app.services.trend_scout_task_monitor import get_task_run
+    from app.models import TrendReport
+
+    run = get_task_run(run_id)
+    if not run:
+        abort(404)
+    report = None
+    if run.report_id:
+        report = db.session.get(TrendReport, run.report_id)
+    return render_template("trend_scout/monitor_detail.html", run=run, report=report)
+
+
+@bp.post("/monitor/<run_id>/cancel")
+@roles_required(UserRole.ADMIN)
+def task_monitor_cancel(run_id: str):
+    from app.services.trend_scout_task_monitor import cancel_task_run, get_task_run
+
+    run = get_task_run(run_id)
+    if not run:
+        return jsonify({"error": "not_found"}), 404
+    if run.status not in ("pending", "running"):
+        return jsonify({"error": f"Cannot cancel task with status '{run.status}'"}), 400
+    if run.celery_task_id:
+        celery.control.revoke(run.celery_task_id, terminate=True)
+    cancel_task_run(run_id)
+    record_audit_event(
+        action="trend_scout.task_cancelled",
+        entity_type="trend_task_run",
+        entity_id=run_id,
+        metadata={"celery_task_id": run.celery_task_id, "trigger": run.trigger},
+        source_module=__name__,
+    )
+    return jsonify({"status": "cancelled"})
+
+
+@bp.post("/monitor/<run_id>/retry")
+@roles_required(UserRole.ADMIN)
+def task_monitor_retry(run_id: str):
+    from app.services.trend_scout_task_monitor import get_task_run
+
+    run = get_task_run(run_id)
+    if not run:
+        return jsonify({"error": "not_found"}), 404
+    if run.status != "failed":
+        return jsonify({"error": f"Can only retry failed tasks, status is '{run.status}'"}), 400
+
+    from app.tasks.trend_scout import trend_scout_pipeline
+
+    task = trend_scout_pipeline.delay()
+    session["trend_scout_task_id"] = task.id
+    record_audit_event(
+        action="trend_scout.task_retried",
+        entity_type="trend_task_run",
+        entity_id=run_id,
+        metadata={"new_celery_task_id": task.id, "trigger": run.trigger},
+        source_module=__name__,
+    )
+    return jsonify({"task_id": task.id, "status": "dispatched"})
 
 
 @bp.get("/backtest")

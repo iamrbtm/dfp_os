@@ -8,7 +8,7 @@ from typing import Any
 import requests
 
 from app.extensions import db
-from app.models.trend import TrendSnapshot
+from app.models.trend import TrendOpportunityScore, TrendReport, TrendSnapshot
 from app.services.ai.trend_scout.analyzer import run_analysis
 from app.services.ai.trend_scout.sources import (
     RateLimiter,
@@ -234,12 +234,51 @@ def run_full_pipeline(
         openai_model=openai_model,
         source_health=source_health,
     )
+    report_id = report.id if report else None
+
+    try:
+        _create_pipeline_notifications(report_id, failed_sources)
+    except Exception:
+        logger.exception("Failed to create pipeline notifications")
 
     return {
         "success": True,
         "total_snapshots": total_inserted,
         "failed_sources": sorted(failed_sources),
         "successful_sources": sorted(successful_sources),
-        "report_id": report.id if report else None,
+        "report_id": report_id,
         "source_health": source_health,
     }
+
+
+def _create_pipeline_notifications(
+    report_id: int | None,
+    failed_sources: set[str],
+) -> None:
+    from app.services.notification import create_notification
+
+    if failed_sources:
+        source_list = ", ".join(sorted(failed_sources)[:5])
+        create_notification(
+            notification_type="trend_scout_source_failure",
+            title="Trend Scout source failures",
+            message=f"Pipeline completed but {len(failed_sources)} source(s) had errors: {source_list}",
+            link="/admin/trend-scout/monitor" if report_id else None,
+        )
+
+    if report_id is not None:
+        print_now = (
+            db.session.query(TrendOpportunityScore)
+            .filter(
+                TrendOpportunityScore.report_id == report_id,
+                TrendOpportunityScore.action == "print_now",
+            )
+            .count()
+        )
+        if print_now:
+            create_notification(
+                notification_type="trend_scout_print_now",
+                title=f"{print_now} product(s) ready to print",
+                message=f"Trend Scout found {print_now} product(s) flagged as print_now. Check the latest report for details.",
+                link="/admin/trend-scout/reports",
+            )
