@@ -19,12 +19,27 @@ from app.models import (
     PrintJob,
     PrintJobStatus,
     Product,
+    Setting,
     SourceHealthRecord,
+    TrendCalibrationResult,
     TrendOpportunityScore,
     TrendReport,
     UserRole,
 )
 from app.services.audit import record_audit_event
+from app.services.trend_scout_backtest import run_backtest
+from app.services.trend_scout_calibration import (
+    check_regression,
+    get_calibration_history,
+    run_and_store_calibration,
+)
+from app.services.trend_scout_history import get_biggest_movers, get_score_history
+from app.services.trend_scout_task_monitor import (
+    cancel_task_run,
+    create_task_run,
+    get_recent_task_runs,
+    get_task_run,
+)
 from app.services.trend_scout_weights import (
     DEFAULT_SCORE_WEIGHTS,
     DEFAULT_SOURCE_WEIGHTS,
@@ -165,8 +180,6 @@ def latest_report():
 def run_pipeline():
     from app.services.ai.trend_scout import FETCHERS as _TS_FETCHERS
     from app.tasks.trend_scout import trend_scout_pipeline
-    from app.services.trend_scout_task_monitor import create_task_run
-
     task = trend_scout_pipeline.delay()
     session["trend_scout_task_id"] = task.id
 
@@ -394,8 +407,6 @@ def api_report_scores(report_id: int):
 @bp.get("/api/score-history")
 @roles_required(UserRole.ADMIN)
 def api_score_history():
-    from app.services.trend_scout_history import get_score_history
-
     keyword = request.args.get("keyword")
     limit = request.args.get("limit", 20, type=int)
     history = get_score_history(keyword=keyword, limit=limit)
@@ -405,8 +416,6 @@ def api_score_history():
 @bp.get("/api/biggest-movers")
 @roles_required(UserRole.ADMIN)
 def api_biggest_movers():
-    from app.services.trend_scout_history import get_biggest_movers
-
     top_n = request.args.get("top_n", 10, type=int)
     movers = get_biggest_movers(top_n=top_n)
     return jsonify({"movers": movers})
@@ -415,8 +424,6 @@ def api_biggest_movers():
 @bp.get("/score-history/<string:keyword>")
 @roles_required(UserRole.ADMIN)
 def score_history_page(keyword: str):
-    from app.services.trend_scout_history import get_score_history
-
     history = get_score_history(keyword=keyword, limit=50)
     return render_template(
         "trend_scout/score_history.html",
@@ -470,7 +477,6 @@ def _profile_storage_key(name: str) -> str:
 
 
 def _list_profiles() -> list[str]:
-    from app.models import Setting
     records = (
         db.session.query(Setting)
         .filter(Setting.key.startswith("trend_profile."))
@@ -480,7 +486,6 @@ def _list_profiles() -> list[str]:
 
 
 def _load_profile(name: str) -> dict | None:
-    from app.models import Setting
     import json
     record = db.session.query(Setting).filter(
         Setting.key == _profile_storage_key(name)
@@ -496,8 +501,6 @@ def _load_profile(name: str) -> dict | None:
 @bp.route("/settings", methods=["GET", "POST"])
 @roles_required(UserRole.ADMIN)
 def settings():
-    from app.models import Setting
-
     if request.method == "POST":
         action = request.form.get("action")
 
@@ -918,8 +921,6 @@ def action_flag_license_review():
 @bp.get("/monitor")
 @roles_required(UserRole.ADMIN)
 def task_monitor():
-    from app.services.trend_scout_task_monitor import get_recent_task_runs
-
     runs = get_recent_task_runs(limit=100)
     return render_template("trend_scout/monitor.html", runs=runs)
 
@@ -927,9 +928,6 @@ def task_monitor():
 @bp.get("/monitor/<run_id>")
 @roles_required(UserRole.ADMIN)
 def task_monitor_detail(run_id: str):
-    from app.services.trend_scout_task_monitor import get_task_run
-    from app.models import TrendReport
-
     run = get_task_run(run_id)
     if not run:
         abort(404)
@@ -942,8 +940,6 @@ def task_monitor_detail(run_id: str):
 @bp.post("/monitor/<run_id>/cancel")
 @roles_required(UserRole.ADMIN)
 def task_monitor_cancel(run_id: str):
-    from app.services.trend_scout_task_monitor import cancel_task_run, get_task_run
-
     run = get_task_run(run_id)
     if not run:
         return jsonify({"error": "not_found"}), 404
@@ -965,8 +961,6 @@ def task_monitor_cancel(run_id: str):
 @bp.post("/monitor/<run_id>/retry")
 @roles_required(UserRole.ADMIN)
 def task_monitor_retry(run_id: str):
-    from app.services.trend_scout_task_monitor import get_task_run
-
     run = get_task_run(run_id)
     if not run:
         return jsonify({"error": "not_found"}), 404
@@ -992,8 +986,6 @@ def task_monitor_retry(run_id: str):
 @bp.get("/calibration")
 @roles_required(UserRole.ADMIN)
 def calibration():
-    from app.services.trend_scout_calibration import get_calibration_history, run_and_store_calibration
-
     if request.args.get("run") == "1":
         result = run_and_store_calibration(trigger="manual")
         record_audit_event(
@@ -1027,8 +1019,7 @@ def calibration():
             "prev": prev,
             "curr": curr,
         }
-        from app.services.trend_scout_calibration import check_regression as _check_regression
-        regression = _check_regression()
+        regression = check_regression()
 
     return render_template(
         "trend_scout/calibration.html",
@@ -1041,8 +1032,6 @@ def calibration():
 @bp.get("/calibration/<int:cal_id>")
 @roles_required(UserRole.ADMIN)
 def calibration_detail(cal_id: int):
-    from app.models.trend import TrendCalibrationResult
-
     cal = db.session.get(TrendCalibrationResult, cal_id)
     if not cal:
         abort(404)
@@ -1149,8 +1138,6 @@ def action_add_to_market_prep():
 @bp.get("/backtest")
 @roles_required(UserRole.ADMIN)
 def backtest():
-    from app.services.trend_scout_backtest import run_backtest
-
     lookback = request.args.get("lookback", 12, type=int)
     window = request.args.get("window", 60, type=int)
     result = run_backtest(db.session, lookback_reports=lookback, sales_window_days=window)
