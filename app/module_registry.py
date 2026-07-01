@@ -185,6 +185,7 @@ MODULES: dict[str, ModuleDefinition] = {
         feature_flag_key="module.trend_scout.enabled",
         dependencies=(),
         blueprint_names=("trend_scout",),
+        api_resources=("trend-reports", "trend-opportunity-scores", "trend-source-health"),
         admin_nav_entries=(NavEntry("Trend Scout", "trend_scout.index"),),
         docs_location="docs/AI Design Trend Scout Implementation.md",
     ),

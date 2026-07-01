@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
+import sys
+from datetime import datetime, timezone
+
 import click
 from flask import current_app
 from pathlib import Path
 
 from app.extensions import db
 from app.models.catalog import Product, ProductImage
+from app.models.trend import TrendOpportunityScore, TrendReport
 from app.services.storage import (
     converted_storage_key,
     delete_storage_reference,
@@ -165,3 +170,133 @@ def migrate_file_paths() -> None:
     click.echo(f"\nMigration complete. {migrated} records updated.")
     if errors:
         click.echo(f"{errors} errors occurred (see above).", err=True)
+
+
+@click.group("trend-scout")
+def trend_scout_group() -> None:
+    """Trend Scout pipeline and analysis."""
+
+
+@trend_scout_group.command("run")
+@click.option("--openai-key", envvar="OPENAI_API_KEY", default="", help="OpenAI API key")
+@click.option("--openai-model", envvar="OPENAI_MODEL_TREND_SCOUT", default="gpt-4o-mini", help="OpenAI model")
+def trend_scout_run(openai_key: str, openai_model: str) -> None:
+    """Run the full Trend Scout pipeline synchronously."""
+    from app.services.ai.trend_scout import run_full_pipeline
+
+    click.echo("Starting Trend Scout pipeline...")
+    with current_app.app_context():
+        result = run_full_pipeline(
+            openai_api_key=openai_key,
+            openai_model=openai_model,
+        )
+    if result.get("success"):
+        click.echo(f"\nPipeline completed successfully.")
+        click.echo(f"  Snapshots stored: {result['total_snapshots']}")
+        click.echo(f"  Successful sources: {len(result['successful_sources'])}")
+        click.echo(f"  Report ID: {result.get('report_id', 'none')}")
+        if result.get("failed_sources"):
+            click.echo(f"  Failed sources ({len(result['failed_sources'])}):")
+            for src in result["failed_sources"]:
+                click.echo(f"    - {src}")
+    else:
+        click.echo(f"\nPipeline failed: {result.get('error', 'unknown error')}", err=True)
+        sys.exit(1)
+
+
+@trend_scout_group.command("status")
+def trend_scout_status() -> None:
+    """Show the latest Trend Scout report summary."""
+    with current_app.app_context():
+        report = (
+            db.session.query(TrendReport)
+            .order_by(TrendReport.report_date.desc())
+            .first()
+        )
+        if not report:
+            click.echo("No Trend Reports found. Run `flask trend-scout run` first.")
+            return
+
+        click.echo(f"Report #{report.id}")
+        click.echo(f"  Date: {report.report_date.isoformat()}")
+        click.echo(f"  Summary: {report.summary or 'No summary'}")
+
+        score_count = (
+            db.session.query(TrendOpportunityScore)
+            .filter(TrendOpportunityScore.report_id == report.id)
+            .count()
+        )
+        click.echo(f"  Opportunity scores: {score_count}")
+
+        from app.models.trend import SourceHealthRecord as SHR
+
+        health_records = (
+            db.session.query(SHR)
+            .filter(SHR.report_id == report.id)
+            .all()
+        )
+        if health_records:
+            click.echo(f"  Source health:")
+            for h in health_records:
+                status_char = "✓" if h.status == "success" else "✗"
+                click.echo(f"    {status_char} {h.source}: {h.status} ({h.item_count} items)" + (f" - {h.error_message}" if h.error_message else ""))
+        else:
+            click.echo("  Source health: no records")
+
+        from app.models.trend import SourceHealthRecord
+
+        totals = (
+            db.session.query(
+                SourceHealthRecord.status,
+                db.func.count(SourceHealthRecord.id),
+            )
+            .filter(SourceHealthRecord.report_id == report.id)
+            .group_by(SourceHealthRecord.status)
+            .all()
+        )
+        if totals:
+            click.echo(f"\n  Source totals:")
+            for status, count in totals:
+                click.echo(f"    {status}: {count}")
+
+
+@trend_scout_group.command("backtest")
+@click.option("--reports", default=12, help="Number of past reports to evaluate")
+@click.option("--sales-window", default=60, help="Sales window in days after each report")
+def trend_scout_backtest(reports: int, sales_window: int) -> None:
+    """Run Trend Scout backtest from the terminal."""
+    from app.services.trend_scout_backtest import run_backtest
+
+    with current_app.app_context():
+        result = run_backtest(
+            db_session=db.session,
+            lookback_reports=reports,
+            sales_window_days=sales_window,
+        )
+
+    if result.get("status") == "no_data":
+        click.echo("No TrendReport records found. Run `flask trend-scout run` first.")
+        return
+
+    click.echo(f"Backtest Results ({result['report_count']} reports, {result.get('score_count', 0)} scores)")
+    click.echo(f"  Sales window: {sales_window} days")
+    click.echo("")
+    click.echo("  Prediction Quality:")
+    stats = result.get("stats", {})
+    for key in ("precision", "recall", "f1_score", "accuracy", "mae", "rmse"):
+        val = stats.get(key)
+        if val is not None:
+            click.echo(f"    {key}: {val:.4f}" if isinstance(val, float) else f"    {key}: {val}")
+    click.echo("")
+    click.echo("  Component Analysis:")
+    for comp in result.get("component_analysis", []):
+        click.echo(f"    {comp['component']}: corr={comp.get('correlation', 'N/A')}, predictive_ratio={comp.get('predictive_ratio', 'N/A')}")
+    click.echo("")
+    click.echo("  Tuning Hints:")
+    for hint in result.get("tuning_hints", []):
+        click.echo(f"    - {hint}")
+    click.echo("")
+    if result.get("action_analysis"):
+        click.echo("  Action Analysis:")
+        for action, data in result["action_analysis"].items():
+            click.echo(f"    {action}: count={data.get('count', 0)}, precision={data.get('precision', 'N/A')}")

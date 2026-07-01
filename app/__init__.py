@@ -31,7 +31,7 @@ from app.blueprints.public import bp as public_bp
 from app.blueprints.receipts import bp as receipts_bp
 from app.blueprints.settings import bp as settings_bp
 from app.blueprints.trend_scout import bp as trend_scout_bp
-from app.cli import migrate_group, seed_group
+from app.cli import migrate_group, seed_group, trend_scout_group
 from app.extensions import api, csrf, db, login_manager, migrate
 from app.models import User
 
@@ -184,6 +184,7 @@ def register_request_guards(app: Flask) -> None:
 def register_cli(app: Flask) -> None:
     app.cli.add_command(seed_group)
     app.cli.add_command(migrate_group)
+    app.cli.add_command(trend_scout_group)
 
 
 def register_error_handlers(app: Flask) -> None:
