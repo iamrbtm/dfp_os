@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import (
@@ -28,6 +28,8 @@ from app.services.admin_mutations import (
     snapshot_instance,
     update_resource as update_admin_resource,
 )
+from app.services.audit_client import get_audit_client
+from app.services.business import ensure_default_business
 from app.services.cost_engine import build_pricing_scenarios, calculate_product_cost, persist_cost_snapshot
 from app.services.crud import get_by_id
 from app.services.storage import (
@@ -111,15 +113,16 @@ def studio(product_id: int | None = None):
 
     if form.validate_on_submit():
         if product is None:
+            business = ensure_default_business()
             product = Product()
-            product.business_id = 1
+            product.business_id = business.id
             form.populate_product(product)
             try:
                 product = create_admin_resource(product, actor_id=current_user.id)
             except IntegrityError:
                 db.session.rollback()
                 flash("Unable to save that product. Please check for duplicates.", "danger")
-                return _render_studio(product, form, mode, 400)
+                return _render_studio(None, form, "create", 400)
             flash("Product created successfully.", "success")
             return redirect(url_for("products.studio", product_id=product.id))
 
@@ -522,3 +525,106 @@ def rename_file():
 
     db.session.commit()
     return jsonify({"success": True})
+
+
+@bp.route("/studio/<int:product_id>/trend-score", methods=["GET"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def trend_score(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return jsonify({"success": False, "error": "Product not found"}), 404
+
+    from app.services.ai.trend_scout.analyzer.trend_detector import (
+        _catalog_metrics,
+        OpportunityCandidate,
+        _score_candidate,
+        compute_velocity_and_momentum,
+    )
+    from app.services.trend_match import match_product_to_term
+
+    catalog_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    products = (
+        db.session.query(Product)
+        .filter(Product.deleted_at.is_(None))
+        .all()
+    )
+    catalog_metrics = _catalog_metrics(db.session, catalog_cutoff)
+    _ = compute_velocity_and_momentum(db.session, lookback_weeks=8)
+
+    inventory = catalog_metrics.get("inventory", {}).get(product.id, {})
+    order_metrics = catalog_metrics.get("orders", {}).get(product.id, {})
+    pos_metrics = catalog_metrics.get("pos", {}).get(product.id, {})
+
+    units_sold = int(order_metrics.get("units", 0)) + int(pos_metrics.get("units", 0))
+    revenue = float(order_metrics.get("revenue", 0)) + float(pos_metrics.get("revenue", 0))
+
+    product_keyword = product.name.lower()
+    matched_sources = {"catalog"}
+    match_confidence = "exact"
+
+    for other in products:
+        if other.id == product.id:
+            continue
+        matches, confidence = match_product_to_term(product_keyword, other)
+        if matches:
+            matched_sources.add(other.name.lower())
+
+    candidate = OpportunityCandidate(
+        keyword=product_keyword,
+        title=product.name,
+        current_product=True,
+        product_id=product.id,
+        product_status=(
+            product.status.value if hasattr(product.status, "value") else str(product.status)
+        ),
+        sources=matched_sources,
+        purchase_raw=(units_sold * 10) + (revenue * 0.35),
+        inventory_available=int(inventory.get("available", 0)),
+        reorder_target=int(inventory.get("reorder_target", 0)),
+        units_sold=units_sold,
+        revenue=revenue,
+        base_price=float(product.base_price or 0),
+        estimated_profit=float(product.estimated_profit or 0),
+        estimated_print_minutes=float(product.parsed_print_minutes or product.estimated_print_minutes or 0),
+        license_status=(
+            product.license_status.value if hasattr(product.license_status, "value") else str(product.license_status)
+        ),
+        model_commercial_use_allowed=bool(product.model_commercial_use_allowed),
+        is_public=bool(product.is_public),
+        is_pos_visible=bool(product.is_pos_visible),
+        category=product.category.name if product.category else "",
+        tags=product.tags or "",
+        match_confidence=match_confidence,
+    )
+
+    if candidate.base_price > 0:
+        candidate.prices.append(candidate.base_price)
+
+    scored = _score_candidate(candidate)
+
+    audit = get_audit_client()
+    audit.record(
+        action="trend_opportunity_score.calculated",
+        entity_type="product",
+        entity_id=str(product.id),
+        actor_id=str(current_user.id),
+        actor_type="user",
+        actor_display_name=getattr(current_user, "full_name", None) or current_user.email,
+        source_module="products.studio_routes",
+        after_state={
+            "product_name": product.name,
+            "opportunity_score": scored.get("opportunity_score"),
+            "action": scored.get("action"),
+        },
+        metadata={
+            "source": "product_studio_button",
+            "score_breakdown": scored.get("score_breakdown"),
+        },
+    )
+
+    return jsonify({
+        "success": True,
+        "product_id": product.id,
+        "product_name": product.name,
+        "score": scored,
+    })

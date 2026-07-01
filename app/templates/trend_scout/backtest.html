@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}Trend Scout Backtest{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold" style="color: var(--color-text);">Score Backtest & Calibration</h1>
+    <div class="flex gap-2">
+      <form method="get" action="{{ url_for('trend_scout.backtest') }}" class="flex items-center gap-2">
+        <label class="text-sm" style="color: var(--color-text-muted);">Reports:</label>
+        <select name="lookback" class="app-input text-sm py-1 w-20">
+          <option value="6" {% if request.args.get('lookback', '12') == '6' %}selected{% endif %}>6</option>
+          <option value="12" {% if request.args.get('lookback', '12') == '12' %}selected{% endif %}>12</option>
+          <option value="24" {% if request.args.get('lookback', '24') == '24' %}selected{% endif %}>24</option>
+          <option value="50" {% if request.args.get('lookback', '50') == '50' %}selected{% endif %}>50</option>
+        </select>
+        <label class="text-sm" style="color: var(--color-text-muted);">Window:</label>
+        <select name="window" class="app-input text-sm py-1 w-24">
+          <option value="30" {% if request.args.get('window', '60') == '30' %}selected{% endif %}>30 days</option>
+          <option value="60" {% if request.args.get('window', '60') == '60' %}selected{% endif %}>60 days</option>
+          <option value="90" {% if request.args.get('window', '90') == '90' %}selected{% endif %}>90 days</option>
+          <option value="180" {% if request.args.get('window', '180') == '180' %}selected{% endif %}>180 days</option>
+        </select>
+        <button type="submit" class="app-btn app-btn-primary text-sm py-1">Run</button>
+      </form>
+      <a href="{{ url_for('trend_scout.index') }}" class="app-btn app-btn-secondary text-sm py-1">Back to Matrix</a>
+    </div>
+  </div>
+
+  {% if result.status == 'no_data' or result.status == 'no_product_scores' %}
+  <div class="app-card p-8 text-center">
+    <p class="text-lg" style="color: var(--color-text-muted);">{{ result.message }}</p>
+    <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Run the Trend Scout pipeline first to generate scored opportunities.</p>
+  </div>
+  {% else %}
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="app-card p-4">
+      <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--color-text-muted);">Reports Analyzed</p>
+      <p class="text-2xl font-bold" style="color: var(--color-text);">{{ result.report_count }}</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--color-text-muted);">Product-Score Rows</p>
+      <p class="text-2xl font-bold" style="color: var(--color-text);">{{ result.score_count }}</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--color-text-muted);">Sales Window</p>
+      <p class="text-2xl font-bold" style="color: var(--color-text);">{{ result.sales_window_days }} days</p>
+    </div>
+    <div class="app-card p-4">
+      <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--color-text-muted);">Total Units Sold</p>
+      <p class="text-2xl font-bold" style="color: var(--color-text);">{{ result.stats.total_units_sold }}</p>
+    </div>
+  </div>
+
+  <div class="app-card p-6 mb-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Prediction Accuracy</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">MAE</p>
+        <p class="text-xl font-semibold" style="color: var(--color-text);">{{ result.stats.mae }}</p>
+        <p class="text-xs" style="color: var(--color-text-muted);">Mean Absolute Error (normalized)</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">RMSE</p>
+        <p class="text-xl font-semibold" style="color: var(--color-text);">{{ result.stats.rmse }}</p>
+        <p class="text-xs" style="color: var(--color-text-muted);">Root Mean Squared Error</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Precision@High</p>
+        <p class="text-xl font-semibold" style="color: var(--color-text);">{{ "%.1f"|format(result.stats.precision_at_high_score * 100) }}%</p>
+        <p class="text-xs" style="color: var(--color-text-muted);">% of 60+ scores that sold</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Recall</p>
+        <p class="text-xl font-semibold" style="color: var(--color-text);">{{ "%.1f"|format(result.stats.recall_of_sellers * 100) }}%</p>
+        <p class="text-xs" style="color: var(--color-text-muted);">% of sellers predicted 60+</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">F1 Score</p>
+        <p class="text-xl font-semibold" style="color: var(--color-text);">{{ "%.3f"|format(result.stats.f1) }}</p>
+        <p class="text-xs" style="color: var(--color-text-muted);">Harmonic mean of precision & recall</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Zero-Seller Rate</p>
+        <p class="text-xl font-semibold" style="color: var(--color-text);">{{ "%.1f"|format(result.stats.zero_seller_rate * 100) }}%</p>
+        <p class="text-xs" style="color: var(--color-text-muted);">({{ result.stats.zero_seller_count }} products)</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Avg Predicted Score</p>
+        <p class="text-xl font-semibold" style="color: var(--color-text);">{{ result.stats.avg_predicted_score }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Score Range</p>
+        <p class="text-xl font-semibold" style="color: var(--color-text);">{{ result.stats.min_predicted_score }} – {{ result.stats.max_predicted_score }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-card p-6 mb-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Top-K Overlap</h2>
+    <p class="text-xs mb-3" style="color: var(--color-text-muted);">How often do the top-scored products match the top-sellers?</p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {% for k, val in result.top_k_analysis.items() %}
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">{{ k|replace('_', ' ')|title }}</p>
+        <p class="text-xl font-semibold" style="color: var(--color-text);">{{ "%.1f"|format(val * 100) }}%</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="app-card p-6 mb-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Component Correlation</h2>
+    <p class="text-xs mb-3" style="color: var(--color-text-muted);">Which score components best predict actual sales? Higher correlation = better predictor.</p>
+    <div class="overflow-x-auto">
+      <table class="app-table w-full text-sm">
+        <thead>
+          <tr>
+            <th class="text-left">Component</th>
+            <th class="text-right">Correlation</th>
+            <th class="text-right">Predictive Ratio</th>
+            <th class="text-right">Top-Half Avg Sales</th>
+            <th class="text-right">Bottom-Half Avg Sales</th>
+            <th class="text-right">Avg Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for comp in result.component_analysis %}
+          <tr>
+            <td class="font-medium" style="color: var(--color-text);">{{ comp.component|replace('_', ' ')|title }}</td>
+            <td class="text-right" style="color: {% if comp.correlation > 0.3 %}var(--color-success){% elif comp.correlation < -0.1 %}var(--color-danger){% else %}var(--color-text){% endif %};">
+              {{ "%.4f"|format(comp.correlation) }}
+            </td>
+            <td class="text-right">{{ "%.2f"|format(comp.predictive_ratio) }}x</td>
+            <td class="text-right">{{ "%.1f"|format(comp.top_half_avg_sales) }}</td>
+            <td class="text-right">{{ "%.1f"|format(comp.bottom_half_avg_sales) }}</td>
+            <td class="text-right">{{ "%.1f"|format(comp.avg_value) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="app-card p-6 mb-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Action Recommendation Analysis</h2>
+    <p class="text-xs mb-3" style="color: var(--color-text-muted);">How well do the recommended actions align with actual sales?</p>
+    <div class="overflow-x-auto">
+      <table class="app-table w-full text-sm">
+        <thead>
+          <tr>
+            <th class="text-left">Action</th>
+            <th class="text-right">Count</th>
+            <th class="text-right">Avg Sales</th>
+            <th class="text-right">Zero-Sales Count</th>
+            <th class="text-right">Zero-Sales Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for action, analysis in result.action_analysis.items() %}
+          <tr>
+            <td class="font-medium" style="color: var(--color-text);">{{ action|replace('_', ' ')|title }}</td>
+            <td class="text-right">{{ analysis.count }}</td>
+            <td class="text-right">{{ "%.2f"|format(analysis.avg_actual_sales) }}</td>
+            <td class="text-right">{{ analysis.zero_sales_count }}</td>
+            <td class="text-right">{{ "%.1f"|format(analysis.zero_sales_rate * 100) }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if result.tuning_hints %}
+  <div class="app-card p-6 mb-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Weight Tuning Hints</h2>
+    <p class="text-xs mb-3" style="color: var(--color-text-muted);">Automated suggestions based on backtest data. Visit Settings → Trend Scout to adjust weights.</p>
+    <div class="space-y-3">
+      {% for hint in result.tuning_hints %}
+      <div class="p-3 rounded" style="background: var(--color-surface-alt);">
+        <p class="font-medium text-sm" style="color: var(--color-text);">{{ hint.component|replace('_', ' ')|title }}</p>
+        <p class="text-sm mt-1" style="color: var(--color-text-muted);">{{ hint.hint }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="app-card p-6 mb-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Current Weights</h2>
+    <div class="overflow-x-auto">
+      <table class="app-table w-full text-sm">
+        <thead>
+          <tr>
+            <th class="text-left">Component</th>
+            <th class="text-right">Weight</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for key, val in result.current_weights.items() %}
+          <tr>
+            <td style="color: var(--color-text);">{{ key|replace('_', ' ')|title }}</td>
+            <td class="text-right" style="color: var(--color-text);">{{ val }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-xs mt-3" style="color: var(--color-text-muted);">
+      <a href="{{ url_for('settings.settings_list') }}" class="underline">Edit in Settings</a>
+    </p>
+  </div>
+
+  <div class="app-card p-6 mb-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Raw Predictions (up to 500)</h2>
+    <details>
+      <summary class="cursor-pointer text-sm" style="color: var(--color-primary);">Show/Hide</summary>
+      <div class="overflow-x-auto mt-3">
+        <table class="app-table w-full text-xs">
+          <thead>
+            <tr>
+              <th class="text-left">Keyword</th>
+              <th class="text-right">Score</th>
+              <th class="text-right">Actual Qty</th>
+              <th class="text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in result.predictions %}
+            <tr>
+              <td style="color: var(--color-text);">{{ p.keyword }}</td>
+              <td class="text-right">{{ p.predicted_score }}</td>
+              <td class="text-right">{{ p.actual_quantity }}</td>
+              <td class="text-right">{{ p.action }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}

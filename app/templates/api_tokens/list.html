@@ -31,8 +31,8 @@
           <span class="app-badge app-badge-danger">Revoked</span>
           {% endif %}
         </td>
-        <td class="text-sm">{{ token.last_used_at.strftime('%Y-%m-%d %H:%M') if token.last_used_at else 'Never' }}</td>
-        <td class="text-sm">{{ token.expires_at.strftime('%Y-%m-%d') if token.expires_at else 'Never' }}</td>
+        <td class="text-sm">{{ token.last_used_at|local_datetime or 'Never' }}</td>
+        <td class="text-sm">{{ token.expires_at|local_date or 'Never' }}</td>
         <td>
           <a href="{{ url_for('api_tokens.token_detail', token_id=token.id) }}" class="app-link">View</a>
         </td>

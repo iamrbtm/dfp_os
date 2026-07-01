@@ -39,7 +39,7 @@
     {% for item in command.recent_activity %}
       <div class="border-l-2 pl-3" style="border-color: var(--color-link);">
         <p class="text-sm font-medium">{{ item.label }}</p>
-        <p class="text-xs" style="color: var(--color-text-muted);">{{ item.detail }} &middot; {{ item.timestamp.strftime("%b %d, %-I:%M %p") if item.timestamp else "Unknown" }}</p>
+        <p class="text-xs" style="color: var(--color-text-muted);">{{ item.detail }} &middot; {{ item.timestamp|local_datetime("%b %d, %-I:%M %p") or "Unknown" }}</p>
       </div>
     {% else %}
       <p class="text-sm" style="color: var(--color-text-muted);">No activity yet.</p>

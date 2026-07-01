@@ -17,7 +17,7 @@
               <span class="app-badge app-badge-info">{{ item.event_type.value.replace("_", " ").title() }}</span>
             </div>
             <p class="mt-1 text-sm" style="color: var(--color-text-muted);">
-              {{ item.starts_at.strftime("%b %d, %Y %-I:%M %p") if item.starts_at else "Time TBD" }}
+              {{ item.starts_at|local_datetime("%b %d, %Y %-I:%M %p") or "Time TBD" }}
               {% if item.location %} &middot; {{ item.location }}{% endif %}
             </p>
             {% if item.notes %}<p class="mt-2 text-sm">{{ item.notes }}</p>{% endif %}

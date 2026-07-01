@@ -4,7 +4,7 @@
 <div class="max-w-lg mx-auto">
   <h1 class="text-2xl font-bold mb-6" style="color: var(--color-text);">Close Session {{ session.session_number }}</h1>
   <div class="app-card p-4 mb-4 space-y-1" style="color: var(--color-text);">
-    <p><strong>Opened:</strong> {{ session.opened_at.strftime('%Y-%m-%d %H:%M') }}</p>
+    <p><strong>Opened:</strong> {{ session.opened_at|local_datetime }}</p>
     <p><strong>Opening Cash:</strong> ${{ "%.2f"|format(session.opening_cash) }}</p>
     <p><strong>Cash Sales:</strong> ${{ "%.2f"|format(summary.cash_sales_total) }}</p>
     <p><strong>Cash Refunds:</strong> ${{ "%.2f"|format(summary.cash_refunds_total) }}</p>

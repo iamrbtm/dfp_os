@@ -109,11 +109,14 @@ class ScoutResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        metadata = dict(self.metadata)
+        metadata.setdefault("item_count", len(self.items))
+        metadata.setdefault("has_signal", bool(self.items))
         return {
             "source": self.source,
             "keyword_or_category": self.keyword_or_category,
             "scraped_at": self.scraped_at,
             "items": self.items,
             "errors": self.errors,
-            "metadata": self.metadata,
+            "metadata": metadata,
         }

@@ -5,9 +5,9 @@ Revises: 787cadb6f437
 Create Date: 2026-06-28 10:45:46.091206
 
 """
+
 from alembic import op
 import sqlalchemy as sa
-
 
 # revision identifiers, used by Alembic.
 revision = "43c4bd2dd978"
@@ -41,13 +41,14 @@ SOURCE_MAP = {
 
 def upgrade():
     conn = op.get_bind()
+    binary_prefix = "" if conn.dialect.name == "sqlite" else "BINARY "
 
     # Fix LicenseStatus rows using BINARY for case-sensitive comparison
     for old, new in LICENSE_MAP.items():
         conn.execute(
             sa.text(
                 "UPDATE products SET license_status = :new "
-                "WHERE BINARY license_status = :old"
+                f"WHERE {binary_prefix}license_status = :old"
             ),
             {"new": new, "old": old},
         )
@@ -57,7 +58,7 @@ def upgrade():
         conn.execute(
             sa.text(
                 "UPDATE products SET model_source_type = :new "
-                "WHERE BINARY model_source_type = :old"
+                f"WHERE {binary_prefix}model_source_type = :old"
             ),
             {"new": new, "old": old},
         )

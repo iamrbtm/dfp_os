@@ -202,19 +202,38 @@
               <p class="text-sm font-semibold mt-2" style="color: var(--color-text);">{{ product.analysis_status or "none" }}</p>
             </div>
           </div>
+
+          <div id="trend-score-results" class="hidden">
+            <div class="app-card p-4">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-base font-semibold" style="color: var(--color-text);">Trend Scout Score</h3>
+                <a href="{{ url_for('trend_scout.index') }}" class="text-xs" style="color: var(--color-link);">View in Trend Scout &rarr;</a>
+              </div>
+              <div id="trend-score-display" class="grid gap-3 sm:grid-cols-4">
+              </div>
+              <div id="trend-score-error" class="hidden text-sm" style="color: var(--color-danger);"></div>
+            </div>
+          </div>
         </div>
 
         <div class="space-y-4">
           <div class="app-card p-4 space-y-4">
             <div class="flex items-center justify-between gap-3">
               <h3 class="text-base font-semibold" style="color: var(--color-text);">Model File</h3>
-              <button class="app-btn app-btn-secondary text-sm"
-                      data-calc-costs
-                      data-url="{{ url_for('products.calculate_product_costs', product_id=product.id) }}"
-                      data-result-target="cost-results"
-                      data-product-id="{{ product.id }}">
-                Calculate Cost
-              </button>
+              <div class="flex gap-2">
+                <button class="app-btn app-btn-secondary text-sm"
+                        data-calc-costs
+                        data-url="{{ url_for('products.calculate_product_costs', product_id=product.id) }}"
+                        data-result-target="cost-results"
+                        data-product-id="{{ product.id }}">
+                  Calculate Cost
+                </button>
+                <button class="app-btn app-btn-secondary text-sm"
+                        id="trend-score-btn"
+                        data-url="{{ url_for('products.trend_score', product_id=product.id) }}">
+                  Calculate Trend Score
+                </button>
+              </div>
             </div>
 
             <form id="model-upload-form" data-product-id="{{ product.id }}" enctype="multipart/form-data" class="space-y-4">
@@ -295,4 +314,57 @@
     </div>
   </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='src/js/studio.js') }}"></script>
+<script>
+  // trend score calculation
+  var trendBtn = document.getElementById('trend-score-btn');
+  if (trendBtn) {
+    trendBtn.addEventListener('click', function() {
+      var url = this.getAttribute('data-url');
+      var container = document.getElementById('trend-score-results');
+      var display = document.getElementById('trend-score-display');
+      var errorDiv = document.getElementById('trend-score-error');
+      if (!url || !container || !display) return;
+      var original = this.innerHTML;
+      this.disabled = true;
+      this.innerHTML = 'Calculating...';
+      container.classList.remove('hidden');
+      errorDiv.classList.add('hidden');
+      display.innerHTML = '<div class="col-span-4 text-center text-sm" style="color: var(--color-text-muted);">Loading...</div>';
+      fetch(url, { headers: {'Accept': 'application/json'} })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success === false) { throw new Error(data.error || 'Unknown error'); }
+          var s = data.score;
+          var items = [
+            {label: 'Overall', value: s.opportunity_score, pct: true},
+            {label: 'Intent', value: s.purchase_intent, pct: true},
+            {label: 'Velocity', value: s.trend_velocity, pct: true},
+            {label: 'Price', value: s.price_resilience, pct: true},
+            {label: 'Low Sat.', value: s.low_saturation, pct: true},
+            {label: 'Local', value: s.local_fit, pct: true},
+            {label: 'Prod.', value: s.production_fit, pct: true},
+            {label: 'License', value: s.license_risk, pct: true},
+            {label: 'Action', value: (s.action || '').replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }), pct: false},
+          ];
+          display.innerHTML = items.map(function(item) {
+            var val = item.pct ? '<span class="text-2xl font-bold" style="color: var(--color-primary);">' + item.value + '</span>' : '<span class="text-lg font-semibold" style="color: var(--color-text);">' + item.value + '</span>';
+            return '<div class="app-card p-3 text-center"><p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">' + item.label + '</p>' + val + '</div>';
+          }).join('');
+        })
+        .catch(function(err) {
+          display.innerHTML = '';
+          errorDiv.classList.remove('hidden');
+          errorDiv.textContent = 'Trend score calculation failed: ' + err.message;
+        })
+        .finally(function() {
+          trendBtn.disabled = false;
+          trendBtn.innerHTML = original;
+        });
+    });
+  }
+</script>
 {% endblock %}

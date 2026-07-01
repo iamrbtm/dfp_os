@@ -24,7 +24,7 @@
           <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div><dt style="color: var(--color-text-muted);">Precipitation</dt><dd>{{ command.latest_weather.precipitation_probability if command.latest_weather.precipitation_probability is not none else "—" }}{% if command.latest_weather.precipitation_probability is not none %}%{% endif %}</dd></div>
             <div><dt style="color: var(--color-text-muted);">Wind</dt><dd>{{ command.latest_weather.wind_speed or "—" }}</dd></div>
-            <div><dt style="color: var(--color-text-muted);">Fetched</dt><dd>{{ command.latest_weather.fetched_at.strftime("%b %d, %-I:%M %p") if command.latest_weather.fetched_at else "—" }}</dd></div>
+            <div><dt style="color: var(--color-text-muted);">Fetched</dt><dd>{{ command.latest_weather.fetched_at|local_datetime("%b %d, %-I:%M %p") or "—" }}</dd></div>
           </dl>
         </div>
       </div>

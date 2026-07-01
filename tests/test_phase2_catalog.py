@@ -2,9 +2,39 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from sqlalchemy.exc import IntegrityError
+
 from app.extensions import db
-from app.models import Category, Product, ProductStatus, ProductType
+from app.models import Business, Category, Product, ProductStatus, ProductType
 from app.services.admin_mutations import create_resource
+from app.services.business import ensure_default_business
+
+
+def _studio_payload(category_id: int, *, slug: str = "dragon-large", sku_base: str = "DRG-LARGE") -> dict[str, str]:
+    return {
+        "name": "Dragon - Large",
+        "slug": slug,
+        "sku_base": sku_base,
+        "short_description": "",
+        "description": "",
+        "category_id": str(category_id),
+        "collection_id": "0",
+        "product_type": "finished_good",
+        "status": "draft",
+        "is_public": "y",
+        "is_pos_visible": "y",
+        "base_price": "0",
+        "license_status": "commercial_subscription",
+        "design_source": "Cinderwing",
+        "commercial_license_notes": "",
+        "model_source_type": "subscription_library",
+        "model_source_url": "",
+        "model_designer_name": "Cinderwing",
+        "model_license_type": "",
+        "model_license_expiration": "",
+        "model_notes": "",
+        "submit": "Save Product",
+    }
 
 
 def test_product_model_can_be_created(app):
@@ -47,6 +77,54 @@ def test_product_admin_list_loads(client, login_admin, catalog_product):
     assert response.status_code == 200
     assert b"Products" in response.data
     assert b"Rainbow Dragon" in response.data
+
+
+def test_product_studio_create_uses_existing_default_business(client, login_admin, app):
+    retired_business = Business(name="Old Business", slug="old-business")
+    category = Category(name="Studio Dragons", slug="studio-dragons")
+    db.session.add_all([retired_business, category])
+    db.session.commit()
+    db.session.delete(retired_business)
+    db.session.commit()
+    category_id = category.id
+
+    response = client.post(
+        "/products/studio",
+        data=_studio_payload(category_id),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    default_business = ensure_default_business()
+    product = Product.query.filter_by(slug="dragon-large").one()
+    assert product.business_id == default_business.id
+
+
+def test_product_studio_create_integrity_error_renders_create_form(client, login_admin, monkeypatch):
+    category = Category(name="Studio Error Dragons", slug="studio-error-dragons")
+    db.session.add(category)
+    db.session.commit()
+
+    def fail_create(*_args, **_kwargs):
+        raise IntegrityError("insert product", {}, Exception("forced failure"))
+
+    monkeypatch.setattr("app.blueprints.products.studio_routes.create_admin_resource", fail_create)
+
+    response = client.post(
+        "/products/studio",
+        data=_studio_payload(category.id, slug="dragon-error", sku_base="DRG-ERROR"),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert b"New Product" in response.data
+
+
+def test_product_studio_loads_upload_script(client, login_admin, catalog_product):
+    response = client.get(f"/products/studio/{catalog_product}")
+
+    assert response.status_code == 200
+    assert b"src/js/studio.js" in response.data
 
 
 def test_public_shop_page_loads_public_product(client, catalog_product):

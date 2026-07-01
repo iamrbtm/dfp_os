@@ -29,27 +29,37 @@
     var productId = uploadForm.getAttribute("data-product-id");
     if (!productId) return;
 
-    dropZone.addEventListener("click", function () {
+    dropZone.addEventListener("click", function (e) {
+      e.preventDefault();
       fileInput.click();
     });
 
-    dropZone.addEventListener("dragover", function (e) {
-      e.preventDefault();
-      dropZone.classList.add("border-primary");
+    ["dragenter", "dragover"].forEach(function (eventName) {
+      dropZone.addEventListener(eventName, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add("border-primary");
+      });
     });
 
-    dropZone.addEventListener("dragleave", function () {
+    dropZone.addEventListener("dragleave", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
       dropZone.classList.remove("border-primary");
     });
 
     dropZone.addEventListener("drop", function (e) {
       e.preventDefault();
+      e.stopPropagation();
       dropZone.classList.remove("border-primary");
       if (e.dataTransfer.files.length) {
         fileInput.files = e.dataTransfer.files;
         updateDropZoneLabel(e.dataTransfer.files[0].name);
       }
     });
+
+    document.addEventListener("dragover", preventUnhandledFileDrop);
+    document.addEventListener("drop", preventUnhandledFileDrop);
 
     fileInput.addEventListener("change", function () {
       if (fileInput.files.length) {
@@ -100,6 +110,16 @@
           }
         });
     });
+  }
+
+  function preventUnhandledFileDrop(e) {
+    if (!e.dataTransfer || !e.dataTransfer.types || !Array.prototype.includes.call(e.dataTransfer.types, "Files")) {
+      return;
+    }
+    if (e.target.closest("#model-drop-zone, .image-drop-zone")) {
+      return;
+    }
+    e.preventDefault();
   }
 
   function updateDropZoneLabel(filename) {

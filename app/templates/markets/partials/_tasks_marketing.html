@@ -16,7 +16,7 @@
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <p class="font-medium">{{ task.title }}</p>
-                  <p class="text-xs" style="color: var(--color-text-muted);">{{ task.task_type.value.replace("_", " ").title() }}{% if task.due_at %} &middot; {{ task.due_at.strftime("%b %d, %-I:%M %p") }}{% endif %}</p>
+                  <p class="text-xs" style="color: var(--color-text-muted);">{{ task.task_type.value.replace("_", " ").title() }}{% if task.due_at %} &middot; {{ task.due_at|local_datetime("%b %d, %-I:%M %p") }}{% endif %}</p>
                 </div>
                 {% if task.status.value != "completed" %}
                   <form method="post" action="{{ url_for('markets.complete_task', market_id=instance.id, task_id=task.id) }}" hx-post="{{ url_for('markets.complete_task', market_id=instance.id, task_id=task.id) }}" hx-target="#market-tasks-marketing" hx-swap="innerHTML">
@@ -38,7 +38,7 @@
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <p class="font-medium">{{ task.title }}</p>
-                  <p class="text-xs" style="color: var(--color-text-muted);">{{ task.status.value.replace("_", " ").title() }}{% if task.due_at %} &middot; {{ task.due_at.strftime("%b %d, %-I:%M %p") }}{% endif %}</p>
+                  <p class="text-xs" style="color: var(--color-text-muted);">{{ task.status.value.replace("_", " ").title() }}{% if task.due_at %} &middot; {{ task.due_at|local_datetime("%b %d, %-I:%M %p") }}{% endif %}</p>
                 </div>
                 {% if task.status.value != "completed" %}
                   <form method="post" action="{{ url_for('markets.complete_task', market_id=instance.id, task_id=task.id) }}" hx-post="{{ url_for('markets.complete_task', market_id=instance.id, task_id=task.id) }}" hx-target="#market-tasks-marketing" hx-swap="innerHTML">

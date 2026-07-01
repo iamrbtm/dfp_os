@@ -55,12 +55,12 @@
           {% if instance.deadline %}
           <div>
             <p class="text-sm" style="color: var(--color-text-muted);">Deadline</p>
-            <p class="mt-1 font-medium" style="color: var(--color-text);">{{ instance.deadline.strftime('%B %d, %Y') }}</p>
+            <p class="mt-1 font-medium" style="color: var(--color-text);">{{ instance.deadline|local_datetime("%B %d, %Y") }}</p>
           </div>
           {% endif %}
           <div>
             <p class="text-sm" style="color: var(--color-text-muted);">Created</p>
-            <p class="mt-1 font-medium" style="color: var(--color-text);">{{ instance.created_at.strftime('%B %d, %Y') }}</p>
+            <p class="mt-1 font-medium" style="color: var(--color-text);">{{ instance.created_at|local_datetime("%B %d, %Y") }}</p>
           </div>
         </div>
       </article>
@@ -79,7 +79,7 @@
         <div class="mb-4 p-3 rounded" style="background-color: var(--color-bg-muted);">
           <p class="text-sm" style="color: var(--color-text-muted);">Market / Event</p>
           <a href="{{ url_for('markets.detail_resource', resource_key='markets', resource_id=market.id) }}" class="font-medium" style="color: var(--color-link);">{{ market.name }}</a>
-          {% if market.event_date %}<span class="text-sm" style="color: var(--color-text-muted);"> — {{ market.event_date.strftime('%B %d, %Y') }}</span>{% endif %}
+          {% if market.event_date %}<span class="text-sm" style="color: var(--color-text-muted);"> — {{ market.event_date|local_datetime("%B %d, %Y") }}</span>{% endif %}
         </div>
         {% endif %}
 

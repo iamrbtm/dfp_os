@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='src/css/theme-tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='src/css/app.css') }}">
     {% block head %}{% endblock %}
+    <script>
+    (function(){var tz=Intl.DateTimeFormat().resolvedOptions().timeZone;document.cookie="tz="+encodeURIComponent(tz)+";path=/;SameSite=Lax";})();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.x.x/dist/htmx.min.js" defer></script>
     <script src="{{ url_for('static', filename='src/js/theme-switcher.js') }}" defer></script>
