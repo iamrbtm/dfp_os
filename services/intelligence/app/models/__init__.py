@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -131,3 +131,129 @@ class HistoricalAliasMapping(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
     __table_args__ = (UniqueConstraint("source", "entity_type", "source_value", name="uq_historical_alias_source_value"),)
+
+
+class WarehouseBuild(Base):
+    __tablename__ = "warehouse_builds"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    source: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default=ImportStatus.RUNNING.value, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fact_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    product_summary_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    seasonal_summary_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    channel_summary_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    build_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+
+
+class SalesFactLine(Base):
+    __tablename__ = "sales_fact_lines"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    source: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    source_row_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    sale_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    sale_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    sale_month: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    product_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    variant_key: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    category_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    channel_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    sku: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    transaction_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
+    gross_sales_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    discount_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    net_sales_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tax_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (UniqueConstraint("source", "source_row_id", name="uq_sales_fact_source_row"),)
+
+
+class ProductSalesSummary(Base):
+    __tablename__ = "product_sales_summaries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    product_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    category_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    total_units: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
+    total_net_sales_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    transaction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_months: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    avg_units_per_active_month: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
+    avg_net_sales_cents_per_unit: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    first_sale_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    last_sale_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (UniqueConstraint("product_key", name="uq_product_sales_summary_product_key"),)
+
+
+class SeasonalProductPerformance(Base):
+    __tablename__ = "seasonal_product_performance"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    product_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    sale_month: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    total_units: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
+    total_net_sales_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    transaction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (UniqueConstraint("product_key", "sale_month", name="uq_seasonal_product_month"),)
+
+
+class ChannelPerformanceSummary(Base):
+    __tablename__ = "channel_performance_summaries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    channel_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    total_units: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
+    total_net_sales_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    transaction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_months: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (UniqueConstraint("channel_name", name="uq_channel_performance_channel"),)
+
+
+class MarketAdvisorRun(Base):
+    __tablename__ = "market_advisor_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    market_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    market_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    event_type: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    max_products: Mapped[int] = mapped_column(Integer, nullable=False, default=12)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="completed", index=True)
+    input_context: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class MarketAdvisorRecommendation(Base):
+    __tablename__ = "market_advisor_recommendations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    product_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    category_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    suggested_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    suggested_print_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    expected_revenue_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    risk_level: Mapped[str] = mapped_column(String(40), nullable=False, default="medium")
+    score: Mapped[float] = mapped_column(Numeric(10, 4), nullable=False, default=0)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (UniqueConstraint("run_id", "rank", name="uq_market_advisor_run_rank"),)

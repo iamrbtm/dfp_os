@@ -4,7 +4,7 @@ Decision intelligence microservice for Dude Fish OS. This service keeps historic
 
 ## Current Scope
 
-Implemented phases 1-4:
+Implemented phases 1-6:
 
 - FastAPI service scaffold with liveness/readiness checks.
 - PostgreSQL 17 async SQLAlchemy models and Alembic migration.
@@ -13,6 +13,9 @@ Implemented phases 1-4:
 - Payment-sensitive Square fields are not stored in normal row payloads: `Token` and `PAN Suffix` are removed.
 - Old MariaDB schema inspection design that records table/column snapshots without requiring live credentials in tests.
 - Historical alias mapping records for product, variant, category, channel, customer, and market cleanup.
+- Warehouse fact and summary rebuild from sanitized Square staging rows.
+- Product, seasonal, and channel performance summaries.
+- Deterministic Market Advisor recommendations with persisted runs, product quantities, print quantities, revenue estimates, risk level, and evidence.
 
 The main DFPos Flask app remains the operational source of truth. This service should recommend and explain decisions, not directly mutate DFPos business records.
 
@@ -65,6 +68,21 @@ Authorization: Bearer <INTELLIGENCE_INTERNAL_API_TOKEN>
 | `POST` | `/api/v1/mappings` | Create a proposed mapping. |
 | `POST` | `/api/v1/mappings/{id}/review` | Mark a mapping reviewed and attach the DFPos target. |
 
+### Warehouse
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/warehouse/rebuild-square` | Rebuild sales facts and product/seasonal/channel summaries from Square staging rows. |
+| `GET` | `/api/v1/warehouse/products` | List product sales summaries ordered by units/revenue. |
+| `GET` | `/api/v1/warehouse/channels` | List channel performance summaries. |
+| `GET` | `/api/v1/warehouse/seasonal-products` | List product performance by month. |
+
+### Advisor
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/advisor/market` | Generate a deterministic Market Advisor run from warehouse summaries and current inventory context. |
+
 ## Testing
 
 ```bash
@@ -75,8 +93,6 @@ Tests use SQLite in memory and fixture CSV files, not live Square or MariaDB cre
 
 ## Next Phases
 
-- Phase 5: warehouse fact/dimension tables and materialized summaries.
-- Phase 6: deterministic Market Advisor recommendations.
 - Phase 7: RAG support for notes, receipts, and product descriptions.
 - Phase 8: safe Ask DFP endpoints with allowlisted tools.
 - Phase 9: Flask admin integration.
