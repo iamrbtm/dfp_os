@@ -1,0 +1,51 @@
+[project]
+name = "dfp-intelligence"
+version = "0.1.0"
+description = "Decision intelligence microservice for Dude Fish OS"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.7",
+    "pymysql>=1.1",
+    "python-multipart>=0.0.20",
+    "sqlalchemy[asyncio]>=2.0",
+    "uvicorn[standard]>=0.34",
+]
+
+[project.optional-dependencies]
+dev = [
+    "aiosqlite>=0.20",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
+]
+
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.22.1",
+    "pytest>=9.1.0",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["app/tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+extend-exclude = ["alembic"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

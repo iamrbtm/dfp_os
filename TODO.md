@@ -28,9 +28,11 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` **Phase 7: Source Health Dashboard** — Added stale-data age column (shows time since last scrape), provider setup status indicator (configured vs unconfigured sources with env var checks), and data freshness score (0–100 color-coded) to the Source Health table.
 - `done` **Phase 9: Saved Views** — Added "Save View" button that persists current pill view, search query, filters, and sort column/direction to localStorage; auto-restores on page load.
 - `done` **Phase 11: Production Verification** — Created `docs/trend_scout_setup.md` with API key setup guide for all 10 sources, env var reference, migration verification steps, Celery worker/beat run instructions, pipeline architecture diagram, scoring weights reference, and development guide.
+- `done` **DFPos Intelligence microservice phases 1-4** — Scaffolded `services/intelligence/` with FastAPI/PostgreSQL/Alembic/Docker, health checks, internal bearer auth, Square item CSV staging import with sensitive payment-field stripping, old MariaDB schema-inspection snapshots, and historical alias mapping review models/APIs.
 
 ## Next Priorities
 
+- `todo` Continue DFPos Intelligence phases 5-10: warehouse facts/summaries, deterministic Market Advisor recommendations, RAG notes, Ask DFP, Flask admin integration, and decision-log feedback loop.
 - `todo` Compare implemented modules against the required modules list in `AGENTS.md` and note gaps.
 - `todo` Audit API coverage under `/api/v1/` against the required resource list.
 - `todo` Audit admin CRUD coverage for modules that now exist in models/services but may still need full UI flows.
