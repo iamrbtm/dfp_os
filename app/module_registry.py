@@ -189,6 +189,17 @@ MODULES: dict[str, ModuleDefinition] = {
         admin_nav_entries=(NavEntry("Trend Scout", "trend_scout.index"),),
         docs_location="docs/AI Design Trend Scout Implementation.md",
     ),
+    "dfp_intelligence": ModuleDefinition(
+        key="dfp_intelligence",
+        display_name="DFP Intelligence",
+        description="Historical warehouse, Market Advisor, Ask DFP, and decision feedback loop.",
+        feature_flag_key="module.dfp_intelligence.enabled",
+        dependencies=("analytics", "markets", "inventory"),
+        blueprint_names=("intelligence",),
+        api_resources=("intelligence",),
+        admin_nav_entries=(NavEntry("DFP Intelligence", "intelligence.index"),),
+        docs_location="docs/DFPos Intelligence microservice.md",
+    ),
     "analytics": ModuleDefinition(
         key="analytics",
         display_name="Analytics",

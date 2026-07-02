@@ -83,6 +83,7 @@ class MarketAdvisorRequest(BaseModel):
 class MarketAdvisorRecommendationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    id: str
     rank: int
     product_key: str
     product_name: str

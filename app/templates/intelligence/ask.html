@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Ask DFP | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">DFP Intelligence</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Ask DFP</h1>
+  </div>
+  <article class="app-card p-5">
+    <form method="post" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="block text-sm font-medium" style="color: var(--color-text);">Question</label>
+      <textarea name="question" rows="4" class="app-input w-full" required>{{ question }}</textarea>
+      <button type="submit" class="app-btn app-btn-primary">Ask</button>
+    </form>
+  </article>
+  {% if result and not result.error %}
+  <article class="app-card p-5">
+    <h2 class="text-lg font-semibold" style="color: var(--color-text);">Answer</h2>
+    <p class="mt-3" style="color: var(--color-text);">{{ result.answer }}</p>
+    <h3 class="mt-5 text-sm font-semibold" style="color: var(--color-text);">Evidence</h3>
+    <pre class="mt-2 overflow-x-auto rounded p-3 text-xs" style="background: var(--color-bg-subtle); color: var(--color-text);">{{ result.evidence|tojson(indent=2) }}</pre>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}

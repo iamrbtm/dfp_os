@@ -16,8 +16,12 @@ from app.config import settings
 from app.database import Base
 from app.models import (  # noqa: F401
     ChannelPerformanceSummary,
+    AskDfpRun,
+    DecisionOutcome,
     HistoricalAliasMapping,
     ImportBatch,
+    KnowledgeChunk,
+    KnowledgeDocument,
     LegacyMariaDbTableSnapshot,
     MarketAdvisorRecommendation,
     MarketAdvisorRun,

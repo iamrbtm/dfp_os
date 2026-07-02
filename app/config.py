@@ -127,6 +127,9 @@ class Config:
     AUDIT_LOG_ENABLED = _as_bool(os.getenv("AUDIT_LOG_ENABLED"), False)
     AUDIT_LOG_FAIL_CLOSED = _as_bool(os.getenv("AUDIT_LOG_FAIL_CLOSED"), False)
     ALLOW_NEGATIVE_INVENTORY = _as_bool(os.getenv("ALLOW_NEGATIVE_INVENTORY"), False)
+    INTELLIGENCE_ENABLED = _as_bool(os.getenv("INTELLIGENCE_ENABLED"), True)
+    INTELLIGENCE_SERVICE_URL = os.getenv("INTELLIGENCE_SERVICE_URL", "http://localhost:8091")
+    INTELLIGENCE_INTERNAL_API_TOKEN = os.getenv("INTELLIGENCE_INTERNAL_API_TOKEN", "")
     WEATHER_USER_AGENT = os.getenv(
         "WEATHER_USER_AGENT",
         f"{APP_NAME} ({ADMIN_EMAIL})",

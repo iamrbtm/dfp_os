@@ -30,10 +30,11 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` **Phase 11: Production Verification** — Created `docs/trend_scout_setup.md` with API key setup guide for all 10 sources, env var reference, migration verification steps, Celery worker/beat run instructions, pipeline architecture diagram, scoring weights reference, and development guide.
 - `done` **DFPos Intelligence microservice phases 1-4** — Scaffolded `services/intelligence/` with FastAPI/PostgreSQL/Alembic/Docker, health checks, internal bearer auth, Square item CSV staging import with sensitive payment-field stripping, old MariaDB schema-inspection snapshots, and historical alias mapping review models/APIs.
 - `done` **DFPos Intelligence microservice phases 5-6** — Added warehouse sales facts plus product/seasonal/channel summaries from sanitized Square rows, and a deterministic Market Advisor that stores evidence-backed product quantity, print quantity, revenue, and risk recommendations.
+- `done` **DFPos Intelligence microservice phases 7-10** — Added RAG-ready knowledge documents/chunks with lexical retrieval, safe allowlisted Ask DFP answers, Flask admin integration, and decision-outcome feedback records for recommendation follow-up.
 
 ## Next Priorities
 
-- `todo` Continue DFPos Intelligence phases 7-10: RAG notes, Ask DFP, Flask admin integration, and decision-log feedback loop.
+- `todo` Extend DFPos Intelligence with current DFPos snapshot sync and approved-action workflows that can create prep tasks or print jobs after human confirmation.
 - `todo` Compare implemented modules against the required modules list in `AGENTS.md` and note gaps.
 - `todo` Audit API coverage under `/api/v1/` against the required resource list.
 - `todo` Audit admin CRUD coverage for modules that now exist in models/services but may still need full UI flows.

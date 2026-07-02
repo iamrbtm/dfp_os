@@ -238,6 +238,7 @@ services:
       - services/intelligence/.env
     environment:
       INTELLIGENCE_DATABASE_URL: postgresql+asyncpg://dfp_intelligence:dfp_intelligence_password@intelligence-postgres:5432/dfp_intelligence
+      INTELLIGENCE_INTERNAL_API_TOKEN: ${INTELLIGENCE_INTERNAL_API_TOKEN:-change-me-intelligence-token}
       INTELLIGENCE_AUDIT_LOG_BASE_URL: http://audit-log:8090
       INTELLIGENCE_AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:-change-me-audit-token}
     ports:

@@ -4,7 +4,7 @@ Decision intelligence microservice for Dude Fish OS. This service keeps historic
 
 ## Current Scope
 
-Implemented phases 1-6:
+Implemented phases 1-10:
 
 - FastAPI service scaffold with liveness/readiness checks.
 - PostgreSQL 17 async SQLAlchemy models and Alembic migration.
@@ -16,6 +16,10 @@ Implemented phases 1-6:
 - Warehouse fact and summary rebuild from sanitized Square staging rows.
 - Product, seasonal, and channel performance summaries.
 - Deterministic Market Advisor recommendations with persisted runs, product quantities, print quantities, revenue estimates, risk level, and evidence.
+- RAG-ready knowledge documents and chunks with lexical retrieval now and an embedding field reserved for future pgvector/vector search.
+- Safe Ask DFP endpoint that uses allowlisted warehouse and knowledge-search tools only.
+- Decision outcome records for tracking whether recommendations were accepted, planned, worked, or failed.
+- Flask admin integration through the main DFPos app.
 
 The main DFPos Flask app remains the operational source of truth. This service should recommend and explain decisions, not directly mutate DFPos business records.
 
@@ -83,6 +87,16 @@ Authorization: Bearer <INTELLIGENCE_INTERNAL_API_TOKEN>
 | --- | --- | --- |
 | `POST` | `/api/v1/advisor/market` | Generate a deterministic Market Advisor run from warehouse summaries and current inventory context. |
 
+### Knowledge, Ask DFP, and Decision Log
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/knowledge/documents` | Store a note/document and create searchable chunks. |
+| `GET` | `/api/v1/knowledge/search` | Search stored chunks with lexical retrieval. |
+| `POST` | `/api/v1/ask` | Answer with allowlisted warehouse/search tools and evidence. |
+| `POST` | `/api/v1/decision-outcomes` | Record feedback against a recommendation or run. |
+| `GET` | `/api/v1/decision-outcomes` | List recent decision feedback. |
+
 ## Testing
 
 ```bash
@@ -91,9 +105,8 @@ uv run pytest
 
 Tests use SQLite in memory and fixture CSV files, not live Square or MariaDB credentials.
 
-## Next Phases
+## Next Work
 
-- Phase 7: RAG support for notes, receipts, and product descriptions.
-- Phase 8: safe Ask DFP endpoints with allowlisted tools.
-- Phase 9: Flask admin integration.
-- Phase 10: decision log and outcome feedback loop.
+- Add richer DFPos snapshot sync from current products, markets, inventory, expenses, print jobs, and receipts.
+- Add pgvector-backed semantic retrieval once the Postgres extension is enabled in deployment.
+- Add approved-action workflows that create prep tasks or print jobs in DFPos after human confirmation.
