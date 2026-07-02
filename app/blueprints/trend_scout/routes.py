@@ -49,10 +49,9 @@ from app.services.trend_scout_weights import (
     PREFIX_SOURCE,
     PREFIX_BUYER,
     PREFIX_METRIC,
+    PREFIX_SOURCE_ENABLED,
     load_all_weights,
-    load_score_weights,
-    load_source_weights,
-    validate_score_weights,
+    load_source_enabled_state,
     save_weight,
 )
 from app.utils.auth import roles_required
@@ -112,6 +111,14 @@ def _freshness_score(scraped_at: datetime | None) -> int:
     return 20
 
 
+def _ranked_opportunity_ordering():
+    return (
+        TrendOpportunityScore.rank.is_(None).asc(),
+        TrendOpportunityScore.rank.asc(),
+        TrendOpportunityScore.opportunity_score.desc(),
+    )
+
+
 @bp.get("/")
 @roles_required(UserRole.ADMIN)
 def index():
@@ -135,9 +142,9 @@ def index():
             db.session.query(TrendOpportunityScore)
             .filter(
                 TrendOpportunityScore.report_id == latest.id,
-                TrendOpportunityScore.dismissed == False,
+                TrendOpportunityScore.dismissed.is_(False),
             )
-            .order_by(TrendOpportunityScore.rank.asc().nulls_last(), TrendOpportunityScore.opportunity_score.desc())
+            .order_by(*_ranked_opportunity_ordering())
         )
         scores_pagination = db.paginate(scores_query, page=page, per_page=per_page, error_out=False)
 
@@ -178,7 +185,7 @@ def latest_report():
 @bp.post("/run")
 @roles_required(UserRole.ADMIN)
 def run_pipeline():
-    from app.services.ai.trend_scout import FETCHERS as _TS_FETCHERS
+    from app.services.ai.trend_scout import enabled_fetcher_count
     from app.tasks.trend_scout import trend_scout_pipeline
     task = trend_scout_pipeline.delay()
     session["trend_scout_task_id"] = task.id
@@ -187,7 +194,7 @@ def run_pipeline():
         create_task_run(
             task_id=f"manual-{task.id}",
             trigger="manual",
-            total_steps=len(_TS_FETCHERS) + 1,
+            total_steps=enabled_fetcher_count() + 1,
             celery_task_id=task.id,
         )
     except Exception:
@@ -270,7 +277,8 @@ def persisted_scores():
     scores = (
         db.session.query(TrendOpportunityScore)
         .filter(TrendOpportunityScore.report_id == report.id)
-        .order_by(TrendOpportunityScore.rank.asc().nulls_last(), TrendOpportunityScore.opportunity_score.desc())
+        .filter(TrendOpportunityScore.dismissed.is_(False))
+        .order_by(*_ranked_opportunity_ordering())
         .all()
     )
 
@@ -356,14 +364,11 @@ def api_report_scores(report_id: int):
         TrendOpportunityScore.report_id == report_id,
     )
     if not include_dismissed:
-        query = query.filter(TrendOpportunityScore.dismissed == False)
+        query = query.filter(TrendOpportunityScore.dismissed.is_(False))
     if action_filter:
         query = query.filter(TrendOpportunityScore.action == action_filter)
 
-    query = query.order_by(
-        TrendOpportunityScore.rank.asc().nulls_last(),
-        TrendOpportunityScore.opportunity_score.desc(),
-    )
+    query = query.order_by(*_ranked_opportunity_ordering())
     pagination = db.paginate(query, page=page, per_page=per_page, error_out=False)
 
     return jsonify({
@@ -590,7 +595,7 @@ def settings():
             source_key = request.form.get("source_key", "")
             enabled = request.form.get("enabled", "1") == "1"
             if source_key:
-                setting_key = f"trend_source_enabled.{source_key}"
+                setting_key = PREFIX_SOURCE_ENABLED + source_key
                 existing = db.session.query(Setting).filter(
                     Setting.key == setting_key
                 ).first()
@@ -618,12 +623,7 @@ def settings():
     profiles = _list_profiles()
     source_keys = list(DEFAULT_SOURCE_WEIGHTS)
 
-    source_enabled_state: dict[str, bool] = {}
-    for sk in source_keys:
-        setting = db.session.query(Setting).filter(
-            Setting.key == f"trend_source_enabled.{sk}"
-        ).first()
-        source_enabled_state[sk] = setting is None or setting.value == "1"
+    source_enabled_state = load_source_enabled_state(source_keys)
 
     return render_template(
         "trend_scout/settings.html",
@@ -656,22 +656,19 @@ def report_detail(report_id: int):
 
     query = db.session.query(TrendOpportunityScore).filter(
         TrendOpportunityScore.report_id == report_id,
-        TrendOpportunityScore.dismissed == False,
+        TrendOpportunityScore.dismissed.is_(False),
     )
     if action_filter:
         query = query.filter(TrendOpportunityScore.action == action_filter)
 
-    query = query.order_by(
-        TrendOpportunityScore.rank.asc().nulls_last(),
-        TrendOpportunityScore.opportunity_score.desc(),
-    )
+    query = query.order_by(*_ranked_opportunity_ordering())
     scores_pagination = db.paginate(query, page=page, per_page=per_page, error_out=False)
 
     compare_scores = None
     if compare_report:
         cq = db.session.query(TrendOpportunityScore).filter(
             TrendOpportunityScore.report_id == compare_report.id,
-            TrendOpportunityScore.dismissed == False,
+            TrendOpportunityScore.dismissed.is_(False),
         )
         if action_filter:
             cq = cq.filter(TrendOpportunityScore.action == action_filter)
@@ -716,9 +713,9 @@ def report_csv(report_id: int):
         db.session.query(TrendOpportunityScore)
         .filter(
             TrendOpportunityScore.report_id == report_id,
-            TrendOpportunityScore.dismissed == False,
+            TrendOpportunityScore.dismissed.is_(False),
         )
-        .order_by(TrendOpportunityScore.rank.asc().nulls_last())
+        .order_by(*_ranked_opportunity_ordering())
         .all()
     )
 

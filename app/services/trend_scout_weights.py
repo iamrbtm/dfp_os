@@ -68,6 +68,7 @@ PREFIX_SCORE = "trend_weight."
 PREFIX_SOURCE = "trend_source."
 PREFIX_BUYER = "trend_buyer."
 PREFIX_METRIC = "trend_metric."
+PREFIX_SOURCE_ENABLED = "trend_source_enabled."
 
 
 def _weights_from_settings(prefix: str, defaults: dict[str, float]) -> dict[str, float]:
@@ -112,6 +113,19 @@ def load_all_weights() -> dict[str, Any]:
         "buyer_source_weights": load_buyer_source_weights(),
         "metric_weights": load_metric_weights(),
     }
+
+
+def load_source_enabled_state(source_keys: list[str] | tuple[str, ...] | set[str]) -> dict[str, bool]:
+    if not has_app_context():
+        return {key: True for key in source_keys}
+
+    state = {}
+    for key in source_keys:
+        setting = db.session.query(Setting).filter(
+            Setting.key == PREFIX_SOURCE_ENABLED + key
+        ).first()
+        state[key] = setting is None or setting.value == "1"
+    return state
 
 
 def scoring_version() -> str:

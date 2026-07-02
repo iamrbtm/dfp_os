@@ -8,7 +8,7 @@ from typing import Any
 import requests
 
 from app.extensions import db
-from app.models.trend import TrendOpportunityScore, TrendReport, TrendSnapshot
+from app.models.trend import TrendOpportunityScore, TrendSnapshot
 from app.services.ai.trend_scout.analyzer import run_analysis
 from app.services.ai.trend_scout.sources import (
     RateLimiter,
@@ -24,6 +24,7 @@ from app.services.ai.trend_scout.sources import (
     fetch_pinterest,
     fetch_tiktok,
 )
+from app.services.trend_scout_weights import load_source_enabled_state
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,15 @@ EXTERNAL_FETCHERS = {
 }
 
 FETCHERS = {**DB_FETCHERS, **EXTERNAL_FETCHERS}
+
+
+def _enabled_fetchers(fetchers: dict[str, Any]) -> dict[str, Any]:
+    enabled_state = load_source_enabled_state(set(fetchers))
+    return {name: fetcher for name, fetcher in fetchers.items() if enabled_state.get(name, True)}
+
+
+def enabled_fetcher_count() -> int:
+    return len(_enabled_fetchers(FETCHERS))
 
 
 def _run_fetcher(name: str, fetcher, limiter: RateLimiter) -> list[ScoutResult]:
@@ -94,11 +104,13 @@ def _source_health_from_results(
 
 def run_all_sources(progress_callback=None) -> list[dict[str, Any]]:
     all_results: list[ScoutResult] = []
-    total_sources = len(FETCHERS)
+    db_fetchers = _enabled_fetchers(DB_FETCHERS)
+    external_fetchers = _enabled_fetchers(EXTERNAL_FETCHERS)
+    total_sources = len(db_fetchers) + len(external_fetchers)
     pipeline_total = total_sources + 1
     completed = 0
 
-    for name, fetcher in DB_FETCHERS.items():
+    for name, fetcher in db_fetchers.items():
         completed += 1
         try:
             logger.info("[%s] DB fetcher starting...", name)
@@ -122,7 +134,7 @@ def run_all_sources(progress_callback=None) -> list[dict[str, Any]]:
     with ThreadPoolExecutor(max_workers=4) as executor:
         future_map = {
             executor.submit(_run_fetcher, name, fn, RateLimiter()): name
-            for name, fn in EXTERNAL_FETCHERS.items()
+            for name, fn in external_fetchers.items()
         }
         for future in as_completed(future_map):
             name = future_map[future]
@@ -182,7 +194,7 @@ def run_full_pipeline(
     successful_sources: set[str] = set()
 
     if progress_callback:
-        progress_callback(0, len(FETCHERS) + 1, "initializing", "running")
+        progress_callback(0, enabled_fetcher_count() + 1, "initializing", "running")
 
     scraped = run_all_sources(progress_callback=progress_callback)
 
@@ -224,7 +236,8 @@ def run_full_pipeline(
     )
 
     if progress_callback:
-        progress_callback(len(FETCHERS) + 1, len(FETCHERS) + 1, "analysis", "running")
+        total_steps = enabled_fetcher_count() + 1
+        progress_callback(total_steps, total_steps, "analysis", "running")
 
     source_health = _source_health_from_results(scraped)
 

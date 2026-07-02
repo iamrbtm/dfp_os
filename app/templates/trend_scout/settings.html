@@ -78,8 +78,8 @@
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {% for key in source_keys %}
         <label class="flex items-center gap-3 p-3 rounded cursor-pointer" style="background:var(--color-surface);">
-          <input type="checkbox" name="enabled" value="1"
-                 onchange="this.closest('form').querySelector('[name=source_key]').value='{{ key }}'; this.closest('form').querySelector('.toggle-submit').click();"
+          <input type="checkbox"
+                 onchange="const form = this.closest('form'); form.querySelector('[name=source_key]').value='{{ key }}'; form.querySelector('[name=enabled]').value=this.checked ? '1' : '0'; form.querySelector('.toggle-submit').click();"
                  {% if source_enabled_state.get(key, true) %}checked{% endif %}>
           <span class="text-sm font-medium" style="color: var(--color-text);">{{ key|replace('_', ' ')|title }}</span>
           <span class="text-xs ml-auto" style="color: var(--color-text-muted);">{{ "ON" if source_enabled_state.get(key, true) else "OFF" }}</span>
@@ -87,6 +87,7 @@
         {% endfor %}
       </div>
       <input type="hidden" name="source_key" value="">
+      <input type="hidden" name="enabled" value="">
       <button type="submit" class="toggle-submit hidden"></button>
     </div>
   </form>

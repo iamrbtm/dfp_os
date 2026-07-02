@@ -11,9 +11,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.catalog import LicenseStatus
+from app.models.inventory import InventoryRecord
 from app.models.order import Order, OrderItem
 from app.models.pos import PosSale, PosSaleItem
-from app.models.print_job import PrintJob, PrintJobStatus
 from app.services.trend_match import match_product_to_term
 from app.services.trend_scout_weights import (
     load_buyer_source_weights as _load_buyer_weights,
@@ -327,17 +327,6 @@ def _collect_signal_candidates(signal_rows: list[Any]) -> dict[str, OpportunityC
             sources=source_set,
         )
 
-    maker_keywords = {
-        kw: _calc_signal_total(
-            item
-            for row in signal_rows
-            if _normalise_keyword(row.keyword_or_category) == kw
-            and row.source in MAKER_SOURCES
-            for item in (row.raw_metadata.get("items", []) if row.raw_metadata else [])
-        )
-        for kw in candidates
-    }
-
     for keyword, candidate in candidates.items():
         candidate.maker_signal_count = (
             sum(
@@ -536,13 +525,11 @@ def _catalog_metrics(
             )
             .filter(
                 InventoryRecord.product_id == p.id,
-                InventoryRecord.is_active == True,
+                InventoryRecord.is_active.is_(True),
             )
             .scalar()
             or 0
-        ) if hasattr(db_session, "query") and hasattr(
-            __import__("app.models.inventory", fromlist=["InventoryRecord"]), "InventoryRecord"
-        ) else 0
+        )
 
         sell_through = total_units / max(total_was, 1)
 
@@ -792,7 +779,10 @@ def _production_fit(candidate: OpportunityCandidate) -> int:
 
 def _license_risk(candidate: OpportunityCandidate) -> int:
     if candidate.admin_override:
-        override_lines = [l for l in candidate.admin_override.split("\n") if "override:license_risk" in l.lower()]
+        override_lines = [
+            line for line in candidate.admin_override.split("\n")
+            if "override:license_risk" in line.lower()
+        ]
         if override_lines:
             return 5
 
@@ -822,7 +812,10 @@ def _license_risk(candidate: OpportunityCandidate) -> int:
 
 def _recommend_action(candidate: OpportunityCandidate, scores: dict[str, int]) -> str:
     if candidate.admin_override:
-        override_lines = [l for l in candidate.admin_override.split("\n") if "override:recommend" in l.lower()]
+        override_lines = [
+            line for line in candidate.admin_override.split("\n")
+            if "override:recommend" in line.lower()
+        ]
         for line in override_lines:
             parts = line.split(":")
             if len(parts) >= 3:

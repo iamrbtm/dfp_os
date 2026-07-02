@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
-import uuid
 
 from flask import current_app
 
 from app.celery_app import celery
 from app.extensions import db
-from app.services.ai.trend_scout import FETCHERS, run_full_pipeline
+from app.services.ai.trend_scout import enabled_fetcher_count, run_full_pipeline
 from app.services.trend_scout_task_monitor import (
     complete_task_run,
     create_task_run,
@@ -38,7 +37,7 @@ def trend_scout_pipeline(self) -> dict:
         ),
     )
 
-    total_steps = len(FETCHERS) + 1
+    total_steps = enabled_fetcher_count() + 1
     internal_task_id = f"celery-{task_id}"
 
     try:

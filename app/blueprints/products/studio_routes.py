@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import (
@@ -542,21 +542,17 @@ def trend_score(product_id: int):
     )
     from app.services.trend_match import match_product_to_term
 
-    catalog_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
     products = (
         db.session.query(Product)
         .filter(Product.deleted_at.is_(None))
         .all()
     )
-    catalog_metrics = _catalog_metrics(db.session, catalog_cutoff)
+    catalog_metrics = _catalog_metrics(db.session)
     _ = compute_velocity_and_momentum(db.session, lookback_weeks=8)
 
-    inventory = catalog_metrics.get("inventory", {}).get(product.id, {})
-    order_metrics = catalog_metrics.get("orders", {}).get(product.id, {})
-    pos_metrics = catalog_metrics.get("pos", {}).get(product.id, {})
-
-    units_sold = int(order_metrics.get("units", 0)) + int(pos_metrics.get("units", 0))
-    revenue = float(order_metrics.get("revenue", 0)) + float(pos_metrics.get("revenue", 0))
+    product_metrics = catalog_metrics.get(product.id, {})
+    units_sold = int(product_metrics.get("units_sold", 0))
+    revenue = float(product_metrics.get("revenue", 0))
 
     product_keyword = product.name.lower()
     matched_sources = {"catalog"}
@@ -579,9 +575,11 @@ def trend_score(product_id: int):
         ),
         sources=matched_sources,
         purchase_raw=(units_sold * 10) + (revenue * 0.35),
-        inventory_available=int(inventory.get("available", 0)),
-        reorder_target=int(inventory.get("reorder_target", 0)),
+        inventory_available=int(product.inventory_available or 0),
+        reorder_target=int(product.reorder_target or 0),
         units_sold=units_sold,
+        online_units_sold=int(product_metrics.get("order_units", 0)),
+        pos_units_sold=int(product_metrics.get("pos_units", 0)),
         revenue=revenue,
         base_price=float(product.base_price or 0),
         estimated_profit=float(product.estimated_profit or 0),
@@ -595,6 +593,13 @@ def trend_score(product_id: int):
         category=product.category.name if product.category else "",
         tags=product.tags or "",
         match_confidence=match_confidence,
+        sell_through_rate=float(product_metrics.get("sell_through_rate", 0.0)),
+        days_since_last_sale=int(product_metrics.get("days_since_last_sale", 999)),
+        inventory_age_days=int(product_metrics.get("inventory_age_days", 0)),
+        stockout_detected=bool(product_metrics.get("stockout_detected", False)),
+        margin_pct=float(product_metrics.get("margin_pct", 0.0)),
+        last_sale_at=product_metrics.get("last_sale_at"),
+        admin_override=product.admin_notes or "",
     )
 
     if candidate.base_price > 0:
