@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Calibration | Trend Scout{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex items-start justify-between flex-wrap gap-4">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Trend Scout</p>
+      <h1 class="mt-2 text-2xl font-semibold" style="color: var(--color-text);">Score Calibration</h1>
+      <p class="text-sm mt-1" style="color: var(--color-text-muted);">Automated backtest results and accuracy tracking.</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="?run=1" class="app-btn app-btn-primary text-sm py-1">Run Calibration Now</a>
+      <a href="{{ url_for('trend_scout.backtest') }}" class="app-btn app-btn-secondary text-sm py-1">Advanced Backtest</a>
+      <a href="{{ url_for('trend_scout.index') }}" class="app-btn app-btn-secondary text-sm py-1">Back to Matrix</a>
+    </div>
+  </div>
+
+  {% if regression %}
+  <div class="p-4 rounded" style="background:var(--color-danger-bg,#fee2e2);color:var(--color-danger,#dc2626);">
+    <p class="font-semibold text-sm">Regression Detected</p>
+    <p class="text-sm mt-1">{{ regression }}</p>
+  </div>
+  {% endif %}
+
+  {% if comparison %}
+  <div class="app-card p-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Change vs Previous Run</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Previous</p>
+        <p class="text-sm font-mono">{{ comparison.prev_date.strftime('%Y-%m-%d %H:%M') }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Current</p>
+        <p class="text-sm font-mono">{{ comparison.curr_date.strftime('%Y-%m-%d %H:%M') }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">MAE Change</p>
+        <p class="text-lg font-semibold font-mono" style="color:
+          {% if comparison.mae_change is not none and comparison.mae_change > 0 %}var(--color-danger)
+          {% elif comparison.mae_change is not none and comparison.mae_change < 0 %}var(--color-success)
+          {% else %}var(--color-text){% endif %};">
+          {% if comparison.mae_change is not none %}{{ "%+.4f"|format(comparison.mae_change) }}{% else %}—{% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Precision Change</p>
+        <p class="text-lg font-semibold font-mono" style="color:
+          {% if comparison.precision_change is not none and comparison.precision_change < 0 %}var(--color-danger)
+          {% elif comparison.precision_change is not none and comparison.precision_change > 0 %}var(--color-success)
+          {% else %}var(--color-text){% endif %};">
+          {% if comparison.precision_change is not none %}{{ "%+.1f"|format(comparison.precision_change * 100) }}%{% else %}—{% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">F1 Change</p>
+        <p class="text-lg font-semibold font-mono" style="color:
+          {% if comparison.f1_change is not none and comparison.f1_change < 0 %}var(--color-danger)
+          {% elif comparison.f1_change is not none and comparison.f1_change > 0 %}var(--color-success)
+          {% else %}var(--color-text){% endif %};">
+          {% if comparison.f1_change is not none %}{{ "%+.4f"|format(comparison.f1_change) }}{% else %}—{% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if history %}
+  <div class="app-card p-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Calibration History</h2>
+    <div class="overflow-x-auto">
+      <table class="app-table text-sm">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Trigger</th>
+            <th>Reports</th>
+            <th>Scores</th>
+            <th>MAE</th>
+            <th>RMSE</th>
+            <th>Precision@High</th>
+            <th>Recall</th>
+            <th>F1</th>
+            <th>Zero-Seller</th>
+            <th>Units Sold</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in history %}
+          <tr>
+            <td class="font-mono text-xs">{{ h.run_date.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td><span class="text-xs px-1.5 py-0.5 rounded" style="background:var(--color-surface);color:var(--color-text-muted);">{{ h.trigger }}</span></td>
+            <td class="font-mono">{{ h.report_count }}</td>
+            <td class="font-mono">{{ h.score_count }}</td>
+            <td class="font-mono">{{ "%.4f"|format(h.mae) if h.mae is not none else "—" }}</td>
+            <td class="font-mono">{{ "%.4f"|format(h.rmse) if h.rmse is not none else "—" }}</td>
+            <td class="font-mono">{{ "%.1f"|format(h.precision_at_high_score * 100) if h.precision_at_high_score is not none else "—" }}%</td>
+            <td class="font-mono">{{ "%.1f"|format(h.recall_of_sellers * 100) if h.recall_of_sellers is not none else "—" }}%</td>
+            <td class="font-mono font-semibold" style="color:
+              {% if h.f1_score is not none and h.f1_score >= 0.5 %}var(--color-success)
+              {% elif h.f1_score is not none and h.f1_score >= 0.3 %}var(--color-warning)
+              {% elif h.f1_score is not none %}var(--color-danger)
+              {% else %}var(--color-text){% endif %};">
+              {{ "%.3f"|format(h.f1_score) if h.f1_score is not none else "—" }}
+            </td>
+            <td class="font-mono">{{ "%.1f"|format(h.zero_seller_rate * 100) if h.zero_seller_rate is not none else "—" }}%</td>
+            <td class="font-mono">{{ h.total_units_sold }}</td>
+            <td><a href="{{ url_for('trend_scout.calibration_detail', cal_id=h.id) }}" class="text-xs" style="color:var(--color-primary);">Detail</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="app-card p-8 text-center">
+    <p style="color: var(--color-text-muted);">No calibration runs yet. Click "Run Calibration Now" to start.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

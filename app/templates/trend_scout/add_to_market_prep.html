@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Add to Market Prep | Trend Scout{% endblock %}
+{% block content %}
+<section class="max-w-2xl mx-auto space-y-6">
+  <div class="flex items-start justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Trend Scout</p>
+      <h1 class="mt-2 text-2xl font-semibold" style="color: var(--color-text);">Add to Market Prep</h1>
+      <p class="text-sm mt-1" style="color: var(--color-text-muted);">
+        Add <strong>{{ keyword }}</strong> to an upcoming market's packing list and create reprint prep tasks.
+      </p>
+    </div>
+    <a href="{{ url_for('trend_scout.index') }}" class="app-btn app-btn-secondary text-sm py-1">Cancel</a>
+  </div>
+
+  <form method="post" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="product_id" value="{{ product_id }}">
+    <input type="hidden" name="keyword" value="{{ keyword }}">
+    <input type="hidden" name="score" value="{{ score }}">
+
+    <div class="app-card p-6">
+      <label class="block text-sm font-medium mb-2" style="color: var(--color-text);">Target Market</label>
+      {% if upcoming_markets %}
+      <select name="market_id" class="app-input w-full" required>
+        <option value="">— Select an upcoming market —</option>
+        {% for m in upcoming_markets %}
+        <option value="{{ m.id }}">{{ m.name }} — {{ m.event_date.strftime('%b %d, %Y') if m.event_date else 'No date' }}</option>
+        {% endfor %}
+      </select>
+      <p class="text-xs mt-2" style="color: var(--color-text-muted);">
+        This will add <strong>{{ keyword }}</strong> to the market packing list with a suggested quantity based on the opportunity score
+        and create a reprint prep task.
+      </p>
+      {% else %}
+      <p style="color: var(--color-text-muted);">No upcoming markets found. Create a market with "Accepted" or "Scheduled" status first.</p>
+      {% endif %}
+    </div>
+
+    {% if upcoming_markets %}
+    <button type="submit" class="app-btn app-btn-primary">Add to Market Prep</button>
+    {% endif %}
+  </form>
+</section>
+{% endblock %}

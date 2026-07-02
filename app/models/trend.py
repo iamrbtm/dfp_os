@@ -2,12 +2,32 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
 from app.models.base import PrimaryKeyMixin, TimestampMixin
+
+
+class TrendTaskRun(PrimaryKeyMixin, TimestampMixin, db.Model):
+    __tablename__ = "trend_task_runs"
+
+    task_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending", index=True)
+    trigger: Mapped[str] = mapped_column(String(40), nullable=False, default="manual")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(nullable=True)
+    total_steps: Mapped[int] = mapped_column(Integer, default=0)
+    completed_steps: Mapped[int] = mapped_column(Integer, default=0)
+    current_step: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_health_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    report_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class TrendSnapshot(PrimaryKeyMixin, TimestampMixin, db.Model):
@@ -91,6 +111,8 @@ class TrendOpportunityScore(PrimaryKeyMixin, TimestampMixin, db.Model):
     score_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     source_health: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     match_confidence: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    dismissed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     report = relationship("TrendReport", back_populates="opportunity_scores")
 
@@ -112,3 +134,27 @@ class SourceHealthRecord(PrimaryKeyMixin, TimestampMixin, db.Model):
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     report = relationship("TrendReport", back_populates="source_health_records")
+
+
+class TrendCalibrationResult(PrimaryKeyMixin, TimestampMixin, db.Model):
+    __tablename__ = "trend_calibration_results"
+
+    run_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    trigger: Mapped[str] = mapped_column(String(40), nullable=False, default="manual")
+    report_count: Mapped[int] = mapped_column(Integer, default=0)
+    score_count: Mapped[int] = mapped_column(Integer, default=0)
+    mae: Mapped[float | None] = mapped_column(nullable=True)
+    rmse: Mapped[float | None] = mapped_column(nullable=True)
+    precision_at_high_score: Mapped[float | None] = mapped_column(nullable=True)
+    recall_of_sellers: Mapped[float | None] = mapped_column(nullable=True)
+    f1_score: Mapped[float | None] = mapped_column(nullable=True)
+    zero_seller_rate: Mapped[float | None] = mapped_column(nullable=True)
+    avg_predicted_score: Mapped[float | None] = mapped_column(nullable=True)
+    total_units_sold: Mapped[int] = mapped_column(Integer, default=0)
+    component_analysis: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    top_k_analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    action_analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    tuning_hints: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    current_weights: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    predictions_sample: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

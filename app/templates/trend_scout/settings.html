@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Trend Scout Settings{% endblock %}
+{% block content %}
+<section class="space-y-6 max-w-4xl">
+  <div class="flex items-start justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Trend Scout</p>
+      <h1 class="mt-2 text-2xl font-semibold" style="color: var(--color-text);">Settings</h1>
+      <p class="text-sm mt-1" style="color: var(--color-text-muted);">Configure scoring weights, sources, and profiles.</p>
+    </div>
+    <a href="{{ url_for('trend_scout.index') }}" class="app-btn app-btn-secondary text-sm py-1">Back to Matrix</a>
+  </div>
+
+  <form method="post" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="app-card p-6">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Score Weights</h2>
+      <p class="text-xs mb-4" style="color: var(--color-text-muted);">Adjust how much each component influences the overall opportunity score. Range: -1.0 to 2.0. Default: 0.1–0.3.</p>
+      <input type="hidden" name="action" value="save_weights">
+      <input type="hidden" name="weight_type" value="score" id="weight-type">
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% for key, default in DEFAULT_SCORE_WEIGHTS.items() %}
+        {% set current = weights.score_weights.get(key, default) %}
+        <div>
+          <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">{{ key|replace('_', ' ')|title }}</label>
+          <div class="flex items-center gap-3">
+            <input type="range" min="-1.0" max="2.0" step="0.01" value="{{ current }}"
+                   class="flex-1 weight-slider" data-target="weight_{{ key }}">
+            <input type="number" step="0.01" min="-1.0" max="2.0" name="weight_{{ key }}"
+                   id="weight_{{ key }}" value="{{ current }}"
+                   class="app-input w-20 text-sm text-center font-mono weight-input">
+          </div>
+          <p class="text-xs mt-1" style="color: var(--color-text-muted);">Default: {{ default }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button type="submit" class="app-btn app-btn-primary text-sm">Save Score Weights</button>
+        <button type="button" class="app-btn text-sm reset-score-btn" style="background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);">Reset to Defaults</button>
+      </div>
+    </div>
+  </form>
+
+  <form method="post" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="app-card p-6">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Source Weights</h2>
+      <p class="text-xs mb-4" style="color: var(--color-text-muted);">Adjust confidence weight per data source. Higher = more influence. Range: 0.0 to 2.0.</p>
+      <input type="hidden" name="action" value="save_weights">
+      <input type="hidden" name="weight_type" value="source">
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% for key, default in DEFAULT_SOURCE_WEIGHTS.items() %}
+        {% set current = weights.source_weights.get(key, default) %}
+        <div>
+          <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">{{ key|replace('_', ' ')|title }}</label>
+          <div class="flex items-center gap-3">
+            <input type="range" min="0.0" max="2.0" step="0.01" value="{{ current }}"
+                   class="flex-1 weight-slider" data-target="weight_{{ key }}">
+            <input type="number" step="0.01" min="0.0" max="2.0" name="weight_{{ key }}"
+                   id="weight_{{ key }}" value="{{ current }}"
+                   class="app-input w-20 text-sm text-center font-mono weight-input">
+          </div>
+          <p class="text-xs mt-1" style="color: var(--color-text-muted);">Default: {{ default }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="submit" class="app-btn app-btn-primary text-sm mt-4">Save Source Weights</button>
+    </div>
+  </form>
+
+  <form method="post" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="app-card p-6">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Source Enable/Disable</h2>
+      <p class="text-xs mb-4" style="color: var(--color-text-muted);">Toggle data sources on or off. Disabled sources are skipped during pipeline runs.</p>
+      <input type="hidden" name="action" value="toggle_source">
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {% for key in source_keys %}
+        <label class="flex items-center gap-3 p-3 rounded cursor-pointer" style="background:var(--color-surface);">
+          <input type="checkbox"
+                 onchange="const form = this.closest('form'); form.querySelector('[name=source_key]').value='{{ key }}'; form.querySelector('[name=enabled]').value=this.checked ? '1' : '0'; form.querySelector('.toggle-submit').click();"
+                 {% if source_enabled_state.get(key, true) %}checked{% endif %}>
+          <span class="text-sm font-medium" style="color: var(--color-text);">{{ key|replace('_', ' ')|title }}</span>
+          <span class="text-xs ml-auto" style="color: var(--color-text-muted);">{{ "ON" if source_enabled_state.get(key, true) else "OFF" }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <input type="hidden" name="source_key" value="">
+      <input type="hidden" name="enabled" value="">
+      <button type="submit" class="toggle-submit hidden"></button>
+    </div>
+  </form>
+
+  <form method="post" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="app-card p-6">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Scoring Profiles</h2>
+      <p class="text-xs mb-4" style="color: var(--color-text-muted);">Save and load named weight configurations. Useful for switching between market modes.</p>
+
+      <div class="flex flex-wrap gap-4 items-end mb-6">
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color: var(--color-text-muted);">Save Current As</label>
+          <div class="flex gap-2">
+            <input type="text" name="profile_name" placeholder="e.g. Market Mode" class="app-input text-sm">
+            <button type="submit" name="action" value="save_profile" class="app-btn app-btn-primary text-sm">Save</button>
+          </div>
+        </div>
+      </div>
+
+      {% if profiles %}
+      <div class="overflow-x-auto">
+        <table class="app-table text-sm">
+          <thead>
+            <tr>
+              <th>Profile Name</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for profile in profiles %}
+            <tr>
+              <td style="color: var(--color-text);">{{ profile }}</td>
+              <td>
+                <div class="flex gap-2">
+                  <button type="submit" name="action" value="load_profile"
+                          class="text-xs px-2 py-1 rounded"
+                          style="background:var(--color-primary);color:white;border:none;cursor:pointer;"
+                          onclick="this.form.profile_name.value='{{ profile }}';">Load</button>
+                  <button type="submit" name="action" value="delete_profile"
+                          class="text-xs px-2 py-1 rounded"
+                          style="background:var(--color-danger);color:white;border:none;cursor:pointer;"
+                          onclick="return confirm('Delete profile {{ profile }}?') || (event.preventDefault(), false);"
+                          formnovalidate
+                          onclick="this.form.profile_name.value='{{ profile }}';">Delete</button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm" style="color: var(--color-text-muted);">No saved profiles yet. Save your current weight configuration as a named profile above.</p>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+<script>
+document.querySelectorAll('.weight-slider').forEach(slider => {
+  slider.addEventListener('input', function() {
+    const target = document.getElementById(this.dataset.target);
+    if (target) target.value = this.value;
+  });
+});
+document.querySelectorAll('.weight-input').forEach(input => {
+  input.addEventListener('change', function() {
+    const slider = document.querySelector(`.weight-slider[data-target="${this.id}"]`);
+    if (slider) slider.value = this.value;
+  });
+});
+document.querySelector('.reset-score-btn')?.addEventListener('click', function() {
+  {% for key, default in DEFAULT_SCORE_WEIGHTS.items() %}
+  const input_{{ key }} = document.getElementById('weight_{{ key }}');
+  const slider_{{ key }} = document.querySelector(`.weight-slider[data-target="weight_{{ key }}"]`);
+  if (input_{{ key }}) input_{{ key }}.value = '{{ default }}';
+  if (slider_{{ key }}) slider_{{ key }}.value = '{{ default }}';
+  {% endfor %}
+});
+</script>
+{% endblock %}

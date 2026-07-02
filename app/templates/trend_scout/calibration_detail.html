@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Calibration #{{ cal.id }} | Trend Scout{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex items-start justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Trend Scout</p>
+      <h1 class="mt-2 text-2xl font-semibold" style="color: var(--color-text);">Calibration #{{ cal.id }}</h1>
+      <p class="text-sm mt-1" style="color: var(--color-text-muted);">{{ cal.run_date|local_full }} &middot; {{ cal.trigger }}</p>
+    </div>
+    <a href="{{ url_for('trend_scout.calibration') }}" class="app-btn app-btn-secondary text-sm py-1">Back to Calibration</a>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Reports</p>
+      <p class="text-lg font-bold" style="color: var(--color-text);">{{ cal.report_count }}</p>
+    </div>
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Scores</p>
+      <p class="text-lg font-bold" style="color: var(--color-text);">{{ cal.score_count }}</p>
+    </div>
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Units Sold</p>
+      <p class="text-lg font-bold" style="color: var(--color-text);">{{ cal.total_units_sold }}</p>
+    </div>
+    <div class="app-card p-3 text-center">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Trigger</p>
+      <p class="text-sm font-mono" style="color: var(--color-text);">{{ cal.trigger }}</p>
+    </div>
+  </div>
+
+  <div class="app-card p-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Accuracy Metrics</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">MAE</p>
+        <p class="text-xl font-semibold font-mono" style="color: var(--color-text);">{{ "%.4f"|format(cal.mae) if cal.mae is not none else "—" }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">RMSE</p>
+        <p class="text-xl font-semibold font-mono" style="color: var(--color-text);">{{ "%.4f"|format(cal.rmse) if cal.rmse is not none else "—" }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Precision@High</p>
+        <p class="text-xl font-semibold font-mono" style="color: var(--color-text);">{{ "%.1f"|format(cal.precision_at_high_score * 100) if cal.precision_at_high_score is not none else "—" }}%</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Recall</p>
+        <p class="text-xl font-semibold font-mono" style="color: var(--color-text);">{{ "%.1f"|format(cal.recall_of_sellers * 100) if cal.recall_of_sellers is not none else "—" }}%</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">F1 Score</p>
+        <p class="text-xl font-semibold font-mono" style="color: var(--color-text);">{{ "%.3f"|format(cal.f1_score) if cal.f1_score is not none else "—" }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Zero-Seller Rate</p>
+        <p class="text-xl font-semibold font-mono" style="color: var(--color-text);">{{ "%.1f"|format(cal.zero_seller_rate * 100) if cal.zero_seller_rate is not none else "—" }}%</p>
+      </div>
+    </div>
+  </div>
+
+  {% if cal.component_analysis %}
+  <div class="app-card p-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Component Analysis</h2>
+    <div class="overflow-x-auto">
+      <table class="app-table text-sm">
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Correlation</th>
+            <th>Predictive Ratio</th>
+            <th>Top-Half Avg</th>
+            <th>Bottom-Half Avg</th>
+            <th>Avg Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for comp in cal.component_analysis %}
+          <tr>
+            <td style="color: var(--color-text);">{{ comp.component|replace('_', ' ')|title }}</td>
+            <td class="font-mono" style="color: {% if comp.correlation > 0.3 %}var(--color-success){% elif comp.correlation < -0.1 %}var(--color-danger){% else %}var(--color-text){% endif %};">{{ "%.4f"|format(comp.correlation) }}</td>
+            <td class="font-mono">{{ "%.2f"|format(comp.predictive_ratio) }}x</td>
+            <td class="font-mono">{{ "%.1f"|format(comp.top_half_avg_sales) }}</td>
+            <td class="font-mono">{{ "%.1f"|format(comp.bottom_half_avg_sales) }}</td>
+            <td class="font-mono">{{ "%.1f"|format(comp.avg_value) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if cal.tuning_hints %}
+  <div class="app-card p-6">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Tuning Hints</h2>
+    <div class="space-y-3">
+      {% for hint in cal.tuning_hints %}
+      <div class="p-3 rounded" style="background:var(--color-surface-alt, var(--color-surface));">
+        <p class="font-medium text-sm" style="color: var(--color-text);">{{ hint.component|replace('_', ' ')|title }}</p>
+        <p class="text-sm mt-1" style="color: var(--color-text-muted);">{{ hint.hint }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if cal.error_message %}
+  <div class="p-4 rounded" style="background:var(--color-danger-bg,#fee2e2);color:var(--color-danger,#dc2626);">
+    <p class="font-semibold text-sm">Error</p>
+    <p class="text-sm mt-1">{{ cal.error_message }}</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -185,6 +185,7 @@ MODULES: dict[str, ModuleDefinition] = {
         feature_flag_key="module.trend_scout.enabled",
         dependencies=(),
         blueprint_names=("trend_scout",),
+        api_resources=("trend-reports", "trend-opportunity-scores", "trend-source-health"),
         admin_nav_entries=(NavEntry("Trend Scout", "trend_scout.index"),),
         docs_location="docs/AI Design Trend Scout Implementation.md",
     ),
@@ -239,6 +240,15 @@ MODULES: dict[str, ModuleDefinition] = {
         feature_flag_key="module.audit_logs.enabled",
         default_enabled=True,
         blueprint_names=("audit_logs",),
+    ),
+    "notifications": ModuleDefinition(
+        key="notifications",
+        display_name="Notifications",
+        description="In-app notification alerts for trends, system events, and workflow milestones.",
+        feature_flag_key="module.notifications.enabled",
+        default_enabled=True,
+        blueprint_names=("notifications",),
+        admin_nav_entries=(NavEntry("Notifications", "notifications.notification_list"),),
     ),
     "feature_flags": ModuleDefinition(
         key="feature_flags",

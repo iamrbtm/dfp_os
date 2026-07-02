@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import logging
 import random
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import requests
+
+logger = logging.getLogger(__name__)
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
@@ -75,6 +80,28 @@ def build_xml_headers() -> dict[str, str]:
         "Connection": "keep-alive",
         "DNT": "1",
     }
+
+
+MAX_429_RETRIES = 3
+RETRY_429_BASE_DELAY = 5.0
+
+
+def request_with_retry(
+    session: requests.Session,
+    method: str,
+    url: str,
+    **kwargs: Any,
+) -> requests.Response:
+    """Make an HTTP request with exponential backoff on 429 responses."""
+    for attempt in range(MAX_429_RETRIES):
+        resp = session.request(method, url, **kwargs)
+        if resp.status_code != 429:
+            return resp
+        delay = RETRY_429_BASE_DELAY * (2 ** attempt)
+        logger.warning("HTTP 429 on %s %s — retrying in %.0fs (attempt %d/%d)", method.upper(), url, delay, attempt + 1, MAX_429_RETRIES)
+        time.sleep(delay)
+    logger.error("HTTP 429 on %s %s — exhausted %d retries", method.upper(), url, MAX_429_RETRIES)
+    return resp
 
 
 class RateLimiter:

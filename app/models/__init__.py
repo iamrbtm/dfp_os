@@ -1,5 +1,6 @@
 from app.models.api_token import ApiToken
 from app.models.business import Business, FeatureFlag
+from app.models.notification import Notification
 from app.models.catalog import (
     Category,
     Collection,
@@ -66,7 +67,7 @@ from app.models.pos import (
 from app.models.prep_task import PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_job import PrintJob, PrintJobStatus
 from app.models.setting import Setting
-from app.models.trend import SourceHealthRecord, TrendOpportunityScore, TrendReport, TrendSnapshot
+from app.models.trend import SourceHealthRecord, TrendCalibrationResult, TrendOpportunityScore, TrendReport, TrendSnapshot, TrendTaskRun
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -148,6 +149,9 @@ __all__ = [
     "SourceHealthRecord",
     "TrendOpportunityScore",
     "TrendReport",
+    "Notification",
+    "TrendCalibrationResult",
+    "TrendTaskRun",
     "TrendSnapshot",
     "User",
     "UserRole",

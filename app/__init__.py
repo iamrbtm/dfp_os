@@ -20,6 +20,7 @@ from app.blueprints.expenses import bp as expenses_bp
 from app.blueprints.custom_orders import bp as custom_orders_bp
 from app.blueprints.dashboard import bp as dashboard_bp
 from app.blueprints.markets import bp as markets_bp
+from app.blueprints.notifications import bp as notifications_bp
 from app.blueprints.inventory import bp as inventory_bp
 from app.blueprints.orders import bp as orders_bp
 from app.blueprints.pos import bp as pos_bp
@@ -31,7 +32,7 @@ from app.blueprints.public import bp as public_bp
 from app.blueprints.receipts import bp as receipts_bp
 from app.blueprints.settings import bp as settings_bp
 from app.blueprints.trend_scout import bp as trend_scout_bp
-from app.cli import migrate_group, seed_group
+from app.cli import migrate_group, seed_group, trend_scout_group
 from app.extensions import api, csrf, db, login_manager, migrate
 from app.models import User
 
@@ -117,6 +118,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(prep_tasks_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(cost_engine_bp)
+    app.register_blueprint(notifications_bp)
     app.register_blueprint(expenses_bp)
     app.register_blueprint(trend_scout_bp)
     app.register_blueprint(audit_logs_bp)
@@ -184,6 +186,7 @@ def register_request_guards(app: Flask) -> None:
 def register_cli(app: Flask) -> None:
     app.cli.add_command(seed_group)
     app.cli.add_command(migrate_group)
+    app.cli.add_command(trend_scout_group)
 
 
 def register_error_handlers(app: Flask) -> None:
@@ -256,6 +259,7 @@ def register_context_processors(app: Flask) -> None:
             "auth": None,
             "public": None,
             "api": None,
+            "notifications": "notifications",
             "prep_tasks": "prep_tasks",
             "cost_engine": "cost_engine",
             "audit_logs": "audit_logs",
@@ -308,6 +312,7 @@ def register_context_processors(app: Flask) -> None:
             ],
             "trend_scout": [
                 ("Dashboard", url_for("trend_scout.index")),
+                ("Task Monitor", url_for("trend_scout.task_monitor")),
             ],
             "audit_logs": [
                 ("Audit Logs", url_for("audit_logs.index")),
@@ -345,6 +350,15 @@ def register_context_processors(app: Flask) -> None:
             "context_nav_items": context_nav_items,
             "public_cart_count": cart_item_count(),
         }
+        notif_count = 0
+        if current_user and current_user.is_authenticated:
+            try:
+                from app.models import Notification
+                notif_count = db.session.query(Notification).filter(Notification.is_read == False).count()
+            except Exception:
+                notif_count = 0
+        ctx["unread_notification_count"] = notif_count
+
         if current_user and current_user.is_authenticated and hasattr(current_user, "theme_slug"):
             ctx["active_theme"] = current_user.theme_slug
         else:

@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from app.services.ai.trend_scout.sources._base import ScoutResult
+from app.services.ai.trend_scout.sources._base import ScoutResult, request_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,8 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
         limiter.wait()
         result = ScoutResult(source="pinterest", keyword_or_category=query)
         try:
-            resp = session.get(
+            resp = request_with_retry(
+                session, "GET",
                 f"{API_BASE}/search/pins",
                 params={"query": query, "page_size": 20},
                 headers=headers,

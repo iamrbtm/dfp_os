@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from app.services.ai.trend_scout.sources._base import ScoutResult, build_json_api_headers
+from app.services.ai.trend_scout.sources._base import ScoutResult, build_json_api_headers, request_with_retry
 
 SERPAPI_URL = "https://serpapi.com/search.json"
 
@@ -71,7 +71,8 @@ def _fetch_with_serpapi(session: requests.Session, limiter: Any, api_key: str) -
     for query in SEED_QUERIES:
         limiter.wait()
         try:
-            resp = session.get(
+            resp = request_with_retry(
+                session, "GET",
                 SERPAPI_URL,
                 params={
                     "engine": "google_trends",
