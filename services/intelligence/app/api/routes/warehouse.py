@@ -11,6 +11,7 @@ from app.schemas.warehouse import (
     WarehouseBuildResponse,
 )
 from app.security import verify_internal_token
+from app.services.legacy_warehouse import rebuild_legacy_warehouse
 from app.services.warehouse import (
     list_channel_summaries,
     list_product_summaries,
@@ -24,6 +25,11 @@ router = APIRouter(prefix="/warehouse", tags=["warehouse"], dependencies=[Depend
 @router.post("/rebuild-square", response_model=WarehouseBuildResponse)
 async def rebuild_square_warehouse(db: AsyncSession = Depends(get_db)):
     return await rebuild_square_sales_warehouse(db)
+
+
+@router.post("/rebuild-legacy")
+async def rebuild_legacy_warehouse_endpoint(db: AsyncSession = Depends(get_db)):
+    return await rebuild_legacy_warehouse(db)
 
 
 @router.get("/products", response_model=ProductSalesSummaryListResponse)

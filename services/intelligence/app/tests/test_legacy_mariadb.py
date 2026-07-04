@@ -9,7 +9,7 @@ from app.services.legacy_mariadb import inspect_legacy_mariadb, resolve_legacy_c
 def test_legacy_config_requires_read_only_connection_details(monkeypatch):
     monkeypatch.setattr("app.services.legacy_mariadb.settings.legacy_mariadb_host", None)
     with pytest.raises(ValueError, match="Missing legacy MariaDB connection settings"):
-        resolve_legacy_config(LegacyMariaDbInspectRequest())
+        resolve_legacy_config(host=None, database=None, user=None, password=None)
 
 
 @pytest.mark.asyncio

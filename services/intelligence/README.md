@@ -63,6 +63,11 @@ Authorization: Bearer <INTELLIGENCE_INTERNAL_API_TOKEN>
 | --- | --- | --- |
 | `POST` | `/api/v1/imports/square/items-csv` | Import Square itemized sales CSV into raw staging rows. |
 | `POST` | `/api/v1/imports/legacy-mariadb/inspect` | Inspect legacy MariaDB table/column shape and save a schema snapshot. |
+| `POST` | `/api/v1/imports/legacy-mariadb/import-all` | Import every table from legacy MariaDB into raw staging tables. |
+| `GET` | `/api/v1/imports/legacy-mariadb/tables` | List imported tables with review state and row counts. |
+| `GET` | `/api/v1/imports/legacy-mariadb/tables/{table_name}/review` | Get review state for a specific table. |
+| `POST` | `/api/v1/imports/legacy-mariadb/tables/{table_name}/review` | Mark a table as keep/exclude/delete_staging. |
+| `DELETE` | `/api/v1/imports/legacy-mariadb/tables/{table_name}/staging` | Hard-delete staging rows for a table (requires `confirm=true`). |
 
 ### Mappings
 

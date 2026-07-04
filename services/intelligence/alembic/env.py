@@ -15,17 +15,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import settings
 from app.database import Base
 from app.models import (  # noqa: F401
-    ChannelPerformanceSummary,
     AskDfpRun,
+    ChannelPerformanceSummary,
     DecisionOutcome,
     HistoricalAliasMapping,
     ImportBatch,
     KnowledgeChunk,
     KnowledgeDocument,
+    LegacyImportRowStage,
     LegacyMariaDbTableSnapshot,
+    LegacyTableManifest,
+    LegacyTableReviewState,
     MarketAdvisorRecommendation,
     MarketAdvisorRun,
     ProductSalesSummary,
+    PromotedLegacyTable,
     SalesFactLine,
     SeasonalProductPerformance,
     SquareItemRaw,
