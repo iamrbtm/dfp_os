@@ -89,6 +89,24 @@ class IntelligenceClient:
                 response.raise_for_status()
                 return response.json()
 
+    def legacy_promote(self) -> dict[str, Any]:
+        return self._request("POST", "/api/v1/imports/legacy-mariadb/promote")
+
+    def legacy_list_promoted(self) -> dict[str, Any]:
+        return self._request("GET", "/api/v1/imports/legacy-mariadb/promoted")
+
+    def legacy_cleanup_staging(self) -> dict[str, Any]:
+        return self._request("POST", "/api/v1/imports/legacy-mariadb/cleanup-staging")
+
+    def rebuild_legacy_warehouse(self) -> dict[str, Any]:
+        return self._request("POST", "/api/v1/warehouse/rebuild-legacy")
+
+    def run_normalized_pipeline(self) -> dict[str, Any]:
+        return self._request("POST", "/api/v1/pipeline/run")
+
+    def pipeline_status(self) -> dict[str, Any]:
+        return self._request("GET", "/api/v1/pipeline/status")
+
 
 def get_intelligence_client() -> IntelligenceClient:
     config = current_app.config

@@ -381,3 +381,39 @@ class MarketAdvisorRecommendation(Base):
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
     evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class PipelineRun(Base):
+    __tablename__ = "pipeline_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="running", index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    entity_counts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class NormalizedEntity(Base):
+    __tablename__ = "normalized_entities"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    pipeline_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    promoted_table_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    entity_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    original_table_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    original_primary_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    sku: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    amount_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    date_value: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    vendor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status_value: Mapped[str | None] = mapped_column("status", String(40), nullable=True)
+    source_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

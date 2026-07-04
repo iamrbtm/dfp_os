@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routes import advisor, health, imports, knowledge, legacy_review_gui, mappings, warehouse
+from app.api.routes import advisor, health, imports, knowledge, legacy_review_gui, mappings, pipeline, warehouse
 from app.config import settings
 
 
@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/health")
     app.include_router(imports.router, prefix="/api/v1")
     app.include_router(mappings.router, prefix="/api/v1")
+    app.include_router(pipeline.router, prefix="/api/v1")
     app.include_router(warehouse.router, prefix="/api/v1")
     app.include_router(advisor.router, prefix="/api/v1")
     app.include_router(knowledge.router, prefix="/api/v1")

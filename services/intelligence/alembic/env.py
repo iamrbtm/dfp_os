@@ -28,6 +28,8 @@ from app.models import (  # noqa: F401
     LegacyTableReviewState,
     MarketAdvisorRecommendation,
     MarketAdvisorRun,
+    NormalizedEntity,
+    PipelineRun,
     ProductSalesSummary,
     PromotedLegacyTable,
     SalesFactLine,

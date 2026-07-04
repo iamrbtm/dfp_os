@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Normalized Pipeline | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">DFP Intelligence</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Normalized Pipeline</h1>
+    </div>
+    <form action="{{ url_for('intelligence.pipeline_run') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="app-btn app-btn-primary">Run Pipeline</button>
+    </form>
+  </div>
+
+  {% if error %}
+  <article class="app-card p-5 border" style="border-color: var(--color-danger);">
+    <p style="color: var(--color-danger);">{{ error.message if error.message else error }}</p>
+  </article>
+  {% endif %}
+
+  {% if status %}
+  <article class="app-card p-5">
+    <h2 class="text-lg font-semibold" style="color: var(--color-text);">Pipeline Status</h2>
+    <div class="mt-4 grid gap-4 md:grid-cols-3">
+      <div class="rounded border p-4" style="border-color: var(--color-border);">
+        <p class="text-sm" style="color: var(--color-text-muted);">Last Run</p>
+        <p class="mt-1 text-lg font-semibold" style="color: var(--color-text);">{{ status.last_run_at or "Never" }}</p>
+      </div>
+      <div class="rounded border p-4" style="border-color: var(--color-border);">
+        <p class="text-sm" style="color: var(--color-text-muted);">Entities Created</p>
+        <p class="mt-1 text-lg font-semibold" style="color: var(--color-text);">{{ status.entities_created or 0 }}</p>
+      </div>
+      <div class="rounded border p-4" style="border-color: var(--color-border);">
+        <p class="text-sm" style="color: var(--color-text-muted);">Status</p>
+        <p class="mt-1 text-lg font-semibold" style="color: var(--color-text);">{{ status.status or "idle" }}</p>
+      </div>
+    </div>
+    {% if status.results %}
+    <div class="mt-4 overflow-x-auto">
+      <table class="app-table">
+        <thead><tr><th>Entity Type</th><th>Created</th><th>Errors</th></tr></thead>
+        <tbody>
+        {% for result in status.results %}
+        <tr>
+          <td>{{ result.entity_type }}</td>
+          <td>{{ result.created }}</td>
+          <td>{{ result.errors }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </article>
+  {% endif %}
+</section>
+{% endblock %}
