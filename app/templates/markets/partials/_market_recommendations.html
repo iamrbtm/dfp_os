@@ -6,7 +6,7 @@
       <p class="text-xs font-normal" style="color: var(--color-text-muted);">Intelligence-powered product suggestions for this market.</p>
     </div>
   </div>
-  {% if recommendations %}
+  {% if command.recommendations %}
   <div class="overflow-x-auto">
     <table class="app-table">
       <thead>
@@ -20,7 +20,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for rec in recommendations %}
+        {% for rec in command.recommendations %}
         <tr>
           <td class="text-center font-semibold" style="color: var(--color-primary);">{{ rec.rank }}</td>
           <td>
