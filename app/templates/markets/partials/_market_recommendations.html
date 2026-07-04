@@ -1,0 +1,67 @@
+<section class="app-card overflow-hidden">
+  <div class="app-card-header flex items-center gap-3">
+    <span class="flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold" style="border-color: var(--color-primary); color: var(--color-primary);">AI</span>
+    <div>
+      <h2>Market Advisor Recommendations</h2>
+      <p class="text-xs font-normal" style="color: var(--color-text-muted);">Intelligence-powered product suggestions for this market.</p>
+    </div>
+  </div>
+  {% if recommendations %}
+  <div class="overflow-x-auto">
+    <table class="app-table">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Product</th>
+          <th>Bring</th>
+          <th>Revenue</th>
+          <th>Risk</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in recommendations %}
+        <tr>
+          <td class="text-center font-semibold" style="color: var(--color-primary);">{{ rec.rank }}</td>
+          <td>
+            <p class="font-medium" style="color: var(--color-text);">{{ rec.product_name }}</p>
+            {% if rec.rationale %}
+            <p class="mt-0.5 text-xs" style="color: var(--color-text-muted);">{{ rec.rationale[:120] }}{% if rec.rationale|length > 120 %}...{% endif %}</p>
+            {% endif %}
+          </td>
+          <td>{{ rec.suggested_quantity or "—" }}</td>
+          <td>${{ "%.2f"|format((rec.expected_revenue_cents or 0) / 100) }}</td>
+          <td>
+            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+              {% if rec.risk_level == 'low' %}bg-green-100 text-green-800
+              {% elif rec.risk_level == 'medium' %}bg-yellow-100 text-yellow-800
+              {% else %}bg-red-100 text-red-800{% endif %}">
+              {{ rec.risk_level }}
+            </span>
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('markets.recommendation_add', market_id=instance.id) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="product_name" value="{{ rec.product_name }}">
+              <input type="hidden" name="suggested_quantity" value="{{ rec.suggested_quantity or 1 }}">
+              <button type="submit" class="app-btn app-btn-secondary text-xs">+ Add to Packing List</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="p-5">
+    <p class="text-sm" style="color: var(--color-text-muted);">
+      No recommendations available. 
+      {% if not configured_intelligence %}
+      The DFP Intelligence service is not configured.
+      {% else %}
+      Add inventory data and ensure the warehouse is built to get product recommendations.
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+</section>

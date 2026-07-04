@@ -27,6 +27,7 @@ from app.models import (
     MarketPackingList,
     MarketTask,
     MarketTimelineEvent,
+    Product,
     UserRole,
 )
 from app.services.admin_mutations import (
@@ -36,6 +37,7 @@ from app.services.admin_mutations import (
     update_resource as update_admin_resource,
 )
 from app.services.crud import apply_search, get_by_id, paginate_query
+from app.services.intelligence_client import get_intelligence_client
 from app.services.markets import (
     complete_market_task,
     complete_timeline_event,
@@ -322,6 +324,7 @@ def detail_resource(resource_id: int, resource_key: str = "markets"):
         command = get_market_command_center(instance)
         extra = {"packing_list": command["packing_list"]}
         forms = _detail_forms(instance)
+        configured_intelligence = get_intelligence_client().is_configured()
     return render_template(
         "markets/detail.html" if resource_key == "markets" else "dashboard/resource_detail.html",
         resource=config,
@@ -329,6 +332,7 @@ def detail_resource(resource_id: int, resource_key: str = "markets"):
         details=details,
         extra=extra,
         command=command,
+        configured_intelligence=configured_intelligence if resource_key == "markets" else False,
         **forms,
     )
 
@@ -635,3 +639,53 @@ def packing_quick_add(market_id: int):
         )
         return _after_market_action(market, "products_inventory", "Packing item added.")
     return _after_market_action(market, "products_inventory", "Choose a product before adding a packing item.", "danger")
+
+
+@bp.route("/<int:market_id>/recommendation-add", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def recommendation_add(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+
+    product_name = (request.form.get("product_name") or "").strip()
+    suggested_qty = max(int(request.form.get("suggested_quantity") or 1), 1)
+
+    if not product_name:
+        flash("Product name is required.", "danger")
+        return redirect(url_for("markets.detail_resource", resource_id=market.id))
+
+    product = Product.query.filter(
+        db.func.lower(Product.name) == product_name.lower()
+    ).first()
+
+    if product is None:
+        flash(f"Could not find product matching \"{product_name}\". Add it to the catalog first.", "warning")
+        return redirect(url_for("markets.detail_resource", resource_id=market.id))
+
+    existing = MarketPackingList.query.filter_by(market_id=market.id, product_id=product.id).first()
+    if existing:
+        existing.planned_quantity = (existing.planned_quantity or 0) + suggested_qty
+        db.session.commit()
+        record_market_audit(
+            "market_packing_item.updated",
+            "market_packing_list",
+            existing.id,
+            actor=current_user,
+            after_state={"market_id": market.id, "product_id": product.id, "planned_quantity": existing.planned_quantity},
+        )
+        flash(f"Added {suggested_qty} more of \"{product.name}\" to the packing list.", "success")
+    else:
+        item = MarketPackingList(market_id=market.id, product_id=product.id, planned_quantity=suggested_qty)
+        db.session.add(item)
+        db.session.commit()
+        record_market_audit(
+            "market_packing_item.created",
+            "market_packing_list",
+            item.id,
+            actor=current_user,
+            after_state={"market_id": market.id, "product_id": product.id, "planned_quantity": suggested_qty},
+        )
+        flash(f"Added \"{product.name}\" to packing list (planned: {suggested_qty}).", "success")
+
+    return redirect(url_for("markets.detail_resource", resource_id=market.id))
