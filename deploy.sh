@@ -93,12 +93,27 @@ info "Copying .env files..."
 scp "$LOCAL_ENV_FILE" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/.env"
 
 # Copy all service-specific .env files (audit-log, api-docs, etc.)
-while IFS= read -r -d '' svc_env; do
-  rel_path="${svc_env#./}"
-  target_dir="${REMOTE_DIR}/$(dirname "$rel_path")"
-  ${SSH_CMD} "mkdir -p ${target_dir}"
-  scp "$svc_env" "${REMOTE_USER}@${REMOTE_HOST}:${target_dir}/"
-done < <(find services -name '.env' -not -path '*/.venv/*' -print0 2>/dev/null || true)
+# Ensure each service has a .env file (create from .env.example if missing)
+for svc_dir in services/*/; do
+  [ -d "$svc_dir" ] || continue
+  svc_name=$(basename "$svc_dir")
+  local_env="${svc_dir}.env"
+  example_env="${svc_dir}.env.example"
+
+  if [ ! -f "$local_env" ] && [ -f "$example_env" ]; then
+    info "Creating ${local_env} from ${example_env}"
+    cp "$example_env" "$local_env"
+  fi
+
+  if [ -f "$local_env" ]; then
+    target_dir="${REMOTE_DIR}/${svc_dir}"
+    ${SSH_CMD} "mkdir -p ${target_dir}"
+    scp "$local_env" "${REMOTE_USER}@${REMOTE_HOST}:${target_dir}/.env"
+    ok "Copied ${svc_name} .env"
+  else
+    info "Skipping ${svc_name}: no .env or .env.example found"
+  fi
+done
 
 ok ".env files copied."
 

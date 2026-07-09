@@ -22,6 +22,7 @@ from app.blueprints.dashboard import bp as dashboard_bp
 from app.blueprints.markets import bp as markets_bp
 from app.blueprints.notifications import bp as notifications_bp
 from app.blueprints.inventory import bp as inventory_bp
+from app.blueprints.intelligence import bp as intelligence_bp
 from app.blueprints.orders import bp as orders_bp
 from app.blueprints.pos import bp as pos_bp
 from app.blueprints.prep_tasks import bp as prep_tasks_bp
@@ -108,6 +109,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(products_bp)
     app.register_blueprint(inventory_bp)
+    app.register_blueprint(intelligence_bp)
     app.register_blueprint(printers_bp)
     app.register_blueprint(customers_bp)
     app.register_blueprint(custom_orders_bp)
@@ -250,6 +252,7 @@ def register_context_processors(app: Flask) -> None:
             "printers": "printers",
             "print_jobs": "print_jobs",
             "inventory": "inventory",
+            "intelligence": "intelligence",
             "markets": "markets",
             "receipts": "expenses",
             "expenses": "expenses",
@@ -274,6 +277,12 @@ def register_context_processors(app: Flask) -> None:
         CONTEXT_NAV_ITEMS: dict[str, list[tuple[str, str]]] = {
             "analytics": [
                 ("Overview", url_for("analytics.index")),
+            ],
+            "intelligence": [
+                ("Overview", url_for("intelligence.index")),
+                ("Ask DFP", url_for("intelligence.ask")),
+                ("Market Advisor", url_for("intelligence.market_advisor")),
+                ("Notes", url_for("intelligence.notes")),
             ],
             "pos": [
                 ("Sessions", url_for("pos.session_list")),

@@ -34,6 +34,7 @@ from app.models import (
 from app.models.base import utc_now
 from app.services.audit_client import get_audit_client
 from app.services.cost_engine import estimate_market_profit
+from app.services.intelligence_client import get_intelligence_client
 from app.services.storage import (
     content_type_for_name,
     upload_file_to_storage,
@@ -110,9 +111,46 @@ def get_market_command_center(market: Market) -> dict:
         "latest_weather": weather,
         "hotel_bookings": hotels,
         "documents": documents,
+        "recommendations": get_market_advisor_recommendations(market),
         "stats": _quick_stats(market, packing_list, tasks, timeline_events, documents, performance),
         "recent_activity": _recent_activity(market, tasks, timeline_events, hotels, documents, packing_list),
     }
+
+
+def get_market_advisor_recommendations(market: Market) -> list[dict]:
+    client = get_intelligence_client()
+    if not client.is_configured():
+        return []
+    booth_fee_cents = None
+    if market.booth_fee is not None:
+        booth_fee_cents = int(Decimal(str(market.booth_fee)) * 100)
+    if market.application_fee is not None:
+        booth_fee_cents = (booth_fee_cents or 0) + int(Decimal(str(market.application_fee)) * 100)
+    payload = {
+        "market_name": market.name,
+        "market_date": market.event_date.isoformat() if market.event_date else None,
+        "event_type": "vendor_market",
+        "expected_foot_traffic": _parse_traffic(market.expected_traffic),
+        "booth_fee_cents": booth_fee_cents,
+        "inventory_by_product_key": {},
+        "max_products": 12,
+    }
+    result = client.market_advisor(payload)
+    if isinstance(result, dict) and result.get("error"):
+        return []
+    return result.get("recommendations", []) if isinstance(result, dict) else []
+
+
+def _parse_traffic(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        parts = value.replace(",", "").split("-")
+        if len(parts) == 2:
+            return (int(parts[0].strip()) + int(parts[1].strip())) // 2
+        return int(parts[0].strip())
+    except (ValueError, IndexError):
+        return None
 
 
 def geocode_market_address(market: Market, actor=None) -> bool:

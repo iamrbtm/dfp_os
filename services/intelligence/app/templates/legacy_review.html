@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Legacy Import Review - {{ service_name }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        brand: { coral: '#f17e6b', teal: '#3b9e9e', navy: '#1a2744', cream: '#fdf8f0' },
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-brand-cream text-gray-800 font-sans">
+
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <div class="mb-8">
+    <p class="text-sm uppercase tracking-[0.2em] text-brand-teal font-semibold">DFP Intelligence</p>
+    <h1 class="text-3xl font-bold text-brand-navy mt-1">Legacy Import Review</h1>
+    <p class="text-gray-500 mt-1">Review imported tables and decide what to keep, exclude, or delete.</p>
+  </div>
+
+  {% if saved %}
+  <div class="bg-green-50 border border-green-200 text-green-800 rounded-lg px-5 py-4 mb-6 flex items-center gap-3">
+    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+    <span>Reviews saved successfully.</span>
+  </div>
+  {% endif %}
+
+  {% if errors %}
+  <div class="bg-red-50 border border-red-200 text-red-800 rounded-lg px-5 py-4 mb-6">
+    <ul class="list-disc list-inside space-y-1">
+    {% for err in errors %}
+      <li>{{ err }}</li>
+    {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if promoted %}
+  <div class="bg-teal-50 border border-teal-200 text-teal-800 rounded-lg px-5 py-4 mb-6 flex items-center gap-3">
+    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+    <span>
+      Promotion complete: <strong>{{ promoted.promoted }}</strong> table{{ 's' if promoted.promoted != 1 }} promoted,
+      <strong>{{ promoted.skipped }}</strong> skipped.
+    </span>
+  </div>
+  {% if promoted.tables %}
+  <div class="bg-white border border-gray-200 rounded-xl px-5 py-4 mb-6">
+    <h3 class="text-sm font-semibold text-brand-navy mb-2">Promotion Details</h3>
+    <table class="w-full text-xs">
+      <thead><tr class="text-left text-gray-500 border-b"><th class="pb-1">Table</th><th class="pb-1">Status</th><th class="pb-1">Entity Type</th><th class="pb-1">Rows</th></tr></thead>
+      <tbody>
+      {% for t in promoted.tables %}
+      <tr class="border-b border-gray-100">
+        <td class="py-1 font-mono">{{ t.table_name }}</td>
+        <td class="py-1">
+          <span class="px-1.5 py-0.5 rounded text-xs font-medium
+            {% if t.status == 'promoted' %}bg-green-100 text-green-700
+            {% else %}bg-gray-100 text-gray-500{% endif %}">{{ t.status }}</span>
+        </td>
+        <td class="py-1 text-gray-500">{{ t.entity_type or '-' }}</td>
+        <td class="py-1 text-gray-500">{{ t.row_count or '-' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <div class="flex items-center gap-4 mb-6">
+    <form method="POST" action="/admin/legacy-import-review/promote?token={{ api_token }}">
+      <button type="submit" class="bg-brand-teal hover:bg-teal-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        Promote Kept Tables
+      </button>
+    </form>
+    <p class="text-sm text-gray-400">Reads kept staging rows and saves them as normalized records.</p>
+  </div>
+
+  {% if not tables %}
+  <div class="bg-white border border-gray-200 rounded-xl p-12 text-center">
+    <p class="text-lg text-gray-400 font-medium">No imported tables found.</p>
+    <p class="text-sm text-gray-400 mt-1">Upload a legacy export first via the JSON upload endpoint.</p>
+  </div>
+  {% else %}
+
+  <form method="POST" action="/admin/legacy-import-review?token={{ api_token }}">
+
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm text-gray-500">{{ tables|length }} table{{ 's' if tables|length != 1 }} to review</p>
+      <button type="submit" class="bg-brand-coral hover:bg-orange-600 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        Save All Reviews
+      </button>
+    </div>
+
+    <div class="space-y-4">
+      {% for t in tables %}
+      <article class="bg-white border border-gray-200 rounded-xl p-5 transition-shadow hover:shadow-sm">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0 flex-1">
+            <h3 class="text-lg font-semibold text-brand-navy font-mono">{{ t.table_name }}</h3>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500">
+              <span>{{ t.staged_row_count }} row{{ 's' if t.staged_row_count != 1 }}</span>
+              {% if t.columns %}
+              <span>{{ t.columns|length }} column{{ 's' if t.columns|length != 1 }}</span>
+              {% endif %}
+              {% if t.primary_key_columns %}
+              <span class="font-mono text-xs">PK: {{ t.primary_key_columns|join(', ') }}</span>
+              {% endif %}
+              {% if t.review_decision %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
+                {% if t.review_decision == 'keep' %}bg-green-100 text-green-700
+                {% elif t.review_decision == 'exclude' %}bg-yellow-100 text-yellow-700
+                {% elif t.review_decision == 'delete_staging' %}bg-red-100 text-red-700
+                {% else %}bg-gray-100 text-gray-600{% endif %}">
+                <span class="w-1.5 h-1.5 rounded-full
+                  {% if t.review_decision == 'keep' %}bg-green-500
+                  {% elif t.review_decision == 'exclude' %}bg-yellow-500
+                  {% elif t.review_decision == 'delete_staging' %}bg-red-500
+                  {% else %}bg-gray-400{% endif %}">
+                </span>
+                {{ t.review_decision }}
+              </span>
+              {% endif %}
+            </div>
+            {% if t.columns %}
+            <details class="mt-2">
+              <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600">columns</summary>
+              <div class="mt-1 flex flex-wrap gap-1">
+                {% for col in t.columns %}
+                <span class="text-xs font-mono bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 text-gray-600">{{ col.name }} <span class="text-gray-400">{{ col.data_type }}</span></span>
+                {% endfor %}
+              </div>
+            </details>
+            {% endif %}
+          </div>
+
+          <div class="shrink-0 space-y-2 min-w-[200px]">
+            <div class="flex items-center gap-2">
+              <label class="flex items-center gap-1.5 cursor-pointer text-sm">
+                <input type="radio" name="decision_{{ t.table_name }}" value="keep" {{ 'checked' if t.recommended_action == 'keep' and not t.review_decision or t.review_decision == 'keep' }} class="accent-brand-teal">
+                <span class="text-green-700 font-medium">Keep</span>
+              </label>
+              <label class="flex items-center gap-1.5 cursor-pointer text-sm">
+                <input type="radio" name="decision_{{ t.table_name }}" value="exclude" {{ 'checked' if t.recommended_action == 'exclude' and not t.review_decision or t.review_decision == 'exclude' }} class="accent-yellow-500">
+                <span class="text-yellow-700 font-medium">Exclude</span>
+              </label>
+              <label class="flex items-center gap-1.5 cursor-pointer text-sm">
+                <input type="radio" name="decision_{{ t.table_name }}" value="delete_staging" {{ 'checked' if t.review_decision == 'delete_staging' }}>
+                <span class="text-red-600 font-medium">Delete</span>
+              </label>
+            </div>
+            <div class="text-xs text-gray-400 italic bg-gray-50 rounded px-2 py-1.5">
+              {{ t.recommendation_note }}
+            </div>
+            <input type="text" name="note_{{ t.table_name }}" placeholder="Your note (optional)" value="{{ t.review_notes or '' }}" class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/30">
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+
+    <div class="mt-6 flex items-center justify-between">
+      <p class="text-sm text-gray-500">{{ tables|length }} table{{ 's' if tables|length != 1 }} to review</p>
+      <button type="submit" class="bg-brand-coral hover:bg-orange-600 text-white font-semibold px-8 py-3 rounded-lg transition-colors flex items-center gap-2 text-lg">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        Save All Reviews
+      </button>
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+</body>
+</html>

@@ -110,6 +110,22 @@ services:
       timeout: 5s
       retries: 5
 
+  intelligence-postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: dfp_intelligence
+      POSTGRES_USER: dfp_intelligence
+      POSTGRES_PASSWORD: dfp_intelligence_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - intelligence_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dfp_intelligence"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   audit-redis:
     image: redis:7-alpine
     ports:
@@ -216,6 +232,27 @@ services:
       "uv run alembic upgrade head &&
       uv run uvicorn app.main:app --host 0.0.0.0 --port 8090"
 
+  intelligence:
+    build: services/intelligence
+    env_file:
+      - services/intelligence/.env
+    environment:
+      INTELLIGENCE_DATABASE_URL: postgresql+asyncpg://dfp_intelligence:dfp_intelligence_password@intelligence-postgres:5432/dfp_intelligence
+      INTELLIGENCE_INTERNAL_API_TOKEN: ${INTELLIGENCE_INTERNAL_API_TOKEN:-change-me-intelligence-token}
+      INTELLIGENCE_AUDIT_LOG_BASE_URL: http://audit-log:8090
+      INTELLIGENCE_AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:-change-me-audit-token}
+    ports:
+      - "8091:8091"
+    depends_on:
+      intelligence-postgres:
+        condition: service_healthy
+      audit-log:
+        condition: service_started
+    command: >
+      /bin/sh -c
+      "uv run alembic upgrade head &&
+      uv run uvicorn app.main:app --host 0.0.0.0 --port 8091"
+
   api-docs:
     profiles:
       - docs
@@ -238,4 +275,5 @@ volumes:
   receipt_uploads:
   seaweedfs_data:
   audit_postgres_data:
+  intelligence_postgres_data:
   audit_redis_data:

@@ -3,6 +3,7 @@
 .venv/
 *.egg-info/
 services/audit-log/.env
+services/intelligence/.env
 DFP OS Audit Log Microservice.md
 __pycache__/
 *.py[cod]
