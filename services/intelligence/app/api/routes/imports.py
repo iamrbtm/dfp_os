@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import LegacyTableReviewState
+from app.models import LegacyTableReviewState, TableReviewDecision
 from app.schemas.imports import (
     LegacyImportAllRequest,
     LegacyImportAllResponse,
@@ -13,8 +13,8 @@ from app.schemas.imports import (
     LegacyJsonUploadResponse,
     LegacyMariaDbInspectRequest,
     LegacyMariaDbInspectResponse,
-    LegacyPromotedTableInfo,
     LegacyPromoteResponse,
+    LegacyPromotedTableInfo,
     LegacyTableDeleteResponse,
     LegacyTableListResponse,
     LegacyTableReviewRequest,

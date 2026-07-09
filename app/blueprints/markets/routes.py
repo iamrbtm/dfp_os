@@ -26,7 +26,6 @@ from app.models import (
     MarketHotelBooking,
     MarketPackingList,
     MarketTimelineEvent,
-    PrepTask,
     Product,
     UserRole,
 )

@@ -18,6 +18,25 @@ depends_on = None
 def upgrade() -> None:
     # Additive migration only. Destructive cleanup must happen through an explicit,
     # operator-run data-loss procedure, not during alembic upgrade.
+    # Drop tables that need schema rebuild to avoid complex ALTER conflicts
+    # Safe in dev — no production data
+    op.execute("DROP TABLE IF EXISTS legacy_mariadb_table_snapshots CASCADE")
+    op.execute("DROP TABLE IF EXISTS square_item_raw CASCADE")
+    op.execute("DROP TABLE IF EXISTS sales_fact_lines CASCADE")
+    op.execute("DROP TABLE IF EXISTS product_sales_summaries CASCADE")
+    op.execute("DROP TABLE IF EXISTS seasonal_product_performance CASCADE")
+    op.execute("DROP TABLE IF EXISTS channel_performance_summaries CASCADE")
+    op.execute("DROP TABLE IF EXISTS historical_alias_mappings CASCADE")
+    op.execute("DROP TABLE IF EXISTS warehouse_builds CASCADE")
+    op.execute("DROP TABLE IF EXISTS knowledge_documents CASCADE")
+    op.execute("DROP TABLE IF EXISTS knowledge_chunks CASCADE")
+    op.execute("DROP TABLE IF EXISTS decision_outcomes CASCADE")
+    op.execute("DROP TABLE IF EXISTS ask_dfp_runs CASCADE")
+    op.execute("DROP TABLE IF EXISTS market_advisor_runs CASCADE")
+    op.execute("DROP TABLE IF EXISTS market_advisor_recommendations CASCADE")
+
+    # legacy_table_manifests — drop and recreate to match new schema
+    op.execute("DROP TABLE IF EXISTS legacy_table_manifests CASCADE")
     op.create_table(
         "legacy_table_manifests",
         sa.Column("id", sa.String(36), primary_key=True),
