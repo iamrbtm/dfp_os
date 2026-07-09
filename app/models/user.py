@@ -33,7 +33,7 @@ class User(UserMixin, PrimaryKeyMixin, TimestampMixin, db.Model):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    theme_slug: Mapped[str] = mapped_column(String(80), default="dfp-github-light", nullable=False)
+    theme_slug: Mapped[str] = mapped_column(String(80), default="dfp-dudefish-light", nullable=False)
     api_tokens = db.relationship("ApiToken", back_populates="user", cascade="all, delete-orphan")
 
     def set_password(self, password: str) -> None:

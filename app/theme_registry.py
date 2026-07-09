@@ -14,6 +14,12 @@ class Theme:
 
 LIGHT_THEMES = [
     Theme(
+        slug="dfp-dudefish-light",
+        name="DudeFish Brand Light",
+        mode="light",
+        description="Warm off-white, coral primary, teal secondary, navy accent. The DudeFish default.",
+    ),
+    Theme(
         slug="dfp-github-light",
         name="DFP GitHub Light",
         mode="light",
@@ -46,6 +52,12 @@ LIGHT_THEMES = [
 ]
 
 DARK_THEMES = [
+    Theme(
+        slug="dfp-dudefish-dark",
+        name="DudeFish Brand Dark",
+        mode="dark",
+        description="Warm near-black, bright coral primary, bright teal secondary, navy accent.",
+    ),
     Theme(
         slug="dfp-one-dark-pro",
         name="DFP One Dark Pro",
@@ -81,7 +93,7 @@ DARK_THEMES = [
 ALL_THEMES = LIGHT_THEMES + DARK_THEMES
 THEME_MAP = {t.slug: t for t in ALL_THEMES}
 
-DEFAULT_THEME = "dfp-github-light"
+DEFAULT_THEME = "dfp-dudefish-light"
 
 REQUIRED_TOKENS = [
     "color-bg",

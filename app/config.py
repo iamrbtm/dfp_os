@@ -146,7 +146,7 @@ class Config:
     CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
     CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 
-    DEFAULT_THEME = "dfp-github-light"
+    DEFAULT_THEME = "dfp-dudefish-light"
 
 
 class DevelopmentConfig(Config):

@@ -10,7 +10,7 @@
 
   var theme = document.documentElement.getAttribute("data-theme");
   if (!theme) {
-    theme = localStorage.getItem("dfp-theme") || "dfp-github-light";
+    theme = localStorage.getItem("dfp-theme") || "dfp-dudefish-light";
     document.documentElement.setAttribute("data-theme", theme);
   }
 

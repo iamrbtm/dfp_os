@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.14-slim AS app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -36,3 +36,8 @@ USER appuser
 EXPOSE 5000
 
 CMD ["uv", "run", "gunicorn", "-b", "0.0.0.0:5000", "--timeout", "120", "app:create_app()"]
+
+FROM app AS dev
+USER root
+RUN uv sync --frozen
+USER appuser
