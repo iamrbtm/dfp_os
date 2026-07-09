@@ -62,7 +62,7 @@ def create_token():
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def token_detail(token_id: int):
     token = db.session.get(ApiToken, token_id)
-    if token is None or token.user_id != current_user.id:
+    if token is None or str(token.user_id) != str(current_user.id):
         flash("API token not found.", "danger")
         return redirect(url_for("api_tokens.list_tokens"))
     return render_template("api_tokens/detail.html", token=token)
@@ -73,7 +73,7 @@ def token_detail(token_id: int):
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def revoke_token(token_id: int):
     token = db.session.get(ApiToken, token_id)
-    if token is None or token.user_id != current_user.id:
+    if token is None or str(token.user_id) != str(current_user.id):
         flash("API token not found.", "danger")
         return redirect(url_for("api_tokens.list_tokens"))
 

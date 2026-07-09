@@ -14,13 +14,13 @@ def test_login_rate_limited(client, admin_user):
     for _ in range(2):
         response = client.post(
             "/auth/login",
-            data={"email": admin_user["email"], "password": "bad-password"},
+            data={"email": admin_user["email"], "password": "bad-password-long-enough"},
         )
         assert response.status_code == 200
 
     response = client.post(
         "/auth/login",
-        data={"email": admin_user["email"], "password": "bad-password"},
+        data={"email": admin_user["email"], "password": "bad-password-long-enough"},
     )
 
     assert response.status_code == 429

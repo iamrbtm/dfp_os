@@ -3,6 +3,7 @@ from uuid import uuid4
 from app.extensions import db
 from app.models import ApiToken, User, UserRole
 from app.services.api_tokens import create_api_token, revoke_api_token
+from app.utils.rate_limit import reset_limits
 
 
 def _make_user_and_token(client):
@@ -21,8 +22,16 @@ def _make_user_and_token(client):
     return uid
 
 
-def _login(client):
-    client.post("/auth/login", data={"email": "token-owner@example.com", "password": "super-secret"})
+def _login(client, expected_user_id=None):
+    reset_limits()
+    response = client.post(
+        "/auth/login",
+        data={"email": "token-owner@example.com", "password": "super-secret"},
+    )
+    assert response.status_code == 302
+    if expected_user_id is not None:
+        with client.session_transaction() as session:
+            assert session.get("_user_id") == str(expected_user_id)
 
 
 def _make_token(client, name="Test Token", user_id=None):
@@ -38,6 +47,14 @@ def _make_token(client, name="Test Token", user_id=None):
         token, raw = create_api_token(user=user, name=name)
         tid = token.id
     return tid, raw
+
+
+def _make_token_for_owner(client, name="Test Token"):
+    with client.application.app_context():
+        user = User.query.filter_by(email="token-owner@example.com").first()
+        token, raw = create_api_token(user=user, name=name)
+        assert token.user_id == user.id
+        return token.id, raw
 
 
 def _make_api_token(client, scopes=None, *, active_user=True):
@@ -176,8 +193,11 @@ def test_api_token_create_requires_name(client):
 
 def test_api_token_detail_page(client):
     uid = _make_user_and_token(client)
-    _login(client)
-    token_id, raw = _make_token(client, name="Detail Token", user_id=uid)
+    _login(client, uid)
+    response = client.post("/settings/api-tokens/new", data={"name": "Detail Token"})
+    assert response.status_code == 200
+    with client.application.app_context():
+        token_id = ApiToken.query.filter_by(name="Detail Token").one().id
     response = client.get(f"/settings/api-tokens/{token_id}")
     assert response.status_code == 200
     assert b"Detail Token" in response.data
@@ -185,13 +205,15 @@ def test_api_token_detail_page(client):
 
 def test_api_token_revoke(client):
     uid = _make_user_and_token(client)
-    _login(client)
-    token_id, raw = _make_token(client, name="Revoke Me", user_id=uid)
+    _login(client, uid)
+    response = client.post("/settings/api-tokens/new", data={"name": "Revoke Me"})
+    assert response.status_code == 200
     with client.application.app_context():
-        token = db.session.get(ApiToken, token_id)
+        token = ApiToken.query.filter_by(name="Revoke Me").one()
+        token_id = token.id
         assert token.is_active
     response = client.post(f"/settings/api-tokens/{token_id}/revoke")
-    assert response.status_code == 302
+    assert response.status_code == 302, response.location
     with client.application.app_context():
         token = db.session.get(ApiToken, token_id)
         assert not token.is_active

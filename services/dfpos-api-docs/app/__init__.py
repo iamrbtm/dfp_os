@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -17,6 +18,13 @@ def create_app() -> Flask:
     app = Flask(__name__)
     Config.validate()
     app.config.from_object(Config)
+    app.config["ENVIRONMENT"] = os.getenv(
+        "FLASK_ENV",
+        os.getenv("ENVIRONMENT", app.config["ENVIRONMENT"]),
+    )
+    app.config["DOCS_USERNAME"] = os.getenv("DOCS_USERNAME", app.config["DOCS_USERNAME"])
+    app.config["DOCS_PASSWORD"] = os.getenv("DOCS_PASSWORD", app.config["DOCS_PASSWORD"])
+    app.config["DOCS_AUTH_REQUIRED"] = Config.docs_auth_required()
 
     logging.basicConfig(
         level=getattr(logging, app.config["LOG_LEVEL"], logging.INFO),
