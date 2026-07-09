@@ -34,6 +34,7 @@ dependencies = [
     "trimesh>=4.5.0",
     "wtforms>=3.2.1",
     "feedparser>=6.0.12",
+    "flask-dotenv>=0.1.2",
 ]
 
 [dependency-groups]

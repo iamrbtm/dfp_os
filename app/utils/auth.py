@@ -3,12 +3,13 @@ from __future__ import annotations
 from functools import wraps
 from typing import Callable
 
-from flask import flash, g, jsonify, redirect, request, url_for
+from flask import current_app, flash, g, jsonify, redirect, request, url_for
 from flask_login import current_user
 
 from app.models import UserRole
 from app.services.api_tokens import authenticate_api_token
 from app.services.audit import record_audit_event
+from app.utils.rate_limit import client_key, is_limited
 
 
 def roles_required(*allowed_roles: UserRole):
@@ -49,6 +50,23 @@ def api_token_required(view: Callable):
             raw_token = auth_header.split(" ", 1)[1].strip()
 
         if not raw_token:
+            if is_limited(
+                client_key("api_auth"),
+                limit=current_app.config.get("API_AUTH_RATE_LIMIT_ATTEMPTS", 60),
+                window_seconds=current_app.config.get("API_AUTH_RATE_LIMIT_WINDOW_SECONDS", 60),
+            ):
+                return (
+                    jsonify(
+                        {
+                            "error": {
+                                "code": "rate_limited",
+                                "message": "Too many API authentication failures.",
+                                "details": {},
+                            }
+                        }
+                    ),
+                    429,
+                )
             record_audit_event(
                 action="api_token.missing",
                 entity_type="api_request",
@@ -71,6 +89,23 @@ def api_token_required(view: Callable):
 
         token = authenticate_api_token(raw_token)
         if token is None:
+            if is_limited(
+                client_key("api_auth"),
+                limit=current_app.config.get("API_AUTH_RATE_LIMIT_ATTEMPTS", 60),
+                window_seconds=current_app.config.get("API_AUTH_RATE_LIMIT_WINDOW_SECONDS", 60),
+            ):
+                return (
+                    jsonify(
+                        {
+                            "error": {
+                                "code": "rate_limited",
+                                "message": "Too many API authentication failures.",
+                                "details": {},
+                            }
+                        }
+                    ),
+                    429,
+                )
             record_audit_event(
                 action="api_token.invalid",
                 entity_type="api_request",

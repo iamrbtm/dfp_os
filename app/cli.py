@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import sys
-from datetime import datetime, timezone
 
 import click
 from flask import current_app
@@ -191,7 +189,7 @@ def trend_scout_run(openai_key: str, openai_model: str) -> None:
             openai_model=openai_model,
         )
     if result.get("success"):
-        click.echo(f"\nPipeline completed successfully.")
+        click.echo("\nPipeline completed successfully.")
         click.echo(f"  Snapshots stored: {result['total_snapshots']}")
         click.echo(f"  Successful sources: {len(result['successful_sources'])}")
         click.echo(f"  Report ID: {result.get('report_id', 'none')}")
@@ -240,7 +238,7 @@ def trend_scout_status() -> None:
             .all()
         )
         if health_records:
-            click.echo(f"  Source health:")
+            click.echo("  Source health:")
             for h in health_records:
                 status_char = "✓" if h.status == "success" else "✗"
                 click.echo(f"    {status_char} {h.source}: {h.status} ({h.item_count} items)" + (f" - {h.error_message}" if h.error_message else ""))
@@ -259,7 +257,7 @@ def trend_scout_status() -> None:
             .all()
         )
         if totals:
-            click.echo(f"\n  Source totals:")
+            click.echo("\n  Source totals:")
             for status, count in totals:
                 click.echo(f"    {status}: {count}")
 

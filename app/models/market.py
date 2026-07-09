@@ -24,22 +24,6 @@ class MarketStatus(StrEnum):
     REPEAT = "repeat"
 
 
-class MarketTaskStatus(StrEnum):
-    OPEN = "open"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    CANCELED = "canceled"
-
-
-class MarketTaskType(StrEnum):
-    TODO = "todo"
-    MARKETING = "marketing"
-    APPLICATION = "application"
-    PAYMENT = "payment"
-    PACKING = "packing"
-    FOLLOW_UP = "follow_up"
-
-
 class MarketTimelineEventType(StrEnum):
     SETUP = "setup"
     MARKET_HOURS = "market_hours"
@@ -115,7 +99,6 @@ class Market(PrimaryKeyMixin, TimestampMixin, db.Model):
     timeline_events = relationship(
         "MarketTimelineEvent", back_populates="market", cascade="all, delete-orphan"
     )
-    tasks = relationship("MarketTask", back_populates="market", cascade="all, delete-orphan")
     weather_snapshots = relationship(
         "MarketWeatherSnapshot", back_populates="market", cascade="all, delete-orphan"
     )
@@ -190,30 +173,6 @@ class MarketTimelineEvent(PrimaryKeyMixin, TimestampMixin, db.Model):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     market = relationship("Market", back_populates="timeline_events")
-
-
-class MarketTask(PrimaryKeyMixin, TimestampMixin, db.Model):
-    __tablename__ = "market_tasks"
-
-    market_id: Mapped[int] = mapped_column(ForeignKey("markets.id"), nullable=False, index=True)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    task_type: Mapped[MarketTaskType] = mapped_column(
-        Enum(MarketTaskType, native_enum=False, length=40),
-        default=MarketTaskType.TODO,
-        nullable=False,
-        index=True,
-    )
-    status: Mapped[MarketTaskStatus] = mapped_column(
-        Enum(MarketTaskStatus, native_enum=False, length=40),
-        default=MarketTaskStatus.OPEN,
-        nullable=False,
-        index=True,
-    )
-    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    market = relationship("Market", back_populates="tasks")
 
 
 class MarketWeatherSnapshot(PrimaryKeyMixin, TimestampMixin, db.Model):

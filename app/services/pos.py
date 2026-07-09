@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from app.extensions import db
+from app.models import Product, ProductStatus
 from app.models.order import (
     Order,
     OrderItem,
@@ -25,6 +26,90 @@ from app.models.pos import (
 from app.services.audit import record_audit_event
 from app.services.internal_demand import record_demand_event
 from app.services.inventory import deduct_finished_goods, return_inventory
+
+MONEY = Decimal("0.01")
+MAX_CUSTOM_ITEM_PRICE = Decimal("10000.00")
+SELLABLE_PRODUCT_STATUSES = {ProductStatus.ACTIVE, ProductStatus.HIDDEN}
+CLIENT_PRICED_ITEM_TYPES = {PosSaleItemType.CUSTOM_ITEM, PosSaleItemType.CUSTOM_DEPOSIT}
+
+
+def _money(value: object, field_name: str) -> Decimal:
+    try:
+        amount = Decimal(str(value if value is not None else "0")).quantize(MONEY)
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"{field_name} must be a valid money amount") from exc
+    return amount
+
+
+def _positive_quantity(value: object) -> int:
+    try:
+        quantity = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Quantity must be a whole number") from exc
+    if quantity <= 0:
+        raise ValueError("Quantity must be greater than zero")
+    return quantity
+
+
+def _normalize_sale_item(item_data: dict) -> dict:
+    if not isinstance(item_data, dict):
+        raise ValueError("Cart item is malformed")
+
+    quantity = _positive_quantity(item_data.get("quantity"))
+    discount = _money(item_data.get("discount_amount", 0), "Discount")
+    if discount < 0:
+        raise ValueError("Discount cannot be negative")
+
+    try:
+        item_type = PosSaleItemType(item_data.get("item_type", PosSaleItemType.PRODUCT.value))
+    except ValueError as exc:
+        raise ValueError("Cart item type is not supported") from exc
+
+    product_id = item_data.get("product_id")
+    description = str(item_data.get("description") or "").strip()
+
+    if item_type == PosSaleItemType.PRODUCT:
+        if not product_id:
+            raise ValueError("Product item is missing a product ID")
+        product = db.session.get(Product, product_id)
+        if (
+            product is None
+            or product.deleted_at is not None
+            or not product.is_pos_visible
+            or product.status not in SELLABLE_PRODUCT_STATUSES
+        ):
+            raise ValueError("Product is not available for sale")
+        unit_price = _money(product.base_price, "Product price")
+        if unit_price < 0:
+            raise ValueError("Product price cannot be negative")
+        description = product.name
+    elif item_type in CLIENT_PRICED_ITEM_TYPES:
+        unit_price = _money(item_data.get("unit_price"), "Custom item price")
+        if unit_price < 0:
+            raise ValueError("Custom item price cannot be negative")
+        if unit_price > MAX_CUSTOM_ITEM_PRICE:
+            raise ValueError("Custom item price exceeds the allowed maximum")
+        if not description:
+            description = "Custom item" if item_type == PosSaleItemType.CUSTOM_ITEM else "Custom order deposit"
+        product_id = None
+    else:
+        raise ValueError("Cart item type is not supported")
+
+    gross_total = unit_price * quantity
+    line_total = gross_total - discount
+    if line_total < 0:
+        raise ValueError("Line total cannot be negative")
+
+    return {
+        "product_id": product_id,
+        "quantity": quantity,
+        "unit_price": unit_price,
+        "discount_amount": discount,
+        "line_total": line_total,
+        "item_type": item_type,
+        "description": description[:255],
+        "custom_notes": item_data.get("custom_notes"),
+    }
 
 
 def open_session(
@@ -124,38 +209,54 @@ def create_sale(
     if not session or session.status != PosSessionStatus.OPEN:
         raise ValueError("Session is not open")
 
+    try:
+        payment_method_enum = PaymentMethod(payment_method)
+    except ValueError as exc:
+        raise ValueError("Payment method is not supported") from exc
+
+    amount_received = _money(amount_received, "Amount received")
+    if amount_received < 0:
+        raise ValueError("Amount received cannot be negative")
+
+    tax_total = _money(tax_total, "Tax total")
+    if tax_total < 0:
+        raise ValueError("Tax total cannot be negative")
+
     subtotal = Decimal("0")
     discount_total = Decimal("0")
-    pos_items = []
+    normalized_items = [_normalize_sale_item(item_data) for item_data in items]
+    if not normalized_items:
+        raise ValueError("Cart is empty")
 
-    for item_data in items:
-        qty = Decimal(str(item_data["quantity"]))
-        unit_price = Decimal(str(item_data["unit_price"]))
-        discount = Decimal(str(item_data.get("discount_amount", 0)))
-        line_total = qty * unit_price - discount
-        subtotal += qty * unit_price
+    pos_items = []
+    for item_data in normalized_items:
+        subtotal += item_data["quantity"] * item_data["unit_price"]
+        discount = item_data["discount_amount"]
         discount_total += discount
 
         pos_item = PosSaleItem(
-            product_id=item_data.get("product_id"),
+            product_id=item_data["product_id"],
             quantity=item_data["quantity"],
-            unit_price=unit_price,
+            unit_price=item_data["unit_price"],
             discount_amount=discount,
-            line_total=line_total,
-            item_type=item_data.get("item_type", PosSaleItemType.PRODUCT.value),
-            description=item_data.get("description", ""),
-            custom_notes=item_data.get("custom_notes"),
+            line_total=item_data["line_total"],
+            item_type=item_data["item_type"],
+            description=item_data["description"],
+            custom_notes=item_data["custom_notes"],
         )
         pos_items.append(pos_item)
 
-    if tax_total is None:
-        tax_total = Decimal("0")
     total = subtotal - discount_total + tax_total
-    change_due = max(Decimal("0"), Decimal(str(amount_received)) - total)
+    if total < 0:
+        raise ValueError("Sale total cannot be negative")
+    if payment_method_enum == PaymentMethod.CASH and amount_received < total:
+        raise ValueError("Cash received must cover the sale total")
+    change_due = max(Decimal("0"), amount_received - total)
 
     order = Order(
         source=OrderSource.POS,
         status=OrderStatus.COMPLETED,
+        payment_status=OrderPaymentStatus.PAID,
         market_id=session.market_id,
         pos_session_id=session.id,
         customer_id=customer_id,
@@ -169,28 +270,28 @@ def create_sale(
     db.session.add(order)
     db.session.flush()
 
-    for item_data, pos_item in zip(items, pos_items):
+    for item_data, pos_item in zip(normalized_items, pos_items):
         order_item = OrderItem(
             order_id=order.id,
-            product_id=item_data.get("product_id"),
+            product_id=item_data["product_id"],
             quantity=item_data["quantity"],
-            unit_price=Decimal(str(item_data["unit_price"])),
+            unit_price=pos_item.unit_price,
             line_total=pos_item.line_total,
-            is_custom_item=item_data.get("item_type", "product") != "product",
+            is_custom_item=item_data["item_type"] != PosSaleItemType.PRODUCT,
             custom_description=(
-                item_data.get("description") if item_data.get("item_type") != "product" else None
+                item_data["description"] if item_data["item_type"] != PosSaleItemType.PRODUCT else None
             ),
         )
         db.session.add(order_item)
 
-    payment = Payment(
+    payment_record = Payment(
         order_id=order.id,
         amount=total,
-        method=PaymentMethod(payment_method),
+        method=payment_method_enum,
         notes=notes,
         payment_date=datetime.now(timezone.utc),
     )
-    db.session.add(payment)
+    db.session.add(payment_record)
 
     sale = PosSale(
         pos_session_id=session_id,
@@ -200,8 +301,8 @@ def create_sale(
         discount_total=discount_total,
         tax_total=tax_total,
         total=total,
-        payment_method=payment_method,
-        amount_received=Decimal(str(amount_received)),
+        payment_method=payment_method_enum.value,
+        amount_received=amount_received,
         change_due=change_due,
         status=PosSaleStatus.COMPLETED,
         notes=notes,
@@ -211,8 +312,30 @@ def create_sale(
 
     db.session.flush()
     _deduct_inventory_for_sale(sale, session.inventory_location_id, session.opened_by_user_id)
+    _update_market_packing_sold(sale, session)
 
-    db.session.commit()
+    try:
+        record_audit_event(
+            action="pos_sale.completed",
+            entity_type="pos_sale",
+            entity_id=sale.id,
+            after_state={
+                "sale_number": sale.sale_number,
+                "order_id": order.id,
+                "total": str(sale.total),
+                "payment_method": sale.payment_method,
+                "market_id": session.market_id,
+                "inventory_location_id": session.inventory_location_id,
+            },
+            source_module=__name__,
+            actor_id=session.opened_by_user_id,
+            critical=True,
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
     for item in sale.items:
         if item.item_type != PosSaleItemType.PRODUCT or item.product_id is None:
             continue
@@ -227,26 +350,26 @@ def create_sale(
                 "pos_sale_id": sale.id,
                 "pos_session_id": session.id,
                 "market_id": session.market_id,
-                "payment_method": payment_method,
+                "payment_method": payment_method_enum.value,
             },
         )
-    record_audit_event(
-        action="pos_sale.completed",
-        entity_type="pos_sale",
-        entity_id=sale.id,
-        after_state={
-            "sale_number": sale.sale_number,
-            "order_id": order.id,
-            "total": str(sale.total),
-            "payment_method": sale.payment_method,
-            "market_id": session.market_id,
-            "inventory_location_id": session.inventory_location_id,
-        },
-        source_module=__name__,
-        actor_id=session.opened_by_user_id,
-    )
 
     return sale, order
+
+
+def _update_market_packing_sold(sale: PosSale, session: PosSession) -> None:
+    if not session.market_id:
+        return
+    from app.models.market import MarketPackingList
+    for item in sale.items:
+        if item.item_type != PosSaleItemType.PRODUCT or item.product_id is None:
+            continue
+        packing = MarketPackingList.query.filter_by(
+            market_id=session.market_id,
+            product_id=item.product_id,
+        ).first()
+        if packing:
+            packing.sold_quantity = (packing.sold_quantity or 0) + item.quantity
 
 
 def _deduct_inventory_for_sale(
@@ -357,15 +480,20 @@ def refund_sale(
                 notes=notes or f"Refund for {sale.sale_number}",
             )
 
-    db.session.commit()
-    record_audit_event(
-        action="pos_sale.refunded",
-        entity_type="pos_sale",
-        entity_id=sale.id,
-        before_state=before,
-        after_state={"status": sale.status.value, "restocked": restock},
-        metadata={"notes": notes, "session_id": session.id},
-        source_module=__name__,
-        actor_id=actor_id,
-    )
+    try:
+        record_audit_event(
+            action="pos_sale.refunded",
+            entity_type="pos_sale",
+            entity_id=sale.id,
+            before_state=before,
+            after_state={"status": sale.status.value, "restocked": restock},
+            metadata={"notes": notes, "session_id": session.id},
+            source_module=__name__,
+            actor_id=actor_id,
+            critical=True,
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     return sale

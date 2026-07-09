@@ -15,7 +15,7 @@ from wtforms import (
 from wtforms.fields.datetime import DateTimeLocalField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional, ValidationError
 
-from app.forms.common import OptionalSelectField, decimal_or_zero, enum_choices
+from app.forms.common import decimal_or_zero, enum_choices
 from app.models import (
     FilamentSpool,
     FilamentStatus,

@@ -21,19 +21,20 @@ from app.models import (
     MarketHotelBooking,
     MarketPackingList,
     MarketStatus,
-    MarketTask,
-    MarketTaskStatus,
-    MarketTaskType,
     MarketTimelineEvent,
     MarketWeatherSnapshot,
     Order,
     PosSale,
     PosSession,
     PosSessionStatus,
+    PrepTask,
+    PrepTaskCategory,
+    PrepTaskStatus,
 )
 from app.models.base import utc_now
 from app.services.audit_client import get_audit_client
 from app.services.cost_engine import estimate_market_profit
+from app.services.intelligence_client import get_intelligence_client
 from app.services.storage import (
     content_type_for_name,
     upload_file_to_storage,
@@ -57,6 +58,8 @@ def get_market_performance(market: Market) -> dict:
     booth_cost = (market.booth_fee or Decimal(0)) + (market.application_fee or Decimal(0))
     units_sold = _get_units_sold(market)
     cost_engine = estimate_market_profit(market.id)
+    packing_list = MarketPackingList.query.filter_by(market_id=market.id).all()
+    shrinkage_pct = _calc_reconciliation(packing_list)["shrinkage_pct"]
 
     return {
         "market": market,
@@ -70,6 +73,7 @@ def get_market_performance(market: Market) -> dict:
             profit=cost_engine["profit"],
             margin_percent=cost_engine["margin_percent"],
             units_sold=units_sold,
+            shrinkage_pct=shrinkage_pct,
         ),
         "booth_fee_pct": _calc_pct(booth_cost, total_sales),
         "top_products": _get_top_products(market),
@@ -78,13 +82,75 @@ def get_market_performance(market: Market) -> dict:
     }
 
 
+def _calc_reconciliation(packing_list: list[MarketPackingList]) -> dict:
+    items = []
+    total_took = 0
+    total_sold = 0
+    total_returned = 0
+    total_shrinkage = 0
+    for pl in packing_list:
+        planned = pl.planned_quantity or 0
+        packed = pl.packed_quantity or 0
+        sold = pl.sold_quantity or 0
+        returned = pl.returned_quantity or 0
+        took = packed if packed > 0 else planned
+        expected_back = max(took - sold, 0)
+        shrinkage = max(expected_back - returned, 0)
+        total_took += took
+        total_sold += sold
+        total_returned += returned
+        total_shrinkage += shrinkage
+        items.append({
+            "product_name": pl.product.name if pl.product else f"Product #{pl.product_id}",
+            "packing_id": pl.id,
+            "planned": planned,
+            "packed": packed,
+            "sold": sold,
+            "returned": returned,
+            "took": took,
+            "expected_back": expected_back,
+            "shrinkage": shrinkage,
+        })
+    shrinkage_pct = round((total_shrinkage / total_took) * 100, 1) if total_took > 0 else None
+    return {
+        "item_list": items,
+        "total_took": total_took,
+        "total_sold": total_sold,
+        "total_returned": total_returned,
+        "total_shrinkage": total_shrinkage,
+        "shrinkage_pct": shrinkage_pct,
+    }
+
+
+def _merge_reconciliation_items(items: list[dict]) -> list[dict]:
+    seen = {}
+    for item in items:
+        key = item["product_name"]
+        if key in seen:
+            m = seen[key]
+            m["planned"] += item["planned"]
+            m["packed"] += item["packed"]
+            m["sold"] += item["sold"]
+            m["returned"] += item["returned"]
+        else:
+            seen[key] = dict(item, packing_id=item["packing_id"])
+    for item in seen.values():
+        took = item["packed"] if item["packed"] > 0 else item["planned"]
+        expected_back = max(took - item["sold"], 0)
+        shrinkage = max(expected_back - item["returned"], 0)
+        item["took"] = took
+        item["expected_back"] = expected_back
+        item["shrinkage"] = shrinkage
+    return list(seen.values())
+
+
 def get_market_command_center(market: Market) -> dict:
     performance = get_market_performance(market)
     packing_list = MarketPackingList.query.filter_by(market_id=market.id).order_by(
         MarketPackingList.product_id
     ).all()
-    tasks = MarketTask.query.filter_by(market_id=market.id).order_by(
-        MarketTask.status.asc(), MarketTask.due_at.is_(None).asc(), MarketTask.due_at.asc(), MarketTask.created_at.desc()
+    tasks = PrepTask.query.filter_by(market_id=market.id).order_by(
+        PrepTask.status.asc(), PrepTask.due_at.is_(None).asc(), PrepTask.due_at.asc(), PrepTask.created_at.desc()
     ).all()
     timeline_events = MarketTimelineEvent.query.filter_by(market_id=market.id).order_by(
         MarketTimelineEvent.starts_at.is_(None).asc(), MarketTimelineEvent.starts_at.asc(), MarketTimelineEvent.created_at.desc()
@@ -98,8 +164,12 @@ def get_market_command_center(market: Market) -> dict:
     documents = MarketDocument.query.filter_by(market_id=market.id).order_by(
         MarketDocument.created_at.desc()
     ).all()
-    marketing_tasks = [task for task in tasks if task.task_type == MarketTaskType.MARKETING]
-    todo_tasks = [task for task in tasks if task.task_type != MarketTaskType.MARKETING]
+    marketing_tasks = [task for task in tasks if task.category == PrepTaskCategory.MARKETING]
+    todo_tasks = [task for task in tasks if task.category != PrepTaskCategory.MARKETING]
+    from app.services.prep_tasks import market_readiness_score
+    readiness = market_readiness_score(market.id)
+    reconciliation = _calc_reconciliation(packing_list)
+    reconciliation["item_list"] = _merge_reconciliation_items(reconciliation["item_list"])
     return {
         "performance": performance,
         "packing_list": packing_list,
@@ -110,9 +180,48 @@ def get_market_command_center(market: Market) -> dict:
         "latest_weather": weather,
         "hotel_bookings": hotels,
         "documents": documents,
+        "recommendations": get_market_advisor_recommendations(market),
+        "readiness": readiness,
         "stats": _quick_stats(market, packing_list, tasks, timeline_events, documents, performance),
         "recent_activity": _recent_activity(market, tasks, timeline_events, hotels, documents, packing_list),
+        "reconciliation": reconciliation,
     }
+
+
+def get_market_advisor_recommendations(market: Market) -> list[dict]:
+    client = get_intelligence_client()
+    if not client.is_configured():
+        return []
+    booth_fee_cents = None
+    if market.booth_fee is not None:
+        booth_fee_cents = int(Decimal(str(market.booth_fee)) * 100)
+    if market.application_fee is not None:
+        booth_fee_cents = (booth_fee_cents or 0) + int(Decimal(str(market.application_fee)) * 100)
+    payload = {
+        "market_name": market.name,
+        "market_date": market.event_date.isoformat() if market.event_date else None,
+        "event_type": "vendor_market",
+        "expected_foot_traffic": _parse_traffic(market.expected_traffic),
+        "booth_fee_cents": booth_fee_cents,
+        "inventory_by_product_key": {},
+        "max_products": 12,
+    }
+    result = client.market_advisor(payload)
+    if isinstance(result, dict) and result.get("error"):
+        return []
+    return result.get("recommendations", []) if isinstance(result, dict) else []
+
+
+def _parse_traffic(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        parts = value.replace(",", "").split("-")
+        if len(parts) == 2:
+            return (int(parts[0].strip()) + int(parts[1].strip())) // 2
+        return int(parts[0].strip())
+    except (ValueError, IndexError):
+        return None
 
 
 def geocode_market_address(market: Market, actor=None) -> bool:
@@ -161,13 +270,13 @@ def geocode_market_address(market: Market, actor=None) -> bool:
     return True
 
 
-def complete_market_task(task: MarketTask, actor=None) -> MarketTask:
-    task.status = MarketTaskStatus.COMPLETED
+def complete_prep_task(task: PrepTask, actor=None) -> PrepTask:
+    task.status = PrepTaskStatus.COMPLETED
     task.completed_at = utc_now()
     db.session.commit()
     record_market_audit(
-        "market_task.completed",
-        "market_task",
+        "prep_task.completed",
+        "prep_task",
         task.id,
         actor=actor,
         after_state={"title": task.title, "market_id": task.market_id, "status": task.status.value},
@@ -349,15 +458,15 @@ def _market_address_query(market: Market) -> str | None:
 def _quick_stats(
     market: Market,
     packing_list: list[MarketPackingList],
-    tasks: list[MarketTask],
+    tasks: list[PrepTask],
     timeline_events: list[MarketTimelineEvent],
     documents: list[MarketDocument],
     performance: dict,
 ) -> dict:
     task_total = len(tasks)
-    task_done = len([task for task in tasks if task.status == MarketTaskStatus.COMPLETED])
-    marketing = [task for task in tasks if task.task_type == MarketTaskType.MARKETING]
-    marketing_done = len([task for task in marketing if task.status == MarketTaskStatus.COMPLETED])
+    task_done = len([task for task in tasks if task.status == PrepTaskStatus.COMPLETED])
+    marketing = [task for task in tasks if task.category == PrepTaskCategory.MARKETING]
+    marketing_done = len([task for task in marketing if task.status == PrepTaskStatus.COMPLETED])
     planned = sum(item.planned_quantity or 0 for item in packing_list)
     packed = sum(item.packed_quantity or 0 for item in packing_list)
     sold = sum(item.sold_quantity or 0 for item in packing_list)
@@ -387,7 +496,7 @@ def _quick_stats(
 
 def _recent_activity(
     market: Market,
-    tasks: list[MarketTask],
+    tasks: list[PrepTask],
     timeline_events: list[MarketTimelineEvent],
     hotels: list[MarketHotelBooking],
     documents: list[MarketDocument],
@@ -495,26 +604,35 @@ def _repeat_recommendation(
     profit: Decimal,
     margin_percent: Decimal,
     units_sold: int,
+    shrinkage_pct: float | None = None,
 ) -> dict[str, str]:
     if revenue <= Decimal("0.00"):
         return {
             "label": "Needs more data",
             "reason": "This market has not produced enough sales yet to judge whether it should be repeated.",
         }
+    reasons: list[str] = []
+    if shrinkage_pct is not None and shrinkage_pct > 10:
+        reasons.append(f"Shrinkage is high at {shrinkage_pct}% — review packing and security.")
     if profit > Decimal("0.00") and margin_percent >= Decimal("25.00") and units_sold >= 10:
+        if not reasons:
+            return {
+                "label": "Strong repeat candidate",
+                "reason": "Profit, margin, and sell-through all cleared a healthy baseline.",
+            }
         return {
-            "label": "Strong repeat candidate",
-            "reason": "Profit, margin, and sell-through all cleared a healthy baseline.",
+            "label": "Repeat with caution",
+            "reason": "Profit is healthy, but " + reasons[0].lower(),
         }
     if profit >= Decimal("0.00"):
-        return {
-            "label": "Conditional repeat",
-            "reason": "The market covered its costs, but the mix still needs tightening before the next booking.",
-        }
-    return {
-        "label": "Review before repeating",
-        "reason": "The market appears unprofitable after cost-of-goods and expenses. Review pricing, booth cost, and product mix first.",
-    }
+        reason = "The market covered its costs, but the mix still needs tightening before the next booking."
+        if reasons:
+            reason += " " + reasons[0]
+        return {"label": "Conditional repeat", "reason": reason}
+    reason = "The market appears unprofitable after cost-of-goods and expenses. Review pricing, booth cost, and product mix first."
+    if reasons:
+        reason += " " + reasons[0]
+    return {"label": "Review before repeating", "reason": reason}
 
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:

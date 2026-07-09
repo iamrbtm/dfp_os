@@ -66,7 +66,9 @@ def _check_auth() -> bool:
     config = current_app.config
     username = config.get("DOCS_USERNAME", "")
     password = config.get("DOCS_PASSWORD", "")
-    if not username or not password:
+    if config.get("DOCS_AUTH_REQUIRED") and (not username or not password):
+        raise RuntimeError("Docs auth is required but DOCS_USERNAME/DOCS_PASSWORD are missing.")
+    if not config.get("DOCS_AUTH_REQUIRED") and (not username or not password):
         return True
 
     auth = request.authorization
@@ -76,7 +78,9 @@ def _check_auth() -> bool:
 def _auth_required() -> Response | None:
     config = current_app.config
     configured = config.get("DOCS_USERNAME", "") and config.get("DOCS_PASSWORD", "")
-    if not configured:
+    if config.get("DOCS_AUTH_REQUIRED") and not configured:
+        raise RuntimeError("Docs auth is required but DOCS_USERNAME/DOCS_PASSWORD are missing.")
+    if not config.get("DOCS_AUTH_REQUIRED") and not configured:
         return None
     if not _check_auth():
         return _auth_response()

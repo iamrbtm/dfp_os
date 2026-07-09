@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import mimetypes
-import os
 import shutil
 import tempfile
 from pathlib import Path

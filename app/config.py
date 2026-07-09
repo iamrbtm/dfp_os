@@ -125,8 +125,16 @@ class Config:
     AUDIT_LOG_BASE_URL = os.getenv("AUDIT_LOG_BASE_URL", "http://audit-log-service:8090")
     AUDIT_LOG_TOKEN = os.getenv("AUDIT_LOG_TOKEN", "")
     AUDIT_LOG_ENABLED = _as_bool(os.getenv("AUDIT_LOG_ENABLED"), False)
-    AUDIT_LOG_FAIL_CLOSED = _as_bool(os.getenv("AUDIT_LOG_FAIL_CLOSED"), False)
+    AUDIT_LOG_FAIL_CLOSED = _as_bool(
+        os.getenv("AUDIT_LOG_FAIL_CLOSED_FOR_FINANCIAL_ACTIONS", os.getenv("AUDIT_LOG_FAIL_CLOSED")),
+        False,
+    )
     ALLOW_NEGATIVE_INVENTORY = _as_bool(os.getenv("ALLOW_NEGATIVE_INVENTORY"), False)
+    RATE_LIMIT_ENABLED = _as_bool(os.getenv("RATE_LIMIT_ENABLED"), True)
+    LOGIN_RATE_LIMIT_ATTEMPTS = int(os.getenv("LOGIN_RATE_LIMIT_ATTEMPTS", "5"))
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("LOGIN_RATE_LIMIT_WINDOW_SECONDS", "60"))
+    API_AUTH_RATE_LIMIT_ATTEMPTS = int(os.getenv("API_AUTH_RATE_LIMIT_ATTEMPTS", "60"))
+    API_AUTH_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("API_AUTH_RATE_LIMIT_WINDOW_SECONDS", "60"))
     INTELLIGENCE_ENABLED = _as_bool(os.getenv("INTELLIGENCE_ENABLED"), True)
     INTELLIGENCE_SERVICE_URL = os.getenv("INTELLIGENCE_SERVICE_URL", "http://localhost:8091")
     INTELLIGENCE_INTERNAL_API_TOKEN = os.getenv("INTELLIGENCE_INTERNAL_API_TOKEN", "")
@@ -150,6 +158,7 @@ class TestingConfig(Config):
     TESTING = True
     ENVIRONMENT = "testing"
     WTF_CSRF_ENABLED = False
+    RATE_LIMIT_ENABLED = False
     SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL", DEFAULT_DOCKER_TEST_DATABASE_URL)
 
 
@@ -157,6 +166,17 @@ class ProductionConfig(Config):
     DEBUG = False
     ENVIRONMENT = "production"
     TEMPLATES_AUTO_RELOAD = False
+    SESSION_COOKIE_SECURE = True
+    REMEMBER_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+
+    @classmethod
+    def validate(cls) -> None:
+        if not cls.SECRET_KEY or cls.SECRET_KEY in {"change-me", "change-me-now"}:
+            raise RuntimeError("Production SECRET_KEY must be set to a strong secret.")
+        if cls.ADMIN_PASSWORD in {"change-me", "change-me-now"}:
+            raise RuntimeError("Production ADMIN_PASSWORD must be changed from the default.")
 
 
 config_by_name = {

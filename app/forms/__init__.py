@@ -17,7 +17,7 @@ from app.forms.market import (
     MarketHotelBookingForm,
     MarketLogisticsForm,
     MarketPackingListForm,
-    MarketTaskForm,
+    MarketPrepTaskForm,
     MarketTimelineEventForm,
 )
 from app.forms.customer import CustomerForm
@@ -58,7 +58,7 @@ __all__ = [
     "MarketHotelBookingForm",
     "MarketLogisticsForm",
     "MarketPackingListForm",
-    "MarketTaskForm",
+    "MarketPrepTaskForm",
     "MarketTimelineEventForm",
     "OrderForm",
     "OrderItemForm",

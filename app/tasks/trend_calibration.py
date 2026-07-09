@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 
 from celery.utils.log import get_task_logger
 
 from app.celery_app import celery
-from app.extensions import db
 from app.services.audit import record_audit_event
 from app.services.notification import create_notification
 from app.services.trend_scout_calibration import check_regression, run_and_store_calibration

@@ -45,5 +45,7 @@ class ApiToken(PrimaryKeyMixin, TimestampMixin, db.Model):
     def has_scope(self, *required_scopes: str) -> bool:
         token_scopes = self.scope_set
         if not token_scopes:
+            return False
+        if token_scopes.intersection({"admin", "all"}):
             return True
         return any(scope in token_scopes for scope in required_scopes)

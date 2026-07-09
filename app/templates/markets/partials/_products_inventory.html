@@ -1,4 +1,17 @@
-<section class="app-card overflow-hidden">
+{% set rc = command.reconciliation %}
+<section class="app-card overflow-hidden"
+         x-data='{
+           items: {{ rc.item_list | tojson }},
+           took(i) { return i.packed > 0 ? i.packed : (i.planned || 0); },
+           expectedBack(i) { return Math.max(this.took(i) - i.sold, 0); },
+           shrinkage(i) { return Math.max(this.expectedBack(i) - i.returned, 0); },
+           get totalTook() { return this.items.reduce((s, i) => s + this.took(i), 0); },
+           get totalSold() { return this.items.reduce((s, i) => s + (i.sold || 0), 0); },
+           get totalReturned() { return this.items.reduce((s, i) => s + (i.returned || 0), 0); },
+           get totalShrinkage() { return this.items.reduce((s, i) => s + this.shrinkage(i), 0); },
+           get shrinkPct() { const t = this.totalTook; return t > 0 ? Math.round((this.totalShrinkage / t) * 1000) / 10 : 0; },
+           get barColor() { const p = this.shrinkPct; return p > 10 ? "#dc2626" : p > 5 ? "#f59e0b" : "#22c55e"; },
+         }'>
   <div class="app-card-header flex items-center gap-3">
     <span class="flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold" style="border-color: var(--color-link); color: var(--color-link);">3</span>
     <div>
@@ -27,18 +40,92 @@
         </tr>
       </thead>
       <tbody>
-        {% for item in command.packing_list %}
+        {% for item in rc.item_list %}
+          {% set idx = loop.index0 %}
           <tr>
-            <td>{{ item.product.name if item.product else "Product #" ~ item.product_id }}</td>
-            <td>{{ item.planned_quantity or 0 }}</td>
-            <td>{{ item.packed_quantity or 0 }}</td>
-            <td>{{ item.sold_quantity or 0 }}</td>
-            <td>{{ item.returned_quantity or 0 }}</td>
+            <td>
+              <span class="font-medium">{{ item.product_name }}</span>
+              <span x-show="took(items[{{ idx }}]) > 0"
+                    class="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold"
+                    style="background-color: var(--color-surface-muted); color: var(--color-text-muted);"
+                    x-text="took(items[{{ idx }}])">{{ item.took }}</span>
+            </td>
+            <td>
+              <input type="number" name="value" value="{{ item.planned }}"
+                     x-model="items[{{ idx }}].planned"
+                     hx-post="{{ url_for('markets.packing_inline_edit', market_id=instance.id, item_id=item.packing_id) }}?field=planned"
+                     hx-trigger="blur"
+                     hx-target="#market-products-inventory"
+                     hx-swap="innerHTML"
+                     hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
+                     class="app-input w-16 text-center" min="0">
+            </td>
+            <td>
+              <input type="number" name="value" value="{{ item.packed }}"
+                     x-model="items[{{ idx }}].packed"
+                     hx-post="{{ url_for('markets.packing_inline_edit', market_id=instance.id, item_id=item.packing_id) }}?field=packed"
+                     hx-trigger="blur"
+                     hx-target="#market-products-inventory"
+                     hx-swap="innerHTML"
+                     hx-vals='{"csrf_token": "{{ csrf_token() }}"}'
+                     class="app-input w-16 text-center" min="0">
+            </td>
+            <td x-text="items[{{ idx }}].sold">{{ item.sold }}</td>
+            <td x-text="items[{{ idx }}].returned">{{ item.returned }}</td>
+          </tr>
+          <tr class="border-none">
+            <td colspan="5" class="pb-3 pt-0 text-xs" style="color: var(--color-text-muted);">
+              Took: <strong x-text="took(items[{{ idx }}])">{{ item.took }}</strong> &middot;
+              Sold: <strong x-text="items[{{ idx }}].sold">{{ item.sold }}</strong> &middot;
+              Expected back: <strong x-text="expectedBack(items[{{ idx }}])">{{ item.expected_back }}</strong> &middot;
+              Returned: <strong x-text="items[{{ idx }}].returned">{{ item.returned }}</strong>
+              <span x-show="shrinkage(items[{{ idx }}]) > 0">
+                &middot; Shrinkage: <strong class="text-red-600" x-text="shrinkage(items[{{ idx }}])">{{ item.shrinkage }}</strong>
+              </span>
+            </td>
           </tr>
         {% else %}
           <tr><td colspan="5" style="color: var(--color-text-muted);">No packing list items yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
+  <div class="border-t p-5" style="border-color: var(--color-border);">
+    <div class="mb-4 grid grid-cols-4 gap-4 text-center text-sm">
+      <div>
+        <span class="block text-lg font-semibold" x-text="totalTook">{{ rc.total_took }}</span>
+        <span style="color: var(--color-text-muted);">Total Took</span>
+      </div>
+      <div>
+        <span class="block text-lg font-semibold" x-text="totalSold">{{ rc.total_sold }}</span>
+        <span style="color: var(--color-text-muted);">Total Sold</span>
+      </div>
+      <div>
+        <span class="block text-lg font-semibold" x-text="totalReturned">{{ rc.total_returned }}</span>
+        <span style="color: var(--color-text-muted);">Total Returned</span>
+      </div>
+      <div>
+        <span class="block text-lg font-semibold" :class="totalShrinkage > 0 ? 'text-red-600' : ''" x-text="totalShrinkage">{{ rc.total_shrinkage }}</span>
+        <span style="color: var(--color-text-muted);">Total Shrinkage</span>
+      </div>
+    </div>
+    <template x-if="totalTook > 0">
+      <div class="mb-4">
+        <div class="h-2 overflow-hidden rounded-full" style="background-color: var(--color-surface-muted);">
+          <div class="h-full rounded-full" :style="`width: ${shrinkPct}%; background-color: ${barColor};`"></div>
+        </div>
+        <p class="mt-2 text-xs" style="color: var(--color-text-muted);">
+          Shrinkage: <span x-text="shrinkPct">{{ rc.shrinkage_pct }}</span>% of items taken
+        </p>
+      </div>
+    </template>
+    <button
+      type="button"
+      class="app-btn app-btn-secondary"
+      hx-get="{{ url_for('markets.reconciliation_form', market_id=instance.id) }}"
+      hx-target="#market-reconciliation"
+      hx-swap="innerHTML"
+    >Reconcile Returns</button>
+    <div id="market-reconciliation" class="mt-4"></div>
   </div>
 </section>

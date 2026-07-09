@@ -17,17 +17,21 @@ RUN apt-get update \
         prusa-slicer \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml uv.lock* .python-version ./
+COPY pyproject.toml uv.lock .python-version ./
 RUN pip install --no-cache-dir uv
-RUN uv sync --frozen --no-dev || uv sync --no-dev
+RUN uv sync --frozen --no-dev
 
-COPY package.json postcss.config.js tailwind.config.js ./
-RUN npm install
+COPY package.json package-lock.json postcss.config.js tailwind.config.js ./
+RUN npm ci
 
 COPY . .
 
 RUN mkdir -p app/static/dist uploads instance
-RUN npm run build:css || true
+RUN npm run build:css
+
+RUN useradd --create-home --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app /opt/venv
+USER appuser
 
 EXPOSE 5000
 

@@ -110,14 +110,27 @@ Local `.env` files are ignored by git. Be careful with `docker compose config`: 
 ## Docker
 
 ```bash
-docker compose up --build
+docker compose --env-file .env.example --profile release run --rm migrate
+docker compose --env-file .env.example up --build web worker beat audit-log intelligence
 ```
 
-The web app runs at `http://localhost:5000`, backed by MariaDB in the `db` service on port `3306`. Compose creates the main `dudefish_os` database and a separate `dudefish_os_test` database for host-side `pytest` runs.
+The web app runs at `http://localhost:5000`. Internal databases, Redis, audit-log, intelligence, and object storage are exposed only inside the Docker network by default.
 
-The container keeps its own virtualenv and `node_modules` in Docker volumes so it does not conflict with a local macOS or Linux `.venv`.
-On startup, the web container also builds `app/static/dist/app.css` so Tailwind styles are present in development.
-If you want to use the optional local MariaDB container instead of an external database, start it with `docker compose --profile localdb up --build`.
+Migrations are intentionally not run by the web container. Run the `release` profile `migrate` service before deploying a new image.
+
+The production image builds Python dependencies with `uv sync --frozen --no-dev`, builds Tailwind during image build, and runs as a non-root user. For local development, use `.env.example` as a template and replace every `change-me` value before using compose on any reachable host.
+
+### E2E Tests
+
+Playwright smoke tests live under `tests/e2e/`.
+
+```bash
+npm install
+npx playwright install
+E2E_BASE_URL=http://127.0.0.1:5000 npm run test:e2e
+```
+
+Seed demo/admin data before running E2E tests so `/pos` has an openable session and product tiles.
 
 ## API Documentation
 

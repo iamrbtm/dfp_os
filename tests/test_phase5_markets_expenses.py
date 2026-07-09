@@ -18,12 +18,12 @@ from app.models import (
     MarketHotelBookingStatus,
     MarketPackingList,
     MarketStatus,
-    MarketTask,
-    MarketTaskStatus,
-    MarketTaskType,
     MarketTimelineEvent,
     MarketTimelineEventType,
     MarketWeatherSnapshot,
+    PrepTask,
+    PrepTaskCategory,
+    PrepTaskStatus,
     Product,
     ProductStatus,
     ProductType,
@@ -166,11 +166,11 @@ def test_market_command_center_models_can_be_created(app):
         market = Market(name="Ops Market", event_date=date(2026, 8, 1), status=MarketStatus.SCHEDULED)
         db.session.add(market)
         db.session.flush()
-        task = MarketTask(
+        task = PrepTask(
             market_id=market.id,
             title="Post preview reel",
-            task_type=MarketTaskType.MARKETING,
-            status=MarketTaskStatus.OPEN,
+            category=PrepTaskCategory.MARKETING,
+            status=PrepTaskStatus.OPEN,
         )
         timeline = MarketTimelineEvent(
             market_id=market.id,
@@ -198,7 +198,7 @@ def test_market_command_center_models_can_be_created(app):
         db.session.add_all([task, timeline, weather, hotel, document])
         db.session.commit()
 
-        assert market.tasks[0].task_type == MarketTaskType.MARKETING
+        assert task.category == PrepTaskCategory.MARKETING
         assert market.timeline_events[0].event_type == MarketTimelineEventType.LOAD_IN
         assert market.weather_snapshots[0].short_forecast == "Sunny"
         assert market.hotel_bookings[0].hotel_name == "Clarksville Inn"
@@ -398,14 +398,14 @@ def test_market_task_create_and_complete_htmx(login_admin, client, app):
 
     resp = client.post(
         f"/markets/{market_id}/tasks",
-        data={"title": "Pack dragons", "task_type": "packing", "status": "open"},
+        data={"title": "Pack dragons", "category": "packing", "status": "open"},
         headers={"HX-Request": "true"},
     )
     assert resp.status_code == 200
     assert "Pack dragons" in resp.text
 
     with app.app_context():
-        task = MarketTask.query.filter_by(market_id=market_id).one()
+        task = PrepTask.query.filter_by(market_id=market_id).one()
         task_id = task.id
 
     resp = client.post(
@@ -414,7 +414,7 @@ def test_market_task_create_and_complete_htmx(login_admin, client, app):
     )
     assert resp.status_code == 200
     with app.app_context():
-        assert db.session.get(MarketTask, task_id).status == MarketTaskStatus.COMPLETED
+        assert db.session.get(PrepTask, task_id).status == PrepTaskStatus.COMPLETED
 
 
 def test_market_timeline_hotel_and_packing_quick_add_htmx(login_admin, client, app, catalog_product):
@@ -545,23 +545,12 @@ def test_weather_fetch_stores_matching_forecast(app, monkeypatch):
 def test_new_market_api_resources_require_token(client):
     for endpoint in [
         "market-timeline-events",
-        "market-tasks",
         "market-weather-snapshots",
         "market-hotel-bookings",
         "market-documents",
     ]:
         resp = client.get(f"/api/v1/{endpoint}")
         assert resp.status_code == 401
-
-
-def test_market_tasks_api_returns_data_with_token(client):
-    raw = _scoped_token(client, "markets")
-    resp = client.get(
-        "/api/v1/market-tasks",
-        headers={"Authorization": f"Bearer {raw}"},
-    )
-    assert resp.status_code == 200
-    assert "data" in resp.get_json()
 
 
 def _ensure_csrf_cookie(client):

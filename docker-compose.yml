@@ -2,12 +2,16 @@ services:
   web:
     build: .
     mem_limit: 1024m
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: mysql+pymysql://username:password@db:3306/dudefish_os
+      FLASK_ENV: ${FLASK_ENV:-production}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      APP_NAME: ${APP_NAME:-Dude Fish OS}
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
+      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
       AUDIT_LOG_BASE_URL: http://audit-log:8090
-      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:-change-me-audit-token}
+      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
       AUDIT_LOG_ENABLED: ${AUDIT_LOG_ENABLED:-false}
       FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
       RECEIPT_STORAGE_PATH: ${RECEIPT_STORAGE_PATH:-uploads/receipts}
@@ -15,8 +19,8 @@ services:
       PRODUCT_ASSETS_PATH: ${PRODUCT_ASSETS_PATH:-uploads/products}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
       S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-change-me-access-key}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-change-me-secret-key}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
       S3_USE_SSL: ${S3_USE_SSL:-false}
       S3_AUTO_CREATE_BUCKETS: ${S3_AUTO_CREATE_BUCKETS:-true}
       RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
@@ -37,9 +41,6 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - .:/app
-      - web_venv:/opt/venv
-      - web_node_modules:/app/node_modules
       - receipt_uploads:/app/uploads/receipts
     depends_on:
       db:
@@ -48,30 +49,26 @@ services:
         condition: service_started
       audit-redis:
         condition: service_healthy
-    command: >
-      /bin/sh -c
-      "npm install &&
-      npm run build:css &&
-      for i in $$(seq 1 30); do
-        uv run flask --app app:create_app db upgrade && break;
-        echo 'Waiting for database...' && sleep 2;
-      done &&
-      uv run gunicorn -b 0.0.0.0:5000 --timeout 120 'app:create_app()'"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   db:
     image: mariadb:11
     environment:
-      MARIADB_DATABASE: dudefish_os
-      MARIADB_USER: username
-      MARIADB_PASSWORD: password
-      MARIADB_ROOT_PASSWORD: rootpassword
-    ports:
-      - "3306:3306"
+      MARIADB_DATABASE: ${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
+      MARIADB_USER: ${MARIADB_USER:?MARIADB_USER must be set}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?MARIADB_ROOT_PASSWORD must be set}
+    expose:
+      - "3306"
     volumes:
       - mariadb_data:/var/lib/mysql
       - ./docker/mariadb/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uusername -ppassword --silent"]
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u$${MARIADB_USER} -p$${MARIADB_PASSWORD} --silent"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -81,11 +78,11 @@ services:
     command: "server -dir=/data -s3"
     environment:
       S3_ENABLE_AUTH: "true"
-      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-change-me-access-key}
-      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-change-me-secret-key}
-    ports:
-      - "8333:8333"
-      - "9333:9333"
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
+    expose:
+      - "8333"
+      - "9333"
     volumes:
       - seaweedfs_data:/data
     healthcheck:
@@ -97,15 +94,15 @@ services:
   audit-postgres:
     image: postgres:17
     environment:
-      POSTGRES_DB: dfp_audit
-      POSTGRES_USER: dfp_audit
-      POSTGRES_PASSWORD: dfp_audit_password
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${AUDIT_POSTGRES_DB:?AUDIT_POSTGRES_DB must be set}
+      POSTGRES_USER: ${AUDIT_POSTGRES_USER:?AUDIT_POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${AUDIT_POSTGRES_PASSWORD:?AUDIT_POSTGRES_PASSWORD must be set}
+    expose:
+      - "5432"
     volumes:
       - audit_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dfp_audit"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -113,23 +110,23 @@ services:
   intelligence-postgres:
     image: postgres:17
     environment:
-      POSTGRES_DB: dfp_intelligence
-      POSTGRES_USER: dfp_intelligence
-      POSTGRES_PASSWORD: dfp_intelligence_password
-    ports:
-      - "5433:5432"
+      POSTGRES_DB: ${INTELLIGENCE_POSTGRES_DB:?INTELLIGENCE_POSTGRES_DB must be set}
+      POSTGRES_USER: ${INTELLIGENCE_POSTGRES_USER:?INTELLIGENCE_POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${INTELLIGENCE_POSTGRES_PASSWORD:?INTELLIGENCE_POSTGRES_PASSWORD must be set}
+    expose:
+      - "5432"
     volumes:
       - intelligence_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dfp_intelligence"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   audit-redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - audit_redis_data:/data
     healthcheck:
@@ -140,27 +137,29 @@ services:
 
   worker:
     build: .
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: mysql+pymysql://username:password@db:3306/dudefish_os
+      FLASK_ENV: ${FLASK_ENV:-production}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      APP_NAME: ${APP_NAME:-Dude Fish OS}
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
+      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://audit-redis:6379/1}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://audit-redis:6379/1}
       AUDIT_LOG_BASE_URL: http://audit-log:8090
-      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:-change-me-audit-token}
+      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
       FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
       S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-change-me-access-key}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-change-me-secret-key}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
       S3_USE_SSL: ${S3_USE_SSL:-false}
       S3_AUTO_CREATE_BUCKETS: ${S3_AUTO_CREATE_BUCKETS:-true}
       RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
       MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
       PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
     volumes:
-      - .:/app
-      - web_venv:/opt/venv
       - receipt_uploads:/app/uploads/receipts
     depends_on:
       db:
@@ -169,37 +168,33 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_started
-    command: >
-      /bin/sh -c
-      "for i in $$(seq 1 30); do
-        uv run flask --app app:create_app db upgrade && break;
-        echo 'Waiting for database...' && sleep 2;
-      done &&
-      uv run celery -A app.celery_app.celery worker --loglevel=info"
+    command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "worker", "--loglevel=info"]
 
   beat:
     build: .
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: mysql+pymysql://username:password@db:3306/dudefish_os
+      FLASK_ENV: ${FLASK_ENV:-production}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      APP_NAME: ${APP_NAME:-Dude Fish OS}
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
+      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://audit-redis:6379/1}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://audit-redis:6379/1}
       AUDIT_LOG_BASE_URL: http://audit-log:8090
-      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:-change-me-audit-token}
+      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
       FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
       S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-change-me-access-key}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-change-me-secret-key}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
       S3_USE_SSL: ${S3_USE_SSL:-false}
       S3_AUTO_CREATE_BUCKETS: ${S3_AUTO_CREATE_BUCKETS:-true}
       RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
       MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
       PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
     volumes:
-      - .:/app
-      - web_venv:/opt/venv
       - receipt_uploads:/app/uploads/receipts
     depends_on:
       db:
@@ -208,20 +203,36 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_started
-    command: >
-      /bin/sh -c
-      "for i in $$(seq 1 30); do
-        uv run flask --app app:create_app db upgrade && break;
-        echo 'Waiting for database...' && sleep 2;
-      done &&
-      uv run celery -A app.celery_app.celery beat --loglevel=info"
+    command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "beat", "--loglevel=info"]
+
+  migrate:
+    build: .
+    profiles:
+      - release
+    environment:
+      FLASK_ENV: ${FLASK_ENV:-production}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["uv", "run", "flask", "--app", "app:create_app", "db", "upgrade"]
 
   audit-log:
     build: services/audit-log
-    env_file:
-      - services/audit-log/.env
-    ports:
-      - "8090:8090"
+    environment:
+      AUDIT_SERVICE_ENV: ${AUDIT_SERVICE_ENV:-production}
+      AUDIT_SERVICE_NAME: ${AUDIT_SERVICE_NAME:-dfp-audit-log}
+      AUDIT_API_HOST: 0.0.0.0
+      AUDIT_API_PORT: 8090
+      AUDIT_DATABASE_URL: postgresql+asyncpg://${AUDIT_POSTGRES_USER:?AUDIT_POSTGRES_USER must be set}:${AUDIT_POSTGRES_PASSWORD:?AUDIT_POSTGRES_PASSWORD must be set}@audit-postgres:5432/${AUDIT_POSTGRES_DB:?AUDIT_POSTGRES_DB must be set}
+      AUDIT_REDIS_URL: redis://audit-redis:6379/0
+      AUDIT_INTERNAL_API_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
+      AUDIT_HASH_SECRET: ${AUDIT_HASH_SECRET:?AUDIT_HASH_SECRET must be set}
+      AUDIT_USE_REDIS_STREAM: ${AUDIT_USE_REDIS_STREAM:-false}
+      AUDIT_LOG_LEVEL: ${AUDIT_LOG_LEVEL:-INFO}
+    expose:
+      - "8090"
     depends_on:
       audit-postgres:
         condition: service_healthy
@@ -229,20 +240,21 @@ services:
         condition: service_healthy
     command: >
       /bin/sh -c
-      "uv run alembic upgrade head &&
-      uv run uvicorn app.main:app --host 0.0.0.0 --port 8090"
+      "uv run uvicorn app.main:app --host 0.0.0.0 --port 8090"
 
   intelligence:
     build: services/intelligence
-    env_file:
-      - services/intelligence/.env
     environment:
-      INTELLIGENCE_DATABASE_URL: postgresql+asyncpg://dfp_intelligence:dfp_intelligence_password@intelligence-postgres:5432/dfp_intelligence
-      INTELLIGENCE_INTERNAL_API_TOKEN: ${INTELLIGENCE_INTERNAL_API_TOKEN:-change-me-intelligence-token}
+      INTELLIGENCE_SERVICE_ENV: ${INTELLIGENCE_SERVICE_ENV:-production}
+      INTELLIGENCE_SERVICE_NAME: ${INTELLIGENCE_SERVICE_NAME:-dfp-intelligence}
+      INTELLIGENCE_API_HOST: 0.0.0.0
+      INTELLIGENCE_API_PORT: 8091
+      INTELLIGENCE_DATABASE_URL: postgresql+asyncpg://${INTELLIGENCE_POSTGRES_USER:?INTELLIGENCE_POSTGRES_USER must be set}:${INTELLIGENCE_POSTGRES_PASSWORD:?INTELLIGENCE_POSTGRES_PASSWORD must be set}@intelligence-postgres:5432/${INTELLIGENCE_POSTGRES_DB:?INTELLIGENCE_POSTGRES_DB must be set}
+      INTELLIGENCE_INTERNAL_API_TOKEN: ${INTELLIGENCE_INTERNAL_API_TOKEN:?INTELLIGENCE_INTERNAL_API_TOKEN must be set}
       INTELLIGENCE_AUDIT_LOG_BASE_URL: http://audit-log:8090
-      INTELLIGENCE_AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:-change-me-audit-token}
-    ports:
-      - "8091:8091"
+      INTELLIGENCE_AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
+    expose:
+      - "8091"
     depends_on:
       intelligence-postgres:
         condition: service_healthy
@@ -250,28 +262,25 @@ services:
         condition: service_started
     command: >
       /bin/sh -c
-      "uv run alembic upgrade head &&
-      uv run uvicorn app.main:app --host 0.0.0.0 --port 8091"
+      "uv run uvicorn app.main:app --host 0.0.0.0 --port 8091"
 
   api-docs:
     profiles:
       - docs
     build: services/dfpos-api-docs
-    env_file:
-      - services/dfpos-api-docs/.env
     environment:
       DFPOS_OPENAPI_URL: http://web:5000/api/openapi.json
       APP_NAME: Dude Fish OS API Reference
       REDOC_THEME: light
+      DOCS_USERNAME: ${DOCS_USERNAME:?DOCS_USERNAME must be set}
+      DOCS_PASSWORD: ${DOCS_PASSWORD:?DOCS_PASSWORD must be set}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       - web
 
 volumes:
   mariadb_data:
-  web_venv:
-  web_node_modules:
   receipt_uploads:
   seaweedfs_data:
   audit_postgres_data:

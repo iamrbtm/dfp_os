@@ -14,7 +14,6 @@ from app.schemas.market import (
     MarketHotelBookingSchema,
     MarketPackingListSchema,
     MarketSchema,
-    MarketTaskSchema,
     MarketTimelineEventSchema,
     MarketWeatherSnapshotSchema,
 )
@@ -57,7 +56,7 @@ __all__ = [
     "MarketHotelBookingSchema",
     "MarketPackingListSchema",
     "MarketSchema",
-    "MarketTaskSchema",
+
     "MarketTimelineEventSchema",
     "MarketWeatherSnapshotSchema",
     "InventoryRecordSchema",

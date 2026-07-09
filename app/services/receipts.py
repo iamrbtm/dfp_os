@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import struct
 import tempfile
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -23,6 +24,18 @@ from app.services.storage import (
     storage_reference_extension,
     upload_file_to_storage,
 )
+
+
+EXTENSION_MIME_MAP = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "heic": "image/heic",
+    "heif": "image/heif",
+    "pdf": "application/pdf",
+}
+MAX_IMAGE_PIXELS = 40_000_000
+MAX_PDF_PAGES = 5
 
 
 def _compute_file_hash(file_path: str) -> str:
@@ -75,14 +88,84 @@ def resolve_receipt_file_path(file_path: str | None) -> str | None:
     return None
 
 
-def _allowed_file(filename: str) -> bool:
+def _configured_receipt_mimes() -> set[str]:
     allowed = current_app.config.get("RECEIPT_ALLOWED_TYPES", "image/jpeg,image/png,image/heic,image/heif,application/pdf")
+    return {item.strip().lower() for item in allowed.split(",") if item.strip()}
+
+
+def _allowed_file(filename: str) -> bool:
     ext = Path(filename).suffix.lower().lstrip(".")
-    ext_map = {
-        "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
-        "heic": "image/heic", "heif": "image/heif", "pdf": "application/pdf",
-    }
-    return ext_map.get(ext, "") in allowed
+    return EXTENSION_MIME_MAP.get(ext, "") in _configured_receipt_mimes()
+
+
+def _detect_mime_from_head(head: bytes) -> str | None:
+    if head.startswith(b"%PDF-"):
+        return "application/pdf"
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if len(head) >= 12 and head[4:8] == b"ftyp" and head[8:12] in {b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1"}:
+        return "image/heic"
+    return None
+
+
+def _validate_upload_content(file_obj, filename: str) -> str:
+    if not _allowed_file(filename):
+        raise ValueError(f"File type not allowed: {filename}")
+    ext = Path(filename).suffix.lower().lstrip(".")
+    expected_mime = EXTENSION_MIME_MAP.get(ext)
+    head = file_obj.read(4096)
+    file_obj.seek(0)
+    detected_mime = _detect_mime_from_head(head)
+    if detected_mime is None:
+        raise ValueError("Uploaded receipt file content is not a supported PDF or image.")
+    if detected_mime != expected_mime:
+        raise ValueError("Uploaded receipt file content does not match the filename extension.")
+    if detected_mime not in _configured_receipt_mimes():
+        raise ValueError(f"File type not allowed: {detected_mime}")
+    return detected_mime
+
+
+def _jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
+    index = 2
+    while index + 9 < len(data):
+        if data[index] != 0xFF:
+            index += 1
+            continue
+        marker = data[index + 1]
+        block_len = int.from_bytes(data[index + 2:index + 4], "big")
+        if marker in {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}:
+            height = int.from_bytes(data[index + 5:index + 7], "big")
+            width = int.from_bytes(data[index + 7:index + 9], "big")
+            return width, height
+        if block_len < 2:
+            return None
+        index += 2 + block_len
+    return None
+
+
+def _validate_parser_limits(file_path: str, detected_mime: str) -> None:
+    path = Path(file_path)
+    if detected_mime == "application/pdf":
+        data = path.read_bytes()
+        page_markers = data.count(b"/Type /Page")
+        if page_markers > MAX_PDF_PAGES:
+            raise ValueError(f"Receipt PDF exceeds the {MAX_PDF_PAGES}-page processing limit.")
+        return
+
+    if detected_mime == "image/png":
+        with path.open("rb") as fh:
+            header = fh.read(24)
+        if len(header) >= 24 and header.startswith(b"\x89PNG\r\n\x1a\n"):
+            width, height = struct.unpack(">II", header[16:24])
+            if width * height > MAX_IMAGE_PIXELS:
+                raise ValueError("Receipt image dimensions exceed the processing limit.")
+    elif detected_mime == "image/jpeg":
+        with path.open("rb") as fh:
+            dimensions = _jpeg_dimensions(fh.read(65536))
+        if dimensions and dimensions[0] * dimensions[1] > MAX_IMAGE_PIXELS:
+            raise ValueError("Receipt image dimensions exceed the processing limit.")
 
 
 def _max_upload_mb() -> int:
@@ -116,8 +199,7 @@ def upload_receipt(file_obj, user_id: int, source_type: str = "upload") -> Recei
     if not file_obj or not file_obj.filename:
         return None
 
-    if not _allowed_file(file_obj.filename):
-        raise ValueError(f"File type not allowed: {file_obj.filename}")
+    detected_mime = _validate_upload_content(file_obj, file_obj.filename)
 
     file_size = 0
     file_obj.seek(0, os.SEEK_END)
@@ -133,6 +215,11 @@ def upload_receipt(file_obj, user_id: int, source_type: str = "upload") -> Recei
     unique_name = f"{timestamp}_{filename}"
     file_path = os.path.join(upload_folder, unique_name)
     file_obj.save(file_path)
+    try:
+        _validate_parser_limits(file_path, detected_mime)
+    except ValueError:
+        Path(file_path).unlink(missing_ok=True)
+        raise
 
     file_hash = _compute_file_hash(file_path)
     original_reference = _store_receipt_artifact(

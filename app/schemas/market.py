@@ -66,19 +66,6 @@ class MarketTimelineEventSchema(Schema):
     updated_at = fields.DateTime(dump_only=True)
 
 
-class MarketTaskSchema(Schema):
-    id = fields.Integer(dump_only=True)
-    market_id = fields.Integer(required=True)
-    title = fields.String(required=True)
-    task_type = fields.String(required=True)
-    status = fields.String(required=True)
-    due_at = fields.DateTime(allow_none=True)
-    completed_at = fields.DateTime(allow_none=True)
-    notes = fields.String(allow_none=True)
-    created_at = fields.DateTime(dump_only=True)
-    updated_at = fields.DateTime(dump_only=True)
-
-
 class MarketWeatherSnapshotSchema(Schema):
     id = fields.Integer(dump_only=True)
     market_id = fields.Integer(required=True)

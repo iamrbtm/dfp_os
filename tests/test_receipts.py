@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+import io
 
 import pytest
+from werkzeug.datastructures import FileStorage
 
 from app import create_app
 from app.extensions import db
@@ -19,7 +21,7 @@ from app.models import (
 from app.models.receipt import (
     AllocationType,
 )
-from app.services.receipts import approve_receipt, reject_receipt, get_receipt_dashboard
+from app.services.receipts import approve_receipt, reject_receipt, get_receipt_dashboard, upload_receipt
 from app.services.receipt_allocations import allocate_taxes_and_fees, set_line_allocation, bulk_assign_line_items, get_reconciliation_summary
 from app.services.receipt_duplicates import check_duplicates, resolve_duplicate
 from tests.db_support import base_test_app_config, configured_test_database_url, ensure_database_exists
@@ -179,6 +181,12 @@ class TestReceiptModel:
 
 
 class TestReceiptServices:
+    def test_upload_rejects_spoofed_extension(self, app_with_receipts, admin_user):
+        with app_with_receipts.app_context():
+            file_obj = FileStorage(stream=io.BytesIO(b"not a real png"), filename="fake.png")
+            with pytest.raises(ValueError, match="content is not a supported"):
+                upload_receipt(file_obj, user_id=admin_user["id"])
+
     def test_get_dashboard_empty(self, app_with_receipts):
         with app_with_receipts.app_context():
             data = get_receipt_dashboard()
@@ -230,6 +238,25 @@ class TestReceiptServices:
             receipt.status = ReceiptStatus.APPROVED
             db.session.commit()
             assert receipt.status == ReceiptStatus.APPROVED
+
+    def test_viewer_cannot_access_receipt_image(self, app_with_receipts, sample_receipt):
+        with app_with_receipts.app_context():
+            viewer = User(
+                email="viewer@test.com",
+                first_name="View",
+                last_name="Only",
+                role=UserRole.VIEWER,
+                is_active=True,
+            )
+            viewer.set_password("password")
+            db.session.add(viewer)
+            db.session.commit()
+        client = app_with_receipts.test_client()
+        client.post("/auth/login", data={"email": "viewer@test.com", "password": "password"})
+
+        response = client.get(f"/receipts/{sample_receipt}/image")
+
+        assert response.status_code != 200
 
 
 class TestAllocationEngine:

@@ -20,8 +20,9 @@ def spec_file(tmp_path):
 
 
 @pytest.fixture
-def app(spec_file):
+def app(spec_file, monkeypatch):
     from app import create_app
+    monkeypatch.setenv("FLASK_ENV", "development")
     app = create_app()
     app.config.update({
         "TESTING": True,
@@ -126,3 +127,14 @@ def test_validate_cli():
         "paths": {"/x": {"get": {}}},
     })
     assert any("responses" in m.lower() for _, m in errors)
+
+
+def test_docs_auth_required_rejects_missing_credentials(monkeypatch):
+    from app.config import Config
+
+    monkeypatch.setattr(Config, "DOCS_AUTH_REQUIRED", True)
+    monkeypatch.setattr(Config, "DOCS_USERNAME", "")
+    monkeypatch.setattr(Config, "DOCS_PASSWORD", "")
+
+    with pytest.raises(RuntimeError, match="Docs auth is required"):
+        Config.validate()

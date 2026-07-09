@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from flask import abort, flash, redirect, render_template, request, url_for
+from flask import abort, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user
 from markupsafe import escape
 from sqlalchemy import select
@@ -16,7 +16,7 @@ from app.forms import (
     MarketHotelBookingForm,
     MarketLogisticsForm,
     MarketPackingListForm,
-    MarketTaskForm,
+    MarketPrepTaskForm,
     MarketTimelineEventForm,
 )
 from app.models import (
@@ -25,8 +25,9 @@ from app.models import (
     MarketDocumentType,
     MarketHotelBooking,
     MarketPackingList,
-    MarketTask,
     MarketTimelineEvent,
+    PrepTask,
+    Product,
     UserRole,
 )
 from app.services.admin_mutations import (
@@ -36,8 +37,9 @@ from app.services.admin_mutations import (
     update_resource as update_admin_resource,
 )
 from app.services.crud import apply_search, get_by_id, paginate_query
+from app.services.intelligence_client import get_intelligence_client
 from app.services.markets import (
-    complete_market_task,
+    complete_prep_task,
     complete_timeline_event,
     fetch_weather_snapshot,
     geocode_market_address,
@@ -87,7 +89,7 @@ def _detail_forms(market: Market) -> dict:
     logistics_form = MarketLogisticsForm(obj=market)
     return {
         "logistics_form": logistics_form,
-        "task_form": MarketTaskForm(),
+        "task_form": MarketPrepTaskForm(),
         "timeline_form": MarketTimelineEventForm(),
         "hotel_form": MarketHotelBookingForm(),
         "document_form": MarketDocumentForm(),
@@ -113,7 +115,10 @@ def _after_market_action(market: Market, section: str, message: str, category: s
             'style="border-color: var(--color-border); color: var(--color-text);">'
             f"{escape(message)}</div>"
         )
-        return notice + _render_market_section(market, section)
+        content = notice + _render_market_section(market, section)
+        response = make_response(content)
+        response.headers["HX-Trigger"] = "market-data-changed"
+        return response
     flash(message, category)
     return redirect(url_for("markets.detail_resource", resource_id=market.id))
 
@@ -322,6 +327,7 @@ def detail_resource(resource_id: int, resource_key: str = "markets"):
         command = get_market_command_center(instance)
         extra = {"packing_list": command["packing_list"]}
         forms = _detail_forms(instance)
+        configured_intelligence = get_intelligence_client().is_configured()
     return render_template(
         "markets/detail.html" if resource_key == "markets" else "dashboard/resource_detail.html",
         resource=config,
@@ -329,6 +335,7 @@ def detail_resource(resource_id: int, resource_key: str = "markets"):
         details=details,
         extra=extra,
         command=command,
+        configured_intelligence=configured_intelligence if resource_key == "markets" else False,
         **forms,
     )
 
@@ -394,6 +401,21 @@ def market_performance(market_id: int):
     return render_template("markets/performance.html", market=market, performance=performance)
 
 
+@bp.get("/<int:market_id>/sidebar")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def sidebar_partial(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    context = get_market_command_center(market)
+    return render_template(
+        "markets/partials/_sidebar.html",
+        instance=market,
+        market=market,
+        command=context,
+    )
+
+
 @bp.post("/<int:market_id>/logistics")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def update_logistics(market_id: int):
@@ -436,18 +458,18 @@ def create_task(market_id: int):
     market = get_by_id(Market, market_id)
     if market is None:
         return render_template("errors/404.html"), 404
-    form = MarketTaskForm()
+    form = MarketPrepTaskForm()
     if form.validate_on_submit():
-        task = MarketTask(market_id=market.id)
+        task = PrepTask(market_id=market.id, source="market_studio")
         form.apply(task)
         db.session.add(task)
         db.session.commit()
         record_market_audit(
-            "market_task.created",
-            "market_task",
+            "prep_task.created",
+            "prep_task",
             task.id,
             actor=current_user,
-            after_state={"market_id": market.id, "title": task.title, "task_type": task.task_type.value},
+            after_state={"market_id": market.id, "title": task.title, "category": task.category.value},
         )
         return _after_market_action(market, "tasks_marketing", "Task added.")
     return _after_market_action(market, "tasks_marketing", "Task title is required.", "danger")
@@ -457,11 +479,26 @@ def create_task(market_id: int):
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def complete_task(market_id: int, task_id: int):
     market = get_by_id(Market, market_id)
-    task = get_by_id(MarketTask, task_id)
+    task = get_by_id(PrepTask, task_id)
     if market is None or task is None or task.market_id != market.id:
         return render_template("errors/404.html"), 404
-    complete_market_task(task, actor=current_user)
+    complete_prep_task(task, actor=current_user)
     return _after_market_action(market, "tasks_marketing", "Task completed.")
+
+
+@bp.post("/<int:market_id>/tasks/generate")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def generate_prep_tasks(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    from app.services.prep_tasks import generate_market_prep_tasks
+    generated = generate_market_prep_tasks(market_id, actor_id=current_user.id)
+    if generated:
+        flash(f"Generated {len(generated)} prep tasks from templates.", "success")
+    else:
+        flash("No new prep tasks to generate (all templates already applied).", "info")
+    return redirect(url_for("markets.detail_resource", resource_id=market.id))
 
 
 @bp.post("/<int:market_id>/timeline")
@@ -622,8 +659,147 @@ def packing_quick_add(market_id: int):
         return render_template("errors/404.html"), 404
     form = MarketPackingListForm()
     if form.validate_on_submit():
-        item = MarketPackingList(market_id=market.id)
-        form.apply(item)
+        existing = MarketPackingList.query.filter_by(
+            market_id=market.id, product_id=form.product_id.data
+        ).first()
+        if existing:
+            existing.planned_quantity = (existing.planned_quantity or 0) + (form.planned_quantity.data or 0)
+            existing.packed_quantity = (existing.packed_quantity or 0) + (form.packed_quantity.data or 0)
+            item = existing
+            action = "updated"
+            verb = "Updated (merged)"
+        else:
+            item = MarketPackingList(market_id=market.id)
+            form.apply(item)
+            db.session.add(item)
+            action = "created"
+            verb = "Added"
+        db.session.commit()
+        record_market_audit(
+            f"market_packing_item.{action}",
+            "market_packing_list",
+            item.id,
+            actor=current_user,
+            after_state={"market_id": market.id, "product_id": item.product_id, "planned_quantity": item.planned_quantity},
+        )
+        return _after_market_action(market, "products_inventory", f"Packing item {verb}.")
+    return _after_market_action(market, "products_inventory", "Choose a product before adding a packing item.", "danger")
+
+
+@bp.get("/<int:market_id>/packing-list/reconciliation-form")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def reconciliation_form(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    from app.services.markets import _calc_reconciliation
+    packing_list = MarketPackingList.query.filter_by(market_id=market.id).order_by(
+        MarketPackingList.product_id
+    ).all()
+    rc = _calc_reconciliation(packing_list)
+    return render_template(
+        "markets/partials/_reconciliation.html",
+        market=market,
+        rc=rc,
+    )
+
+
+@bp.post("/<int:market_id>/packing-list/<int:item_id>/edit")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def packing_inline_edit(market_id: int, item_id: int):
+    market = get_by_id(Market, market_id)
+    item = get_by_id(MarketPackingList, item_id)
+    if market is None or item is None or item.market_id != market.id:
+        return render_template("errors/404.html"), 404
+
+    field = request.args.get("field")
+    value = request.form.get("value", type=int)
+
+    if field == "planned":
+        item.planned_quantity = max(value or 0, 0)
+    elif field == "packed":
+        item.packed_quantity = max(value or 0, 0)
+
+    db.session.commit()
+    record_market_audit(
+        "market_packing_item.updated",
+        "market_packing_list",
+        item.id,
+        actor=current_user,
+        after_state={
+            "market_id": market.id,
+            "product_id": item.product_id,
+            "planned_quantity": item.planned_quantity,
+            "packed_quantity": item.packed_quantity,
+        },
+    )
+    response = make_response(_render_market_section(market, "products_inventory"))
+    response.headers["HX-Trigger"] = "market-data-changed"
+    return response
+
+
+@bp.post("/<int:market_id>/packing-list/reconcile")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def reconcile_packing(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    items = MarketPackingList.query.filter_by(market_id=market.id).all()
+    for item in items:
+        returned = request.form.get(f"returned_{item.id}")
+        packed = request.form.get(f"packed_{item.id}")
+        if returned is not None and returned.strip():
+            item.returned_quantity = max(int(returned), 0)
+        if packed is not None and packed.strip():
+            item.packed_quantity = max(int(packed), 0)
+    db.session.commit()
+    record_market_audit(
+        "market_packing.reconciled",
+        "market_packing_list",
+        market.id,
+        actor=current_user,
+        after_state={"item_count": len(items)},
+    )
+    flash("Reconciliation saved.", "success")
+    return redirect(url_for("markets.detail_resource", resource_id=market.id))
+
+
+@bp.route("/<int:market_id>/recommendation-add", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def recommendation_add(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+
+    product_name = (request.form.get("product_name") or "").strip()
+    suggested_qty = max(int(request.form.get("suggested_quantity") or 1), 1)
+
+    if not product_name:
+        flash("Product name is required.", "danger")
+        return redirect(url_for("markets.detail_resource", resource_id=market.id))
+
+    product = Product.query.filter(
+        db.func.lower(Product.name) == product_name.lower()
+    ).first()
+
+    if product is None:
+        flash(f"Could not find product matching \"{product_name}\". Add it to the catalog first.", "warning")
+        return redirect(url_for("markets.detail_resource", resource_id=market.id))
+
+    existing = MarketPackingList.query.filter_by(market_id=market.id, product_id=product.id).first()
+    if existing:
+        existing.planned_quantity = (existing.planned_quantity or 0) + suggested_qty
+        db.session.commit()
+        record_market_audit(
+            "market_packing_item.updated",
+            "market_packing_list",
+            existing.id,
+            actor=current_user,
+            after_state={"market_id": market.id, "product_id": product.id, "planned_quantity": existing.planned_quantity},
+        )
+        flash(f"Added {suggested_qty} more of \"{product.name}\" to the packing list.", "success")
+    else:
+        item = MarketPackingList(market_id=market.id, product_id=product.id, planned_quantity=suggested_qty)
         db.session.add(item)
         db.session.commit()
         record_market_audit(
@@ -631,7 +807,8 @@ def packing_quick_add(market_id: int):
             "market_packing_list",
             item.id,
             actor=current_user,
-            after_state={"market_id": market.id, "product_id": item.product_id, "planned_quantity": item.planned_quantity},
+            after_state={"market_id": market.id, "product_id": product.id, "planned_quantity": suggested_qty},
         )
-        return _after_market_action(market, "products_inventory", "Packing item added.")
-    return _after_market_action(market, "products_inventory", "Choose a product before adding a packing item.", "danger")
+        flash(f"Added \"{product.name}\" to packing list (planned: {suggested_qty}).", "success")
+
+    return redirect(url_for("markets.detail_resource", resource_id=market.id))

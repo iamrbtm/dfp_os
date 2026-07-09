@@ -7,6 +7,10 @@ import httpx
 from flask import current_app
 
 
+class AuditDispatchError(RuntimeError):
+    """Raised when a critical audit event cannot be dispatched."""
+
+
 class AuditClient:
     """Synchronous HTTP client for the audit-log microservice."""
 
@@ -37,8 +41,11 @@ class AuditClient:
         before_state: dict[str, Any] | None = None,
         after_state: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
+        critical: bool = False,
     ) -> dict[str, Any] | None:
         if not self._is_configured():
+            if critical and self.enabled and current_app.config.get("AUDIT_LOG_FAIL_CLOSED", False):
+                raise AuditDispatchError("Critical audit event could not be dispatched: audit-log is not configured")
             return None
 
         payload = {
@@ -69,10 +76,16 @@ class AuditClient:
                 return response.json()
         except httpx.RequestError as e:
             current_app.logger.warning("audit-log unavailable: %s", e)
+            if critical and current_app.config.get("AUDIT_LOG_FAIL_CLOSED", False):
+                raise AuditDispatchError("Critical audit event could not be dispatched") from e
         except httpx.HTTPStatusError as e:
             current_app.logger.warning("audit-log error: %s", e)
+            if critical and current_app.config.get("AUDIT_LOG_FAIL_CLOSED", False):
+                raise AuditDispatchError("Critical audit event could not be dispatched") from e
         except Exception as e:
             current_app.logger.warning("audit-log client failed: %s", e)
+            if critical and current_app.config.get("AUDIT_LOG_FAIL_CLOSED", False):
+                raise AuditDispatchError("Critical audit event could not be dispatched") from e
         return None
 
     def record_batch(

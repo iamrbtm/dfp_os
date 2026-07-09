@@ -4,6 +4,7 @@
 *.egg-info/
 services/audit-log/.env
 services/intelligence/.env
+services/dfpos-api-docs/.env
 DFP OS Audit Log Microservice.md
 __pycache__/
 *.py[cod]

@@ -66,6 +66,7 @@ def record_audit_event(
     actor_type: str | None = None,
     actor_display_name: str | None = None,
     business_id: str | int | None = None,
+    critical: bool = False,
 ) -> dict[str, Any] | None:
     actor = actor_context(actor_id, actor_type, actor_display_name)
     return get_audit_client().record(
@@ -80,4 +81,5 @@ def record_audit_event(
         before_state=before_state,
         after_state=after_state,
         metadata=request_metadata(metadata),
+        critical=critical,
     )

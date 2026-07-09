@@ -73,6 +73,104 @@ def ask():
     return render_template("intelligence/ask.html", result=result, question=question)
 
 
+@bp.get("/legacy")
+@roles_required(UserRole.ADMIN)
+def legacy_management():
+    client = get_intelligence_client()
+    tables = client.legacy_list_tables()
+    promoted = client.legacy_list_promoted()
+    return render_template(
+        "intelligence/legacy.html",
+        tables=tables.get("tables", tables.get("items", [])) if not _has_error(tables) else [],
+        promoted=promoted if isinstance(promoted, list) and not _has_error(promoted) else [],
+        error=promoted.get("error") if _has_error(promoted) else tables.get("error") if _has_error(tables) else None,
+    )
+
+
+@bp.post("/legacy/promote")
+@roles_required(UserRole.ADMIN)
+def legacy_promote():
+    result = get_intelligence_client().legacy_promote()
+    if _has_error(result):
+        flash("Promotion failed. Check that tables are reviewed and marked as keep.", "danger")
+    else:
+        flash(f"Promoted {result.get('promoted', 0)} tables.", "success")
+        record_audit_event(
+            action="intelligence.legacy_promoted",
+            entity_type="legacy_import",
+            entity_id=result.get("id"),
+            after_state={"promoted_count": result.get("promoted")},
+            source_module=__name__,
+        )
+    return redirect(url_for("intelligence.legacy_management"))
+
+
+@bp.post("/legacy/cleanup-staging")
+@roles_required(UserRole.ADMIN)
+def legacy_cleanup_staging():
+    result = get_intelligence_client().legacy_cleanup_staging()
+    if _has_error(result):
+        flash("Staging cleanup failed.", "danger")
+    else:
+        flash("Staging data cleared.", "success")
+        record_audit_event(
+            action="intelligence.legacy_staging_cleaned",
+            entity_type="legacy_import",
+            entity_id="all",
+            after_state=result,
+            source_module=__name__,
+        )
+    return redirect(url_for("intelligence.legacy_management"))
+
+
+@bp.post("/legacy/rebuild-warehouse")
+@roles_required(UserRole.ADMIN)
+def legacy_rebuild_warehouse():
+    result = get_intelligence_client().rebuild_legacy_warehouse()
+    if _has_error(result):
+        flash("Legacy warehouse rebuild failed.", "danger")
+    else:
+        flash(f"Legacy warehouse rebuilt: {result.get('facts_created', 0)} fact rows.", "success")
+        record_audit_event(
+            action="intelligence.legacy_warehouse_rebuilt",
+            entity_type="intelligence_warehouse",
+            entity_id=result.get("id"),
+            after_state=result,
+            source_module=__name__,
+        )
+    return redirect(url_for("intelligence.legacy_management"))
+
+
+@bp.get("/pipeline")
+@roles_required(UserRole.ADMIN)
+def pipeline_status():
+    client = get_intelligence_client()
+    status = client.pipeline_status()
+    return render_template(
+        "intelligence/pipeline.html",
+        status=status if not _has_error(status) else None,
+        error=status.get("error") if _has_error(status) else None,
+    )
+
+
+@bp.post("/pipeline/run")
+@roles_required(UserRole.ADMIN)
+def pipeline_run():
+    result = get_intelligence_client().run_normalized_pipeline()
+    if _has_error(result):
+        flash("Normalized pipeline run failed.", "danger")
+    else:
+        flash(f"Pipeline complete: {result.get('entities_created', 0)} entities.", "success")
+        record_audit_event(
+            action="intelligence.pipeline_run",
+            entity_type="normalized_pipeline",
+            entity_id=result.get("id"),
+            after_state=result,
+            source_module=__name__,
+        )
+    return redirect(url_for("intelligence.pipeline_status"))
+
+
 @bp.route("/market-advisor", methods=["GET", "POST"])
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def market_advisor():

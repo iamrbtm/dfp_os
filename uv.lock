@@ -341,6 +341,7 @@ dependencies = [
     { name = "email-validator" },
     { name = "feedparser" },
     { name = "flask" },
+    { name = "flask-dotenv" },
     { name = "flask-login" },
     { name = "flask-migrate" },
     { name = "flask-smorest" },
@@ -382,6 +383,7 @@ requires-dist = [
     { name = "email-validator", specifier = ">=2.2.0" },
     { name = "feedparser", specifier = ">=6.0.12" },
     { name = "flask", specifier = ">=3.1.0" },
+    { name = "flask-dotenv", specifier = ">=0.1.2" },
     { name = "flask-login", specifier = ">=0.6.3" },
     { name = "flask-migrate", specifier = ">=4.1.0" },
     { name = "flask-smorest", specifier = ">=0.46.1" },
@@ -472,6 +474,15 @@ sdist = { url = "https://files.pythonhosted.org/packages/26/00/35d85dcce6c57fdc8
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/9c/34f6962f9b9e9c71f6e5ed806e0d0ff03c9d1b0b2340088a0cf4bce09b18/flask-3.1.3-py3-none-any.whl", hash = "sha256:f4bcbefc124291925f1a26446da31a5178f9483862233b23c0c96a20701f670c", size = 103424, upload-time = "2026-02-19T05:00:56.027Z" },
 ]
+
+[[package]]
+name = "flask-dotenv"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flask" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c9/53/0892440c506c030206744128b81a26c5689988f280f493f56964b17449ab/Flask-DotEnv-0.1.2.tar.gz", hash = "sha256:8ef7d21877fdebdb46276da07ccb9a55b45fa657e476b0c7b7f5f1fa071057f6", size = 4024, upload-time = "2019-04-30T18:38:51.786Z" }
 
 [[package]]
 name = "flask-login"

@@ -47,7 +47,10 @@ def create_app(config_name: str | None = None, test_config: dict | None = None) 
     app = Flask(__name__, instance_relative_config=True)
 
     selected_config = config_name or os.getenv("FLASK_ENV", "development")
-    app.config.from_object(config_by_name.get(selected_config, config_by_name["development"]))
+    config_object = config_by_name.get(selected_config, config_by_name["development"])
+    if hasattr(config_object, "validate"):
+        config_object.validate()
+    app.config.from_object(config_object)
 
     if test_config:
         app.config.update(test_config)
@@ -60,8 +63,10 @@ def create_app(config_name: str | None = None, test_config: dict | None = None) 
 
     register_extensions(app)
     register_blueprints(app)
+    register_healthcheck(app)
     register_cli(app)
     register_request_guards(app)
+    register_security_headers(app)
     register_error_handlers(app)
     register_context_processors(app)
 
@@ -135,6 +140,12 @@ def _register_redoc_view(app: Flask) -> None:
         return render_template("api/redoc.html")
 
 
+def register_healthcheck(app: Flask) -> None:
+    @app.get("/health")
+    def healthcheck():
+        return {"status": "ok"}
+
+
 def register_request_guards(app: Flask) -> None:
     @app.before_request
     def assign_request_id_and_enforce_modules():
@@ -183,6 +194,18 @@ def register_request_guards(app: Flask) -> None:
 
         if current_user and current_user.is_authenticated and module_key:
             g.active_module_key = module_key
+
+
+def register_security_headers(app: Flask) -> None:
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        if app.config.get("SESSION_COOKIE_SECURE"):
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        return response
 
 
 def register_cli(app: Flask) -> None:
@@ -363,7 +386,7 @@ def register_context_processors(app: Flask) -> None:
         if current_user and current_user.is_authenticated:
             try:
                 from app.models import Notification
-                notif_count = db.session.query(Notification).filter(Notification.is_read == False).count()
+                notif_count = db.session.query(Notification).filter(Notification.is_read.is_(False)).count()
             except Exception:
                 notif_count = 0
         ctx["unread_notification_count"] = notif_count

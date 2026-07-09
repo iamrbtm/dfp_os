@@ -6,7 +6,6 @@ Each key maps to a CSS rule injected via a <style> tag with a scoped class.
 The rendered HTML is wrapped in a div with class "md-render".
 """
 
-import re
 from typing import Any
 
 import markdown as md_lib
