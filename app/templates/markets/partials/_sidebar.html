@@ -1,12 +1,14 @@
 <section class="app-card p-5">
   <h2 class="text-lg font-semibold">Readiness</h2>
   <div class="mt-4 space-y-4">
+    {% set readiness_score = command.readiness.score if command.readiness else 0 %}
     {% for label, pct in [
       ("Application", command.stats.application_pct),
       ("Payment", command.stats.payment_pct),
       ("Packing", command.stats.packing_pct),
       ("Tasks", command.stats.task_pct),
-      ("Marketing", command.stats.marketing_pct)
+      ("Marketing", command.stats.marketing_pct),
+      ("Prep", readiness_score|int)
     ] %}
       <div>
         <div class="mb-1 flex justify-between text-sm">
@@ -30,6 +32,13 @@
     <div><dt style="color: var(--color-text-muted);">Files</dt><dd class="font-semibold">{{ command.stats.document_count }}</dd></div>
     <div><dt style="color: var(--color-text-muted);">Timeline</dt><dd class="font-semibold">{{ command.stats.timeline_count }}</dd></div>
     <div><dt style="color: var(--color-text-muted);">Net</dt><dd class="font-semibold">${{ "{:,.2f}".format(command.stats.net_position) }}</dd></div>
+    {% set rc = command.reconciliation %}
+    {% if rc.shrinkage_pct is not none %}
+      <div>
+        <dt style="color: var(--color-text-muted);">Shrinkage</dt>
+        <dd class="font-semibold {% if rc.shrinkage_pct > 10 %}text-red-600{% elif rc.shrinkage_pct > 5 %}text-amber-600{% endif %}">{{ rc.shrinkage_pct }}%</dd>
+      </div>
+    {% endif %}
   </dl>
 </section>
 

@@ -577,6 +577,7 @@ def help_download():
 
 @bp.route("/<int:receipt_id>/image")
 @login_required
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
 def receipt_image(receipt_id: int):
     receipt = db.session.get(Receipt, receipt_id)
     if not receipt or receipt.deleted_at:

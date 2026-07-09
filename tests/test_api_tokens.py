@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from app.extensions import db
 from app.models import ApiToken, User, UserRole
 from app.services.api_tokens import create_api_token, revoke_api_token
@@ -38,6 +40,27 @@ def _make_token(client, name="Test Token", user_id=None):
     return tid, raw
 
 
+def _make_api_token(client, scopes=None, *, active_user=True):
+    with client.application.app_context():
+        suffix = uuid4().hex
+        user = User(
+            email=f"api-{suffix}@example.com",
+            first_name="API",
+            last_name="User",
+            role=UserRole.ADMIN,
+            is_active=active_user,
+        )
+        user.set_password("super-secret")
+        db.session.add(user)
+        db.session.commit()
+        token, raw = create_api_token(user=user, name="API Test Token", scopes=scopes)
+        return token.id, raw
+
+
+def _auth_header(raw_token):
+    return {"Authorization": f"Bearer {raw_token}"}
+
+
 def test_create_api_token_via_service(app):
     with app.app_context():
         user = User(
@@ -52,6 +75,7 @@ def test_create_api_token_via_service(app):
         assert token.prefix == raw[:8]
         assert token.is_active
         assert token.user_id == user.id
+        assert not token.has_scope("catalog")
 
 
 def test_create_api_token_with_expiry(app):
@@ -173,11 +197,34 @@ def test_api_token_revoke(client):
         assert not token.is_active
 
 
-def test_api_v1_create_token_endpoint(api_token, client):
+def test_empty_scope_api_token_has_no_api_access(client):
+    _token_id, raw = _make_api_token(client, scopes=[])
+    response = client.get("/api/v1/products", headers=_auth_header(raw))
+    assert response.status_code == 403
+
+
+def test_deactivated_user_api_token_is_rejected(client):
+    _token_id, raw = _make_api_token(client, scopes=["catalog"], active_user=False)
+    response = client.get("/api/v1/products", headers=_auth_header(raw))
+    assert response.status_code == 401
+
+
+def test_scoped_token_cannot_create_api_tokens(client):
+    _token_id, raw = _make_api_token(client, scopes=["settings"])
+    response = client.post(
+        "/api/v1/api-tokens",
+        json={"name": "Escalated Token", "scopes": "admin"},
+        headers=_auth_header(raw),
+    )
+    assert response.status_code == 403
+
+
+def test_api_v1_create_token_endpoint(client):
+    _token_id, raw = _make_api_token(client, scopes=["admin"])
     response = client.post(
         "/api/v1/api-tokens",
         json={"name": "API Created Token"},
-        headers={"Authorization": f"Bearer {api_token}"},
+        headers=_auth_header(raw),
     )
     assert response.status_code == 201
     data = response.get_json()
@@ -186,29 +233,32 @@ def test_api_v1_create_token_endpoint(api_token, client):
     assert data["data"]["is_active"]
 
 
-def test_api_v1_list_tokens(api_token, client):
-    response = client.get("/api/v1/api-tokens", headers={"Authorization": f"Bearer {api_token}"})
+def test_api_v1_list_tokens(client):
+    _token_id, raw = _make_api_token(client, scopes=["settings"])
+    response = client.get("/api/v1/api-tokens", headers=_auth_header(raw))
     assert response.status_code == 200
     data = response.get_json()
     assert isinstance(data["data"], list)
 
 
-def test_api_v1_get_token(api_token, client):
+def test_api_v1_get_token(client):
+    _token_id, auth_raw = _make_api_token(client, scopes=["settings"])
     with client.application.app_context():
         user = db.session.get(User, 1)
         token, raw = create_api_token(user=user, name="Getable")
         tid = token.id
-    response = client.get(f"/api/v1/api-tokens/{tid}", headers={"Authorization": f"Bearer {api_token}"})
+    response = client.get(f"/api/v1/api-tokens/{tid}", headers=_auth_header(auth_raw))
     assert response.status_code == 200
     assert response.get_json()["data"]["name"] == "Getable"
 
 
-def test_api_v1_delete_token(api_token, client):
+def test_api_v1_delete_token(client):
+    _token_id, auth_raw = _make_api_token(client, scopes=["settings"])
     with client.application.app_context():
         user = db.session.get(User, 1)
         token, raw = create_api_token(user=user, name="Deletable")
         tid = token.id
-    response = client.delete(f"/api/v1/api-tokens/{tid}", headers={"Authorization": f"Bearer {api_token}"})
+    response = client.delete(f"/api/v1/api-tokens/{tid}", headers=_auth_header(auth_raw))
     assert response.status_code == 200
     assert response.get_json()["status"] == "revoked"
     with client.application.app_context():
@@ -216,13 +266,15 @@ def test_api_v1_delete_token(api_token, client):
         assert not token.is_active
 
 
-def test_api_v1_create_token_requires_name(api_token, client):
-    response = client.post("/api/v1/api-tokens", json={"name": ""}, headers={"Authorization": f"Bearer {api_token}"})
+def test_api_v1_create_token_requires_name(client):
+    _token_id, raw = _make_api_token(client, scopes=["admin"])
+    response = client.post("/api/v1/api-tokens", json={"name": ""}, headers=_auth_header(raw))
     assert response.status_code == 400
 
 
-def test_api_v1_token_not_found(api_token, client):
-    response = client.get("/api/v1/api-tokens/99999", headers={"Authorization": f"Bearer {api_token}"})
+def test_api_v1_token_not_found(client):
+    _token_id, raw = _make_api_token(client, scopes=["settings"])
+    response = client.get("/api/v1/api-tokens/99999", headers=_auth_header(raw))
     assert response.status_code == 404
 
 

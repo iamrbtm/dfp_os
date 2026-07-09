@@ -92,7 +92,7 @@
 
       <div x-show="paymentMethod === 'cash'">
         <label class="block text-sm font-medium mb-1" style="color: var(--color-text);">Amount Received</label>
-        <input type="number" x-model="amountReceived" step="0.01" class="app-input text-lg">
+        <input type="number" x-model="amountReceived" step="0.01" class="app-input text-lg" data-testid="amount-received">
         <p x-show="parseFloat(amountReceived) >= cartTotal()" class="text-sm mt-1" style="color: var(--color-success);">
           Change: $<span x-text="(parseFloat(amountReceived) - cartTotal()).toFixed(2)"></span>
         </p>
@@ -116,7 +116,7 @@
       </div>
 
       <button @click="checkout()" :disabled="cart.length === 0"
-              class="pos-checkout-button">
+              class="pos-checkout-button" data-testid="complete-sale">
         Complete Sale
       </button>
     </div>

@@ -1,10 +1,14 @@
 <section class="app-card overflow-hidden">
   <div class="app-card-header flex items-center gap-3">
     <span class="flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold" style="border-color: var(--color-link); color: var(--color-link);">5</span>
-    <div>
-      <h2>Tasks &amp; Marketing</h2>
-      <p class="text-xs font-normal" style="color: var(--color-text-muted);">Market prep, application follow-up, social posts, and after-action items.</p>
+    <div class="flex-1">
+      <h2>Tasks</h2>
+      <p class="text-xs font-normal" style="color: var(--color-text-muted);">Market prep, marketing, application follow-up, packing, and after-action items.</p>
     </div>
+    <form method="post" action="{{ url_for('markets.generate_prep_tasks', market_id=instance.id) }}" class="shrink-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="app-btn app-btn-secondary text-xs" type="submit">Generate from Templates</button>
+    </form>
   </div>
   <div class="grid gap-5 p-5 lg:grid-cols-[1fr_18rem]">
     <div class="grid gap-4 md:grid-cols-2">
@@ -16,17 +20,18 @@
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <p class="font-medium">{{ task.title }}</p>
-                  <p class="text-xs" style="color: var(--color-text-muted);">{{ task.task_type.value.replace("_", " ").title() }}{% if task.due_at %} &middot; {{ task.due_at|local_datetime("%b %d, %-I:%M %p") }}{% endif %}</p>
+                  <p class="text-xs" style="color: var(--color-text-muted);">{{ task.category.value.replace("_", " ").title() }}{% if task.due_at %} &middot; {{ task.due_at|local_datetime("%b %d, %-I:%M %p") }}{% endif %}{% if task.assigned_user %} &middot; {{ task.assigned_user.display_name }}{% endif %}</p>
                 </div>
                 {% if task.status.value != "completed" %}
                   <form method="post" action="{{ url_for('markets.complete_task', market_id=instance.id, task_id=task.id) }}" hx-post="{{ url_for('markets.complete_task', market_id=instance.id, task_id=task.id) }}" hx-target="#market-tasks-marketing" hx-swap="innerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="app-btn app-btn-secondary" type="submit">Done</button>
                   </form>
                 {% endif %}
               </div>
             </div>
           {% else %}
-            <p class="text-sm" style="color: var(--color-text-muted);">No prep tasks yet.</p>
+            <p class="text-sm" style="color: var(--color-text-muted);">No tasks yet.</p>
           {% endfor %}
         </div>
       </div>
@@ -38,10 +43,11 @@
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <p class="font-medium">{{ task.title }}</p>
-                  <p class="text-xs" style="color: var(--color-text-muted);">{{ task.status.value.replace("_", " ").title() }}{% if task.due_at %} &middot; {{ task.due_at|local_datetime("%b %d, %-I:%M %p") }}{% endif %}</p>
+                  <p class="text-xs" style="color: var(--color-text-muted);">{{ task.category.value.replace("_", " ").title() }}{% if task.due_at %} &middot; {{ task.due_at|local_datetime("%b %d, %-I:%M %p") }}{% endif %}{% if task.assigned_user %} &middot; {{ task.assigned_user.display_name }}{% endif %}</p>
                 </div>
                 {% if task.status.value != "completed" %}
                   <form method="post" action="{{ url_for('markets.complete_task', market_id=instance.id, task_id=task.id) }}" hx-post="{{ url_for('markets.complete_task', market_id=instance.id, task_id=task.id) }}" hx-target="#market-tasks-marketing" hx-swap="innerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="app-btn app-btn-secondary" type="submit">Done</button>
                   </form>
                 {% endif %}
@@ -56,7 +62,7 @@
     <form method="post" action="{{ url_for('markets.create_task', market_id=instance.id) }}" hx-post="{{ url_for('markets.create_task', market_id=instance.id) }}" hx-target="#market-tasks-marketing" hx-swap="innerHTML" class="space-y-3">
       {{ task_form.hidden_tag() }}
       {{ task_form.title(class_="app-input", placeholder="Task") }}
-      {{ task_form.task_type(class_="app-select") }}
+      {{ task_form.category(class_="app-select") }}
       {{ task_form.status(class_="app-select") }}
       {{ task_form.due_at(class_="app-input") }}
       {{ task_form.notes(class_="app-textarea", rows="3", placeholder="Notes") }}

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.inventory import bp
+from app.extensions import db
 from app.forms import (
     FilamentSpoolForm,
     InventoryAdjustmentForm,
@@ -69,7 +70,7 @@ INVENTORY_RESOURCES: dict[str, ResourceConfig] = {
         search_fields=[],
         columns=[
             ("Product", lambda item: item.product.name if item.product else "—"),
-            ("Variant", lambda item: item.variant.name if item.variant else "—"),
+            ("Variant", lambda item: "—"),
             ("Location", lambda item: item.location.name if item.location else "—"),
             ("On Hand", lambda item: item.quantity_on_hand),
             ("Available", lambda item: item.quantity_available),

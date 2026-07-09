@@ -12,8 +12,7 @@ from wtforms import (
     SubmitField,
     TextAreaField,
 )
-from wtforms.fields.datetime import DateTimeLocalField
-from wtforms.validators import DataRequired, Length, NumberRange, Optional, URL, ValidationError
+from wtforms.validators import DataRequired, Length, NumberRange, Optional, ValidationError
 
 from app.forms.common import OptionalSelectField, decimal_or_zero, enum_choices
 from app.models import (

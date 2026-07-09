@@ -19,6 +19,12 @@ class PrepTaskStatus(StrEnum):
 
 
 class PrepTaskCategory(StrEnum):
+    TODO = "todo"
+    MARKETING = "marketing"
+    APPLICATION = "application"
+    PAYMENT = "payment"
+    PACKING = "packing"
+    FOLLOW_UP = "follow_up"
     INVENTORY = "inventory"
     REPRINT = "reprint"
     SUPPLY = "supply"

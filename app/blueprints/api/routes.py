@@ -36,9 +36,6 @@ from app.models import (
     MarketHotelBookingStatus,
     MarketPackingList,
     MarketStatus,
-    MarketTask,
-    MarketTaskStatus,
-    MarketTaskType,
     MarketTimelineEvent,
     MarketTimelineEventType,
     MarketWeatherSnapshot,
@@ -52,7 +49,6 @@ from app.models import (
     Payment,
     PaymentMethod,
     PosSale,
-    PosSaleStatus,
     PosSession,
     PrepTask,
     PrepTaskCategory,
@@ -92,7 +88,6 @@ from app.schemas import (
     MarketHotelBookingSchema,
     MarketPackingListSchema,
     MarketSchema,
-    MarketTaskSchema,
     MarketTimelineEventSchema,
     MarketWeatherSnapshotSchema,
     OrderItemSchema,
@@ -192,7 +187,6 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "markets": ("markets",),
     "market-packing-lists": ("markets",),
     "market-timeline-events": ("markets",),
-    "market-tasks": ("markets",),
     "market-weather-snapshots": ("markets",),
     "market-hotel-bookings": ("markets",),
     "market-documents": ("markets",),
@@ -220,6 +214,18 @@ def _list_response(pagination, schema_cls: type[Schema]):
 
 def _scope_guard_for(endpoint: str):
     return require_api_scopes(*RESOURCE_SCOPES.get(endpoint, ()))
+
+
+def _validation_error(message: str, details: dict | None = None):
+    return jsonify(
+        {
+            "error": {
+                "code": "validation_error",
+                "message": message,
+                "details": details or {},
+            }
+        }
+    ), 400
 
 
 def _instance_state(instance) -> dict:
@@ -362,10 +368,13 @@ def _apply_feature_flag(instance: FeatureFlag, data: dict):
 
 
 def _apply_inventory_record(instance: InventoryRecord, data: dict):
+    if instance.id is not None and {"quantity_on_hand", "quantity_reserved"}.intersection(data):
+        raise ValueError("Inventory quantities must be changed through inventory workflow endpoints.")
     instance.product_id = data["product_id"]
     instance.location_id = data["location_id"]
-    instance.quantity_on_hand = data.get("quantity_on_hand", 0) or 0
-    instance.quantity_reserved = data.get("quantity_reserved", 0) or 0
+    if instance.id is None:
+        instance.quantity_on_hand = data.get("quantity_on_hand", 0) or 0
+        instance.quantity_reserved = data.get("quantity_reserved", 0) or 0
     instance.reorder_threshold = data.get("reorder_threshold", 0) or 0
     instance.reorder_target = data.get("reorder_target", 0) or 0
     instance.last_counted_at = data.get("last_counted_at")
@@ -489,13 +498,12 @@ def _apply_pos_session(instance: PosSession, data: dict):
 
 
 def _apply_pos_sale(instance: PosSale, data: dict):
+    if instance.id is not None and "status" in data:
+        raise ValueError("POS sale status must be changed through POS workflow endpoints.")
     instance.payment_method = data["payment_method"]
     instance.total = data.get("total", 0)
     instance.amount_received = data.get("amount_received", 0)
     instance.notes = data.get("notes")
-
-    if "status" in data:
-        instance.status = PosSaleStatus(data["status"])
 
 
 def _apply_market(instance: Market, data: dict):
@@ -555,16 +563,6 @@ def _apply_market_timeline_event(instance: MarketTimelineEvent, data: dict):
     instance.completed_at = data.get("completed_at")
 
 
-def _apply_market_task(instance: MarketTask, data: dict):
-    instance.market_id = data["market_id"]
-    instance.title = data["title"].strip()
-    instance.task_type = MarketTaskType(data["task_type"])
-    instance.status = MarketTaskStatus(data["status"])
-    instance.due_at = data.get("due_at")
-    instance.completed_at = data.get("completed_at")
-    instance.notes = data.get("notes")
-
-
 def _apply_market_weather_snapshot(instance: MarketWeatherSnapshot, data: dict):
     from app.models.base import utc_now
 
@@ -615,7 +613,9 @@ def _apply_receipt(instance: Receipt, data: dict):
     instance.payment_method = data.get("payment_method", instance.payment_method)
     instance.currency = data.get("currency", instance.currency)
     instance.notes = data.get("notes", instance.notes)
-    if "status" in data:
+    if instance.id is not None and "status" in data:
+        raise ValueError("Receipt status must be changed through receipt workflow endpoints.")
+    if instance.id is None and "status" in data:
         instance.status = ReceiptStatus(data["status"])
 
 
@@ -813,13 +813,6 @@ API_RESOURCES = {
         ["title", "location", "notes"],
         _apply_market_timeline_event,
     ),
-    "market-tasks": ApiResourceConfig(
-        "market-tasks",
-        MarketTask,
-        MarketTaskSchema,
-        ["title", "notes"],
-        _apply_market_task,
-    ),
     "market-weather-snapshots": ApiResourceConfig(
         "market-weather-snapshots",
         MarketWeatherSnapshot,
@@ -924,13 +917,16 @@ def _register_resource(config: ApiResourceConfig):
             if denied:
                 return denied
             instance = config.model()
-            config.apply_data(instance, body_data)
             try:
+                config.apply_data(instance, body_data)
                 create_admin_resource(
                     instance,
                     actor_id=getattr(getattr(g, "api_token", None), "user_id", None),
                     entity_type=config.endpoint,
                 )
+            except ValueError as exc:
+                db.session.rollback()
+                return _validation_error(str(exc))
             except IntegrityError:
                 db.session.rollback()
                 return jsonify(
@@ -986,14 +982,17 @@ def _register_resource(config: ApiResourceConfig):
                     },
                 ), 404
             before_state = _instance_state(instance)
-            config.apply_data(instance, body_data)
             try:
+                config.apply_data(instance, body_data)
                 update_admin_resource(
                     instance,
                     before_state=before_state,
                     actor_id=getattr(getattr(g, "api_token", None), "user_id", None),
                     entity_type=config.endpoint,
                 )
+            except ValueError as exc:
+                db.session.rollback()
+                return _validation_error(str(exc))
             except IntegrityError:
                 db.session.rollback()
                 return jsonify(
@@ -1024,7 +1023,6 @@ def _register_resource(config: ApiResourceConfig):
                         }
                     },
                 ), 404
-            before_state = _instance_state(instance)
             archive_admin_resource(
                 instance,
                 actor_id=getattr(getattr(g, "api_token", None), "user_id", None),
@@ -1714,7 +1712,7 @@ class ApiTokenCollection(MethodView):
     @catalog_blp.doc(tags=["API Tokens"])
     @catalog_blp.response(201)
     def post(self):
-        denied = require_api_scopes("settings")
+        denied = require_api_scopes("admin")
         if denied:
             return denied
         from app.services.api_tokens import create_api_token

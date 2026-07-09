@@ -4,7 +4,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func
 
 from app.extensions import db
 from app.models.trend import SourceHealthRecord, TrendOpportunityScore, TrendReport, TrendSnapshot

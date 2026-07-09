@@ -16,6 +16,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Additive migration only. Destructive cleanup must happen through an explicit,
+    # operator-run data-loss procedure, not during alembic upgrade.
     # Drop tables that need schema rebuild to avoid complex ALTER conflicts
     # Safe in dev — no production data
     op.execute("DROP TABLE IF EXISTS legacy_mariadb_table_snapshots CASCADE")

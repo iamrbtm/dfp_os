@@ -26,6 +26,6 @@ async def verify_internal_token(
         )
     if parsed != settings.internal_api_token:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "invalid_token", "message": "The provided internal token is invalid."},
         )

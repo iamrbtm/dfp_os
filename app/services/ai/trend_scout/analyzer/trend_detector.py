@@ -521,7 +521,7 @@ def _catalog_metrics(
 
         total_was = (
             db_session.query(
-                func.coalesce(func.sum(InventoryRecord.quantity), 0)
+                func.coalesce(func.sum(InventoryRecord.quantity_on_hand), 0)
             )
             .filter(
                 InventoryRecord.product_id == p.id,

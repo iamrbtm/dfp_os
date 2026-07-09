@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import case
 
 from app.extensions import db
 from app.models.trend import TrendOpportunityScore, TrendReport

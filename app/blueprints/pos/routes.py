@@ -12,9 +12,7 @@ from app.forms.pos import PosCloseSessionForm, PosSessionForm
 from app.models import (
     Category,
     Customer,
-    PaymentMethod,
     PosSale,
-    PosSaleStatus,
     PosSession,
     PosSessionStatus,
     Product,
@@ -22,6 +20,7 @@ from app.models import (
     UserRole,
 )
 from app.services.crud import apply_search, paginate_query
+from app.services.audit_client import AuditDispatchError
 from app.services.pos import (
     close_session,
     create_sale,
@@ -30,7 +29,7 @@ from app.services.pos import (
     refund_sale,
     void_session,
 )
-from app.services.storage import send_storage_reference, storage_reference_name
+from app.services.storage import send_storage_reference
 from app.utils.auth import roles_required
 
 
@@ -218,6 +217,8 @@ def checkout(session_id):
         )
     except ValueError as e:
         return {"error": str(e)}, 400
+    except AuditDispatchError:
+        return {"error": "Sale could not be completed because audit logging is unavailable."}, 503
 
     return {"redirect": url_for("pos.receipt", session_id=session_id, sale_id=sale.id)}
 

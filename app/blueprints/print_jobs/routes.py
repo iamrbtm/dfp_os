@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.print_jobs import bp
-from app.extensions import db
 from app.forms import PrintJobForm
 from app.models import PrintJob, UserRole
 from app.services.crud import (

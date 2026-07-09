@@ -1,6 +1,6 @@
 # Production Readiness Scorecard
 
-Date: 2026-06-30
+Date: 2026-07-08
 
 This scorecard reflects the current hardening pass. Scores are conservative and describe the foundation after the changes in this pass, not a claim that every feature is complete.
 
@@ -23,3 +23,15 @@ This scorecard reflects the current hardening pass. Scores are conservative and 
 | Docker / Deployment | Compose config validates and includes audit-log and docs profiles. | 6 | Rendered Compose config can display local `.env` secrets. | Production secrets management and health checks need hardening. | Verified `docker compose config`. | Real-looking local secrets were present in this workstation environment; rotate if valid. | Compose config verification. | Use `.env.example` placeholders and secret manager/CI vars for deployment. |
 | Documentation | AGENTS/DESIGN/README describe modular monolith, API docs, audit, and readiness direction. | 7 | Scorecard was missing. | Module docs per module are still shallow. | Added this scorecard and README foundation notes. | Docs need to track future schema resets carefully. | Not applicable. | Add per-module docs under `docs/modules/`. |
 | SaaS-Later Readiness | Default business/account model and nullable `business_id` fields added to major records. | 6 | No account foundation existed. | No tenant onboarding, billing, or tenant isolation policy yet by design. | Added `Business`, default-business seed, and major-record scoping fields. | Single-business assumptions remain throughout queries. | Migration and seed paths covered by tests. | Add query helpers that scope by active business without full multi-tenant complexity. |
+
+## 2026-07-08 Audit Remediation Update
+
+| Area | Score | Fixes made | Remaining risks | Tests/checks added |
+|---|---:|---|---|---|
+| POS | 8 | Server now uses database product prices, validates quantities/discounts/tax/cash, and records critical POS sale/refund audit events before commit. | Partial refunds and concurrent checkout load tests still need a live MariaDB pass. | Added POS tamper/negative/insufficient-cash/audit fail-closed tests. |
+| Audit Logging | 7 | Added `AuditDispatchError`, critical audit dispatch, and config alias `AUDIT_LOG_FAIL_CLOSED_FOR_FINANCIAL_ACTIONS`. | A transactional outbox would be stronger for audit-service outages. | Added critical audit failure tests and syntax checks. |
+| REST API | 8 | Empty API-token scopes no longer imply full access, inactive token owners are rejected, API token creation requires `admin`, and generic API updates block receipt/POS/inventory workflow mutations. | Existing legacy empty-scope tokens need admin review before production use. | Added API token and workflow-guard tests. |
+| Receipts & Expenses | 8 | Receipt uploads now check file signatures before saving/parser execution, enforce basic parser limits, and receipt images require admin/staff. | Parser isolation and malware scanning are still future hardening work. | Added spoofed-extension and low-privilege image-access tests. |
+| Security / Permissions | 8 | Production config rejects default secrets, security headers are set, login/API auth rate limits are configurable, docs auth is required outside development, and intelligence query-token auth was removed. | In-memory rate limiting is process-local; production should use Redis-backed limiting. | Added security config, docs auth, intelligence auth, and rate-limit tests. |
+| Docker / Deployment | 7 | Docker image fails CSS build failures, uses `npm ci`, runs as non-root, exposes only intended ports, moves migrations to a release-profile service, and compose now requires explicit credentials. | `npm`, `uv`, and full Docker build were not available here; image build must be verified in CI/dev workstation. | `docker compose --env-file .env.example config` succeeds; npm build could not run because npm is missing. |
+| Tests | 7 | Added focused unit/API/E2E scaffolding for remediated issues. | `uv`, `pytest`, and `npm` are unavailable in this environment, so tests were syntax-checked but not executed. | `python3 -m py_compile` passed for changed Python files. |

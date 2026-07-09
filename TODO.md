@@ -12,6 +12,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 
 ## Current Focus
 
+- `done` Production audit remediation pass for `docs/audit.md`: POS financial integrity, audit fail-closed, API token/workflow hardening, receipt upload/access security, production config/service auth, rate limiting, Docker hardening, and Playwright E2E scaffold.
 - `done` Reorganized agent guidance into `AGENTS.md`, `PROMPTS.md`, `ARCHITECTURE.md`, and this file.
 - `done` Built the public website + ecommerce storefront pass: polished public pages, session cart, online checkout, and payment fallback flow.
 - `done` Refactored product asset storage so uploaded model/image/generated files follow the per-product and per-variant folder layout used in production file management.
@@ -34,6 +35,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 
 ## Next Priorities
 
+- `todo` Normalize and map kept tables from the legacy import staging layer into warehouse fact tables.
 - `todo` Extend DFPos Intelligence with current DFPos snapshot sync and approved-action workflows that can create prep tasks or print jobs after human confirmation.
 - `todo` Compare implemented modules against the required modules list in `AGENTS.md` and note gaps.
 - `todo` Audit API coverage under `/api/v1/` against the required resource list.
@@ -47,6 +49,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 
 ## Recently Completed
 
+- `done` Built legacy MariaDB import pipeline for DFPos Intelligence: raw row staging (`legacy_import_row_stage`), per-table manifests (`legacy_table_manifests`), review decision tracking (`legacy_table_review_state`), Alembic migration 0004, full API for import-all/list/review/delete, 12 targeted tests, and Flask client methods.
 - `done` Added public storefront checkout with session cart, customer checkout form, Square payment-link integration, and Venmo fallback confirmation flow.
 - `done` Upgraded the public website with richer home/shop/product pages plus 3D printing basics, returns, and customer policies pages.
 - `done` Added focused storefront tests covering cart, Venmo checkout, and Square redirect behavior.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from flask_wtf import FlaskForm
-from wtforms import HiddenField, IntegerField, RadioField, SelectField, StringField, SubmitField, TextAreaField
+from wtforms import HiddenField, IntegerField, RadioField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Email, Length, NumberRange, Optional
 
 

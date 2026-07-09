@@ -3,9 +3,8 @@ from __future__ import annotations
 from flask import jsonify, render_template, request
 
 from app.blueprints.notifications import bp
-from app.models import Notification, UserRole
+from app.models import UserRole
 from app.services.notification import (
-    create_notification,
     get_notifications,
     get_unread_count,
     mark_all_read,

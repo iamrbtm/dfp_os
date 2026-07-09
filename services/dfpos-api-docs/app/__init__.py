@@ -15,6 +15,7 @@ def create_app() -> Flask:
     load_dotenv(BASE_DIR / ".env")
 
     app = Flask(__name__)
+    Config.validate()
     app.config.from_object(Config)
 
     logging.basicConfig(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from flask_wtf import FlaskForm
+from sqlalchemy import func
 from wtforms import (
     BooleanField,
     DecimalField,
@@ -13,19 +14,22 @@ from wtforms import (
 from wtforms.fields.datetime import DateField, DateTimeLocalField, TimeField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
+from app.extensions import db
 from app.forms.common import enum_choices
 from app.models import (
+    InventoryRecord,
     Market,
     MarketDocumentType,
     MarketHotelBooking,
     MarketHotelBookingStatus,
     MarketPackingList,
     MarketStatus,
-    MarketTask,
-    MarketTaskStatus,
-    MarketTaskType,
     MarketTimelineEvent,
     MarketTimelineEventType,
+    PrepTask,
+    PrepTaskCategory,
+    PrepTaskStatus,
+    Product,
 )
 
 
@@ -113,9 +117,20 @@ class MarketPackingListForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from app.models import Product
+        products = Product.query.order_by(Product.name).all()
+        product_ids = [p.id for p in products]
+        stock_counts: dict[int, int] = dict(
+            db.session.query(
+                InventoryRecord.product_id,
+                func.coalesce(func.sum(InventoryRecord.quantity_on_hand), 0),
+            )
+            .filter(InventoryRecord.product_id.in_(product_ids))
+            .group_by(InventoryRecord.product_id)
+            .all()
+        )
         self.product_id.choices = [
-            (p.id, p.name) for p in Product.query.order_by(Product.name)
+            (p.id, f"{p.name}   [{stock_counts.get(p.id, 0)} in stock]")
+            for p in products
         ]
 
     def apply(self, item: MarketPackingList) -> MarketPackingList:
@@ -169,18 +184,18 @@ class MarketLogisticsForm(FlaskForm):
         return market
 
 
-class MarketTaskForm(FlaskForm):
+class MarketPrepTaskForm(FlaskForm):
     title = StringField("Task", validators=[DataRequired(), Length(max=200)])
-    task_type = SelectField("Type", choices=enum_choices(MarketTaskType), validators=[DataRequired()])
-    status = SelectField("Status", choices=enum_choices(MarketTaskStatus), validators=[DataRequired()], default=MarketTaskStatus.OPEN.value)
+    category = SelectField("Category", choices=enum_choices(PrepTaskCategory), validators=[DataRequired()])
+    status = SelectField("Status", choices=enum_choices(PrepTaskStatus), validators=[DataRequired()], default=PrepTaskStatus.OPEN.value)
     due_at = DateTimeLocalField("Due", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Save task")
 
-    def apply(self, task: MarketTask) -> MarketTask:
+    def apply(self, task: PrepTask) -> PrepTask:
         task.title = self.title.data.strip()
-        task.task_type = MarketTaskType(self.task_type.data)
-        task.status = MarketTaskStatus(self.status.data)
+        task.category = PrepTaskCategory(self.category.data)
+        task.status = PrepTaskStatus(self.status.data)
         task.due_at = self.due_at.data
         task.notes = self.notes.data
         return task

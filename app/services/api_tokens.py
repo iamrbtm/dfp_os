@@ -12,6 +12,7 @@ from app.models.base import utc_now
 from app.services.audit import record_audit_event
 
 AVAILABLE_API_TOKEN_SCOPES: tuple[tuple[str, str], ...] = (
+    ("admin", "Full API access. Use only for trusted owner/admin automation."),
     ("catalog", "Catalog: products, categories, collections, and product studio data"),
     ("inventory", "Inventory: finished goods, filament, and locations"),
     ("orders", "Orders: orders, items, payments, and customers"),
@@ -85,7 +86,7 @@ def revoke_api_token(token: ApiToken, *, actor_id: int | None = None) -> ApiToke
 def authenticate_api_token(raw_token: str) -> ApiToken | None:
     statement = select(ApiToken).where(ApiToken.token_hash == _hash_token(raw_token))
     token = db.session.scalar(statement)
-    if token is None or not token.is_active:
+    if token is None or not token.is_active or token.user is None or not token.user.is_active:
         return None
 
     token.last_used_at = utc_now()
