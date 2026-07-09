@@ -173,9 +173,11 @@ class ProductionConfig(Config):
 
     @classmethod
     def validate(cls) -> None:
-        if not cls.SECRET_KEY or cls.SECRET_KEY in {"change-me", "change-me-now"}:
+        secret_key = os.getenv("SECRET_KEY", cls.SECRET_KEY)
+        admin_password = os.getenv("ADMIN_PASSWORD", cls.ADMIN_PASSWORD)
+        if not secret_key or secret_key in {"change-me", "change-me-now"}:
             raise RuntimeError("Production SECRET_KEY must be set to a strong secret.")
-        if cls.ADMIN_PASSWORD in {"change-me", "change-me-now"}:
+        if admin_password in {"change-me", "change-me-now"}:
             raise RuntimeError("Production ADMIN_PASSWORD must be changed from the default.")
 
 

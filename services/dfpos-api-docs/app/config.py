@@ -34,6 +34,13 @@ class Config:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
     @classmethod
+    def docs_auth_required(cls) -> bool:
+        environment = os.getenv("FLASK_ENV", os.getenv("ENVIRONMENT", cls.ENVIRONMENT))
+        return _as_bool(os.getenv("DOCS_AUTH_REQUIRED"), environment != "development")
+
+    @classmethod
     def validate(cls) -> None:
-        if cls.DOCS_AUTH_REQUIRED and (not cls.DOCS_USERNAME or not cls.DOCS_PASSWORD):
+        username = os.getenv("DOCS_USERNAME", cls.DOCS_USERNAME)
+        password = os.getenv("DOCS_PASSWORD", cls.DOCS_PASSWORD)
+        if cls.docs_auth_required() and (not username or not password):
             raise RuntimeError("Docs auth is required but DOCS_USERNAME/DOCS_PASSWORD are missing.")

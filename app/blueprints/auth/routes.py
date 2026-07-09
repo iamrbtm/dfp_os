@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from app.blueprints.auth import bp
 from app.forms import LoginForm
 from app.services.auth import authenticate_user
 from app.services.audit import record_audit_event
+from app.utils.rate_limit import client_key, is_limited
 from app.utils.urls import is_safe_local_url
 
 
@@ -19,6 +20,20 @@ def login():
     next_url = request.args.get("next")
 
     if form.validate_on_submit():
+        if is_limited(
+            client_key("login", form.email.data),
+            limit=current_app.config.get("LOGIN_RATE_LIMIT_ATTEMPTS", 5),
+            window_seconds=current_app.config.get("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 60),
+        ):
+            record_audit_event(
+                action="user.login_rate_limited",
+                entity_type="user",
+                entity_id=form.email.data,
+                metadata={"email": form.email.data},
+                source_module=__name__,
+                actor_type="anonymous",
+            )
+            return "Too many login attempts. Try again shortly.", 429
         user = authenticate_user(form.email.data, form.password.data)
         if user:
             login_user(user, remember=form.remember_me.data)

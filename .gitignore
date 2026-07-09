@@ -19,3 +19,5 @@ uploads/*
 node_modules/
 app/static/dist/
 .DS_Store
+celerybeat-schedule*
+*.db
