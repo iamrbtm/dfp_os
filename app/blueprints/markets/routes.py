@@ -25,6 +25,7 @@ from app.models import (
     MarketDocumentType,
     MarketHotelBooking,
     MarketPackingList,
+    MarketStatus,
     MarketTimelineEvent,
     Product,
     UserRole,
@@ -135,6 +136,8 @@ MARKET_RESOURCES: dict[str, ResourceConfig] = {
             ("Location", lambda item: item.location_name or "\u2014"),
             ("Date", lambda item: item.event_date),
             ("Status", lambda item: item.status),
+            ("Deadline", lambda item: item.application_deadline),
+            ("Follow-Up", lambda item: item.follow_up_date),
             ("Revenue", lambda item: _format_money(item.calculated_revenue)),
             ("Profit", lambda item: _format_money(item.calculated_profit)),
         ],
@@ -143,6 +146,9 @@ MARKET_RESOURCES: dict[str, ResourceConfig] = {
             "location": Market.location_name,
             "date": Market.event_date,
             "status": Market.status,
+            "deadline": Market.application_deadline,
+            "follow_up": Market.follow_up_date,
+            "revenue": Market.actual_revenue,
             "created": Market.created_at,
         },
     ),
@@ -178,6 +184,9 @@ MARKET_SORT_LABELS = {
         "Location": "location",
         "Date": "date",
         "Status": "status",
+        "Deadline": "deadline",
+        "Follow-Up": "follow_up",
+        "Revenue": "revenue",
     },
     "packing-lists": {
         "Product": "product",
@@ -226,6 +235,8 @@ def markets_root():
     return redirect(url_for("markets.list_resource", resource_key="markets"))
 
 
+APPLICATION_STATUSES = {MarketStatus.INTERESTED, MarketStatus.APPLIED, MarketStatus.ACCEPTED, MarketStatus.WAITLISTED, MarketStatus.REJECTED}
+
 @bp.route("/<resource_key>/")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def list_resource(resource_key: str):
@@ -234,8 +245,17 @@ def list_resource(resource_key: str):
     config = MARKET_RESOURCES[resource_key]
     page = request.args.get("page", default=1, type=int)
     search_term = request.args.get("q", "").strip()
+    status_filter = request.args.get("status", "").strip()
     sort_key, sort_dir, order_clause = _resolve_sort(config, resource_key)
     statement = apply_search(select(config.model), config.model, search_term, config.search_fields)
+    if resource_key == "markets" and status_filter:
+        if status_filter == "application":
+            statement = statement.where(Market.status.in_(APPLICATION_STATUSES))
+        else:
+            try:
+                statement = statement.where(Market.status == MarketStatus(status_filter))
+            except ValueError:
+                pass
     pagination = paginate_query(statement.order_by(order_clause, config.model.id.desc()), page, 20)
     rows = [
         {"id": item.id, "cells": [_display_value(getter(item)) for _, getter in config.columns]}
@@ -269,6 +289,7 @@ def list_resource(resource_key: str):
         search_term=search_term,
         active_sort=sort_key,
         active_dir=sort_dir,
+        status_filter=status_filter,
     )
 
 

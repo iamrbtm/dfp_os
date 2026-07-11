@@ -20,6 +20,19 @@
       </div>
     </form>
 
+    {% if resource.key == "markets" %}
+      <div class="flex flex-wrap gap-2">
+        <a href="{{ url_for('markets.list_resource', resource_key='markets') }}"
+           class="{% if not status_filter %}app-filter-pill-active{% else %}app-filter-pill{% endif %}">All</a>
+        <a href="{{ url_for('markets.list_resource', resource_key='markets', status='application') }}"
+           class="{% if status_filter == 'application' %}app-filter-pill-active{% else %}app-filter-pill{% endif %}">Applications</a>
+        <a href="{{ url_for('markets.list_resource', resource_key='markets', status='scheduled') }}"
+           class="{% if status_filter == 'scheduled' %}app-filter-pill-active{% else %}app-filter-pill{% endif %}">Scheduled</a>
+        <a href="{{ url_for('markets.list_resource', resource_key='markets', status='completed') }}"
+           class="{% if status_filter == 'completed' %}app-filter-pill-active{% else %}app-filter-pill{% endif %}">Completed</a>
+      </div>
+    {% endif %}
+
     {% if rows %}
       <div class="app-card overflow-hidden">
         <div class="overflow-x-auto">

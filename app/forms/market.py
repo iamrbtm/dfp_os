@@ -43,11 +43,16 @@ class MarketForm(FlaskForm):
     event_date = DateField("Event Date", format="%Y-%m-%d", validators=[Optional()])
     start_time = TimeField("Start Time", format="%H:%M", validators=[Optional()])
     end_time = TimeField("End Time", format="%H:%M", validators=[Optional()])
+    application_deadline = DateField("Application Deadline", format="%Y-%m-%d", validators=[Optional()])
     application_submitted_at = DateTimeLocalField("Application Submitted", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     application_approved_at = DateTimeLocalField("Application Approved", format="%Y-%m-%dT%H:%M", validators=[Optional()])
+    application_url = StringField("Application URL", validators=[Optional(), Length(max=500)])
+    application_contact = StringField("Application Contact", validators=[Optional(), Length(max=200)])
     fee_paid_at = DateTimeLocalField("Fee Paid", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     booth_location = StringField("Booth Location", validators=[Optional(), Length(max=160)])
     booth_size = StringField("Booth Size", validators=[Optional(), Length(max=80)])
+    booth_rules = TextAreaField("Booth Rules", validators=[Optional()])
+    required_documents = TextAreaField("Required Documents", validators=[Optional()])
     power_available = BooleanField("Power Available")
     wifi_available = BooleanField("Wi-Fi Available")
     food_available = BooleanField("Food Available")
@@ -61,6 +66,8 @@ class MarketForm(FlaskForm):
     expected_traffic = StringField("Expected Traffic", validators=[Optional(), Length(max=100)])
     actual_revenue = StringField("Actual Revenue", validators=[Optional()])
     actual_profit = StringField("Actual Profit", validators=[Optional()])
+    follow_up_date = DateField("Follow-Up Date", format="%Y-%m-%d", validators=[Optional()])
+    worth_repeating = SelectField("Worth Repeating", choices=[("", "---"), ("true", "Yes"), ("false", "No")], validators=[Optional()])
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Save market")
 
@@ -74,11 +81,16 @@ class MarketForm(FlaskForm):
         market.event_date = self.event_date.data
         market.start_time = self.start_time.data
         market.end_time = self.end_time.data
+        market.application_deadline = self.application_deadline.data
         market.application_submitted_at = self.application_submitted_at.data
         market.application_approved_at = self.application_approved_at.data
+        market.application_url = self.application_url.data or None
+        market.application_contact = self.application_contact.data or None
         market.fee_paid_at = self.fee_paid_at.data
         market.booth_location = self.booth_location.data or None
         market.booth_size = self.booth_size.data or None
+        market.booth_rules = self.booth_rules.data
+        market.required_documents = self.required_documents.data
         market.power_available = bool(self.power_available.data)
         market.wifi_available = bool(self.wifi_available.data)
         market.food_available = bool(self.food_available.data)
@@ -92,6 +104,14 @@ class MarketForm(FlaskForm):
         market.expected_traffic = self.expected_traffic.data or None
         market.actual_revenue = self._parse_money(self.actual_revenue.data)
         market.actual_profit = self._parse_money(self.actual_profit.data)
+        market.follow_up_date = self.follow_up_date.data
+        wr = self.worth_repeating.data
+        if wr == "true":
+            market.worth_repeating = True
+        elif wr == "false":
+            market.worth_repeating = False
+        else:
+            market.worth_repeating = None
         market.notes = self.notes.data
         return market
 
@@ -154,13 +174,20 @@ class MarketLogisticsForm(FlaskForm):
     power_available = BooleanField("Power")
     wifi_available = BooleanField("Wi-Fi")
     food_available = BooleanField("Food")
+    application_deadline = DateField("Application Deadline", format="%Y-%m-%d", validators=[Optional()])
     application_submitted_at = DateTimeLocalField("Application Submitted", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     application_approved_at = DateTimeLocalField("Application Approved", format="%Y-%m-%dT%H:%M", validators=[Optional()])
+    application_url = StringField("Application URL", validators=[Optional(), Length(max=500)])
+    application_contact = StringField("Application Contact", validators=[Optional(), Length(max=200)])
     fee_paid_at = DateTimeLocalField("Fee Paid", format="%Y-%m-%dT%H:%M", validators=[Optional()])
+    booth_rules = TextAreaField("Booth Rules", validators=[Optional()])
+    required_documents = TextAreaField("Required Documents", validators=[Optional()])
     load_in_at = DateTimeLocalField("Load In", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     load_out_at = DateTimeLocalField("Load Out", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     load_in_notes = TextAreaField("Load-In Notes", validators=[Optional()])
     load_out_notes = TextAreaField("Load-Out Notes", validators=[Optional()])
+    follow_up_date = DateField("Follow-Up Date", format="%Y-%m-%d", validators=[Optional()])
+    worth_repeating = SelectField("Worth Repeating", choices=[("", "---"), ("true", "Yes"), ("false", "No")], validators=[Optional()])
     submit = SubmitField("Save logistics")
 
     def apply(self, market: Market) -> Market:
@@ -174,13 +201,26 @@ class MarketLogisticsForm(FlaskForm):
         market.power_available = bool(self.power_available.data)
         market.wifi_available = bool(self.wifi_available.data)
         market.food_available = bool(self.food_available.data)
+        market.application_deadline = self.application_deadline.data
         market.application_submitted_at = self.application_submitted_at.data
         market.application_approved_at = self.application_approved_at.data
+        market.application_url = self.application_url.data or None
+        market.application_contact = self.application_contact.data or None
         market.fee_paid_at = self.fee_paid_at.data
+        market.booth_rules = self.booth_rules.data
+        market.required_documents = self.required_documents.data
         market.load_in_at = self.load_in_at.data
         market.load_out_at = self.load_out_at.data
         market.load_in_notes = self.load_in_notes.data
         market.load_out_notes = self.load_out_notes.data
+        market.follow_up_date = self.follow_up_date.data
+        wr = self.worth_repeating.data
+        if wr == "true":
+            market.worth_repeating = True
+        elif wr == "false":
+            market.worth_repeating = False
+        else:
+            market.worth_repeating = None
         return market
 
 

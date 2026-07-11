@@ -405,3 +405,34 @@
   outline: none;
   box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
+
+/* --- Filter pills --- */
+.app-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  background-color: transparent;
+  text-decoration: none;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.app-filter-pill:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.app-filter-pill-active {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  text-decoration: none;
+}

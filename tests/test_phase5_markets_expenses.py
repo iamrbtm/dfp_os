@@ -553,6 +553,120 @@ def test_new_market_api_resources_require_token(client):
         assert resp.status_code == 401
 
 
+# --- Market Application Tracker (Phase 1.1) ---
+
+
+def test_market_application_tracker_model(app):
+    with app.app_context():
+        market = Market(
+            name="App Tracker Test",
+            status=MarketStatus.INTERESTED,
+            application_deadline=date(2026, 8, 1),
+            application_url="https://example.com/apply",
+            application_contact="organizer@example.com",
+            booth_rules="No open flames",
+            required_documents="Insurance, photos",
+            follow_up_date=date(2026, 8, 15),
+            worth_repeating=True,
+        )
+        db.session.add(market)
+        db.session.commit()
+        assert market.id is not None
+        assert market.application_deadline == date(2026, 8, 1)
+        assert market.application_url == "https://example.com/apply"
+        assert market.application_contact == "organizer@example.com"
+        assert market.booth_rules == "No open flames"
+        assert market.required_documents == "Insurance, photos"
+        assert market.follow_up_date == date(2026, 8, 15)
+        assert market.worth_repeating is True
+
+
+def test_market_application_list_requires_auth(client):
+    resp = client.get("/markets/markets/?status=application")
+    assert resp.status_code in (302, 401)
+
+
+def test_market_application_tracker_status_filter(app, client):
+    with app.app_context():
+        from app.models import User, UserRole
+        from flask_login import login_user
+
+        user = User(
+            email="app-tracker-admin@example.com",
+            first_name="App",
+            last_name="Tracker",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
+        user.set_password("secret")
+        db.session.add(user)
+        for name, status in [
+            ("Spring Festival", MarketStatus.INTERESTED),
+            ("Summer Fair", MarketStatus.APPLIED),
+            ("Fall Market", MarketStatus.ACCEPTED),
+            ("Winter Bazaar", MarketStatus.REJECTED),
+            ("Past Event", MarketStatus.COMPLETED),
+        ]:
+            db.session.add(Market(name=name, status=status))
+        db.session.commit()
+
+    with client:
+        with app.app_context():
+            login_user(user)
+        resp = client.get("/markets/markets/?status=application")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "Spring Festival" in html
+        assert "Summer Fair" in html
+        assert "Fall Market" in html
+        assert "Winter Bazaar" in html
+        assert "Past Event" not in html
+
+
+def test_market_application_tracker_admin_create(app, client):
+    with app.app_context():
+        from app.models import User, UserRole
+        from flask_login import login_user
+
+        user = User(
+            email="app-create-admin@example.com",
+            first_name="Create",
+            last_name="Admin",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
+        user.set_password("secret")
+        db.session.add(user)
+        db.session.commit()
+
+    with client:
+        with app.app_context():
+            login_user(user)
+        _ensure_csrf_cookie(client)
+        resp = client.post(
+            "/markets/new",
+            data={
+                "name": "New Application Market",
+                "status": MarketStatus.INTERESTED.value,
+                "application_deadline": "2026-09-01",
+                "application_url": "https://example.org/apply",
+                "application_contact": "info@example.org",
+                "booth_rules": "Table provided",
+                "required_documents": "Business license",
+                "follow_up_date": "2026-09-15",
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "New Application Market" in html
+
+
+def test_market_application_api_requires_token(client):
+    resp = client.get("/api/v1/markets")
+    assert resp.status_code == 401
+
+
 def _ensure_csrf_cookie(client):
     """Fetch a page to get the CSRF token cookie set by Flask-WTF."""
     client.get("/markets/markets/")
