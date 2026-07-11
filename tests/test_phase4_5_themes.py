@@ -8,8 +8,8 @@ from app.theme_registry import ALL_THEMES, DEFAULT_THEME, REQUIRED_TOKENS, is_va
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-def test_theme_registry_has_10_themes():
-    assert len(ALL_THEMES) == 10
+def test_theme_registry_has_12_themes():
+    assert len(ALL_THEMES) == 12
 
 
 def test_theme_registry_has_required_tokens():
