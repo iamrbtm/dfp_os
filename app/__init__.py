@@ -32,6 +32,7 @@ from app.blueprints.products import bp as products_bp
 from app.blueprints.public import bp as public_bp
 from app.blueprints.receipts import bp as receipts_bp
 from app.blueprints.settings import bp as settings_bp
+from app.blueprints.table_layouts import bp as table_layouts_bp
 from app.blueprints.trend_scout import bp as trend_scout_bp
 from app.cli import migrate_group, seed_group, trend_scout_group
 from app.extensions import api, csrf, db, login_manager, migrate
@@ -123,6 +124,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(print_jobs_bp)
     app.register_blueprint(markets_bp)
     app.register_blueprint(prep_tasks_bp)
+    app.register_blueprint(table_layouts_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(cost_engine_bp)
     app.register_blueprint(notifications_bp)

@@ -64,6 +64,7 @@ from app.models.pos import (
 from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_job import PrintJob, PrintJobStatus
 from app.models.setting import Setting
+from app.models.table_layout import MarketTableLayout, MarketTablePlacement, MarketTableSection, TableSectionType
 from app.models.trend import SourceHealthRecord, TrendCalibrationResult, TrendOpportunityScore, TrendReport, TrendSnapshot, TrendTaskRun
 from app.models.user import User, UserRole
 
@@ -148,6 +149,10 @@ __all__ = [
     "TrendCalibrationResult",
     "TrendTaskRun",
     "TrendSnapshot",
+    "TableSectionType",
+    "MarketTableLayout",
+    "MarketTableSection",
+    "MarketTablePlacement",
     "User",
     "UserRole",
 ]

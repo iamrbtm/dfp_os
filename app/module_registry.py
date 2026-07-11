@@ -231,6 +231,15 @@ MODULES: dict[str, ModuleDefinition] = {
             NavEntry("Follow-Up Queue", "prep_tasks.follow_up_queue"),
         ),
     ),
+    "table_layouts": ModuleDefinition(
+        key="table_layouts",
+        display_name="Table Layout Planner",
+        description="Product placement grid with table sections, inventory allocation, and layout templates.",
+        feature_flag_key="module.table_layouts.enabled",
+        dependencies=("markets", "products"),
+        blueprint_names=("table_layouts",),
+        admin_nav_entries=(NavEntry("Table Layouts", "table_layouts.list_layouts"),),
+    ),
     "api": ModuleDefinition(
         key="api",
         display_name="REST API",

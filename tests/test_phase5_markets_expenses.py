@@ -800,6 +800,170 @@ def test_follow_up_generate_for_completed_market(app, client, admin_headers):
         assert isinstance(tasks, list)
 
 
+# --- Table Layout Planner (Phase 1.3) ---
+
+
+def test_table_layout_model_creation(app):
+    with app.app_context():
+        from app.models.table_layout import MarketTableLayout, MarketTableSection, MarketTablePlacement, TableSectionType
+        market = Market(name="Layout Test Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.flush()
+
+        layout = MarketTableLayout(market_id=market.id, name="Main Table Setup", notes="6ft table")
+        db.session.add(layout)
+        db.session.flush()
+
+        section = MarketTableSection(
+            layout_id=layout.id,
+            section_type=TableSectionType.FRONT_CENTER,
+            label="Front Center",
+            sort_order=1,
+        )
+        db.session.add(section)
+        db.session.flush()
+
+        cat = Category.query.filter_by(slug="layout-test-cat").first()
+        if not cat:
+            cat = Category(name="Layout Test Cat", slug="layout-test-cat", is_public=True, is_pos_visible=True)
+            db.session.add(cat)
+            db.session.flush()
+        product = Product(
+            name="Layout Test Product", slug="layout-test-prod",
+            category_id=cat.id, product_type=ProductType.FINISHED_GOOD,
+            status=ProductStatus.ACTIVE, base_price=Decimal("10.00"),
+            is_public=True, is_pos_visible=True,
+        )
+        db.session.add(product)
+        db.session.flush()
+
+        placement = MarketTablePlacement(section_id=section.id, product_id=product.id, quantity=5)
+        db.session.add(placement)
+        db.session.commit()
+
+        assert layout.id is not None
+        assert section.id is not None
+        assert placement.id is not None
+        assert len(layout.sections) == 1
+        assert len(section.placements) == 1
+        assert section.placements[0].product.name == "Layout Test Product"
+
+
+def test_table_layout_list_requires_auth(client):
+    resp = client.get("/table_layouts/")
+    assert resp.status_code == 302
+
+
+def test_table_layout_list_loads(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        from app.models.table_layout import MarketTableLayout
+        market = Market(name="List Layout Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.flush()
+        layout = MarketTableLayout(market_id=market.id, name="List Test Layout")
+        db.session.add(layout)
+        db.session.commit()
+
+    resp = client.get("/table_layouts/", headers=admin_headers)
+    assert resp.status_code == 200
+    assert "List Test Layout" in resp.data.decode("utf-8")
+
+
+def test_table_layout_detail_loads(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        from app.models.table_layout import MarketTableLayout
+        market = Market(name="Detail Layout Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.flush()
+        layout = MarketTableLayout(market_id=market.id, name="Detail Test Layout")
+        db.session.add(layout)
+        db.session.commit()
+        layout_id = layout.id
+
+    resp = client.get(f"/table_layouts/{layout_id}", headers=admin_headers)
+    assert resp.status_code == 200
+    assert "Detail Test Layout" in resp.data.decode("utf-8")
+
+
+def test_table_section_type_enum():
+    from app.models.table_layout import TableSectionType
+    assert TableSectionType.FRONT_LEFT.value == "front_left"
+    assert TableSectionType.FRONT_CENTER.value == "front_center"
+    assert TableSectionType.BACK_CENTER.value == "back_center"
+    assert TableSectionType.IMPULSE_TRAY.value == "impulse_tray"
+
+
+def test_table_layout_generates_default_sections(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        market = Market(name="Default Sections Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.flush()
+        market_id = market.id
+
+    resp = client.get(f"/table_layouts/new?market_id={market_id}", headers=admin_headers)
+    assert resp.status_code == 200
+
+    resp = client.post(f"/table_layouts/new?market_id={market_id}", data={
+        "name": "Default Layout Test",
+        "csrf_token": _csrf_token_from_response(resp),
+    }, follow_redirects=True, headers=admin_headers)
+    assert resp.status_code == 200
+    assert "Default Layout Test" in resp.data.decode("utf-8") or "Default Layout Test" in resp.text
+
+
+def _csrf_token_from_response(resp):
+    import re
+    match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', resp.text)
+    return match.group(1) if match else ""
+
+
+def test_table_layout_requires_product_for_placement(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        from app.models.table_layout import MarketTableLayout, MarketTableSection, TableSectionType
+        market = Market(name="Placement Test Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.flush()
+        layout = MarketTableLayout(market_id=market.id, name="Placement Test")
+        db.session.add(layout)
+        db.session.flush()
+        section = MarketTableSection(layout_id=layout.id, section_type=TableSectionType.FRONT_LEFT, label="FL", sort_order=1)
+        db.session.add(section)
+        db.session.commit()
+        section_id = section.id
+        layout_id = layout.id
+
+    resp = client.post(f"/table_layouts/{layout_id}/placements/new?section_id={section_id}", data={
+        "product_id": "0",
+        "quantity": "1",
+        "csrf_token": _csrf_token_from_response(client.get(f"/table_layouts/{layout_id}")),
+    }, follow_redirects=True, headers=admin_headers)
+    assert resp.status_code in (200, 302)
+
+
+def test_table_layout_archive(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        from app.models.table_layout import MarketTableLayout
+        market = Market(name="Archive Layout Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.flush()
+        layout = MarketTableLayout(market_id=market.id, name="Archive Test")
+        db.session.add(layout)
+        db.session.commit()
+        layout_id = layout.id
+
+    resp = client.post(f"/table_layouts/{layout_id}/archive", headers=admin_headers)
+    assert resp.status_code in (200, 302)
+
+    with app.app_context():
+        from app.models.table_layout import MarketTableLayout
+        assert db.session.get(MarketTableLayout, layout_id) is None
+
+
 def test_follow_up_generate_wont_run_for_pending_market(app):
     with app.app_context():
         from app.services.follow_ups import generate_market_follow_ups

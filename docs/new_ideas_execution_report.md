@@ -67,6 +67,32 @@ Features:
 **Checks run**:
 - `python3 -m py_compile` — All Python files pass.
 
-**Commit hash**: *Pending*
+**Commit hash**: `2de93ce`
 
-**Next phase**: Phase 1.3 — Table Layout Planner
+**Next phase**: Phase 1.4 — Impulse Tray Optimizer<br>
+**Commit hash**: `2de93ce`
+
+
+### Phase 1.3: Table Layout Planner
+
+**Status**: `done`
+
+**Scope**: Product placement grid with table sections, inventory allocation per section, layout templates, photo snapshots, section management, and copy-from-template workflow.
+
+**Files changed**:
+- `app/models/table_layout.py` — New: `MarketTableLayout`, `MarketTableSection` (with `TableSectionType` enum), `MarketTablePlacement`.
+- `app/models/__init__.py` — Exported new models.
+- `app/forms/table_layout.py` — `MarketTableLayoutForm`, `MarketTableSectionForm`, `MarketTablePlacementForm`.
+- `app/blueprints/table_layouts/` — New blueprint: layout CRUD, section add/delete, placement add/delete, archive, copy-from-template with default sections.
+- `app/__init__.py` — Registered blueprint.
+- `app/module_registry.py` — Registered module with admin nav entry.
+- `app/templates/dashboard/table_layouts/list.html` — Card grid with photo previews.
+- `app/templates/dashboard/table_layouts/form.html` — Create/edit with photo upload.
+- `app/templates/dashboard/table_layouts/detail.html` — Section grid with inline product add, summary sidebar.
+- `migrations/versions/e2f3a4b5c6d7_add_table_layout_models.py` — 3 new tables.
+- `tests/test_phase5_markets_expenses.py` — Added 8 tests.
+
+**Checks run**:
+- `python3 -m py_compile` — All Python files pass.
+
+**Commit hash**: *Pending*
