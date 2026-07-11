@@ -226,7 +226,10 @@ MODULES: dict[str, ModuleDefinition] = {
         dependencies=("markets", "inventory", "print_jobs"),
         blueprint_names=("prep_tasks",),
         api_resources=("prep-tasks", "prep-task-templates"),
-        admin_nav_entries=(NavEntry("Prep Tasks", "prep_tasks.list_resource"),),
+        admin_nav_entries=(
+            NavEntry("Prep Tasks", "prep_tasks.list_resource"),
+            NavEntry("Follow-Up Queue", "prep_tasks.follow_up_queue"),
+        ),
     ),
     "api": ModuleDefinition(
         key="api",

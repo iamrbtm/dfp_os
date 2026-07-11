@@ -521,6 +521,21 @@ def generate_prep_tasks(market_id: int):
     return redirect(url_for("markets.detail_resource", resource_id=market.id))
 
 
+@bp.post("/<int:market_id>/follow-ups/generate")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def generate_follow_ups(market_id: int):
+    market = get_by_id(Market, market_id)
+    if market is None:
+        return render_template("errors/404.html"), 404
+    from app.services.follow_ups import generate_market_follow_ups
+    generated = generate_market_follow_ups(market, actor=current_user)
+    if generated:
+        flash(f"Generated {len(generated)} follow-up tasks from market data.", "success")
+    else:
+        flash("No follow-ups needed — all caught up!", "info")
+    return redirect(url_for("markets.detail_resource", resource_id=market.id))
+
+
 @bp.post("/<int:market_id>/timeline")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def create_timeline_event(market_id: int):

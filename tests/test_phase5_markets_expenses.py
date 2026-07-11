@@ -670,3 +670,155 @@ def test_market_application_api_requires_token(client):
 def _ensure_csrf_cookie(client):
     """Fetch a page to get the CSRF token cookie set by Flask-WTF."""
     client.get("/markets/markets/")
+
+
+def test_follow_up_queue_requires_auth(client):
+    resp = client.get("/prep_tasks/follow_ups/")
+    assert resp.status_code == 302
+
+
+def test_follow_up_queue_loads(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        market = Market.query.filter_by(status=MarketStatus.COMPLETED).first()
+        if not market:
+            market = Market(name="Follow-Up Test Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+            db.session.add(market)
+            db.session.commit()
+
+        from app.models.prep_task import PrepTask, PrepTaskCategory, PrepTaskStatus
+
+        task = PrepTask(
+            market_id=market.id,
+            title="Thank customer for purchase",
+            category=PrepTaskCategory.FOLLOW_UP,
+            status=PrepTaskStatus.OPEN,
+            follow_up_type="thank_you",
+            source="market_follow_up",
+        )
+        db.session.add(task)
+        db.session.commit()
+
+    resp = client.get("/prep_tasks/follow_ups/", headers=admin_headers)
+    assert resp.status_code == 200
+    assert "Thank customer for purchase" in resp.data.decode("utf-8")
+
+
+def test_follow_up_complete(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        market = Market(name="Complete FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.commit()
+        task = PrepTask(
+            market_id=market.id,
+            title="Test follow-up",
+            category=PrepTaskCategory.FOLLOW_UP,
+            status=PrepTaskStatus.OPEN,
+            follow_up_type="thank_you",
+            source="market_follow_up",
+        )
+        db.session.add(task)
+        db.session.commit()
+        task_id = task.id
+
+    resp = client.post(f"/prep_tasks/follow_ups/{task_id}/complete", headers=admin_headers)
+    assert resp.status_code in (200, 302)
+
+    with app.app_context():
+        t = db.session.get(PrepTask, task_id)
+        assert t is not None
+        assert t.status == PrepTaskStatus.COMPLETED
+
+
+def test_follow_up_reopen(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        market = Market(name="Reopen FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.commit()
+        task = PrepTask(
+            market_id=market.id,
+            title="Test reopen",
+            category=PrepTaskCategory.FOLLOW_UP,
+            status=PrepTaskStatus.COMPLETED,
+            completed_at=datetime.utcnow(),
+            follow_up_type="custom_lead",
+            source="market_follow_up",
+        )
+        db.session.add(task)
+        db.session.commit()
+        task_id = task.id
+
+    resp = client.post(f"/prep_tasks/follow_ups/{task_id}/reopen", headers=admin_headers)
+    assert resp.status_code in (200, 302)
+
+    with app.app_context():
+        t = db.session.get(PrepTask, task_id)
+        assert t is not None
+        assert t.status == PrepTaskStatus.REOPENED
+        assert t.completed_at is None
+
+
+def test_follow_up_archive(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        market = Market(name="Archive FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.commit()
+        task = PrepTask(
+            market_id=market.id,
+            title="Test archive",
+            category=PrepTaskCategory.FOLLOW_UP,
+            status=PrepTaskStatus.OPEN,
+            follow_up_type="pickup_reminder",
+            source="market_follow_up",
+        )
+        db.session.add(task)
+        db.session.commit()
+        task_id = task.id
+
+    resp = client.post(f"/prep_tasks/follow_ups/{task_id}/archive", headers=admin_headers)
+    assert resp.status_code in (200, 302)
+
+    with app.app_context():
+        t = db.session.get(PrepTask, task_id)
+        assert t is not None
+        assert t.status == PrepTaskStatus.CANCELED
+
+
+def test_follow_up_generate_for_completed_market(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    with app.app_context():
+        from app.services.follow_ups import generate_market_follow_ups
+
+        market = Market(name="Gen FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.commit()
+
+        tasks = generate_market_follow_ups(market, actor=None)
+        assert isinstance(tasks, list)
+
+
+def test_follow_up_generate_wont_run_for_pending_market(app):
+    with app.app_context():
+        from app.services.follow_ups import generate_market_follow_ups
+
+        market = Market(name="Pending FU Market", status=MarketStatus.INTERESTED, city="Clarksville", state="TN")
+        db.session.add(market)
+        db.session.commit()
+
+        tasks = generate_market_follow_ups(market, actor=None)
+        assert tasks == []
+
+
+def test_follow_up_type_enum():
+    from app.models.prep_task import FollowUpType
+
+    assert FollowUpType.CUSTOM_LEAD.value == "custom_lead"
+    assert FollowUpType.THANK_YOU.value == "thank_you"
+    assert FollowUpType.UNPAID_DEPOSIT.value == "unpaid_deposit"
+    assert FollowUpType.PICKUP_REMINDER.value == "pickup_reminder"
+    assert FollowUpType.QUOTE_FOLLOW_UP.value == "quote_follow_up"
+    assert FollowUpType.REQUESTED_COLOR.value == "requested_color"
+    assert FollowUpType.REQUESTED_PRODUCT.value == "requested_product"

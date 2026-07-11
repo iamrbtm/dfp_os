@@ -5,10 +5,17 @@
       <h2>Tasks</h2>
       <p class="text-xs font-normal" style="color: var(--color-text-muted);">Market prep, marketing, application follow-up, packing, and after-action items.</p>
     </div>
-    <form method="post" action="{{ url_for('markets.generate_prep_tasks', market_id=instance.id) }}" class="shrink-0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="app-btn app-btn-secondary text-xs" type="submit">Generate from Templates</button>
-    </form>
+    <div class="flex items-center gap-2 shrink-0">
+      <form method="post" action="{{ url_for('markets.generate_prep_tasks', market_id=instance.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="app-btn app-btn-secondary text-xs" type="submit">Generate from Templates</button>
+      </form>
+      <form method="post" action="{{ url_for('markets.generate_follow_ups', market_id=instance.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="app-btn app-btn-secondary text-xs" type="submit">Generate Follow-Ups</button>
+      </form>
+      <a href="{{ url_for('prep_tasks.follow_up_queue', market_id=instance.id) }}" class="app-btn app-btn-secondary text-xs">Follow-Up Queue</a>
+    </div>
   </div>
   <div class="grid gap-5 p-5 lg:grid-cols-[1fr_18rem]">
     <div class="grid gap-4 md:grid-cols-2">

@@ -61,7 +61,7 @@ from app.models.pos import (
     PosSession,
     PosSessionStatus,
 )
-from app.models.prep_task import PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
+from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_job import PrintJob, PrintJobStatus
 from app.models.setting import Setting
 from app.models.trend import SourceHealthRecord, TrendCalibrationResult, TrendOpportunityScore, TrendReport, TrendSnapshot, TrendTaskRun
@@ -92,6 +92,7 @@ __all__ = [
     "Customer",
     "Expense",
     "ExpenseCategory",
+    "FollowUpType",
     "FilamentSpool",
     "FilamentStatus",
     "FeatureFlag",

@@ -9,13 +9,19 @@ from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.prep_tasks import bp
 from app.forms.admin import PrepTaskAdminForm, PrepTaskTemplateForm
-from app.models import PrepTask, PrepTaskTemplate, UserRole
+from app.models import PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate, UserRole
 from app.services.admin_mutations import (
     create_resource as create_admin_resource,
     snapshot_instance,
     update_resource as update_admin_resource,
 )
 from app.services.crud import apply_search, get_by_id, paginate_query
+from app.services.follow_ups import (
+    archive_follow_up,
+    complete_follow_up,
+    get_follow_up_queue,
+    reopen_follow_up,
+)
 from app.utils.auth import roles_required
 
 
@@ -205,9 +211,89 @@ def archive_resource_view(resource_key: str, resource_id: int):
     if resource_key == "templates":
         instance.default_enabled = False
     elif resource_key == "tasks":
-        from app.models import PrepTaskStatus
-
         instance.status = PrepTaskStatus.CANCELED
     update_admin_resource(instance, before_state=before_state, actor_id=current_user.id)
     flash(f"{config.singular} archived.", "success")
     return redirect(url_for("prep_tasks.list_resource", resource_key=resource_key))
+
+
+@bp.get("/follow_ups/")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def follow_up_queue():
+    market_id = request.args.get("market_id", type=int)
+    q = request.args.get("q", "").strip()
+    tasks = get_follow_up_queue(market_id=market_id)
+    if q:
+        tasks = [t for t in tasks if q.lower() in (t.title or "").lower() or (t.follow_up_type or "").lower() == q.lower()]
+    page = request.args.get("page", 1, type=int)
+    per_page = 25
+    total = len(tasks)
+    start = (page - 1) * per_page
+    paged_tasks = tasks[start:start + per_page]
+    from math import ceil
+    total_pages = max(1, ceil(total / per_page))
+    from dataclasses import dataclass
+
+    @dataclass
+    class Pager:
+        page: int
+        per_page: int
+        total: int
+        pages: int
+        items: list
+        has_prev: bool
+        has_next: bool
+        prev_num: int
+        next_num: int
+
+    pagination = Pager(
+        page=page, per_page=per_page, total=total, pages=total_pages,
+        items=paged_tasks,
+        has_prev=page > 1, has_next=page < total_pages,
+        prev_num=page - 1, next_num=page + 1,
+    )
+    from datetime import datetime, timezone
+    from app.models import Market
+    markets = Market.query.order_by(Market.event_date.desc(), Market.name).all()
+    return render_template(
+        "dashboard/prep_tasks/follow_up_queue.html",
+        tasks=paged_tasks,
+        pagination=pagination,
+        search_term=q,
+        current_market_id=market_id,
+        markets=markets,
+        now=datetime.now(timezone.utc),
+    )
+
+
+@bp.post("/follow_ups/<int:task_id>/complete")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def follow_up_complete(task_id: int):
+    task = get_by_id(PrepTask, task_id)
+    if task is None:
+        return render_template("errors/404.html"), 404
+    complete_follow_up(task, actor=current_user)
+    flash("Follow-up marked complete.", "success")
+    return redirect(request.referrer or url_for("prep_tasks.follow_up_queue"))
+
+
+@bp.post("/follow_ups/<int:task_id>/reopen")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def follow_up_reopen(task_id: int):
+    task = get_by_id(PrepTask, task_id)
+    if task is None:
+        return render_template("errors/404.html"), 404
+    reopen_follow_up(task, actor=current_user)
+    flash("Follow-up reopened.", "success")
+    return redirect(request.referrer or url_for("prep_tasks.follow_up_queue"))
+
+
+@bp.post("/follow_ups/<int:task_id>/archive")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def follow_up_archive(task_id: int):
+    task = get_by_id(PrepTask, task_id)
+    if task is None:
+        return render_template("errors/404.html"), 404
+    archive_follow_up(task, actor=current_user)
+    flash("Follow-up archived.", "success")
+    return redirect(request.referrer or url_for("prep_tasks.follow_up_queue"))
