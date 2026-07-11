@@ -229,6 +229,7 @@ MODULES: dict[str, ModuleDefinition] = {
         admin_nav_entries=(
             NavEntry("Prep Tasks", "prep_tasks.list_resource"),
             NavEntry("Follow-Up Queue", "prep_tasks.follow_up_queue"),
+            NavEntry("Impulse Tray", "prep_tasks.impulse_tray_optimizer"),
         ),
     ),
     "table_layouts": ModuleDefinition(

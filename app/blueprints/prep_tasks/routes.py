@@ -297,3 +297,19 @@ def follow_up_archive(task_id: int):
     archive_follow_up(task, actor=current_user)
     flash("Follow-up archived.", "success")
     return redirect(request.referrer or url_for("prep_tasks.follow_up_queue"))
+
+
+@bp.get("/impulse-tray/")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def impulse_tray_optimizer():
+    from app.services.impulse_tray import get_impulse_tray_recommendations
+    market_id = request.args.get("market_id", type=int)
+    result = get_impulse_tray_recommendations(market_id)
+    from app.models import Market
+    markets = Market.query.order_by(Market.event_date.desc(), Market.name).all()
+    return render_template(
+        "dashboard/prep_tasks/impulse_tray.html",
+        result=result,
+        current_market_id=market_id,
+        markets=markets,
+    )

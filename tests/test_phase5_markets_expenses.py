@@ -964,6 +964,33 @@ def test_table_layout_archive(app, client, admin_headers):
         assert db.session.get(MarketTableLayout, layout_id) is None
 
 
+# --- Impulse Tray Optimizer (Phase 1.4) ---
+
+
+def test_impulse_tray_requires_auth(client):
+    resp = client.get("/prep_tasks/impulse-tray/")
+    assert resp.status_code == 302
+
+
+def test_impulse_tray_loads(app, client, admin_headers):
+    _ensure_csrf_cookie(client)
+    resp = client.get("/prep_tasks/impulse-tray/", headers=admin_headers)
+    assert resp.status_code == 200
+
+
+def test_impulse_tray_service_no_data(app):
+    with app.app_context():
+        from app.services.impulse_tray import get_impulse_tray_recommendations
+        result = get_impulse_tray_recommendations()
+        assert isinstance(result, dict)
+        assert result["total_products"] == 0
+
+
+def test_impulse_tray_enums():
+    from app.models.table_layout import TableSectionType
+    assert TableSectionType.IMPULSE_TRAY.value == "impulse_tray"
+
+
 def test_follow_up_generate_wont_run_for_pending_market(app):
     with app.app_context():
         from app.services.follow_ups import generate_market_follow_ups
