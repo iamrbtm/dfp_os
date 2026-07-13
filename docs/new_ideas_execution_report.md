@@ -177,8 +177,74 @@ Features:
 
 **Checks run**: Python AST parse passes on all changed files.
 
-**Commit hash**: *(pending — to be committed with Phase 2.3)*
+**Commit hash**: `1a54444`
 
 **Risks**: OpenAI API call is untested (requires real key). httpx dependency is available locally.
 
-**Next phase**: Phase 2.3 — Market Display Sign Generator
+**Next phase**: ~~Phase 2.3 — Market Display Sign Generator~~ *(complete)*
+
+### Phase 2.3: Market Display Sign Generator
+
+**Status**: `complete`
+
+**Scope**: QR code integration on signs, product image references in sign print view, print view polish, market sign batch generation.
+
+**Git status at start**: Clean after Phase 2.2 commit `1a54444`.
+
+**Files changed**:
+- `app/services/promotion.py` — Added `_generate_qr_svg()` (inline SVG QR via qrcode library), `_product_image_html()` (embeds product image from `default_image_path` or first ProductImage), `generate_signs_for_market()` (batch-creates SignAssets from packing list products with audit dispatch). Updated `generate_sign_html()` to include QR and product image sections.
+- `app/blueprints/promotion/routes.py` — Added `sign_generate_for_market` POST route (`/signs/generate-for-market/<id>`). Added `generate_signs_for_market` import.
+- `app/templates/dashboard/promotion/sign_print.html` — Polished with Dude Fish design tokens (warm off-white, coral price, navy accents), print button, product image display, external QR code image, rounded card layout.
+- `tests/test_promotion.py` — 8 new tests: batch sign creation, duplicate skip, QR inclusion when URL set, QR omitted when URL empty, missing market returns empty, product image in HTML, print route loads, audit dispatch.
+
+**Checks run**: Python `py_compile` passes on all changed files.
+
+**Commit hash**: `2b93285`
+
+**Risks**: External QR API (api.qrserver.com) used in print template; could fail when offline. Inline SVG QR in service layer uses local qrcode library and has no external dependency.
+
+## Milestone 2: Promotion — Completion Summary
+
+**Status**: `complete`
+
+**Total phases**: 3 (2.1: Foundation, 2.2: Social Content Queue, 2.3: Market Display Sign Generator)
+
+**Total commits**: 3 (`2068c0d`, `1a54444`, `2b93285`)
+
+**Total files created**: 15 new files
+- `app/models/promotion.py` — ContentDraft + SignAsset models with status/type enums
+- `app/forms/promotion.py` — WTForms for drafts and signs
+- `app/schemas/promotion.py` — Marshmallow schemas for API
+- `app/services/promotion.py` — Full service layer with generation, AI, QR, workflow
+- `app/blueprints/promotion/__init__.py` — Blueprint
+- `app/blueprints/promotion/routes.py` — 15+ admin routes (CRUD + workflow + generation)
+- `app/templates/dashboard/promotion/` — 7 Jinja2 templates (list, form, detail, print for both entity types)
+- `migrations/versions/e3f4a5b6c7d8_add_promotion_models.py` — DB migration
+
+**Total files modified**: 5 existing files
+- `app/__init__.py` — Blueprint + nav registration
+- `app/blueprints/api/routes.py` — API endpoints + AI generate endpoint
+- `app/models/__init__.py` — Model exports
+- `app/schemas/__init__.py` — Schema exports
+- `app/module_registry.py` — Module registration
+- `tests/test_promotion.py` — 32 total tests
+
+**Test coverage**: 32 tests covering:
+- Model creation and status enums
+- Product/market/custom-request draft generation
+- AI-assisted generation with fallback
+- Draft workflow (approve → needs_review → publish / archive)
+- Sign HTML generation with QR + product images
+- Sign workflow (approve / archive)
+- Market batch sign generation (create, skip duplicates)
+- Missing entity handling
+- Auth enforcement (admin routes, API tokens)
+- Audit event dispatch for all meaningful actions
+- Print view route loads
+
+**Skipped / Not built**:
+- No automatic social posting (Phase 2.2 scope explicitly excludes this)
+- No AI-generated image creation
+- No multi-market sign comparison features
+
+**Next milestone**: Milestone 3 — Pricing & Cost Engine Enhancements
