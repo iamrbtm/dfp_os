@@ -22,6 +22,7 @@ from app.services.promotion import (
     approve_sign,
     archive_draft,
     archive_sign,
+    generate_ai_assisted_draft,
     generate_draft_from_custom_request,
     generate_draft_from_market,
     generate_draft_from_product,
@@ -219,6 +220,22 @@ def draft_generate_from_custom_request(cr_id: int):
         flash("Custom request not found.", "danger")
         return redirect(request.referrer or url_for("promotion.draft_list"))
     flash(f"Draft generated from custom request.", "success")
+    return redirect(url_for("promotion.draft_edit", draft_id=draft.id))
+
+
+@bp.post("/drafts/generate-ai")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def draft_generate_ai():
+    source_type = request.form.get("source_type", "").strip()
+    source_id = request.form.get("source_id", 0, type=int)
+    if not source_type or not source_id:
+        flash("Source type and source ID are required.", "danger")
+        return redirect(request.referrer or url_for("promotion.draft_list"))
+    draft = generate_ai_assisted_draft(source_type, source_id, actor_id=current_user.id)
+    if draft is None:
+        flash("Could not generate draft from the given source.", "danger")
+        return redirect(request.referrer or url_for("promotion.draft_list"))
+    flash("AI-assisted draft generated. Please review before publishing.", "success")
     return redirect(url_for("promotion.draft_edit", draft_id=draft.id))
 
 

@@ -1971,6 +1971,27 @@ class ContentDraftItem(MethodView):
         return {"status": "archived"}
 
 
+@catalog_blp.route("/content-drafts/generate-ai", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Promotion"])
+@catalog_blp.response(201)
+def content_draft_generate_ai():
+    denied = require_api_scopes("promotion")
+    if denied:
+        return denied
+    payload = request.get_json(silent=True) or {}
+    source_type = payload.get("source_type", "").strip()
+    source_id = payload.get("source_id", 0)
+    if not source_type or not source_id:
+        return {"error": {"code": "validation_error", "message": "source_type and source_id are required.", "details": {}}}, 400
+    from app.services.promotion import generate_ai_assisted_draft
+    actor_id = getattr(g, "api_user", None) and g.api_user.id
+    draft = generate_ai_assisted_draft(source_type, int(source_id), actor_id=actor_id)
+    if draft is None:
+        return {"error": {"code": "not_found", "message": f"Could not find {source_type} with id {source_id}.", "details": {}}}, 404
+    return {"data": ContentDraftSchema().dump(draft)}, 201
+
+
 # --- Promotion: Sign Assets ---
 
 @catalog_blp.route("/sign-assets")

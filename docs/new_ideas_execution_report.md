@@ -155,8 +155,30 @@ Features:
 **Checks run**:
 - `python3 -m py_compile` — All Python files pass.
 
-**Commit hash**: *(pending)*
+**Commit hash**: `2068c0d`
 
 **Risks**: MariaDB migration needs real DB test. Docker compose migration flow not verified in this session.
 
 **Next phase**: Phase 2.2 — Social Content Queue
+
+### Phase 2.2: Social Content Queue
+
+**Status**: `complete`
+
+**Scope**: AI-assisted draft creation with config-gated enable/disable fallback, deterministic template improvements, sourcing from booth photos/market notes, focused tests for AI-disabled fallback and audit paths.
+
+**Git status at start**: Clean after Phase 2.1 commit `2068c0d`.
+
+**Files changed**:
+- `app/services/promotion.py` — Added `generate_ai_assisted_draft()` (public entry point, checks AI config), `_generate_with_openai()` (calls OpenAI API with httpx, wrapped in try/except), `_generate_deterministic()` (routes to existing deterministic generators), `_build_source_context()` (builds JSON context dict for AI prompt), `_apply_source_field()` (sets the correct FK on a draft model).
+- `app/blueprints/promotion/routes.py` — Added `draft_generate_ai` POST route (`/drafts/generate-ai`) that accepts `source_type` and `source_id` form fields.
+- `app/blueprints/api/routes.py` — Added `content_draft_generate_ai` POST endpoint at `/api/v1/promotion/content-drafts/generate-ai` accepting JSON `{source_type, source_id}`, requires `promotion` API scope.
+- `tests/test_promotion.py` — 4 new tests: AI-disabled deterministic fallback from product, AI-disabled fallback from market, unknown source returns None, audit event dispatch on fallback.
+
+**Checks run**: Python AST parse passes on all changed files.
+
+**Commit hash**: *(pending — to be committed with Phase 2.3)*
+
+**Risks**: OpenAI API call is untested (requires real key). httpx dependency is available locally.
+
+**Next phase**: Phase 2.3 — Market Display Sign Generator

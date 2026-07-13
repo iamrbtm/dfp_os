@@ -14,6 +14,7 @@ from app.services.promotion import (
     approve_sign,
     archive_draft,
     archive_sign,
+    generate_ai_assisted_draft,
     generate_draft_from_custom_request,
     generate_draft_from_market,
     generate_draft_from_product,
@@ -355,3 +356,67 @@ def test_prep_task_model_create_audit_dispatched(app, monkeypatch):
         create_resource(draft, actor_id=123)
 
     assert any(call["action"] == "content_draft.created" for call in calls)
+
+
+def test_ai_assisted_draft_falls_back_to_deterministic_when_ai_disabled(app):
+    with app.app_context():
+        from flask import current_app
+        current_app.config["AI_RECEIPT_PARSING_ENABLED"] = False
+        current_app.config["AI_ANALYTICS_INSIGHTS_ENABLED"] = False
+        current_app.config["OPENAI_API_KEY"] = ""
+
+        product = _ensure_product()
+        draft = generate_ai_assisted_draft("product", product.id, actor_id=1)
+
+        assert draft is not None
+        assert draft.product_id == product.id
+        assert draft.status == ContentStatus.DRAFT
+        assert "Promo Test Product" in draft.title
+
+
+def test_ai_assisted_draft_from_market_falls_back_when_disabled(app):
+    with app.app_context():
+        from flask import current_app
+        current_app.config["AI_RECEIPT_PARSING_ENABLED"] = False
+        current_app.config["OPENAI_API_KEY"] = ""
+
+        market = Market(
+            name="AI Fallback Market",
+            city="Clarksville",
+            state="TN",
+            status=MarketStatus.SCHEDULED,
+        )
+        db.session.add(market)
+        db.session.commit()
+
+        draft = generate_ai_assisted_draft("market", market.id, actor_id=1)
+
+        assert draft is not None
+        assert draft.market_id == market.id
+        assert "AI Fallback Market" in draft.title
+
+
+def test_ai_assisted_draft_handles_unknown_source(app):
+    with app.app_context():
+        draft = generate_ai_assisted_draft("unknown_source", 1, actor_id=1)
+        assert draft is None
+
+
+def test_ai_assisted_draft_dispatches_audit_event(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-ai-fallback"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        from flask import current_app
+        current_app.config["AI_RECEIPT_PARSING_ENABLED"] = False
+        current_app.config["OPENAI_API_KEY"] = ""
+
+        product = _ensure_product()
+        generate_ai_assisted_draft("product", product.id, actor_id=42)
+
+    assert any(call["action"] == "content_draft.generated_from_product" for call in calls)

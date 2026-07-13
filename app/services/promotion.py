@@ -125,6 +125,122 @@ def _build_custom_request_caption(cr: CustomRequest) -> str:
     return " ".join(parts)
 
 
+def generate_ai_assisted_draft(
+    source_type: str,
+    source_id: int,
+    actor_id: int | None = None,
+) -> ContentDraft | None:
+    from flask import current_app
+
+    ai_enabled = bool(current_app.config.get("AI_RECEIPT_PARSING_ENABLED", False) or
+                      current_app.config.get("AI_ANALYTICS_INSIGHTS_ENABLED", False))
+    openai_key = current_app.config.get("OPENAI_API_KEY", "")
+
+    if ai_enabled and openai_key:
+        try:
+            return _generate_with_openai(source_type, source_id, actor_id)
+        except Exception:
+            current_app.logger.warning("AI draft generation failed, falling back to deterministic")
+            return _generate_deterministic(source_type, source_id, actor_id)
+    return _generate_deterministic(source_type, source_id, actor_id)
+
+
+def _generate_with_openai(source_type: str, source_id: int, actor_id: int | None = None) -> ContentDraft | None:
+    from flask import current_app
+    import json
+
+    context = _build_source_context(source_type, source_id)
+    if context is None:
+        return None
+
+    prompt = (
+        "You are a social media content assistant for Dude Fish Printing, a family-run 3D printing business. "
+        "Generate a social media post draft based on the following context. "
+        "Respond with JSON: {\"title\": \"...\", \"caption\": \"...\", \"channel\": \"facebook|instagram|tiktok\", \"content_type\": \"social_post\"}. "
+        "Keep the caption under 300 characters. Do not invent fake reviews, fake testimonials, or unsupported claims. "
+        f"Context: {json.dumps(context)}"
+    )
+
+    try:
+        import httpx
+        api_key = current_app.config["OPENAI_API_KEY"]
+        model = current_app.config.get("OPENAI_MODEL", "gpt-4o-mini")
+        resp = httpx.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.7},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        content = data["choices"][0]["message"]["content"]
+        result = json.loads(content)
+    except Exception:
+        raise
+
+    channel_raw = result.get("channel", "facebook")
+    try:
+        channel = ContentChannel(channel_raw)
+    except ValueError:
+        channel = ContentChannel.FACEBOOK
+    draft = ContentDraft(
+        title=result.get("title", f"{source_type.title()} Spotlight"),
+        content_type=result.get("content_type", "social_post"),
+        channel=channel,
+        caption=result.get("caption", ""),
+        status=ContentStatus.DRAFT,
+        created_by_user_id=actor_id,
+    )
+    _apply_source_field(draft, source_type, source_id)
+    db.session.add(draft)
+    db.session.commit()
+    record_audit_event(
+        action=f"content_draft.ai_generated_from_{source_type}",
+        entity_type="content_draft",
+        entity_id=draft.id,
+        after_state={"title": draft.title, "source": source_type, "ai_assisted": True},
+        source_module=__name__,
+        actor_id=actor_id,
+    )
+    return draft
+
+
+def _generate_deterministic(source_type: str, source_id: int, actor_id: int | None = None) -> ContentDraft | None:
+    if source_type == "product":
+        return generate_draft_from_product(source_id, actor_id)
+    elif source_type == "market":
+        return generate_draft_from_market(source_id, actor_id)
+    elif source_type in ("custom_request", "custom-order"):
+        return generate_draft_from_custom_request(source_id, actor_id)
+    return None
+
+
+def _build_source_context(source_type: str, source_id: int) -> dict | None:
+    if source_type == "product":
+        product = db.session.get(Product, source_id)
+        if product is None:
+            return None
+        return {"type": "product", "name": product.name, "description": product.short_description or "", "price": float(product.base_price) if product.base_price else None}
+    elif source_type == "market":
+        market = db.session.get(Market, source_id)
+        if market is None:
+            return None
+        return {"type": "market", "name": market.name, "city": market.city, "state": market.state, "date": str(market.event_date) if market.event_date else None}
+    elif source_type in ("custom_request", "custom-order"):
+        cr = db.session.get(CustomRequest, source_id)
+        if cr is None:
+            return None
+        return {"type": "custom_order", "description": cr.description or ""}
+    return None
+
+
+def _apply_source_field(draft: ContentDraft, source_type: str, source_id: int) -> None:
+    field_map = {"product": "product_id", "market": "market_id", "custom_request": "custom_request_id", "custom-order": "custom_request_id"}
+    field = field_map.get(source_type)
+    if field:
+        setattr(draft, field, source_id)
+
+
 def approve_draft(draft: ContentDraft, actor: Any | None = None) -> ContentDraft:
     draft.status = ContentStatus.APPROVED
     db.session.commit()
