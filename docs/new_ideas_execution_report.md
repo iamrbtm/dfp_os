@@ -113,3 +113,50 @@ Features:
 **Commit hash**: `1df4345`
 
 **Next phase**: Milestone 2 — Promotion
+
+---
+
+## Milestone 2: Promotion
+
+Goal: Turn product and market data into practical promotional assets without making unsupported business claims.
+
+Features:
+- Social Content Queue
+- Market Display Sign Generator
+
+### Phase 2.1: Promotion Module Foundation
+
+**Status**: `done`
+
+**Scope**: Models for content drafts and sign assets, status workflow, admin CRUD, API endpoints, module registry, permissions, audit logging, migration, and focused tests.
+
+**Git status at start**: clean.
+
+**Files changed**:
+- `app/models/promotion.py` — New: `ContentDraft` (with `ContentStatus`, `ContentChannel` enums) and `SignAsset` (with `SignStatus` enum).
+- `app/models/__init__.py` — Exported new models and enums.
+- `app/forms/promotion.py` — `ContentDraftForm` and `SignAssetForm` with WTForms validation, apply(), and product/market/custom-request selectors.
+- `app/schemas/promotion.py` — `ContentDraftSchema` and `SignAssetSchema` for API serialization.
+- `app/services/promotion.py` — Service with draft generation from product/market/custom-request, approve/publish/archive, sign HTML generation, sign approve/archive.
+- `app/blueprints/promotion/__init__.py` — Blueprint with `/promotion` prefix.
+- `app/blueprints/promotion/routes.py` — Full CRUD for drafts and signs, approve/publish/archive flows, sign print view, generate-from-* endpoints, sign HTML regeneration.
+- `app/module_registry.py` — Registered `promotion` module with nav entries.
+- `app/__init__.py` — Registered blueprint, added BLUEPRINT_SECTION_MAP and CONTEXT_NAV_ITEMS for promotion.
+- `app/templates/dashboard/promotion/draft_list.html` — Admin draft queue with status/channel filters.
+- `app/templates/dashboard/promotion/draft_form.html` — Create/edit draft form.
+- `app/templates/dashboard/promotion/draft_detail.html` — Draft detail with approve/publish/archive actions.
+- `app/templates/dashboard/promotion/sign_list.html` — Admin sign list with status filters.
+- `app/templates/dashboard/promotion/sign_form.html` — Create/edit sign form.
+- `app/templates/dashboard/promotion/sign_detail.html` — Sign detail with preview and actions.
+- `app/templates/dashboard/promotion/sign_print.html` — Print-optimized sign view with auto-print.
+- `migrations/versions/e3f4a5b6c7d8_add_promotion_models.py` — New migration for `content_drafts` and `sign_assets` tables.
+- `tests/test_promotion.py` — 20 tests: model creation, status enums, product links, draft generation from product/market/custom-request, approve/publish/archive workflow, sign HTML generation, sign approve/archive, missing product handling, auth enforcement, admin create flow, API token enforcement, audit dispatch.
+
+**Checks run**:
+- `python3 -m py_compile` — All Python files pass.
+
+**Commit hash**: *(pending)*
+
+**Risks**: MariaDB migration needs real DB test. Docker compose migration flow not verified in this session.
+
+**Next phase**: Phase 2.2 — Social Content Queue

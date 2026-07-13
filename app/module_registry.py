@@ -134,6 +134,19 @@ MODULES: dict[str, ModuleDefinition] = {
         api_resources=("custom-requests",),
         required_roles=("admin", "staff"),
     ),
+    "promotion": ModuleDefinition(
+        key="promotion",
+        display_name="Promotion",
+        description="Social content queue and market display sign generation.",
+        feature_flag_key="module.promotion.enabled",
+        dependencies=("products",),
+        blueprint_names=("promotion",),
+        api_resources=("content-drafts", "sign-assets"),
+        admin_nav_entries=(
+            NavEntry("Content Queue", "promotion.draft_list"),
+            NavEntry("Display Signs", "promotion.sign_list"),
+        ),
+    ),
     "pos": ModuleDefinition(
         key="pos",
         display_name="POS",

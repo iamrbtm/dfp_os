@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Print — {{ sign.title }}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #fff;
+      color: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 1in;
+    }
+    .sign-container {
+      max-width: 5in;
+      width: 100%;
+      text-align: center;
+      padding: 0.5in;
+      border: 2px solid #333;
+      border-radius: 0.25in;
+    }
+    .sign-title {
+      font-size: 28pt;
+      font-weight: 700;
+      margin-bottom: 8pt;
+      line-height: 1.1;
+    }
+    .sign-subtitle {
+      font-size: 16pt;
+      margin-bottom: 12pt;
+      color: #555;
+    }
+    .sign-price {
+      font-size: 36pt;
+      font-weight: 700;
+      color: #e8634a;
+      margin-bottom: 12pt;
+    }
+    .sign-description {
+      font-size: 12pt;
+      margin-bottom: 12pt;
+      line-height: 1.4;
+    }
+    .sign-care {
+      font-size: 10pt;
+      color: #666;
+      font-style: italic;
+    }
+    .sign-footer {
+      margin-top: 16pt;
+      font-size: 9pt;
+      color: #999;
+    }
+    @media print {
+      body { padding: 0; }
+      .sign-container { border-color: #333; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sign-container">
+    {% if sign.preview_html %}
+      {{ sign.preview_html|safe }}
+    {% else %}
+      <div class="sign-content">
+        <h1 class="sign-title">{{ sign.title }}</h1>
+        {% if sign.subtitle %}<p class="sign-subtitle">{{ sign.subtitle }}</p>{% endif %}
+        {% if sign.price_display %}<p class="sign-price">{{ sign.price_display }}</p>{% endif %}
+        {% if sign.short_description %}<p class="sign-description">{{ sign.short_description }}</p>{% endif %}
+        {% if sign.care_note %}<p class="sign-care">{{ sign.care_note }}</p>{% endif %}
+      </div>
+    {% endif %}
+    <p class="sign-footer">Dude Fish Printing &mdash; dudefishprinting.com</p>
+  </div>
+  <script>window.print();</script>
+</body>
+</html>

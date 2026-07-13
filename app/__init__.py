@@ -32,6 +32,7 @@ from app.blueprints.products import bp as products_bp
 from app.blueprints.public import bp as public_bp
 from app.blueprints.receipts import bp as receipts_bp
 from app.blueprints.settings import bp as settings_bp
+from app.blueprints.promotion import bp as promotion_bp
 from app.blueprints.table_layouts import bp as table_layouts_bp
 from app.blueprints.trend_scout import bp as trend_scout_bp
 from app.cli import migrate_group, seed_group, trend_scout_group
@@ -124,6 +125,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(print_jobs_bp)
     app.register_blueprint(markets_bp)
     app.register_blueprint(prep_tasks_bp)
+    app.register_blueprint(promotion_bp)
     app.register_blueprint(table_layouts_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(cost_engine_bp)
@@ -288,6 +290,7 @@ def register_context_processors(app: Flask) -> None:
             "public": None,
             "api": None,
             "notifications": "notifications",
+            "promotion": "promotion",
             "prep_tasks": "prep_tasks",
             "cost_engine": "cost_engine",
             "audit_logs": "audit_logs",
@@ -340,6 +343,10 @@ def register_context_processors(app: Flask) -> None:
             "prep_tasks": [
                 ("Tasks", url_for("prep_tasks.list_resource", resource_key="tasks")),
                 ("Templates", url_for("prep_tasks.list_resource", resource_key="templates")),
+            ],
+            "promotion": [
+                ("Content Queue", url_for("promotion.draft_list")),
+                ("Display Signs", url_for("promotion.sign_list")),
             ],
             "cost_engine": [
                 ("Overview", url_for("cost_engine.index")),

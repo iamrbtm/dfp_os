@@ -1,0 +1,39 @@
+from marshmallow import Schema, fields
+
+
+class ContentDraftSchema(Schema):
+    id = fields.Integer(dump_only=True)
+    title = fields.String(required=True)
+    content_type = fields.String(load_default="social_post")
+    channel = fields.String(required=True)
+    caption = fields.String(allow_none=True)
+    media_reference = fields.String(allow_none=True)
+    product_id = fields.Integer(allow_none=True)
+    market_id = fields.Integer(allow_none=True)
+    custom_request_id = fields.Integer(allow_none=True)
+    planned_publish_date = fields.DateTime(allow_none=True)
+    status = fields.String(required=True)
+    notes = fields.String(allow_none=True)
+    created_by_user_id = fields.Integer(allow_none=True, dump_only=True)
+    reviewed_by_user_id = fields.Integer(allow_none=True)
+    published_at = fields.DateTime(allow_none=True, dump_only=True)
+    created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)
+
+
+class SignAssetSchema(Schema):
+    id = fields.Integer(dump_only=True)
+    title = fields.String(required=True)
+    subtitle = fields.String(allow_none=True)
+    price_display = fields.String(allow_none=True)
+    short_description = fields.String(allow_none=True)
+    care_note = fields.String(allow_none=True)
+    qr_target_url = fields.String(allow_none=True)
+    generated_html = fields.String(allow_none=True, dump_only=True)
+    preview_html = fields.String(allow_none=True, dump_only=True)
+    product_id = fields.Integer(allow_none=True)
+    collection_id = fields.Integer(allow_none=True)
+    is_active = fields.Boolean(load_default=True)
+    status = fields.String(required=True)
+    created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)

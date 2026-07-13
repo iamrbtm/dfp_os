@@ -63,6 +63,7 @@ from app.models.pos import (
 )
 from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_job import PrintJob, PrintJobStatus
+from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, SignAsset, SignStatus
 from app.models.setting import Setting
 from app.models.table_layout import MarketTableLayout, MarketTablePlacement, MarketTableSection, TableSectionType
 from app.models.trend import SourceHealthRecord, TrendCalibrationResult, TrendOpportunityScore, TrendReport, TrendSnapshot, TrendTaskRun
@@ -88,6 +89,10 @@ __all__ = [
     "Collection",
     "CustomRequest",
     "CustomRequestStatus",
+    "CostSnapshot",
+    "ContentChannel",
+    "ContentDraft",
+    "ContentStatus",
     "CostSnapshot",
     "CostSnapshotConfidence",
     "Customer",
@@ -140,6 +145,8 @@ __all__ = [
     "Product",
     "ProductImage",
     "Setting",
+    "SignAsset",
+    "SignStatus",
     "ProductStatus",
     "ProductType",
     "SourceHealthRecord",

@@ -34,6 +34,7 @@ from app.schemas.pos import (
 )
 from app.schemas.print_job import PrintJobSchema
 from app.schemas.setting import SettingSchema
+from app.schemas.promotion import ContentDraftSchema, SignAssetSchema
 from app.schemas.trend import (
     TrendOpportunityScoreSchema,
     TrendReportSchema,
@@ -64,6 +65,8 @@ __all__ = [
     "OrderSchema",
     "PaginationSchema",
     "PaymentSchema",
+    "ContentDraftSchema",
+    "SignAssetSchema",
     "PosCloseSessionSchema",
     "PosSaleCreateSchema",
     "PosSaleItemSchema",

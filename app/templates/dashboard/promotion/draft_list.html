@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Content Drafts | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Promotion</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Social Content Queue</h1>
+      <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">Draft, review, and manage social media content.</p>
+    </div>
+    <a href="{{ url_for('promotion.draft_create') }}" class="app-btn app-btn-primary">New Draft</a>
+  </div>
+
+  <form method="get" class="app-card p-4">
+    <div class="flex flex-col gap-3 sm:flex-row">
+      <input type="search" name="q" value="{{ search_term }}" placeholder="Search drafts..." class="app-input">
+      <select name="status" class="app-input" onchange="this.form.submit()">
+        <option value="">All Statuses</option>
+        {% for s in status_choices %}
+        <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>{{ s.value|replace('_', ' ')|title }}</option>
+        {% endfor %}
+      </select>
+      <select name="channel" class="app-input" onchange="this.form.submit()">
+        <option value="">All Channels</option>
+        {% for c in channel_choices %}
+        <option value="{{ c.value }}" {% if channel_filter == c.value %}selected{% endif %}>{{ c.value|title }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="app-btn app-btn-secondary">Filter</button>
+    </div>
+  </form>
+
+  {% if rows %}
+  <div class="app-card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            {% for col in columns %}
+            <th class="font-medium">{{ col }}</th>
+            {% endfor %}
+            <th class="font-medium">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            {% for cell in row.cells %}
+            <td>{{ cell }}</td>
+            {% endfor %}
+            <td>
+              <div class="flex flex-wrap gap-2">
+                <a href="{{ url_for('promotion.draft_detail', draft_id=row.id) }}" class="app-link">View</a>
+                <a href="{{ url_for('promotion.draft_edit', draft_id=row.id) }}" class="app-link" style="color: var(--color-text-muted);">Edit</a>
+                <form action="{{ url_for('promotion.draft_archive', draft_id=row.id) }}" method="post" onsubmit="return confirm('Archive this draft?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="app-link" style="color: var(--color-danger);">Archive</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="app-card p-8 text-center" style="color: var(--color-text-muted);">
+    <p class="text-lg">No content drafts yet.</p>
+    <p class="mt-2">Create a draft manually or generate one from a product, market, or custom order.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
