@@ -145,6 +145,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./migrations/versions:/app/migrations/versions
     command: ["uv", "run", "flask", "--app", "app:create_app", "db", "upgrade"]
 
   audit-postgres:

@@ -92,7 +92,7 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 info "Rsyncing project files to ${REMOTE_HOST}:${REMOTE_DIR}..."
-rsync -avz --delete --size-only "${RSYNC_EXCLUDES[@]}" ./ "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
+rsync -avz --delete --checksum "${RSYNC_EXCLUDES[@]}" ./ "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
 ok "Project files synced."
 
 info "Copying .env files..."
@@ -188,12 +188,12 @@ ${SSH_CMD} bash -s -- "${REMOTE_DIR}" <<-'REMOTECMD'
   DIR="$1"
   cd "${DIR}"
 
+  echo "  → Running database migrations..."
+  docker compose --profile release run --rm migrate 2>&1 | sed 's/^/    /'
   echo "  → Building images..."
   docker compose build --pull 2>&1 | sed 's/^/    /'
   echo "  → Clearing stale Python bytecode cache..."
   docker compose run --rm --no-deps web find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-  echo "  → Running database migrations..."
-  docker compose --profile release run --rm migrate 2>&1 | sed 's/^/    /'
   echo "  → Restarting services..."
   docker compose up -d 2>&1 | sed 's/^/    /'
   echo "  → Cleaning up dangling images..."
