@@ -287,11 +287,44 @@ def archive_draft(draft: ContentDraft, actor: Any | None = None) -> ContentDraft
     return draft
 
 
+def _generate_qr_svg(target_url: str | None) -> str:
+    if not target_url:
+        return ""
+    import io
+    import qrcode
+    from qrcode.image.svg import SvgPathImage
+
+    qr = qrcode.make(target_url, image_factory=SvgPathImage)
+    buf = io.StringIO()
+    qr.save(buf)
+    return buf.getvalue()
+
+
+def _product_image_html(sign: SignAsset) -> str:
+    if not sign.product:
+        return ""
+    product = sign.product
+    img_path = product.default_image_path
+    if not img_path and product.images:
+        img_path = product.images[0].file_path
+    if not img_path:
+        return ""
+    from flask import url_for
+    try:
+        img_url = url_for("static", filename=img_path.lstrip("/"))
+    except Exception:
+        img_url = img_path
+    return f'<img class="sign-product-image" src="{img_url}" alt="{product.name}" />'
+
+
 def generate_sign_html(sign: SignAsset) -> str:
     price_html = f"<p class=\"sign-price\">{sign.price_display}</p>" if sign.price_display else ""
     subtitle_html = f"<p class=\"sign-subtitle\">{sign.subtitle}</p>" if sign.subtitle else ""
     desc_html = f"<p class=\"sign-description\">{sign.short_description}</p>" if sign.short_description else ""
     care_html = f"<p class=\"sign-care\">{sign.care_note}</p>" if sign.care_note else ""
+    qr_html = _generate_qr_svg(sign.qr_target_url)
+    img_html = _product_image_html(sign)
+    qr_section = f'<div class="sign-qr">{qr_html}</div>' if qr_html else ""
 
     return f"""<div class="sign-container">
   <div class="sign-content">
@@ -300,6 +333,8 @@ def generate_sign_html(sign: SignAsset) -> str:
     {price_html}
     {desc_html}
     {care_html}
+    {img_html}
+    {qr_section}
   </div>
 </div>"""
 
@@ -309,6 +344,47 @@ def save_sign_html(sign: SignAsset) -> SignAsset:
     sign.preview_html = sign.generated_html
     db.session.commit()
     return sign
+
+
+def generate_signs_for_market(market_id: int, actor_id: int | None = None) -> list[SignAsset]:
+    market = db.session.get(Market, market_id)
+    if market is None:
+        return []
+    from app.models.market import MarketPackingList
+
+    packing_items = MarketPackingList.query.filter_by(market_id=market_id).all()
+    product_ids = {item.product_id for item in packing_items}
+
+    created: list[SignAsset] = []
+    for pid in product_ids:
+        product = db.session.get(Product, pid)
+        if product is None:
+            continue
+        existing = SignAsset.query.filter_by(product_id=pid, market_id=market_id, status=SignStatus.DRAFT).first()
+        if existing:
+            continue
+        sign = SignAsset(
+            title=f"{product.name}",
+            subtitle=f"At {market.name}",
+            price_display=f"${float(product.base_price):.2f}" if product.base_price and product.base_price > 0 else None,
+            short_description=product.short_description or "",
+            status=SignStatus.DRAFT,
+            product_id=product.id,
+            market_id=market.id,
+            is_active=True,
+        )
+        db.session.add(sign)
+        save_sign_html(sign)
+        created.append(sign)
+        record_audit_event(
+            action="sign_asset.generated_from_market",
+            entity_type="sign_asset",
+            entity_id=sign.id,
+            after_state={"title": sign.title, "market_id": market.id, "product_id": product.id},
+            source_module=__name__,
+            actor_id=actor_id,
+        )
+    return created
 
 
 def approve_sign(sign: SignAsset, actor: Any | None = None) -> SignAsset:

@@ -19,6 +19,7 @@ from app.services.promotion import (
     generate_draft_from_market,
     generate_draft_from_product,
     generate_sign_html,
+    generate_signs_for_market,
     publish_draft,
     save_sign_html,
 )
@@ -420,3 +421,136 @@ def test_ai_assisted_draft_dispatches_audit_event(app, monkeypatch):
         generate_ai_assisted_draft("product", product.id, actor_id=42)
 
     assert any(call["action"] == "content_draft.generated_from_product" for call in calls)
+
+
+def test_generate_signs_for_market_creates_signs(app):
+    with app.app_context():
+        product = _ensure_product()
+        from app.models.market import MarketPackingList
+        market = Market(
+            name="Sign Test Market",
+            city="Clarksville",
+            state="TN",
+            status=MarketStatus.SCHEDULED,
+        )
+        db.session.add(market)
+        db.session.flush()
+        packing = MarketPackingList(market_id=market.id, product_id=product.id)
+        db.session.add(packing)
+        db.session.commit()
+
+        signs = generate_signs_for_market(market.id)
+        assert len(signs) >= 1
+        assert any(s.product_id == product.id for s in signs)
+
+
+def test_generate_signs_for_market_skips_existing(app):
+    with app.app_context():
+        product = _ensure_product()
+        from app.models.market import MarketPackingList
+        market = Market(
+            name="Skip Test Market",
+            city="Clarksville",
+            state="TN",
+            status=MarketStatus.SCHEDULED,
+        )
+        db.session.add(market)
+        db.session.flush()
+        packing = MarketPackingList(market_id=market.id, product_id=product.id)
+        db.session.add(packing)
+        db.session.commit()
+
+        generate_signs_for_market(market.id)
+        second_batch = generate_signs_for_market(market.id)
+        assert len(second_batch) == 0
+
+
+def test_generate_sign_html_includes_qr_when_url_set(app):
+    with app.app_context():
+        sign = SignAsset(
+            title="QR Sign",
+            qr_target_url="https://dudefishprinting.com/shop/rainbow-dragon",
+            status=SignStatus.DRAFT,
+        )
+        db.session.add(sign)
+        db.session.commit()
+
+        html = generate_sign_html(sign)
+        assert "sign-qr" in html
+        assert "svg" in html
+
+
+def test_generate_sign_html_omits_qr_when_url_empty(app):
+    with app.app_context():
+        sign = SignAsset(
+            title="No QR Sign",
+            status=SignStatus.DRAFT,
+        )
+        html = generate_sign_html(sign)
+        assert "sign-qr" not in html
+
+
+def test_generate_signs_for_market_returns_empty_for_missing(app):
+    with app.app_context():
+        signs = generate_signs_for_market(99999)
+        assert signs == []
+
+
+def test_generate_sign_html_includes_product_image_when_available(app):
+    with app.app_context():
+        product = _ensure_product()
+        from app.models.catalog import ProductImage
+        img = ProductImage(product_id=product.id, file_path="uploads/test.jpg", is_default=True)
+        db.session.add(img)
+        db.session.flush()
+        sign = SignAsset(title="Image Sign", product_id=product.id, status=SignStatus.DRAFT)
+        db.session.add(sign)
+        db.session.commit()
+
+        html = generate_sign_html(sign)
+        assert "sign-product-image" in html
+
+
+def test_sign_print_route_loads(client, app):
+    with app.app_context():
+        sign = SignAsset(title="Print Test Sign", status=SignStatus.DRAFT)
+        db.session.add(sign)
+        db.session.commit()
+        sid = sign.id
+
+    from app.models import User
+    with app.app_context():
+        user = User.query.filter_by(role=UserRole.ADMIN).first()
+        if user is None:
+            user = User(email="print-test@example.com", first_name="Print", last_name="Test", role=UserRole.ADMIN, is_active=True)
+            user.set_password("secret")
+            db.session.add(user)
+            db.session.commit()
+
+    client.post("/auth/login", data={"email": "print-test@example.com", "password": "secret"}, follow_redirects=True)
+    resp = client.get(f"/promotion/signs/{sid}/print")
+    assert resp.status_code in (200, 302)
+
+
+def test_generate_signs_for_market_dispatches_audit(app, monkeypatch):
+    calls = []
+
+    def fake_record(self, **payload):
+        calls.append(payload)
+        return {"id": "audit-sign-market"}
+
+    monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
+
+    with app.app_context():
+        product = _ensure_product()
+        from app.models.market import MarketPackingList
+        market = Market(name="Audit Market Sign", city="Clarksville", state="TN", status=MarketStatus.SCHEDULED)
+        db.session.add(market)
+        db.session.flush()
+        packing = MarketPackingList(market_id=market.id, product_id=product.id)
+        db.session.add(packing)
+        db.session.commit()
+
+        generate_signs_for_market(market.id, actor_id=42)
+
+    assert any(call["action"] == "sign_asset.generated_from_market" for call in calls)

@@ -26,6 +26,7 @@ from app.services.promotion import (
     generate_draft_from_custom_request,
     generate_draft_from_market,
     generate_draft_from_product,
+    generate_signs_for_market,
     publish_draft,
     save_sign_html,
 )
@@ -360,3 +361,14 @@ def sign_regenerate(sign_id: int):
     save_sign_html(sign)
     flash("Sign HTML regenerated.", "success")
     return redirect(url_for("promotion.sign_detail", sign_id=sign.id))
+
+
+@bp.post("/signs/generate-for-market/<int:market_id>")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def sign_generate_for_market(market_id: int):
+    signs = generate_signs_for_market(market_id, actor_id=current_user.id)
+    if not signs:
+        flash("No new signs generated (all products may already have drafts).", "info")
+    else:
+        flash(f"Generated {len(signs)} sign(s) for market.", "success")
+    return redirect(request.referrer or url_for("promotion.sign_list"))

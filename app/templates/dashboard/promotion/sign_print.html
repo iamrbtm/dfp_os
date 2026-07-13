@@ -8,72 +8,123 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-      background: #fff;
-      color: #111;
+      background: #faf7f2;
+      color: #1a1a2e;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      padding: 1in;
+      padding: 0.5in;
     }
-    .sign-container {
+    .sign-card {
       max-width: 5in;
       width: 100%;
+      background: #fff;
       text-align: center;
-      padding: 0.5in;
-      border: 2px solid #333;
-      border-radius: 0.25in;
+      padding: 0.5in 0.4in;
+      border: 1px solid #e2d9cc;
+      border-radius: 0.2in;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
     }
     .sign-title {
-      font-size: 28pt;
+      font-size: 26pt;
       font-weight: 700;
-      margin-bottom: 8pt;
-      line-height: 1.1;
+      margin-bottom: 6pt;
+      line-height: 1.15;
+      color: #1a1a2e;
     }
     .sign-subtitle {
-      font-size: 16pt;
-      margin-bottom: 12pt;
-      color: #555;
+      font-size: 14pt;
+      margin-bottom: 10pt;
+      color: #666;
     }
     .sign-price {
-      font-size: 36pt;
+      font-size: 34pt;
       font-weight: 700;
       color: #e8634a;
-      margin-bottom: 12pt;
+      margin-bottom: 10pt;
     }
     .sign-description {
-      font-size: 12pt;
-      margin-bottom: 12pt;
-      line-height: 1.4;
+      font-size: 11pt;
+      margin-bottom: 10pt;
+      line-height: 1.45;
+      color: #444;
     }
     .sign-care {
-      font-size: 10pt;
-      color: #666;
+      font-size: 9pt;
+      color: #888;
       font-style: italic;
+      margin-bottom: 8pt;
+    }
+    .sign-product-image {
+      max-width: 80%;
+      max-height: 3in;
+      object-fit: contain;
+      display: block;
+      margin: 12pt auto;
+      border-radius: 0.1in;
+    }
+    .sign-qr {
+      margin: 12pt auto 0;
+      text-align: center;
+    }
+    .sign-qr svg {
+      width: 1.2in;
+      height: 1.2in;
     }
     .sign-footer {
-      margin-top: 16pt;
-      font-size: 9pt;
-      color: #999;
+      margin-top: 14pt;
+      font-size: 8pt;
+      color: #aaa;
+    }
+    .no-print {
+      margin-bottom: 16pt;
+      text-align: center;
+    }
+    .no-print button {
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .no-print button:hover {
+      background: #2a2a4e;
     }
     @media print {
-      body { padding: 0; }
-      .sign-container { border-color: #333; }
+      body { padding: 0; background: #fff; }
+      .sign-card { box-shadow: none; border: 1px solid #ccc; }
+      .no-print { display: none; }
     }
   </style>
 </head>
 <body>
-  <div class="sign-container">
+  <div class="no-print">
+    <button onclick="window.print()">Print This Sign</button>
+  </div>
+  <div class="sign-card">
     {% if sign.preview_html %}
       {{ sign.preview_html|safe }}
     {% else %}
-      <div class="sign-content">
-        <h1 class="sign-title">{{ sign.title }}</h1>
-        {% if sign.subtitle %}<p class="sign-subtitle">{{ sign.subtitle }}</p>{% endif %}
-        {% if sign.price_display %}<p class="sign-price">{{ sign.price_display }}</p>{% endif %}
-        {% if sign.short_description %}<p class="sign-description">{{ sign.short_description }}</p>{% endif %}
-        {% if sign.care_note %}<p class="sign-care">{{ sign.care_note }}</p>{% endif %}
+      <h1 class="sign-title">{{ sign.title }}</h1>
+      {% if sign.subtitle %}<p class="sign-subtitle">{{ sign.subtitle }}</p>{% endif %}
+      {% if sign.price_display %}<p class="sign-price">{{ sign.price_display }}</p>{% endif %}
+      {% if sign.short_description %}<p class="sign-description">{{ sign.short_description }}</p>{% endif %}
+      {% if sign.care_note %}<p class="sign-care">{{ sign.care_note }}</p>{% endif %}
+      {% if sign.product and sign.product.default_image_path %}
+        <img class="sign-product-image"
+             src="{{ url_for('static', filename=sign.product.default_image_path.lstrip('/')) }}"
+             alt="{{ sign.product.name }}" />
+      {% endif %}
+      {% if sign.qr_target_url %}
+      <div class="sign-qr">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ sign.qr_target_url | urlencode }}"
+             alt="QR code" width="150" height="150" />
       </div>
+      {% endif %}
     {% endif %}
     <p class="sign-footer">Dude Fish Printing &mdash; dudefishprinting.com</p>
   </div>
