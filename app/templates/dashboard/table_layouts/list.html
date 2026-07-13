@@ -5,44 +5,59 @@
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold text-navy">Table Layouts</h1>
+    <h1 class="text-2xl font-bold" style="color: var(--color-text);">Table Layouts</h1>
     <div class="flex gap-2">
-      <select onchange="if(this.value) window.location=this.value" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+      <select onchange="if(this.value) window.location=this.value" class="app-select text-sm">
         <option value="">Filter by market…</option>
         {% for m in layouts|map(attribute='market')|unique(attribute='id') if m %}
         <option value="?market_id={{ m.id }}" {% if current_market_id == m.id %}selected{% endif %}>{{ m.name }}</option>
         {% endfor %}
       </select>
-      <a href="{{ url_for('table_layouts.create_layout') }}" class="px-4 py-2 bg-coral text-white rounded-lg text-sm font-medium hover:bg-coral-600 transition">New Layout</a>
+      <a href="{{ url_for('table_layouts.create_layout', market_id=current_market_id) if current_market_id else url_for('table_layouts.create_layout') }}" class="app-btn app-btn-primary">New Layout</a>
     </div>
   </div>
+
+  {% if templates and current_market_id %}
+  <div class="app-card p-4 mb-4">
+    <form class="flex items-center gap-3" onsubmit="event.preventDefault(); var v=this.querySelector('select').value; if(v) window.location='{{ url_for('table_layouts.create_layout', market_id=current_market_id) }}&copy_from='+v;">
+      <label class="text-sm font-medium whitespace-nowrap" style="color: var(--color-text);">Start from template:</label>
+      <select class="app-select text-sm flex-1">
+        <option value="">Select a template…</option>
+        {% for t in templates %}
+        <option value="{{ t.id }}">{{ t.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="app-btn app-btn-primary text-sm">Go</button>
+    </form>
+  </div>
+  {% endif %}
 
   {% if layouts %}
   <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
     {% for layout in layouts %}
-    <a href="{{ url_for('table_layouts.detail_layout', layout_id=layout.id) }}" class="block bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition overflow-hidden">
+    <a href="{{ url_for('table_layouts.detail_layout', layout_id=layout.id) }}" class="app-card overflow-hidden hover:shadow-md transition">
       {% if layout.photo_path %}
-      <div class="h-40 bg-gray-100 overflow-hidden">
+      <div class="h-40 overflow-hidden" style="background: var(--color-surface-muted);">
         <img src="{{ url_for('static', filename=layout.photo_path) }}" alt="{{ layout.name }}" class="w-full h-full object-cover">
       </div>
       {% else %}
-      <div class="h-40 bg-gradient-to-br from-teal-50 to-coral-50 flex items-center justify-center">
-        <span class="text-gray-400 text-4xl">&#x2B55;</span>
+      <div class="h-40 flex items-center justify-center" style="background: linear-gradient(135deg, var(--color-surface-muted), var(--color-surface));">
+        <span class="text-4xl" style="color: var(--color-text-muted);">&#x2B55;</span>
       </div>
       {% endif %}
       <div class="p-4">
         <div class="flex items-start justify-between">
           <div>
-            <h3 class="font-semibold text-gray-900">{{ layout.name }}</h3>
+            <h3 class="font-semibold" style="color: var(--color-text);">{{ layout.name }}</h3>
             {% if layout.market %}
-            <p class="text-xs text-gray-500 mt-0.5">{{ layout.market.name }}</p>
+            <p class="text-xs mt-0.5" style="color: var(--color-text-muted);">{{ layout.market.name }}</p>
             {% endif %}
           </div>
           {% if layout.is_template %}
-          <span class="text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 font-medium">Template</span>
+          <span class="inline-block rounded-full px-2 py-0.5 text-xs font-medium" style="background: var(--color-warning-bg); color: var(--color-warning);">Template</span>
           {% endif %}
         </div>
-        <div class="flex items-center gap-3 mt-3 text-xs text-gray-400">
+        <div class="flex items-center gap-3 mt-3 text-xs" style="color: var(--color-text-muted);">
           <span>{{ layout.sections|length }} section{% if layout.sections|length != 1 %}s{% endif %}</span>
           <span>{{ layout.created_at.strftime('%b %d, %Y') }}</span>
         </div>
@@ -51,10 +66,10 @@
     {% endfor %}
   </div>
   {% else %}
-  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
-    <p class="text-gray-500 text-lg font-medium">No table layouts yet</p>
-    <p class="text-gray-400 text-sm mt-1">Plan your product placement grid for upcoming markets.</p>
-    <a href="{{ url_for('table_layouts.create_layout') }}" class="inline-block mt-4 px-4 py-2 bg-coral text-white rounded-lg text-sm font-medium hover:bg-coral-600 transition">Create Your First Layout</a>
+  <div class="app-card p-12 text-center">
+    <p class="text-lg font-medium" style="color: var(--color-text-muted);">No table layouts yet</p>
+    <p class="text-sm mt-1" style="color: var(--color-text-muted);">Plan your product placement grid for upcoming markets.</p>
+    <a href="{{ url_for('table_layouts.create_layout', market_id=current_market_id) if current_market_id else url_for('table_layouts.create_layout') }}" class="app-btn app-btn-primary mt-4 inline-block">Create Your First Layout</a>
   </div>
   {% endif %}
 </div>

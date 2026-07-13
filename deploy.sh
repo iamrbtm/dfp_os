@@ -10,10 +10,6 @@ SCRIPT_NAME=$(basename "$0")
 REMOTE_HOST="breath.local"
 REMOTE_USER="rbtm2006"
 REMOTE_DIR="/mnt/storage/docker/dfpos"
-LOCAL_ENV_FILE=".env"
-REQUIRED_SERVICE_ENV_FILES=(
-  "services/intelligence/.env"
-)
 RSYNC_EXCLUDES=(
   --exclude '.venv'
   --exclude 'node_modules'
@@ -51,21 +47,15 @@ err()   { printf "\033[31m✘\033[0m %s\n" "$*" >&2; }
 
 SSH_CMD="ssh ${REMOTE_USER}@${REMOTE_HOST}"
 
+
 # ── Phase 0: Preflight ───────────────────────
 
 info "Preflight checks..."
 
-if [ ! -f "$LOCAL_ENV_FILE" ]; then
-  err "$LOCAL_ENV_FILE not found. Create it from .env.example first."
+if [ ! -f ".env" ]; then
+  err ".env not found. Create it from .env.example first."
   exit 1
 fi
-
-for required_env in "${REQUIRED_SERVICE_ENV_FILES[@]}"; do
-  if [ ! -f "$required_env" ]; then
-    err "$required_env not found. Create it from ${required_env}.example first."
-    exit 1
-  fi
-done
 
 if ! ssh -q -o ConnectTimeout=5 -o BatchMode=yes "${REMOTE_USER}@${REMOTE_HOST}" exit 2>/dev/null; then
   err "Cannot connect to ${REMOTE_HOST}. Check:"
@@ -96,59 +86,26 @@ fi
 
 if [ "$DRY_RUN" = true ]; then
   info "[DRY-RUN] Would rsync project to ${REMOTE_HOST}:${REMOTE_DIR}"
-  rsync --dry-run -avz --delete --checksum "${RSYNC_EXCLUDES[@]}" ./ "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
+  rsync --dry-run -avz --delete --size-only "${RSYNC_EXCLUDES[@]}" ./ "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
   info "[DRY-RUN] Done. No files were transferred."
   exit 0
 fi
 
 info "Rsyncing project files to ${REMOTE_HOST}:${REMOTE_DIR}..."
-rsync -avz --delete --checksum "${RSYNC_EXCLUDES[@]}" ./ "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
+rsync -avz --delete --size-only "${RSYNC_EXCLUDES[@]}" ./ "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
 ok "Project files synced."
 
 info "Copying .env files..."
-scp "$LOCAL_ENV_FILE" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/.env"
-
-for required_env in "${REQUIRED_SERVICE_ENV_FILES[@]}"; do
-  target_dir="${REMOTE_DIR}/$(dirname "$required_env")"
-  ${SSH_CMD} "mkdir -p ${target_dir}"
-  scp "$required_env" "${REMOTE_USER}@${REMOTE_HOST}:${target_dir}/.env"
-  ok "Copied $(dirname "$required_env") .env"
-done
-
-# Copy all service-specific .env files (audit-log, api-docs, etc.)
-# Ensure each service has a .env file (create from .env.example if missing)
-for svc_dir in services/*/; do
-  [ -d "$svc_dir" ] || continue
-  svc_name=$(basename "$svc_dir")
-  local_env="${svc_dir}.env"
-  example_env="${svc_dir}.env.example"
-
-  already_copied=false
-  for required_env in "${REQUIRED_SERVICE_ENV_FILES[@]}"; do
-    if [ "$local_env" = "$required_env" ]; then
-      already_copied=true
-      break
-    fi
-  done
-  if [ "$already_copied" = true ]; then
-    continue
-  fi
-
-  if [ ! -f "$local_env" ] && [ -f "$example_env" ]; then
-    info "Creating ${local_env} from ${example_env}"
-    cp "$example_env" "$local_env"
-  fi
-
-  if [ -f "$local_env" ]; then
-    target_dir="${REMOTE_DIR}/${svc_dir}"
-    ${SSH_CMD} "mkdir -p ${target_dir}"
-    scp "$local_env" "${REMOTE_USER}@${REMOTE_HOST}:${target_dir}/.env"
-    ok "Copied ${svc_name} .env"
-  else
-    info "Skipping ${svc_name}: no .env or .env.example found"
-  fi
-done
-
+rsync -avz --size-only \
+  --include='.env' \
+  --include='*/' \
+  --exclude='*' \
+  --exclude='.venv' \
+  --exclude='node_modules' \
+  --exclude='.git' \
+  --exclude='__pycache__' \
+  --prune-empty-dirs \
+  ./ "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
 ok ".env files copied."
 
 # ── Phase 2: Database sync (optional) ────────
@@ -233,6 +190,10 @@ ${SSH_CMD} bash -s -- "${REMOTE_DIR}" <<-'REMOTECMD'
 
   echo "  → Building images..."
   docker compose build --pull 2>&1 | sed 's/^/    /'
+  echo "  → Clearing stale Python bytecode cache..."
+  docker compose run --rm --no-deps web find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+  echo "  → Running database migrations..."
+  docker compose --profile release run --rm migrate 2>&1 | sed 's/^/    /'
   echo "  → Restarting services..."
   docker compose up -d 2>&1 | sed 's/^/    /'
   echo "  → Cleaning up dangling images..."

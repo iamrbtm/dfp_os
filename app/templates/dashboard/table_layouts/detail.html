@@ -6,98 +6,98 @@
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
   <div class="flex items-center justify-between mb-6">
     <div>
-      <a href="{{ url_for('table_layouts.list_layouts') }}" class="text-sm text-teal hover:underline">&larr; Back to Layouts</a>
-      <h1 class="text-2xl font-bold text-navy mt-1">{{ layout.name }}</h1>
+      <a href="{{ url_for('table_layouts.list_layouts') }}" class="text-sm" style="color: var(--color-link);">&larr; Back to Layouts</a>
+      <h1 class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ layout.name }}</h1>
       {% if layout.market %}
-      <p class="text-sm text-gray-500">{{ layout.market.name }} &middot; {{ layout.market.event_date.strftime('%b %d, %Y') if layout.market.event_date }}</p>
+      <p class="text-sm" style="color: var(--color-text-muted);">{{ layout.market.name }} &middot; {{ layout.market.event_date.strftime('%b %d, %Y') if layout.market.event_date }}</p>
       {% endif %}
     </div>
     <div class="flex items-center gap-2">
-      <a href="{{ url_for('table_layouts.edit_layout', layout_id=layout.id) }}" class="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition">Edit</a>
+      <a href="{{ url_for('table_layouts.edit_layout', layout_id=layout.id) }}" class="app-btn app-btn-secondary">Edit</a>
       <form method="post" action="{{ url_for('table_layouts.archive_layout', layout_id=layout.id) }}" onsubmit="return confirm('Delete this layout?')" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="px-4 py-2 text-sm rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition">Delete</button>
+        <button type="submit" class="app-btn app-btn-danger">Delete</button>
       </form>
     </div>
   </div>
 
   {% if layout.notes %}
-  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-6">
-    <p class="text-sm text-gray-600">{{ layout.notes }}</p>
+  <div class="app-card p-4 mb-6">
+    <p class="text-sm" style="color: var(--color-text);">{{ layout.notes }}</p>
   </div>
   {% endif %}
 
   {% if layout.photo_path %}
   <div class="mb-6">
-    <img src="{{ url_for('static', filename=layout.photo_path) }}" alt="{{ layout.name }}" class="max-w-full rounded-xl border border-gray-200 shadow-sm max-h-96 object-contain">
+    <img src="{{ url_for('static', filename=layout.photo_path) }}" alt="{{ layout.name }}" class="max-w-full rounded-xl border max-h-96 object-contain" style="border-color: var(--color-border);">
   </div>
   {% endif %}
 
   <div class="grid gap-6 lg:grid-cols-[1fr_18rem]">
     <div class="space-y-4">
-      <h2 class="text-lg font-semibold text-navy">Table Sections</h2>
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">Table Sections</h2>
 
       {% for section in sections %}
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+      <div class="app-card overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3" style="background: var(--color-surface-muted); border-bottom: 1px solid var(--color-divider);">
           <div class="flex items-center gap-2">
-            <span class="inline-block w-2 h-2 rounded-full
-              {% if section.section_type.value in ('front_left', 'front_center', 'front_right') %}bg-teal
-              {% elif section.section_type.value in ('back_left', 'back_center', 'back_right') %}bg-blue
-              {% elif section.section_type.value == 'impulse_tray' %}bg-coral
-              {% else %}bg-gray-400{% endif %}"></span>
-            <h3 class="font-medium text-sm">{{ section.label }}</h3>
-            <span class="text-xs text-gray-400">{{ section.section_type.value.replace('_', ' ').title() }}</span>
+            <span class="inline-block w-2 h-2 rounded-full"
+              {% if section.section_type.value in ('front_left', 'front_center', 'front_right') %}style="background: var(--color-success);"
+              {% elif section.section_type.value in ('back_left', 'back_center', 'back_right') %}style="background: var(--color-info);"
+              {% elif section.section_type.value == 'impulse_tray' %}style="background: var(--color-primary);"
+              {% else %}style="background: var(--color-text-muted);"{% endif %}></span>
+            <h3 class="font-medium text-sm" style="color: var(--color-text);">{{ section.label }}</h3>
+            <span class="text-xs" style="color: var(--color-text-muted);">{{ section.section_type.value.replace('_', ' ').title() }}</span>
           </div>
           <form method="post" action="{{ url_for('table_layouts.delete_section', layout_id=layout.id, section_id=section.id) }}" onsubmit="return confirm('Remove this section?')" class="inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="text-xs text-red-400 hover:text-red-600">&times;</button>
+            <button type="submit" class="text-xs" style="color: var(--color-danger);">&times;</button>
           </form>
         </div>
 
         {% if section.placements %}
-        <div class="divide-y divide-gray-50">
+        <div class="divide-y" style="border-color: var(--color-divider);">
           {% for p in section.placements %}
           <div class="px-4 py-2 flex items-center justify-between text-sm">
             <div class="flex items-center gap-3">
-              <span class="font-medium">{{ p.product.name if p.product else 'Unknown Product' }}</span>
-              <span class="text-gray-400">&times;{{ p.quantity }}</span>
+              <span class="font-medium" style="color: var(--color-text);">{{ p.product.name if p.product else 'Unknown Product' }}</span>
+              <span style="color: var(--color-text-muted);">&times;{{ p.quantity }}</span>
               {% if p.notes %}
-              <span class="text-gray-400 text-xs">{{ p.notes }}</span>
+              <span class="text-xs" style="color: var(--color-text-muted);">{{ p.notes }}</span>
               {% endif %}
             </div>
             <form method="post" action="{{ url_for('table_layouts.delete_placement', layout_id=layout.id, placement_id=p.id) }}" onsubmit="return confirm('Remove this product?')" class="inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="text-xs text-red-400 hover:text-red-600">Remove</button>
+              <button type="submit" class="text-xs" style="color: var(--color-danger);">Remove</button>
             </form>
           </div>
           {% endfor %}
         </div>
         {% else %}
-        <p class="px-4 py-3 text-xs text-gray-400">No products placed here yet.</p>
+        <p class="px-4 py-3 text-xs" style="color: var(--color-text-muted);">No products placed here yet.</p>
         {% endif %}
 
-        <div class="px-4 py-3 border-t border-gray-50 bg-gray-50/50">
+        <div class="px-4 py-3" style="background: var(--color-surface-muted); border-top: 1px solid var(--color-divider);">
           <form method="post" action="{{ url_for('table_layouts.add_placement', layout_id=layout.id, section_id=section.id) }}" class="flex items-center gap-2">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <select name="product_id" class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs flex-1 focus:outline-none focus:ring-1 focus:ring-teal">
+            <select name="product_id" class="app-select text-xs flex-1">
               <option value="">Select product…</option>
               {% for pid, pname in placement_form.product_id.choices %}
               <option value="{{ pid }}">{{ pname }}</option>
               {% endfor %}
             </select>
-            <input type="number" name="quantity" value="1" min="1" class="w-16 rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-teal">
-            <button type="submit" class="px-3 py-1.5 bg-teal text-white rounded-lg text-xs font-medium hover:bg-teal-600 transition">Add</button>
+            <input type="number" name="quantity" value="1" min="1" class="app-input w-16 text-xs text-center">
+            <button type="submit" class="app-btn app-btn-primary text-xs">Add</button>
           </form>
         </div>
       </div>
       {% endfor %}
 
-      <div class="bg-white rounded-xl border border-gray-200 border-dashed shadow-sm p-4">
-        <h3 class="text-sm font-medium text-gray-500 mb-2">Add Section</h3>
+      <div class="app-card border-dashed p-4">
+        <h3 class="text-sm font-medium mb-2" style="color: var(--color-text-muted);">Add Section</h3>
         <form method="post" action="{{ url_for('table_layouts.add_section', layout_id=layout.id) }}" class="flex items-center gap-2">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <select name="section_type" class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal">
+          <select name="section_type" class="app-select text-xs">
             <option value="front_left">Front Left</option>
             <option value="front_center">Front Center</option>
             <option value="front_right">Front Right</option>
@@ -111,36 +111,53 @@
             <option value="impulse_tray">Impulse Tray</option>
             <option value="custom">Custom</option>
           </select>
-          <input type="text" name="label" placeholder="Section label…" class="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal">
-          <button type="submit" class="px-3 py-1.5 bg-coral text-white rounded-lg text-xs font-medium hover:bg-coral-600 transition">Add</button>
+          <input type="text" name="label" placeholder="Section label…" class="app-input flex-1 text-xs">
+          <button type="submit" class="app-btn app-btn-primary text-xs">Add</button>
         </form>
       </div>
     </div>
 
     <div class="space-y-4">
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-        <h3 class="text-sm font-semibold text-navy mb-2">Layout Summary</h3>
+      <div class="app-card p-4">
+        <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Layout Summary</h3>
         <dl class="space-y-1.5 text-sm">
           <div class="flex justify-between">
-            <dt class="text-gray-500">Sections</dt>
-            <dd class="font-medium">{{ sections|length }}</dd>
+            <dt style="color: var(--color-text-muted);">Sections</dt>
+            <dd class="font-medium" style="color: var(--color-text);">{{ sections|length }}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-gray-500">Products</dt>
-            <dd class="font-medium">{{ sections|map(attribute='placements')|list|length }}</dd>
+            <dt style="color: var(--color-text-muted);">Products</dt>
+            <dd class="font-medium" style="color: var(--color-text);">{{ sections|map(attribute='placements')|list|length }}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-gray-500">Template</dt>
-            <dd class="font-medium">{% if layout.is_template %}Yes{% else %}No{% endif %}</dd>
+            <dt style="color: var(--color-text-muted);">Template</dt>
+            <dd class="font-medium" style="color: var(--color-text);">{% if layout.is_template %}Yes{% else %}No{% endif %}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-gray-500">Created</dt>
-            <dd class="font-medium">{{ layout.created_at.strftime('%b %d, %Y') }}</dd>
+            <dt style="color: var(--color-text-muted);">Created</dt>
+            <dd class="font-medium" style="color: var(--color-text);">{{ layout.created_at.strftime('%b %d, %Y') }}</dd>
           </div>
         </dl>
       </div>
 
-      <a href="{{ url_for('table_layouts.create_layout', copy_from=layout.id) }}" class="block text-center px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition">
+      {% if layout.is_template %}
+      <div class="app-card p-4">
+        <h3 class="text-sm font-semibold mb-2" style="color: var(--color-text);">Apply to Market</h3>
+        <form method="post" action="{{ url_for('table_layouts.apply_template_to_market', layout_id=layout.id) }}" class="space-y-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <select name="market_id" class="app-select text-sm">
+            <option value="">Select market…</option>
+            {% for m in markets %}
+            <option value="{{ m.id }}">{{ m.name }} ({{ m.event_date.strftime('%b %d, %Y') if m.event_date }})</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="name" placeholder="Layout name (optional)" class="app-input text-sm">
+          <button type="submit" class="app-btn app-btn-primary w-full text-sm">Apply Template</button>
+        </form>
+      </div>
+      {% endif %}
+
+      <a href="{{ url_for('table_layouts.create_layout', copy_from=layout.id) }}" class="block text-center app-btn app-btn-secondary">
         Copy as New Layout
       </a>
     </div>

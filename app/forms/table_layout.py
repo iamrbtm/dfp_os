@@ -35,6 +35,6 @@ class MarketTablePlacementForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.product_id.choices = [
-            (p.id, f"{p.name} (${float(p.price or 0):.2f})")
+            (p.id, f"{p.name} (${float(p.base_price or 0):.2f})")
             for p in Product.query.order_by(Product.name).all()
         ]

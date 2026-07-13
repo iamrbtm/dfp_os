@@ -14,11 +14,22 @@
       </p>
     </div>
     <div class="flex flex-wrap gap-3">
-      <a href="{{ url_for('markets.market_performance', market_id=instance.id) }}" class="app-btn app-btn-primary">Performance</a>
       <a href="{{ url_for('markets.edit_resource', resource_key='markets', resource_id=instance.id) }}" class="app-btn app-btn-secondary">Edit Core</a>
       <a href="{{ url_for('markets.list_resource', resource_key='markets') }}" class="app-btn app-btn-secondary">Back</a>
     </div>
   </div>
+
+  <nav class="flex gap-1 border-b pb-0" style="border-color: var(--color-border);">
+    <a href="{{ url_for('markets.detail_resource', resource_id=instance.id) }}"
+       class="px-4 py-2 text-sm font-medium rounded-t-lg -mb-px border border-b-0"
+       style="color: var(--color-text); border-color: var(--color-border); background: var(--color-surface);">Overview</a>
+    <a href="{{ url_for('markets.market_performance', market_id=instance.id) }}"
+       class="px-4 py-2 text-sm font-medium rounded-t-lg -mb-px border border-b-0"
+       style="color: var(--color-text-muted); border-color: transparent;">Performance</a>
+    <a href="{{ url_for('table_layouts.list_layouts', market_id=instance.id) }}"
+       class="px-4 py-2 text-sm font-medium rounded-t-lg -mb-px border border-b-0"
+       style="color: var(--color-text-muted); border-color: transparent;">Table Layout</a>
+  </nav>
 
   <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
     <div class="space-y-6">

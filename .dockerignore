@@ -12,3 +12,14 @@ app/static/dist
 instance
 uploads
 .DS_Store
+.coverage*
+test-results/
+.playwright-mcp/
+.uv-cache/
+docs/
+scripts/
+pmp/
+erank results/
+*.md
+*.pdf
+services/

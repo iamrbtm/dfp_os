@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.x.x/dist/htmx.min.js" defer></script>
     <script src="{{ url_for('static', filename='src/js/theme-switcher.js') }}" defer></script>
   </head>
-  <body x-data="{ sidebarOpen: false }" class="app-shell">
+  <body x-data="{ sidebarOpen: false }" class="app-shell {% block body_class %}{% endblock %}">
     {% if current_user.is_authenticated %}
       {% include "components/_sidebar.html" %}
       <div class="lg:ml-64 min-h-screen flex flex-col" style="background-color: var(--color-bg);">

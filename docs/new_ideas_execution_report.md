@@ -69,10 +69,6 @@ Features:
 
 **Commit hash**: `2de93ce`
 
-**Next phase**: Phase 1.4 — Impulse Tray Optimizer<br>
-**Commit hash**: `2de93ce`
-
-
 ### Phase 1.3: Table Layout Planner
 
 **Status**: `done`
@@ -95,4 +91,25 @@ Features:
 **Checks run**:
 - `python3 -m py_compile` — All Python files pass.
 
-**Commit hash**: *Pending*
+**Commit hash**: `8617634`
+
+
+### Phase 1.4: Impulse Tray Optimizer
+
+**Status**: `done`
+
+**Scope**: Analyze impulse tray product sell-through, generate rotation recommendations, and provide admin view with placement history.
+
+**Files changed**:
+- `app/services/impulse_tray.py` — Service with `get_impulse_tray_products()`, `get_impulse_tray_recommendations()`, `optimize_impulse_tray()`, `_calc_sell_through()`.
+- `app/blueprints/prep_tasks/routes.py` — Added `impulse_tray_optimizer()` route.
+- `app/module_registry.py` — Added Impulse Tray nav entry.
+- `app/templates/dashboard/prep_tasks/impulse_tray.html` — Stats cards, rotation recommendations, placement history table.
+- `tests/test_phase5_markets_expenses.py` — Added 4 tests.
+
+**Checks run**:
+- `python3 -m py_compile` — All Python files pass.
+
+**Commit hash**: `1df4345`
+
+**Next phase**: Milestone 2 — Promotion

@@ -27,7 +27,7 @@ class TableSectionType(StrEnum):
 class MarketTableLayout(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "market_table_layouts"
 
-    market_id: Mapped[int] = mapped_column(ForeignKey("markets.id"), nullable=False, index=True)
+    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)

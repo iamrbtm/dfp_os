@@ -2,9 +2,38 @@ from __future__ import annotations
 
 import re
 
+from typing import Any
+
+from flask_login import current_user
+
 from app.extensions import db
 from app.services.audit import record_audit_event
 from app.services.crud import archive_instance
+
+
+def record_admin_audit(
+    action: str,
+    entity_type: str,
+    entity_id: int | str,
+    *,
+    actor: Any | None = None,
+    before_state: dict[str, Any] | None = None,
+    after_state: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    user = actor or current_user
+    return record_audit_event(
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        actor_id=str(user.id) if user and hasattr(user, "id") else None,
+        actor_type="user",
+        actor_display_name=getattr(user, "full_name", None) or getattr(user, "email", None),
+        source_module=__name__,
+        before_state=before_state,
+        after_state=after_state,
+        metadata=metadata,
+    )
 
 
 def snapshot_instance(instance) -> dict:

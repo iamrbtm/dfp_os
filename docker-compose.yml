@@ -1,60 +1,49 @@
-services:
-  web:
-    build: .
-    mem_limit: 1024m
-    environment:
-      FLASK_ENV: ${FLASK_ENV:-production}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
-      APP_NAME: ${APP_NAME:-Dude Fish OS}
-      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
-      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
-      AUDIT_LOG_BASE_URL: http://audit-log:8090
-      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
-      AUDIT_LOG_ENABLED: ${AUDIT_LOG_ENABLED:-false}
-      FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
-      RECEIPT_STORAGE_PATH: ${RECEIPT_STORAGE_PATH:-uploads/receipts}
-      MARKET_DOCUMENTS_PATH: ${MARKET_DOCUMENTS_PATH:-uploads/markets}
-      PRODUCT_ASSETS_PATH: ${PRODUCT_ASSETS_PATH:-uploads/products}
-      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
-      S3_USE_SSL: ${S3_USE_SSL:-false}
-      S3_AUTO_CREATE_BUCKETS: ${S3_AUTO_CREATE_BUCKETS:-true}
-      RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
-      MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
-      PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
-      RECEIPT_OCR_PROVIDER: ${RECEIPT_OCR_PROVIDER:-tesseract}
-      RECEIPT_AI_PROVIDER: ${RECEIPT_AI_PROVIDER:-openai}
-      AI_RECEIPT_PARSING_ENABLED: ${AI_RECEIPT_PARSING_ENABLED:-false}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
-      OPENAI_MODEL_RECEIPTS: ${OPENAI_MODEL_RECEIPTS:-gpt-4o-mini}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://localhost:11434}
-      OLLAMA_FALLBACK_URL: ${OLLAMA_FALLBACK_URL:-http://localhost:11434}
-      OLLAMA_RECEIPT_MODEL: ${OLLAMA_RECEIPT_MODEL:-llama3}
-      RECEIPT_DUPLICATE_STRICTNESS: ${RECEIPT_DUPLICATE_STRICTNESS:-normal}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://audit-redis:6379/1}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://audit-redis:6379/1}
-    ports:
-      - "5000:5000"
-    volumes:
-      - receipt_uploads:/app/uploads/receipts
-    depends_on:
-      db:
-        condition: service_healthy
-      seaweedfs:
-        condition: service_started
-      audit-redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+x-env-app: &env-app
+  FLASK_ENV: ${FLASK_ENV:-production}
+  SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+  APP_NAME: ${APP_NAME:-Dude Fish OS}
+  APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
+  DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://audit-redis:6379/1}
+  CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://audit-redis:6379/1}
+  AUDIT_LOG_BASE_URL: http://audit-log:8090
+  AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
+  AUDIT_LOG_ENABLED: ${AUDIT_LOG_ENABLED:-false}
+  FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
+  S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
+  S3_USE_SSL: ${S3_USE_SSL:-false}
+  S3_AUTO_CREATE_BUCKETS: ${S3_AUTO_CREATE_BUCKETS:-true}
+  RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
+  MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
+  PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
+  RECEIPT_STORAGE_PATH: ${RECEIPT_STORAGE_PATH:-uploads/receipts}
+  MARKET_DOCUMENTS_PATH: ${MARKET_DOCUMENTS_PATH:-uploads/markets}
+  PRODUCT_ASSETS_PATH: ${PRODUCT_ASSETS_PATH:-uploads/products}
+  RECEIPT_OCR_PROVIDER: ${RECEIPT_OCR_PROVIDER:-tesseract}
+  RECEIPT_AI_PROVIDER: ${RECEIPT_AI_PROVIDER:-openai}
+  AI_RECEIPT_PARSING_ENABLED: ${AI_RECEIPT_PARSING_ENABLED:-false}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+  OPENAI_MODEL_RECEIPTS: ${OPENAI_MODEL_RECEIPTS:-gpt-4o-mini}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://localhost:11434}
+  OLLAMA_FALLBACK_URL: ${OLLAMA_FALLBACK_URL:-http://localhost:11434}
+  OLLAMA_RECEIPT_MODEL: ${OLLAMA_RECEIPT_MODEL:-llama3}
+  RECEIPT_DUPLICATE_STRICTNESS: ${RECEIPT_DUPLICATE_STRICTNESS:-normal}
 
+x-depends-all: &depends-all
+  db:
+    condition: service_healthy
+  audit-redis:
+    condition: service_healthy
+  seaweedfs:
+    condition: service_healthy
+
+services:
   db:
     image: mariadb:11
     environment:
@@ -74,7 +63,7 @@ services:
       retries: 5
 
   seaweedfs:
-    image: chrislusf/seaweedfs:latest
+    image: chrislusf/seaweedfs:3.85
     command: "server -dir=/data -s3"
     environment:
       S3_ENABLE_AUTH: "true"
@@ -91,6 +80,73 @@ services:
       timeout: 5s
       retries: 5
 
+  audit-redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"
+    volumes:
+      - audit_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    mem_limit: 1024m
+    environment:
+      <<: *env-app
+    ports:
+      - "5000:5000"
+    volumes:
+      - receipt_uploads:/app/uploads/receipts
+    depends_on:
+      db:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+      audit-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build: .
+    mem_limit: 1024m
+    environment:
+      <<: *env-app
+    volumes:
+      - receipt_uploads:/app/uploads/receipts
+    depends_on: *depends-all
+    command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "worker", "--loglevel=info"]
+
+  beat:
+    build: .
+    mem_limit: 1024m
+    environment:
+      <<: *env-app
+    volumes:
+      - receipt_uploads:/app/uploads/receipts
+    depends_on: *depends-all
+    command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "beat", "--loglevel=info"]
+
+  migrate:
+    build: .
+    profiles:
+      - release
+    environment:
+      FLASK_ENV: ${FLASK_ENV:-production}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["uv", "run", "flask", "--app", "app:create_app", "db", "upgrade"]
+
   audit-postgres:
     image: postgres:17
     environment:
@@ -106,117 +162,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  intelligence-postgres:
-    image: postgres:17
-    environment:
-      POSTGRES_DB: ${INTELLIGENCE_POSTGRES_DB:?INTELLIGENCE_POSTGRES_DB must be set}
-      POSTGRES_USER: ${INTELLIGENCE_POSTGRES_USER:?INTELLIGENCE_POSTGRES_USER must be set}
-      POSTGRES_PASSWORD: ${INTELLIGENCE_POSTGRES_PASSWORD:?INTELLIGENCE_POSTGRES_PASSWORD must be set}
-    expose:
-      - "5432"
-    volumes:
-      - intelligence_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  audit-redis:
-    image: redis:7-alpine
-    expose:
-      - "6379"
-    volumes:
-      - audit_redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  worker:
-    build: .
-    environment:
-      FLASK_ENV: ${FLASK_ENV:-production}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
-      APP_NAME: ${APP_NAME:-Dude Fish OS}
-      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
-      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://audit-redis:6379/1}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://audit-redis:6379/1}
-      AUDIT_LOG_BASE_URL: http://audit-log:8090
-      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
-      FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
-      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
-      S3_USE_SSL: ${S3_USE_SSL:-false}
-      S3_AUTO_CREATE_BUCKETS: ${S3_AUTO_CREATE_BUCKETS:-true}
-      RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
-      MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
-      PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
-    volumes:
-      - receipt_uploads:/app/uploads/receipts
-    depends_on:
-      db:
-        condition: service_healthy
-      audit-redis:
-        condition: service_healthy
-      seaweedfs:
-        condition: service_started
-    command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "worker", "--loglevel=info"]
-
-  beat:
-    build: .
-    environment:
-      FLASK_ENV: ${FLASK_ENV:-production}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
-      APP_NAME: ${APP_NAME:-Dude Fish OS}
-      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
-      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://audit-redis:6379/1}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://audit-redis:6379/1}
-      AUDIT_LOG_BASE_URL: http://audit-log:8090
-      AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
-      FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
-      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://seaweedfs:8333}
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
-      S3_USE_SSL: ${S3_USE_SSL:-false}
-      S3_AUTO_CREATE_BUCKETS: ${S3_AUTO_CREATE_BUCKETS:-true}
-      RECEIPT_STORAGE_BUCKET: ${RECEIPT_STORAGE_BUCKET:-receipts}
-      MARKET_DOCUMENTS_BUCKET: ${MARKET_DOCUMENTS_BUCKET:-markets}
-      PRODUCT_ASSETS_BUCKET: ${PRODUCT_ASSETS_BUCKET:-products}
-    volumes:
-      - receipt_uploads:/app/uploads/receipts
-    depends_on:
-      db:
-        condition: service_healthy
-      audit-redis:
-        condition: service_healthy
-      seaweedfs:
-        condition: service_started
-    command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "beat", "--loglevel=info"]
-
-  migrate:
-    build: .
-    profiles:
-      - release
-    environment:
-      FLASK_ENV: ${FLASK_ENV:-production}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
-    depends_on:
-      db:
-        condition: service_healthy
-    command: ["uv", "run", "flask", "--app", "app:create_app", "db", "upgrade"]
 
   audit-log:
     build: services/audit-log
@@ -238,9 +183,23 @@ services:
         condition: service_healthy
       audit-redis:
         condition: service_healthy
-    command: >
-      /bin/sh -c
-      "uv run uvicorn app.main:app --host 0.0.0.0 --port 8090"
+    command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090"]
+
+  intelligence-postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${INTELLIGENCE_POSTGRES_DB:?INTELLIGENCE_POSTGRES_DB must be set}
+      POSTGRES_USER: ${INTELLIGENCE_POSTGRES_USER:?INTELLIGENCE_POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${INTELLIGENCE_POSTGRES_PASSWORD:?INTELLIGENCE_POSTGRES_PASSWORD must be set}
+    expose:
+      - "5432"
+    volumes:
+      - intelligence_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   intelligence:
     build: services/intelligence
@@ -260,9 +219,7 @@ services:
         condition: service_healthy
       audit-log:
         condition: service_started
-    command: >
-      /bin/sh -c
-      "uv run uvicorn app.main:app --host 0.0.0.0 --port 8091"
+    command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8091"]
 
   test:
     build:
@@ -273,8 +230,6 @@ services:
     environment:
       FLASK_ENV: testing
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      TEST_DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/dudefish_os_test
-      TEST_DATABASE_ADMIN_URL: mysql+pymysql://root:${MARIADB_ROOT_PASSWORD:?MARIADB_ROOT_PASSWORD must be set}@db:3306/mysql
     depends_on:
       db:
         condition: service_healthy

@@ -4,33 +4,37 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_COMPILE_BYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+RUN useradd --create-home --shell /usr/sbin/nologin appuser
 
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         build-essential curl nodejs npm \
         tesseract-ocr tesseract-ocr-eng \
         imagemagick poppler-utils \
         libgl1 libglib2.0-0 \
-        prusa-slicer \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml uv.lock .python-version ./
-RUN pip install --no-cache-dir uv
-RUN uv sync --frozen --no-dev
+COPY --chown=appuser:appuser pyproject.toml uv.lock .python-version ./
+RUN mkdir -p /opt/venv && chown appuser:appuser /opt/venv
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
-COPY package.json package-lock.json postcss.config.js tailwind.config.js ./
+COPY --chown=appuser:appuser package.json package-lock.json postcss.config.js tailwind.config.js ./
 RUN npm ci
 
-COPY . .
+COPY --chown=appuser:appuser . .
+RUN mkdir -p app/static/dist \
+    && npm run build:css \
+    && mkdir -p uploads instance \
+    && chown appuser:appuser /app uploads instance
 
-RUN mkdir -p app/static/dist uploads instance
-RUN npm run build:css
-
-RUN useradd --create-home --shell /usr/sbin/nologin appuser \
-    && chown -R appuser:appuser /app /opt/venv
 USER appuser
 
 EXPOSE 5000

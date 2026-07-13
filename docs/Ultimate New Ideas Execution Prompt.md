@@ -10,6 +10,8 @@ Your job is to convert the categorized idea list into production-ready DFPos fea
 
 The work is complete only when the implemented features are production-ready, fully wired into the app, tested, documented, audited, permissioned, and consistent with the DFPos design system.
 
+Do not stop after a phase, a milestone, or a partial implementation unless blocked by a real external dependency that cannot be resolved locally. Continue through every milestone until all items are finished, all required tests/checks are successful, and the program is 100% production-ready by the completion gates in this prompt.
+
 ## Required Read Order
 
 Before planning or coding, read these files in order:
@@ -44,6 +46,33 @@ Do not rely only on this prompt. Verify the actual code before making decisions.
 - Do not store card data.
 - Do not commit secrets, `.env`, real credentials, API keys, or production tokens.
 - Keep `TODO.md` updated as the live execution ledger.
+- Keep `docs/new_ideas_execution_report.md` updated as the durable implementation report.
+
+## Durable Report File
+
+Create and maintain this file throughout the entire program:
+
+```text
+docs/new_ideas_execution_report.md
+```
+
+This report is the authoritative implementation log for the New Ideas program. Update it at the start and end of every phase, after every commit, after every milestone push, and whenever a blocker or failed test changes the execution state.
+
+The report must include:
+
+- Current milestone and phase.
+- Overall milestone checklist.
+- Phase checklist with status: `pending`, `in-progress`, `done`, or `blocked`.
+- Files changed by phase.
+- Migrations added by phase.
+- Tests/checks run, exact commands, and pass/fail results.
+- Commit hash for each phase.
+- Push result for each milestone.
+- Open risks, blockers, failed checks, and remediation plan.
+- Production-readiness status.
+- Final completion checklist.
+
+Do not use chat messages as the only status record. If the agent resumes after interruption, read `docs/new_ideas_execution_report.md`, `TODO.md`, and `git status --short`, then continue from the first unfinished phase.
 
 ## Git Cadence
 
@@ -52,33 +81,39 @@ At the start of each phase:
 1. Run `git status --short`.
 2. Identify unrelated dirty files and do not touch or revert them.
 3. Update `TODO.md` to mark the phase as in progress.
+4. Update `docs/new_ideas_execution_report.md` with the phase start, intended scope, current git status summary, and planned checks.
 
 At the end of each phase:
 
 1. Run targeted formatting/checks/tests for the phase.
 2. Update `TODO.md` with completed work and remaining gaps.
-3. Run `git status --short`.
-4. Stage only files relevant to that phase.
-5. Commit with a clear message, for example:
+3. Update `docs/new_ideas_execution_report.md` with files changed, tests/checks run, results, risks, and completion status.
+4. Run `git status --short`.
+5. Stage only files relevant to that phase.
+6. Commit with a clear message, for example:
 
 ```bash
 git add <phase files>
 git commit -m "Add market follow-up foundation"
 ```
 
+7. Add the commit hash to `docs/new_ideas_execution_report.md` and commit that report update if it was not included in the phase commit. Prefer including the report update in the same phase commit when it accurately reflects the completed phase.
+
 At the end of each milestone:
 
 1. Run the full relevant milestone test suite.
 2. Run broader checks if feasible: `uv run pytest`, API/OpenAPI tests, migrations, and focused browser checks where UI-heavy.
 3. Update docs and `docs/production_readiness_scorecard.md`.
-4. Commit any final milestone documentation or hardening changes.
-5. Push the branch only after the full milestone is complete:
+4. Update `docs/new_ideas_execution_report.md` with the milestone summary, phase commit hashes, test results, production-readiness status, and push readiness.
+5. Commit any final milestone documentation or hardening changes.
+6. Create a new branch with the titled <milestone> for the phase.
+6. Push the branch only after the full milestone is complete:
 
 ```bash
 git push origin HEAD
 ```
 
-If push fails due to network/DNS/auth, leave the commits local, report the exact failure, and do not invent a successful push.
+If push fails due to network/DNS/auth, leave the commits local, record the exact failure in `docs/new_ideas_execution_report.md`, report it, and continue only with work that does not depend on the push having succeeded.
 
 ## Definition Of Production Ready
 
@@ -103,6 +138,8 @@ A phase is not done unless all applicable items are complete:
 - Existing user changes are not reverted.
 
 A milestone is not complete until all phases in that category meet this bar and the milestone has been pushed.
+
+The full program is not complete until every milestone is complete, every required test/check passes, every known blocker is resolved or explicitly documented as an external dependency, and `docs/new_ideas_execution_report.md` shows a final production-ready status.
 
 ## Cross-Cutting Architecture To Reuse
 
@@ -691,16 +728,17 @@ uv run pytest
 9. Confirm no generated duplicate files or accidental `* 2.py`, `* 2.html`, `* 2.md` files were introduced.
 10. Update:
     - `TODO.md`
+    - `docs/new_ideas_execution_report.md`
     - `docs/production_readiness_scorecard.md`
     - `README.md` or relevant module docs
     - API docs if endpoints changed
 11. Push the final branch state.
 
-Only call the entire program complete when every milestone has been pushed and all final production-readiness gates pass.
+Only call the entire program complete when every milestone has been pushed, all final production-readiness gates pass, all tests/checks are successful, and `docs/new_ideas_execution_report.md` records the final status as 100% production-ready.
 
 ## Reporting Format After Each Phase
 
-After each phase, report:
+After each phase, update `docs/new_ideas_execution_report.md` with:
 
 - Phase completed
 - Files changed
@@ -710,9 +748,11 @@ After each phase, report:
 - Remaining risks or blockers
 - Next phase
 
+Then provide a short chat summary and continue to the next phase without waiting, unless blocked by an external dependency.
+
 ## Reporting Format After Each Milestone
 
-After each milestone, report:
+After each milestone, update `docs/new_ideas_execution_report.md` with:
 
 - Milestone completed
 - Phase commit hashes
@@ -721,3 +761,4 @@ After each milestone, report:
 - Production-readiness status
 - Any remaining risks before starting the next milestone
 
+Then provide a short chat summary, push the completed milestone if all gates passed, and continue to the next milestone without waiting.
