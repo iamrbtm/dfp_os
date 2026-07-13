@@ -93,6 +93,7 @@ class SignAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
     collection_id: Mapped[int | None] = mapped_column(
         ForeignKey("collections.id"), nullable=True, index=True
     )
+    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     status: Mapped[SignStatus] = mapped_column(
         Enum(SignStatus, native_enum=False, length=40),
@@ -103,3 +104,4 @@ class SignAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     product = relationship("Product")
     collection = relationship("Collection")
+    market = relationship("Market")

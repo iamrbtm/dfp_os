@@ -1,7 +1,7 @@
 """Add promotion models (content_drafts, sign_assets)
 
 Revision ID: e3f4a5b6c7d8
-Revises: d1e2f3a4b5c6
+Revises: b5a6c7d8e9f0
 Create Date: 2025-07-13 10:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 revision = "e3f4a5b6c7d8"
-down_revision = "e2f3a4b5c6d7"
+down_revision = "b5a6c7d8e9f0"
 branch_labels = None
 depends_on = None
 
@@ -68,9 +68,11 @@ def upgrade():
         sa.Column("preview_html", sa.Text(), nullable=True),
         sa.Column("product_id", sa.Integer(), nullable=True),
         sa.Column("collection_id", sa.Integer(), nullable=True),
+        sa.Column("market_id", sa.Integer(), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("status", sa.String(length=40), nullable=False),
         sa.ForeignKeyConstraint(["collection_id"], ["collections.id"],),
+        sa.ForeignKeyConstraint(["market_id"], ["markets.id"],),
         sa.ForeignKeyConstraint(["product_id"], ["products.id"],),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -78,6 +80,7 @@ def upgrade():
     op.create_index(op.f("ix_sign_assets_title"), "sign_assets", ["title"])
     op.create_index(op.f("ix_sign_assets_product_id"), "sign_assets", ["product_id"])
     op.create_index(op.f("ix_sign_assets_collection_id"), "sign_assets", ["collection_id"])
+    op.create_index(op.f("ix_sign_assets_market_id"), "sign_assets", ["market_id"])
 
 
 def downgrade():
