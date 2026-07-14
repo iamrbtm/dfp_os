@@ -320,20 +320,30 @@ def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
         prompt_parts.append(f"Subtitle: {sign.subtitle}")
     if sign.price_display:
         prompt_parts.append(f"Price: {sign.price_display}")
-    prompt = ". ".join(prompt_parts) + ". Clean design, bold text, solid background, no real brand logos."
+    prompt = ". ".join(prompt_parts) + ". Clean product photography style, warm inviting colors, solid background, no logos, no text rendering."
 
-    try:
-        resp = httpx.post(
-            "https://api.openai.com/v1/images/generations",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": "dall-e-3", "prompt": prompt, "n": 1, "size": "1024x1024"},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        image_url = data["data"][0]["url"]
-    except Exception as exc:
-        current_app.logger.warning("AI sign image generation failed: %s", exc)
+    image_url = None
+    for model, size_val in [("dall-e-3", "1024x1024"), ("dall-e-2", "1024x1024")]:
+        try:
+            resp = httpx.post(
+                "https://api.openai.com/v1/images/generations",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": model, "prompt": prompt, "n": 1, "size": size_val},
+                timeout=30,
+            )
+            if not resp.is_success:
+                body = resp.text
+                current_app.logger.warning("OpenAI %s error (status %s): %s", model, resp.status_code, body[:300])
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            image_url = data["data"][0]["url"]
+            break
+        except Exception as exc:
+            current_app.logger.warning("AI sign image generation failed with %s: %s", model, exc)
+            continue
+
+    if image_url is None:
         return sign
 
     try:
