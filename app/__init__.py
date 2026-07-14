@@ -33,6 +33,7 @@ from app.blueprints.public import bp as public_bp
 from app.blueprints.receipts import bp as receipts_bp
 from app.blueprints.settings import bp as settings_bp
 from app.blueprints.promotion import bp as promotion_bp
+from app.blueprints.report_studio import bp as report_studio_bp
 from app.blueprints.table_layouts import bp as table_layouts_bp
 from app.blueprints.trend_scout import bp as trend_scout_bp
 from app.cli import migrate_group, seed_group, trend_scout_group
@@ -126,6 +127,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(markets_bp)
     app.register_blueprint(prep_tasks_bp)
     app.register_blueprint(promotion_bp)
+    app.register_blueprint(report_studio_bp)
     app.register_blueprint(table_layouts_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(cost_engine_bp)
@@ -283,6 +285,7 @@ def register_context_processors(app: Flask) -> None:
             "markets": "markets",
             "receipts": "expenses",
             "expenses": "expenses",
+            "report_studio": "report_studio",
             "trend_scout": "trend_scout",
             "api_tokens": "api_tokens",
             "settings": "settings",
@@ -293,6 +296,7 @@ def register_context_processors(app: Flask) -> None:
             "promotion": "promotion",
             "prep_tasks": "prep_tasks",
             "cost_engine": "cost_engine",
+            "report_studio": "report_studio",
             "audit_logs": "audit_logs",
         }
 
@@ -350,6 +354,11 @@ def register_context_processors(app: Flask) -> None:
             ],
             "cost_engine": [
                 ("Overview", url_for("cost_engine.index")),
+            ],
+            "report_studio": [
+                ("Home", url_for("report_studio.home")),
+                ("Heat Map", url_for("report_studio.heat_map")),
+                ("Application Tracker", url_for("report_studio.application_tracker")),
             ],
             "trend_scout": [
                 ("Dashboard", url_for("trend_scout.index")),

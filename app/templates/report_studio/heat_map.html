@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Vendor Market Heat Map | Report Studio | {{ app_name }}{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.x.x/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Report Studio</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Vendor Market Heat Map</h1>
+      <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">Map markets by profit, distance, booth fee, weather risk, traffic, and repeat quality.</p>
+    </div>
+    <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary text-sm">&larr; Back to Reports</a>
+  </div>
+
+  <form method="get" class="app-card p-4">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+      <div>
+        <label class="text-xs font-medium" style="color: var(--color-text-muted);">Status</label>
+        <select name="status" class="app-input mt-1" onchange="this.form.submit()">
+          <option value="">All Statuses</option>
+          <option value="interested" {% if status_filter == 'interested' %}selected{% endif %}>Interested</option>
+          <option value="applied" {% if status_filter == 'applied' %}selected{% endif %}>Applied</option>
+          <option value="accepted" {% if status_filter == 'accepted' %}selected{% endif %}>Accepted</option>
+          <option value="scheduled" {% if status_filter == 'scheduled' %}selected{% endif %}>Scheduled</option>
+          <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+          <option value="canceled" {% if status_filter == 'canceled' %}selected{% endif %}>Canceled</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium" style="color: var(--color-text-muted);">Min. Profit ($)</label>
+        <input type="number" name="min_profit" value="{{ min_profit }}" placeholder="0" class="app-input mt-1" style="max-width: 120px;">
+      </div>
+      <button type="submit" class="app-btn app-btn-secondary">Filter</button>
+      {% if status_filter or min_profit %}
+      <a href="{{ url_for('report_studio.heat_map') }}" class="app-btn app-btn-secondary">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+
+  <div class="app-card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th class="font-medium">Market</th>
+            <th class="font-medium">Location</th>
+            <th class="font-medium">Status</th>
+            <th class="font-medium">Date</th>
+            <th class="font-medium">Booth Fee</th>
+            <th class="font-medium">Revenue</th>
+            <th class="font-medium">Profit</th>
+            <th class="font-medium">Margin</th>
+            <th class="font-medium">Coordinates</th>
+            <th class="font-medium">Repeat?</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in markets %}
+          <tr>
+            <td><a href="{{ url_for('markets.detail_resource', resource_key='markets', resource_id=m.id) }}" class="app-link">{{ m.name }}</a></td>
+            <td>{{ m.city or '\u2014' }}, {{ m.state or '\u2014' }}</td>
+            <td>
+              <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full"
+                    style="background-color: {% if m.status == 'completed' %}var(--color-success-bg){% elif m.status == 'canceled' %}var(--color-danger-bg){% else %}var(--color-bg-subtle){% endif %};
+                           color: {% if m.status == 'completed' %}var(--color-success){% elif m.status == 'canceled' %}var(--color-danger){% else %}var(--color-text){% endif %};">
+                {{ m.status|replace('_', ' ')|title if m.status else '\u2014' }}
+              </span>
+            </td>
+            <td>{{ m.event_date }}</td>
+            <td>${{ "%.2f"|format(m.booth_fee) }}</td>
+            <td>${{ "%.2f"|format(m.revenue) }}</td>
+            <td style="color: {% if m.profit >= 0 %}var(--color-success){% else %}var(--color-danger){% endif %};">
+              ${{ "%.2f"|format(m.profit) }}
+            </td>
+            <td>{{ "%.1f"|format(m.margin_pct) if m.margin_pct is not none else '\u2014' }}%</td>
+            <td>
+              {% if m.has_coordinates %}
+              <span style="color: var(--color-success);">&#x2713;</span>
+              {% else %}
+              <span style="color: var(--color-text-muted);">&#x2014;</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if m.worth_repeating is true %}
+              <span style="color: var(--color-success);">Yes</span>
+              {% elif m.worth_repeating is false %}
+              <span style="color: var(--color-danger);">No</span>
+              {% else %}
+              <span style="color: var(--color-text-muted);">&#x2014;</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="10" class="text-center py-8" style="color: var(--color-text-muted);">No markets found matching your filters.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if markets %}
+  <div class="app-card p-5">
+    <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Profit by Market</h2>
+    <canvas id="profitChart" height="200"></canvas>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+{% if markets %}
+<script>
+(function() {
+  var ctx = document.getElementById('profitChart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [{% for m in markets %}'{{ m.name|e }}'{% if not loop.last %},{% endif %}{% endfor %}],
+      datasets: [{
+        label: 'Profit ($)',
+        data: [{% for m in markets %}{{ m.profit }}{% if not loop.last %},{% endif %}{% endfor %}],
+        backgroundColor: [{% for m in markets %}'{{ "rgba(46, 184, 92, 0.7)" if m.profit >= 0 else "rgba(220, 38, 38, 0.7)" }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        borderColor: [{% for m in markets %}'{{ "rgba(46, 184, 92, 1)" if m.profit >= 0 else "rgba(220, 38, 38, 1)" }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: function(v) { return '$' + v; } } }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -278,6 +278,17 @@ MODULES: dict[str, ModuleDefinition] = {
         default_enabled=True,
         blueprint_names=("audit_logs",),
     ),
+    "report_studio": ModuleDefinition(
+        key="report_studio",
+        display_name="Report Studio",
+        description="Centralized reporting hub for markets, products, inventory, POS, orders, printers, and promotion.",
+        feature_flag_key="module.report_studio.enabled",
+        dependencies=(),
+        blueprint_names=("report_studio",),
+        api_resources=("report-studio",),
+        admin_nav_entries=(NavEntry("Report Studio", "report_studio.home"),),
+        docs_location="docs/New Ideas by Category.md#report-studio",
+    ),
     "notifications": ModuleDefinition(
         key="notifications",
         display_name="Notifications",

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from flask import current_app, g, jsonify, request
+from flask import Response, current_app, g, jsonify, request
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
@@ -199,6 +199,7 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "trend-reports": ("trend_scout",),
     "trend-opportunity-scores": ("trend_scout",),
     "trend-source-health": ("trend_scout",),
+    "report-studio": ("report_studio",),
 }
 
 
@@ -2129,6 +2130,105 @@ class SignAssetItem(MethodView):
             source_module=__name__,
         )
         return {"status": "archived"}
+
+
+@catalog_blp.route("/report-studio/reports", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_reports():
+    from app.services.report_studio import get_report_catalog, get_data_quality_summary
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    catalog = get_report_catalog()
+    data_quality = get_data_quality_summary()
+    return {"data": {"catalog": catalog, "data_quality": data_quality}}
+
+
+@catalog_blp.route("/report-studio/heat-map", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_heat_map():
+    from app.services.report_studio import get_vendor_market_heat_map
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    data = get_vendor_market_heat_map(dict(request.args))
+    return {"data": data}
+
+
+@catalog_blp.route("/report-studio/application-tracker", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_application_tracker():
+    from app.services.report_studio import get_market_application_pipeline_report
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    data = get_market_application_pipeline_report(dict(request.args))
+    return {"data": data}
+
+
+@catalog_blp.route("/report-studio/heat-map/csv", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_heat_map_csv():
+    from app.services.report_studio import get_vendor_market_heat_map
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    data = get_vendor_market_heat_map(dict(request.args))
+    import csv, io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Name", "City", "State", "Status", "Date", "Booth Fee", "Revenue", "Profit", "Margin %", "Has Coordinates", "Worth Repeating"])
+    for m in data:
+        writer.writerow([
+            m["name"], m.get("city", ""), m.get("state", ""), m.get("status", ""),
+            m.get("event_date", ""), m.get("booth_fee", 0), m.get("revenue", 0),
+            m.get("profit", 0), m.get("margin_pct", ""),
+            "Yes" if m.get("has_coordinates") else "No",
+            "Yes" if m.get("worth_repeating") is True else ("No" if m.get("worth_repeating") is False else ""),
+        ])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=market_heat_map.csv"})
+
+
+@catalog_blp.route("/report-studio/application-tracker/csv", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_application_tracker_csv():
+    from app.services.report_studio import get_market_application_pipeline_report
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    data = get_market_application_pipeline_report(dict(request.args))
+    import csv, io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Market", "City", "State", "Status", "Deadline", "App Fee", "Booth Fee", "Total Fee", "Has Documents", "Follow-Up Date", "Needs Follow-Up", "Worth Repeating"])
+    for m in data.get("pipeline", []):
+        writer.writerow([
+            m["name"], m.get("city", ""), m.get("state", ""), m.get("status", ""),
+            m.get("application_deadline", ""), m.get("application_fee", 0),
+            m.get("booth_fee", 0), m.get("total_fee", 0),
+            "Yes" if m.get("has_documents") else "No",
+            m.get("follow_up_date", ""),
+            "Yes" if m.get("needs_follow_up") else "No",
+            "Yes" if m.get("worth_repeating") is True else ("No" if m.get("worth_repeating") is False else ""),
+        ])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=application_tracker.csv"})
 
 
 @catalog_blp.route("/sign-assets/<int:sign_id>/generate-ai-image", methods=["POST"])

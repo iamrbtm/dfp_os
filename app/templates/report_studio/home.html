@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Report Studio | {{ app_name }}{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.x.x/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Report Studio</h1>
+    <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">Central reporting hub for market performance, product readiness, inventory, POS, orders, printers, and promotion.</p>
+  </div>
+
+  {% if data_quality.warnings %}
+  <div class="space-y-2">
+    {% for warning in data_quality.warnings %}
+    <div class="app-card p-4 flex items-start gap-3 {% if warning.type == 'warning' %}" style="border-left: 4px solid var(--color-warning);{% else %}" style="border-left: 4px solid var(--color-link);{% endif %}">
+      <span class="text-sm" style="color: var(--color-text-muted);">{{ warning.message }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="get" class="app-card p-4">
+    <div class="flex flex-col gap-3 sm:flex-row">
+      <input type="search" name="q" value="{{ search }}" placeholder="Search reports..." class="app-input">
+      <select name="category" class="app-input" onchange="this.form.submit()">
+        <option value="">All Categories</option>
+        {% for cat in ['Markets', 'Products', 'Inventory', 'POS', 'Orders', 'Printers', 'Promotion'] %}
+        <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+      {% if search or category_filter %}
+      <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if catalog %}
+  <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    {% for report in catalog %}
+    <article class="app-card p-5 flex flex-col">
+      <div class="mb-1">
+        <span class="text-xs font-medium uppercase tracking-wider" style="color: var(--color-link);">{{ report.category }}</span>
+      </div>
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">{{ report.title }}</h2>
+      <p class="mt-1 text-sm flex-1" style="color: var(--color-text-muted);">{{ report.description }}</p>
+      <div class="mt-4 flex items-center gap-3">
+        {% if report.url %}
+        <a href="{{ report.url }}" class="app-btn app-btn-primary text-sm">Open Report</a>
+        {% endif %}
+        {% if report.export_csv %}
+        <span class="text-xs" style="color: var(--color-text-muted);">CSV export available</span>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="app-card p-8 text-center">
+    <p class="text-lg" style="color: var(--color-text-muted);">No reports found matching your filters.</p>
+    {% if search or category_filter %}
+    <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary mt-4 inline-block">Clear Filters</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
