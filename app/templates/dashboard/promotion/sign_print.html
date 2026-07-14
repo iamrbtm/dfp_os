@@ -106,7 +106,9 @@
     <button onclick="window.print()">Print This Sign</button>
   </div>
   <div class="sign-card">
-    {% if sign.preview_html %}
+    {% if sign.layout == 'graphical' and sign.ai_image_path %}
+      <img src="{{ sign.ai_image_path }}" alt="{{ sign.title }}" style="max-width: 100%; height: auto; display: block; border-radius: 0.1in;" />
+    {% elif sign.preview_html %}
       {{ sign.preview_html|safe }}
     {% else %}
       <h1 class="sign-title">{{ sign.title }}</h1>

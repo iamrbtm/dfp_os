@@ -91,6 +91,7 @@ class Config:
     S3_USE_SSL = _as_bool(os.getenv("S3_USE_SSL"), False)
     S3_AUTO_CREATE_BUCKETS = _as_bool(os.getenv("S3_AUTO_CREATE_BUCKETS"), True)
     RECEIPT_STORAGE_BUCKET = os.getenv("RECEIPT_STORAGE_BUCKET", "receipts")
+    SIGN_STORAGE_BUCKET = os.getenv("SIGN_STORAGE_BUCKET", "signs")
     MARKET_DOCUMENTS_BUCKET = os.getenv("MARKET_DOCUMENTS_BUCKET", "markets")
     PRODUCT_ASSETS_BUCKET = os.getenv("PRODUCT_ASSETS_BUCKET", "products")
     RECEIPT_MAX_UPLOAD_MB = int(os.getenv("RECEIPT_MAX_UPLOAD_MB", "25"))

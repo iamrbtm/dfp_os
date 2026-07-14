@@ -2034,6 +2034,7 @@ class SignAssetCollection(MethodView):
             short_description=payload.get("short_description"),
             care_note=payload.get("care_note"),
             qr_target_url=payload.get("qr_target_url"),
+            layout=payload.get("layout", "text"),
             product_id=payload.get("product_id"),
             collection_id=payload.get("collection_id"),
             is_active=payload.get("is_active", True),
@@ -2084,7 +2085,7 @@ class SignAssetItem(MethodView):
             return {"error": {"code": "validation_error", "message": str(errors), "details": errors}}, 400
         from app.services.admin_mutations import snapshot_instance
         before_state = snapshot_instance(sign)
-        for field in ("title", "subtitle", "price_display", "short_description", "care_note", "qr_target_url"):
+        for field in ("title", "subtitle", "price_display", "short_description", "care_note", "qr_target_url", "layout"):
             if field in payload:
                 setattr(sign, field, payload[field])
         if "product_id" in payload:
@@ -2128,6 +2129,22 @@ class SignAssetItem(MethodView):
             source_module=__name__,
         )
         return {"status": "archived"}
+
+
+@catalog_blp.route("/sign-assets/<int:sign_id>/generate-ai-image", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Promotion"])
+@catalog_blp.response(200)
+def sign_asset_generate_ai_image(sign_id: int):
+    denied = require_api_scopes("promotion")
+    if denied:
+        return denied
+    sign = db.session.get(SignAsset, sign_id)
+    if sign is None:
+        return {"error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}}, 404
+    from app.services.promotion import generate_ai_sign_image
+    result = generate_ai_sign_image(sign)
+    return {"data": SignAssetSchema().dump(result)}
 
 
 def register_api_blueprints(api):

@@ -14,6 +14,10 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="app-btn app-btn-secondary">Regenerate HTML</button>
       </form>
+      <form action="{{ url_for('promotion.sign_generate_ai_image', sign_id=sign.id) }}" method="post" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="app-btn app-btn-secondary" style="background: var(--color-teal, #0d9488); color: #fff;">Generate AI Image</button>
+      </form>
       {% if sign.status.value in ('draft', 'needs_review') %}
       <form action="{{ url_for('promotion.sign_approve', sign_id=sign.id) }}" method="post" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -33,6 +37,10 @@
         <div>
           <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Status</p>
           <p style="color: var(--color-text);">{{ sign.status.value|replace('_', ' ')|title }}</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Layout</p>
+          <p style="color: var(--color-text);">{{ sign.layout|title }}</p>
         </div>
         <div>
           <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Active</p>
@@ -83,12 +91,16 @@
     <div>
       <h3 class="text-sm font-medium mb-2" style="color: var(--color-text);">Preview</h3>
       <div class="app-card p-4">
-        {% if sign.preview_html %}
+        {% if sign.layout == 'graphical' and sign.ai_image_path %}
+        <div style="background: #fff; border-radius: 0.5rem; overflow: hidden;">
+          <img src="{{ sign.ai_image_path }}" alt="{{ sign.title }}" style="max-width: 100%; height: auto; display: block;" />
+        </div>
+        {% elif sign.preview_html %}
         <div class="sign-preview" style="background: #fff; color: #111; padding: 1.5rem; border-radius: 0.5rem; font-family: system-ui, sans-serif;">
           {{ sign.preview_html|safe }}
         </div>
         {% else %}
-        <p style="color: var(--color-text-muted);">No preview generated. Save the sign to generate HTML preview.</p>
+        <p style="color: var(--color-text-muted);">No preview generated. Save the sign or generate an AI image.</p>
         {% endif %}
       </div>
     </div>

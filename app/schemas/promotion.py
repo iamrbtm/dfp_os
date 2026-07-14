@@ -34,6 +34,8 @@ class SignAssetSchema(Schema):
     product_id = fields.Integer(allow_none=True)
     collection_id = fields.Integer(allow_none=True)
     is_active = fields.Boolean(load_default=True)
+    layout = fields.String(load_default="text")
+    ai_image_path = fields.String(allow_none=True, dump_only=True)
     status = fields.String(required=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)

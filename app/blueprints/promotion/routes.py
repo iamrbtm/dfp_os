@@ -23,6 +23,7 @@ from app.services.promotion import (
     archive_draft,
     archive_sign,
     generate_ai_assisted_draft,
+    generate_ai_sign_image,
     generate_draft_from_custom_request,
     generate_draft_from_market,
     generate_draft_from_product,
@@ -360,6 +361,20 @@ def sign_regenerate(sign_id: int):
         return render_template("errors/404.html"), 404
     save_sign_html(sign)
     flash("Sign HTML regenerated.", "success")
+    return redirect(url_for("promotion.sign_detail", sign_id=sign.id))
+
+
+@bp.post("/signs/<int:sign_id>/generate-ai-image")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def sign_generate_ai_image(sign_id: int):
+    sign = get_by_id(SignAsset, sign_id)
+    if sign is None:
+        return render_template("errors/404.html"), 404
+    result = generate_ai_sign_image(sign)
+    if result.ai_image_path:
+        flash("AI graphical sign generated.", "success")
+    else:
+        flash("AI generation skipped (AI disabled or API error). Sign remains text layout.", "warning")
     return redirect(url_for("promotion.sign_detail", sign_id=sign.id))
 
 

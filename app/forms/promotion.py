@@ -55,6 +55,7 @@ class SignAssetForm(FlaskForm):
     short_description = TextAreaField("Short Description", validators=[Optional()])
     care_note = TextAreaField("Care Note", validators=[Optional()])
     qr_target_url = StringField("QR Target URL", validators=[Optional(), Length(max=500)])
+    layout = SelectField("Layout", choices=[("text", "Text Sign"), ("graphical", "Graphical Sign")], validators=[DataRequired()])
     product_id = SelectField("Product", coerce=int, validators=[Optional()])
     collection_id = SelectField("Collection", coerce=int, validators=[Optional()])
     is_active = BooleanField("Active")
@@ -75,6 +76,7 @@ class SignAssetForm(FlaskForm):
         sign.short_description = self.short_description.data
         sign.care_note = self.care_note.data
         sign.qr_target_url = self.qr_target_url.data or None
+        sign.layout = self.layout.data
         sign.product_id = self.product_id.data or None
         sign.collection_id = self.collection_id.data or None
         sign.is_active = bool(self.is_active.data)

@@ -95,6 +95,8 @@ class SignAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
     )
     market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    layout: Mapped[str] = mapped_column(String(20), default="text", nullable=False)
+    ai_image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[SignStatus] = mapped_column(
         Enum(SignStatus, native_enum=False, length=40),
         default=SignStatus.DRAFT,

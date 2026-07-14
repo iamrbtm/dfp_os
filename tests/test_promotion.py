@@ -15,6 +15,7 @@ from app.services.promotion import (
     archive_draft,
     archive_sign,
     generate_ai_assisted_draft,
+    generate_ai_sign_image,
     generate_draft_from_custom_request,
     generate_draft_from_market,
     generate_draft_from_product,
@@ -554,3 +555,26 @@ def test_generate_signs_for_market_dispatches_audit(app, monkeypatch):
         generate_signs_for_market(market.id, actor_id=42)
 
     assert any(call["action"] == "sign_asset.generated_from_market" for call in calls)
+
+
+def test_ai_sign_image_skipped_when_ai_disabled(app):
+    with app.app_context():
+        from flask import current_app
+        current_app.config["AI_RECEIPT_PARSING_ENABLED"] = False
+        current_app.config["OPENAI_API_KEY"] = ""
+
+        sign = SignAsset(title="AI Image Sign", status=SignStatus.DRAFT)
+        db.session.add(sign)
+        db.session.commit()
+
+        result = generate_ai_sign_image(sign)
+        assert result.layout == "text"
+        assert result.ai_image_path is None
+
+
+def test_sign_layout_defaults_to_text(app):
+    with app.app_context():
+        sign = SignAsset(title="Layout Test", status=SignStatus.DRAFT)
+        db.session.add(sign)
+        db.session.commit()
+        assert sign.layout == "text"

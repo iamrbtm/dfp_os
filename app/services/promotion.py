@@ -300,6 +300,84 @@ def _generate_qr_svg(target_url: str | None) -> str:
     return buf.getvalue().decode("utf-8")
 
 
+def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
+    from flask import current_app
+    import io, uuid, httpx
+    from PIL import Image
+
+    ai_enabled = bool(current_app.config.get("AI_RECEIPT_PARSING_ENABLED", False) or
+                      current_app.config.get("AI_ANALYTICS_INSIGHTS_ENABLED", False))
+    api_key = current_app.config.get("OPENAI_API_KEY", "")
+    if not ai_enabled or not api_key:
+        return sign
+
+    prompt_parts = [f"A professional market display sign for 3D printed products."]
+    if sign.product:
+        prompt_parts.append(f"Product: {sign.product.name}")
+        if sign.product.short_description:
+            prompt_parts.append(f"Description: {sign.product.short_description[:200]}")
+    if sign.subtitle:
+        prompt_parts.append(f"Subtitle: {sign.subtitle}")
+    if sign.price_display:
+        prompt_parts.append(f"Price: {sign.price_display}")
+    prompt = ". ".join(prompt_parts) + ". Clean design, bold text, solid background, no real brand logos."
+
+    try:
+        resp = httpx.post(
+            "https://api.openai.com/v1/images/generations",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": "dall-e-3", "prompt": prompt, "n": 1, "size": "1024x1024"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        image_url = data["data"][0]["url"]
+    except Exception as exc:
+        current_app.logger.warning("AI sign image generation failed: %s", exc)
+        return sign
+
+    try:
+        img_resp = httpx.get(image_url, timeout=30)
+        img_resp.raise_for_status()
+        img = Image.open(io.BytesIO(img_resp.content))
+
+        if sign.qr_target_url:
+            import qrcode as qrcode_lib
+            qr_img = qrcode_lib.make(sign.qr_target_url, box_size=12, border=2).convert("RGB")
+            qr_size = int(img.width * 0.2)
+            qr_img = qr_img.resize((qr_size, qr_size), Image.LANCZOS)
+            margin = 20
+            pos = (img.width - qr_size - margin, img.height - qr_size - margin)
+            img.paste(qr_img, pos)
+
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        buf.seek(0)
+        png_bytes = buf.getvalue()
+
+        from app.services.storage import upload_bytes_to_storage, image_storage_key
+        bucket = current_app.config.get("SIGN_STORAGE_BUCKET", "signs")
+        key = image_storage_key(sign.id, f"ai_sign_{uuid.uuid4().hex[:8]}.png")
+        local_root = current_app.config.get("UPLOAD_FOLDER", "uploads")
+        ref = upload_bytes_to_storage(png_bytes, bucket=bucket, key=key, local_root=local_root, content_type="image/png")
+
+        sign.layout = "graphical"
+        sign.ai_image_path = ref
+        sign.generated_html = None
+        sign.preview_html = None
+        db.session.commit()
+        record_audit_event(
+            action="sign_asset.ai_image_generated",
+            entity_type="sign_asset",
+            entity_id=sign.id,
+            after_state={"layout": "graphical", "ai_image_path": ref},
+            source_module=__name__,
+        )
+    except Exception as exc:
+        current_app.logger.warning("Failed to save AI sign image: %s", exc)
+    return sign
+
+
 def _product_image_html(sign: SignAsset) -> str:
     if not sign.product:
         return ""
