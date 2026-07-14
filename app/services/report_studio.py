@@ -168,6 +168,32 @@ def get_vendor_market_heat_map(params: dict[str, str]) -> list[dict[str, Any]]:
     if status_filter:
         stmt = stmt.where(Market.status == status_filter)
 
+    location = params.get("location", "").strip()
+    if location:
+        parts = [p.strip() for p in location.split(",")]
+        city_part = parts[0] if parts else ""
+        state_part = parts[1] if len(parts) > 1 else ""
+        if city_part:
+            stmt = stmt.where(Market.city.ilike(f"%{city_part}%"))
+        if state_part:
+            stmt = stmt.where(Market.state.ilike(f"%{state_part}%"))
+
+    date_from = params.get("date_from", "").strip()
+    if date_from:
+        try:
+            from_date = date.fromisoformat(date_from)
+            stmt = stmt.where(Market.event_date >= from_date)
+        except (ValueError, TypeError):
+            pass
+
+    date_to = params.get("date_to", "").strip()
+    if date_to:
+        try:
+            to_date = date.fromisoformat(date_to)
+            stmt = stmt.where(Market.event_date <= to_date)
+        except (ValueError, TypeError):
+            pass
+
     min_profit_str = params.get("min_profit", "").strip()
     min_profit = None
     if min_profit_str:

@@ -22,14 +22,29 @@
   {% endif %}
 
   <form method="get" class="app-card p-4">
-    <div class="flex flex-col gap-3 sm:flex-row">
-      <input type="search" name="q" value="{{ search }}" placeholder="Search reports..." class="app-input">
-      <select name="category" class="app-input" onchange="this.form.submit()">
-        <option value="">All Categories</option>
-        {% for cat in ['Markets', 'Products', 'Inventory', 'POS', 'Orders', 'Printers', 'Promotion'] %}
-        <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
-        {% endfor %}
-      </select>
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+      <div>
+        <label class="text-xs font-medium" style="color: var(--color-text-muted);">Search</label>
+        <input type="search" name="q" value="{{ search }}" placeholder="Search reports..." class="app-input mt-1">
+      </div>
+      <div>
+        <label class="text-xs font-medium" style="color: var(--color-text-muted);">Category</label>
+        <select name="category" class="app-input mt-1">
+          <option value="">All Categories</option>
+          {% for cat in ['Markets', 'Products', 'Inventory', 'POS', 'Orders', 'Printers', 'Promotion'] %}
+          <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium" style="color: var(--color-text-muted);">Report Status</label>
+        <select name="report_status" class="app-input mt-1">
+          <option value="">All</option>
+          <option value="available" {% if request.args.get('report_status') == 'available' %}selected{% endif %}>Available</option>
+          <option value="coming_soon" {% if request.args.get('report_status') == 'coming_soon' %}selected{% endif %}>Coming Soon</option>
+        </select>
+      </div>
+      <button type="submit" class="app-btn app-btn-secondary">Filter</button>
       {% if search or category_filter %}
       <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary">Clear</a>
       {% endif %}
@@ -40,8 +55,13 @@
   <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
     {% for report in catalog %}
     <article class="app-card p-5 flex flex-col">
-      <div class="mb-1">
+      <div class="flex items-center justify-between mb-1">
         <span class="text-xs font-medium uppercase tracking-wider" style="color: var(--color-link);">{{ report.category }}</span>
+        {% if report.url %}
+        <span class="text-xs" style="color: var(--color-success);">Available</span>
+        {% else %}
+        <span class="text-xs" style="color: var(--color-text-muted);">Coming Soon</span>
+        {% endif %}
       </div>
       <h2 class="text-lg font-semibold" style="color: var(--color-text);">{{ report.title }}</h2>
       <p class="mt-1 text-sm flex-1" style="color: var(--color-text-muted);">{{ report.description }}</p>
@@ -52,6 +72,9 @@
         {% if report.export_csv %}
         <span class="text-xs" style="color: var(--color-text-muted);">CSV export available</span>
         {% endif %}
+      </div>
+      <div class="mt-2 text-xs" style="color: var(--color-text-muted);">
+        Data refreshes on page load &middot; {% if report.export_csv %}CSV download ready{% else %}No export{% endif %}
       </div>
     </article>
     {% endfor %}

@@ -11,7 +11,12 @@
       <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Market Application Tracker</h1>
       <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">Pipeline view of market applications: deadlines, costs, status counts, and follow-up needs.</p>
     </div>
-    <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary text-sm">&larr; Back to Reports</a>
+    <div class="flex items-center gap-3">
+      <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary text-sm">&larr; Back to Reports</a>
+      <a href="/api/v1/report-studio/application-tracker/csv" class="app-btn app-btn-secondary text-sm">
+         Download CSV
+      </a>
+    </div>
   </div>
 
   {% if report.total_applications > 0 %}

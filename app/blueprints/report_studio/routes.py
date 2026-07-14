@@ -50,6 +50,9 @@ def heat_map():
         markets=data,
         min_profit=request.args.get("min_profit", ""),
         status_filter=request.args.get("status", "").strip(),
+        date_from=request.args.get("date_from", ""),
+        date_to=request.args.get("date_to", ""),
+        location_filter=request.args.get("location", ""),
     )
 
 

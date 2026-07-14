@@ -11,14 +11,19 @@
       <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Vendor Market Heat Map</h1>
       <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">Map markets by profit, distance, booth fee, weather risk, traffic, and repeat quality.</p>
     </div>
-    <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary text-sm">&larr; Back to Reports</a>
+    <div class="flex items-center gap-3">
+      <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary text-sm">&larr; Back to Reports</a>
+      <a href="/api/v1/report-studio/heat-map/csv" class="app-btn app-btn-secondary text-sm">
+         Download CSV
+      </a>
+    </div>
   </div>
 
   <form method="get" class="app-card p-4">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <div>
         <label class="text-xs font-medium" style="color: var(--color-text-muted);">Status</label>
-        <select name="status" class="app-input mt-1" onchange="this.form.submit()">
+        <select name="status" class="app-input mt-1">
           <option value="">All Statuses</option>
           <option value="interested" {% if status_filter == 'interested' %}selected{% endif %}>Interested</option>
           <option value="applied" {% if status_filter == 'applied' %}selected{% endif %}>Applied</option>
@@ -26,14 +31,30 @@
           <option value="scheduled" {% if status_filter == 'scheduled' %}selected{% endif %}>Scheduled</option>
           <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
           <option value="canceled" {% if status_filter == 'canceled' %}selected{% endif %}>Canceled</option>
+          <option value="not_worth_repeating" {% if status_filter == 'not_worth_repeating' %}selected{% endif %}>Not Worth Repeating</option>
+          <option value="repeat" {% if status_filter == 'repeat' %}selected{% endif %}>Repeat</option>
         </select>
       </div>
       <div>
-        <label class="text-xs font-medium" style="color: var(--color-text-muted);">Min. Profit ($)</label>
-        <input type="number" name="min_profit" value="{{ min_profit }}" placeholder="0" class="app-input mt-1" style="max-width: 120px;">
+        <label class="text-xs font-medium" style="color: var(--color-text-muted);">City/State</label>
+        <input type="text" name="location" value="{{ request.args.get('location', '') }}" placeholder="e.g. Clarksville, TN" class="app-input mt-1">
       </div>
+      <div>
+        <label class="text-xs font-medium" style="color: var(--color-text-muted);">From Date</label>
+        <input type="date" name="date_from" value="{{ request.args.get('date_from', '') }}" class="app-input mt-1">
+      </div>
+      <div>
+        <label class="text-xs font-medium" style="color: var(--color-text-muted);">To Date</label>
+        <input type="date" name="date_to" value="{{ request.args.get('date_to', '') }}" class="app-input mt-1">
+      </div>
+      <div>
+        <label class="text-xs font-medium" style="color: var(--color-text-muted);">Min. Profit ($)</label>
+        <input type="number" name="min_profit" value="{{ min_profit }}" placeholder="0" class="app-input mt-1">
+      </div>
+    </div>
+    <div class="mt-3 flex gap-2">
       <button type="submit" class="app-btn app-btn-secondary">Filter</button>
-      {% if status_filter or min_profit %}
+      {% if status_filter or min_profit or request.args.get('location') or request.args.get('date_from') or request.args.get('date_to') %}
       <a href="{{ url_for('report_studio.heat_map') }}" class="app-btn app-btn-secondary">Clear</a>
       {% endif %}
     </div>
