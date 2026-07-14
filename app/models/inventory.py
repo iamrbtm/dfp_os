@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
 from app.models.base import PrimaryKeyMixin, TimestampMixin
+from app.models.business import Business
 
 
 class FilamentStatus(StrEnum):
@@ -54,6 +55,8 @@ class FilamentSpool(PrimaryKeyMixin, TimestampMixin, db.Model):
     reorder_threshold_grams: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    business: Mapped[Business | None] = relationship(back_populates="filament_spools")
+
 
 class InventoryLocation(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "inventory_locations"
@@ -66,6 +69,7 @@ class InventoryLocation(PrimaryKeyMixin, TimestampMixin, db.Model):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    business: Mapped[Business | None] = relationship(back_populates="inventory_locations")
     inventory_records = relationship("InventoryRecord", back_populates="location")
 
 
@@ -92,6 +96,7 @@ class InventoryRecord(PrimaryKeyMixin, TimestampMixin, db.Model):
     reorder_target: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_counted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    business: Mapped[Business | None] = relationship(back_populates="inventory_records")
     product = relationship("Product", back_populates="inventory_records")
     location = relationship("InventoryLocation", back_populates="inventory_records")
 

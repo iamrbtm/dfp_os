@@ -17,6 +17,7 @@ from app.blueprints.audit_logs import bp as audit_logs_bp
 from app.blueprints.cost_engine import bp as cost_engine_bp
 from app.blueprints.customers import bp as customers_bp
 from app.blueprints.expenses import bp as expenses_bp
+from app.blueprints.feature_flags import bp as feature_flags_bp
 from app.blueprints.custom_orders import bp as custom_orders_bp
 from app.blueprints.dashboard import bp as dashboard_bp
 from app.blueprints.markets import bp as markets_bp
@@ -136,6 +137,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(trend_scout_bp)
     app.register_blueprint(audit_logs_bp)
     app.register_blueprint(api_tokens_bp)
+    app.register_blueprint(feature_flags_bp)
     register_api_blueprints(api)
     _register_redoc_view(app)
 
@@ -309,6 +311,7 @@ def register_context_processors(app: Flask) -> None:
             "prep_tasks": "prep_tasks",
             "cost_engine": "cost_engine",
             "audit_logs": "audit_logs",
+            "feature_flags": "feature_flags",
         }
 
         SECTION_TITLES: dict[str, str] = {
@@ -392,6 +395,9 @@ def register_context_processors(app: Flask) -> None:
             "settings": [
                 ("Settings", url_for("settings.settings_list")),
                 ("Themes", url_for("settings.themes")),
+            ],
+            "feature_flags": [
+                ("Feature Flags", url_for("feature_flags.index")),
             ],
         }
 

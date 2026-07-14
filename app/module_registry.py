@@ -305,7 +305,9 @@ MODULES: dict[str, ModuleDefinition] = {
         feature_flag_key="module.feature_flags.enabled",
         default_enabled=True,
         dependencies=("settings",),
+        blueprint_names=("feature_flags",),
         api_resources=("feature-flags",),
+        admin_nav_entries=(NavEntry("Feature Flags", "feature_flags.index"),),
     ),
 }
 

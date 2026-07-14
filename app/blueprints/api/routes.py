@@ -1259,6 +1259,12 @@ class MarketsExport(MethodView):
                 m.event_date.isoformat() if m.event_date else "", m.booth_fee or 0, m.application_fee or 0,
                 m.status.value, m.actual_revenue or 0, m.actual_profit or 0, m.notes or ""
             ])
+        record_audit_event(
+            action="csv.export",
+            entity_type="market",
+            metadata={"export_type": "markets", "row_count": len(markets)},
+            source_module=__name__,
+        )
         from flask import Response
         return Response(
             output.getvalue(),
@@ -1287,6 +1293,12 @@ class ExpensesExport(MethodView):
                 e.description or "", e.amount, e.payment_method or "", e.related_market_id or "",
                 "yes" if e.tax_deductible else "no"
             ])
+        record_audit_event(
+            action="csv.export",
+            entity_type="expense",
+            metadata={"export_type": "expenses", "row_count": len(expenses)},
+            source_module=__name__,
+        )
         from flask import Response
         return Response(
             output.getvalue(),
@@ -1314,6 +1326,12 @@ class MarketPackingListsExport(MethodView):
                 i.id, i.market_id, i.product_id,
                 i.planned_quantity or 0, i.packed_quantity or 0, i.sold_quantity or 0, i.returned_quantity or 0
             ])
+        record_audit_event(
+            action="csv.export",
+            entity_type="market_packing_list",
+            metadata={"export_type": "market-packing-lists", "row_count": len(items)},
+            source_module=__name__,
+        )
         from flask import Response
         return Response(
             output.getvalue(),
@@ -2199,6 +2217,12 @@ def report_studio_heat_map_csv():
             "Yes" if m.get("has_coordinates") else "No",
             "Yes" if m.get("worth_repeating") is True else ("No" if m.get("worth_repeating") is False else ""),
         ])
+    record_audit_event(
+        action="csv.export",
+        entity_type="market",
+        metadata={"export_type": "market_heat_map", "row_count": len(data)},
+        source_module=__name__,
+    )
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=market_heat_map.csv"})
 
 
@@ -2228,6 +2252,13 @@ def report_studio_application_tracker_csv():
             "Yes" if m.get("needs_follow_up") else "No",
             "Yes" if m.get("worth_repeating") is True else ("No" if m.get("worth_repeating") is False else ""),
         ])
+    pipeline = data.get("pipeline", [])
+    record_audit_event(
+        action="csv.export",
+        entity_type="market",
+        metadata={"export_type": "application_tracker", "row_count": len(pipeline)},
+        source_module=__name__,
+    )
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=application_tracker.csv"})
 
 

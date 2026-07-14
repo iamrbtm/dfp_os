@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP
+
 from flask_wtf import FlaskForm
 from wtforms import (
     BooleanField,
+    DecimalField,
     SelectField,
     StringField,
     SubmitField,
@@ -23,7 +26,7 @@ class ExpenseForm(FlaskForm):
         "Category", choices=enum_choices(ExpenseCategory), validators=[DataRequired()]
     )
     description = TextAreaField("Description", validators=[Optional()])
-    amount = StringField("Amount", validators=[DataRequired()])
+    amount = DecimalField("Amount", places=2, rounding=ROUND_HALF_UP, validators=[DataRequired()])
     payment_method = StringField("Payment Method", validators=[Optional(), Length(max=100)])
     related_market_id = SelectField("Market", coerce=int, validators=[Optional()], default=0)
     related_order_id = SelectField("Custom Order", coerce=int, validators=[Optional()], default=0)
@@ -76,7 +79,7 @@ class ExpenseForm(FlaskForm):
         expense.vendor = self.vendor.data.strip()
         expense.category = ExpenseCategory(self.category.data)
         expense.description = self.description.data
-        expense.amount = self._parse_money(self.amount.data)
+        expense.amount = self.amount.data
         expense.payment_method = self.payment_method.data or None
         expense.related_market_id = self.related_market_id.data or None if self.related_market_id.data else None
         expense.related_order_id = self.related_order_id.data or None if self.related_order_id.data else None
@@ -85,12 +88,3 @@ class ExpenseForm(FlaskForm):
         expense.notes = self.notes.data
         return expense
 
-    @staticmethod
-    def _parse_money(value: str | None) -> int | None:
-        if not value:
-            return None
-        try:
-            from decimal import Decimal
-            return Decimal(value)
-        except (ValueError, TypeError):
-            return None

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
 from app.models.base import PrimaryKeyMixin, TimestampMixin
+from app.models.business import Business
 
 
 class Customer(PrimaryKeyMixin, TimestampMixin, db.Model):
@@ -22,9 +23,13 @@ class Customer(PrimaryKeyMixin, TimestampMixin, db.Model):
     state: Mapped[str | None] = mapped_column(String(120), nullable=True)
     zip_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    business: Mapped[Business | None] = relationship(back_populates="customers")
     orders = relationship("Order", back_populates="customer", order_by="Order.created_at.desc()")
     custom_requests = relationship(
         "CustomRequest", back_populates="customer", order_by="CustomRequest.created_at.desc()"

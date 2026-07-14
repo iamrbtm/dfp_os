@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from marshmallow import Schema, fields
 
 
@@ -15,7 +17,7 @@ class CategorySchema(Schema):
     name = fields.String(required=True)
     slug = fields.String(required=True)
     description = fields.String(allow_none=True)
-    sort_order = fields.Integer()
+    sort_order = fields.Integer(load_default=0)
     is_public = fields.Boolean()
     is_pos_visible = fields.Boolean()
     created_at = fields.DateTime(dump_only=True)
@@ -28,7 +30,7 @@ class CollectionSchema(Schema):
     slug = fields.String(required=True)
     description = fields.String(allow_none=True)
     is_public = fields.Boolean()
-    sort_order = fields.Integer()
+    sort_order = fields.Integer(load_default=0)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
 
@@ -47,11 +49,11 @@ class ProductSchema(Schema):
     is_public = fields.Boolean()
     is_pos_visible = fields.Boolean()
     is_featured = fields.Boolean()
-    base_price = fields.Decimal(as_string=True)
-    estimated_material_cost = fields.Decimal(as_string=True)
-    estimated_labor_minutes = fields.Integer()
-    estimated_print_minutes = fields.Integer()
-    estimated_profit = fields.Decimal(as_string=True)
+    base_price = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
+    estimated_material_cost = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
+    estimated_labor_minutes = fields.Integer(load_default=0)
+    estimated_print_minutes = fields.Integer(load_default=0)
+    estimated_profit = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
     default_image_path = fields.String(allow_none=True)
     tags = fields.String(allow_none=True)
     care_instructions = fields.String(allow_none=True)
