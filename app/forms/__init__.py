@@ -32,7 +32,7 @@ from app.forms.inventory import (
 )
 from app.forms.order import OrderForm, OrderItemForm, PaymentForm
 from app.forms.pos import PosCloseSessionForm, PosSessionForm
-from app.forms.print_job import PrintJobForm
+from app.forms.print_job import PrintFailureAutopsyForm, PrintJobForm
 from app.forms.storefront import AddToCartForm, CheckoutForm
 
 __all__ = [
@@ -68,6 +68,7 @@ __all__ = [
     "PrepTaskAdminForm",
     "PrepTaskTemplateForm",
     "PrinterForm",
+    "PrintFailureAutopsyForm",
     "PrintJobForm",
     "ProductModelUploadForm",
     "ProductForm",

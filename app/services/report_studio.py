@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 
 from app.extensions import db
 from app.models import Market, MarketStatus
-from app.services.cost_engine import get_cost_engine
+from app.services.printer_reliability import get_reliability_report_rows
 
 
 REPORT_CATEGORIES = {
@@ -77,7 +77,7 @@ REPORT_CATEGORIES = {
             "key": "printer-reliability",
             "title": "Printer Reliability",
             "description": "Failure rates, common causes, and printer productivity.",
-            "endpoint": None,
+            "endpoint": "report_studio.printer_reliability",
             "export_csv": False,
         },
     ],
@@ -162,7 +162,7 @@ def get_data_quality_summary() -> dict[str, Any]:
 
 
 def get_vendor_market_heat_map(params: dict[str, str]) -> list[dict[str, Any]]:
-    stmt = select(Market).order_by(Market.event_date.desc().nullslast())
+    stmt = select(Market).order_by(Market.event_date.is_(None), Market.event_date.desc())
 
     status_filter = params.get("status", "").strip()
     if status_filter:
@@ -246,7 +246,11 @@ def get_market_application_pipeline_report(params: dict[str, str]) -> dict[str, 
         MarketStatus.REJECTED,
     ]
 
-    stmt = select(Market).where(Market.status.in_(application_statuses)).order_by(Market.application_deadline.asc().nullslast())
+    stmt = (
+        select(Market)
+        .where(Market.status.in_(application_statuses))
+        .order_by(Market.application_deadline.is_(None), Market.application_deadline.asc())
+    )
 
     markets = db.session.execute(stmt).scalars().all()
 
@@ -295,4 +299,16 @@ def get_market_application_pipeline_report(params: dict[str, str]) -> dict[str, 
         "missing_documents_count": len(missing_docs),
         "needs_follow_up_count": len(needs_follow_up),
         "total_applications": len(markets),
+    }
+
+
+def get_printer_reliability_report() -> dict[str, Any]:
+    rows = get_reliability_report_rows()
+    highest_risk = sorted(rows, key=lambda row: (row["failure_rate"], row["failed_count"]), reverse=True)
+    return {
+        "printers": rows,
+        "printer_count": len(rows),
+        "failed_count": sum(int(row["failed_count"]) for row in rows),
+        "completed_count": sum(int(row["completed_count"]) for row in rows),
+        "highest_risk": highest_risk[:3],
     }

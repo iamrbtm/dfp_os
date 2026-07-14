@@ -38,6 +38,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 ## Next Priorities
 
 - `done` Milestone 3: Report Studio — Module foundation, report catalog home, vendor market heat map, and market application tracker report.
+- `in-progress` Milestone 5: Printers — Failure autopsy model/workflow, reliability UI, API endpoint, Report Studio integration, and focused tests implemented; DB-backed verification blocked because local MariaDB/Docker is not running.
 
 - `todo` Normalize and map kept tables from the legacy import staging layer into warehouse fact tables.
 - `todo` Extend DFPos Intelligence with current DFPos snapshot sync and approved-action workflows that can create prep tasks or print jobs after human confirmation.

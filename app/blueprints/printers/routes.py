@@ -21,6 +21,7 @@ from app.services.admin_mutations import (
     snapshot_instance,
     update_resource as update_admin_resource,
 )
+from app.services.printer_reliability import get_all_printer_reliability_summaries
 from app.utils.auth import roles_required
 
 
@@ -104,6 +105,13 @@ def _build_form(config: ResourceConfig, instance=None):
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def printers_root():
     return redirect(url_for("printers.list_resource", resource_key="printers"))
+
+
+@bp.get("/reliability")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def reliability():
+    summaries = get_all_printer_reliability_summaries()
+    return render_template("printers/reliability.html", summaries=summaries)
 
 
 @bp.route("/<resource_key>/")

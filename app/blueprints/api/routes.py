@@ -56,6 +56,9 @@ from app.models import (
     PrepTaskTemplate,
     Printer,
     PrinterStatus,
+    PrintFailureAutopsy,
+    PrintFailureCategory,
+    PrintFailureSeverity,
     PrintJob,
     PrintJobStatus,
     Product,
@@ -100,6 +103,7 @@ from app.schemas import (
     PrepTaskSchema,
     PrepTaskTemplateSchema,
     PrinterSchema,
+    PrintFailureAutopsySchema,
     PrintJobSchema,
     ProductSchema,
     ResourceListEnvelope,
@@ -124,6 +128,7 @@ from app.services.audit import record_audit_event
 from app.services.api_tokens import revoke_api_token
 from app.services.inventory import release_inventory, reserve_inventory, transfer_inventory
 from app.services.pos import refund_sale
+from app.services.printer_reliability import get_reliability_report_rows
 from app.utils import slugify
 from app.utils.auth import api_token_required, require_api_scopes
 
@@ -173,6 +178,7 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "collections": ("catalog",),
     "products": ("catalog",),
     "printers": ("inventory",),
+    "print-failure-autopsies": ("inventory",),
     "ams-units": ("inventory",),
     "filament-spools": ("inventory",),
     "inventory-locations": ("inventory",),
@@ -464,13 +470,40 @@ def _apply_payment(instance: Payment, data: dict):
 
 
 def _apply_print_job(instance: PrintJob, data: dict):
-    instance.label = data["label"].strip()
-    instance.status = PrintJobStatus(data["status"])
+    instance.label = (data.get("label") or "").strip() or None
+    instance.status = PrintJobStatus(data.get("status", PrintJobStatus.QUEUED.value))
     instance.printer_id = data.get("printer_id")
     instance.order_item_id = data.get("order_item_id")
-    instance.quantity = data.get("quantity", 1)
-    instance.priority = data.get("priority", 0)
+    instance.product_id = data.get("product_id")
+    instance.assigned_to_id = data.get("assigned_to_id")
+    instance.priority = data.get("priority", 0) or 0
+    instance.started_at = data.get("started_at")
+    instance.completed_at = data.get("completed_at")
+    instance.estimated_minutes = data.get("estimated_minutes", 0) or 0
+    instance.actual_minutes = data.get("actual_minutes")
+    instance.filament_used_grams = data.get("filament_used_grams")
+    instance.failure_reason = data.get("failure_reason")
     instance.notes = data.get("notes")
+
+
+def _apply_print_failure_autopsy(instance: PrintFailureAutopsy, data: dict):
+    instance.print_job_id = data["print_job_id"]
+    job = db.session.get(PrintJob, instance.print_job_id)
+    if job is None:
+        raise ValueError("Print job not found.")
+    instance.printer_id = data.get("printer_id", job.printer_id)
+    instance.product_id = data.get("product_id", job.product_id)
+    instance.filament_spool_id = data.get("filament_spool_id")
+    instance.user_id = data.get("user_id")
+    instance.model_asset_id = data.get("model_asset_id")
+    instance.category = PrintFailureCategory(data["category"])
+    instance.severity = PrintFailureSeverity(data["severity"])
+    instance.notes = data.get("notes")
+    instance.photo_reference = data.get("photo_reference")
+    instance.corrective_action = data.get("corrective_action")
+    instance.maintenance_required = data.get("maintenance_required", False)
+    instance.resolved = data.get("resolved", False)
+    instance.resolution_notes = data.get("resolution_notes")
 
 
 def _apply_prep_task_template(instance: PrepTaskTemplate, data: dict):
@@ -766,6 +799,13 @@ API_RESOURCES = {
         ["label", "notes"],
         _apply_print_job,
     ),
+    "print-failure-autopsies": ApiResourceConfig(
+        "print-failure-autopsies",
+        PrintFailureAutopsy,
+        PrintFailureAutopsySchema,
+        ["notes", "corrective_action", "resolution_notes"],
+        _apply_print_failure_autopsy,
+    ),
     "prep-task-templates": ApiResourceConfig(
         "prep-task-templates",
         PrepTaskTemplate,
@@ -1037,6 +1077,18 @@ def _register_resource(config: ApiResourceConfig):
 
 for resource_config in API_RESOURCES.values():
     _register_resource(resource_config)
+
+
+@catalog_blp.route("/printers/reliability")
+class PrinterReliabilityCollection(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Printers"])
+    @catalog_blp.response(200)
+    def get(self):
+        denied = require_api_scopes("inventory")
+        if denied:
+            return denied
+        return {"data": get_reliability_report_rows()}
 
 
 @catalog_blp.route("/themes")

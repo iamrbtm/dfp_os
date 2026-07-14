@@ -55,3 +55,63 @@
 - [x] Empty states: All templates handle no-data scenarios
 - [x] Test file: 28 tests covering critical paths
 - [x] Design system: Uses design tokens, app-card, app-btn, app-table, app-input classes
+
+## Milestone 5: Printers
+
+### Phase 5.1: Failure Autopsy Data Model
+
+**Status**: Implemented and DB-verified
+**Date**: 2026-07-14
+
+**Files created**:
+- `app/models/print_failure_autopsy.py` — Failure autopsy model plus category/severity enums.
+- `migrations/versions/f6a7b8c9d0e1_add_print_failure_autopsies.py` — Alembic table/index migration.
+
+**Files modified**:
+- `app/models/print_job.py` — Added `failure_autopsies` relationship.
+- `app/models/__init__.py` — Exported autopsy model/enums.
+
+### Phase 5.2: Failure Autopsy Workflow
+
+**Status**: Implemented and DB-verified
+
+**Files created**:
+- `app/services/printer_reliability.py` — Autopsy create/update/resolve logic, audit dispatch, reliability summaries, cost-engine failure-rate helper.
+- `app/templates/print_jobs/detail.html` — Print job detail with failed-print autopsy prompt and autopsy table.
+- `app/templates/print_jobs/autopsy_form.html` — Staff/admin autopsy entry/edit form.
+
+**Files modified**:
+- `app/forms/print_job.py` — Added `PrintFailureAutopsyForm`.
+- `app/forms/__init__.py` — Exported autopsy form.
+- `app/blueprints/print_jobs/routes.py` — Added create/edit/resolve autopsy workflow.
+
+### Phase 5.3: Printer Reliability Reporting
+
+**Status**: Implemented and DB-verified
+
+**Files created**:
+- `app/templates/printers/reliability.html` — Printer reliability cards.
+- `app/templates/report_studio/printer_reliability.html` — Report Studio reliability report.
+- `tests/test_milestone5_printer_reliability.py` — Focused model/service/workflow/API/report tests.
+
+**Files modified**:
+- `app/blueprints/printers/routes.py` — Added `/printers/reliability`.
+- `app/blueprints/api/routes.py` — Added `print-failure-autopsies` resource, fixed print-job API field mapping, added `/api/v1/printers/reliability`.
+- `app/schemas/print_job.py` — Added `PrintFailureAutopsySchema`.
+- `app/schemas/__init__.py` — Exported autopsy schema.
+- `app/services/report_studio.py` — Added printer reliability catalog entry and report data.
+- `app/blueprints/report_studio/routes.py` — Added `/report-studio/printer-reliability`.
+- `app/services/cost_engine.py` — Uses printer-model failure history as fallback failure-rate evidence.
+- `TODO.md` — Added current Milestone 5 status.
+
+**Tests/checks**:
+- `./.venv/bin/python -m py_compile ...` passed for changed Python files.
+- App route-map smoke check passed and confirmed `/api/v1/printers/reliability`, `/report-studio/printer-reliability`, and `/printers/reliability` are registered.
+- `./.venv/bin/pytest -q tests/test_milestone5_printer_reliability.py` passed: 4 passed.
+- Broader `tests/test_report_studio.py` run against MariaDB exposed pre-existing Milestone 3 test/compatibility issues: MariaDB rejected `NULLS LAST` ordering, several route tests log in without creating an admin user, one helper call passes duplicate `name`, and CSV tests expect an exact `text/csv` content type while Flask returns `text/csv; charset=utf-8`.
+- Fixed the MariaDB `NULLS LAST` compatibility issue in `app/services/report_studio.py`.
+
+**Remaining risks**:
+- Alembic migration upgrade still needs a dedicated `flask db upgrade` pass against a clean MariaDB database.
+- OpenAPI broad test still has an unrelated existing failure for `/api/v1/content-drafts` missing requestBody metadata.
+- No commit created yet.
