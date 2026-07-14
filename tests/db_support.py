@@ -8,8 +8,14 @@ from sqlalchemy.engine import URL, make_url
 
 
 DEFAULT_TEST_DATABASE_URL = "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test"
-DEFAULT_MIGRATION_DATABASE_URL = "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_migration_check"
-DEFAULT_TEST_DATABASE_ADMIN_URL = "mysql+pymysql://root:rootpassword@127.0.0.1:3306/mysql"
+DEFAULT_MIGRATION_DATABASE_URL = os.getenv(
+    "MIGRATION_DATABASE_URL",
+    "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_migration_check",
+)
+DEFAULT_TEST_DATABASE_ADMIN_URL = os.getenv(
+    "TEST_DATABASE_ADMIN_URL",
+    "mysql+pymysql://root:rootpassword@127.0.0.1:3306/mysql",
+)
 
 
 def configured_test_database_url() -> str:
@@ -41,7 +47,7 @@ def _database_password(database_url: str) -> str | None:
 
 def _database_host_pattern(database_url: str) -> str:
     host = make_url(database_url).host or "%"
-    return "%" if host in {"127.0.0.1", "localhost"} else host
+    return "%" if host in {"127.0.0.1", "localhost", "db"} else host
 
 
 def ensure_database_exists(database_url: str) -> None:
