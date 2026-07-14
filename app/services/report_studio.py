@@ -9,7 +9,6 @@ from sqlalchemy import func, select
 
 from app.extensions import db
 from app.models import Market, MarketStatus
-from app.services.cost_engine import get_cost_engine
 
 
 REPORT_CATEGORIES = {

@@ -44,16 +44,16 @@ def get_setting(key: str, default: str = "") -> str:
     return instance.value
 
 
-def set_setting(key: str, value: str, description: str | None = None, type: str = "string") -> Setting:
+def set_setting(key: str, value: str, description: str | None = None, setting_type: str = "string") -> Setting:
     instance = db.session.scalar(select(Setting).where(Setting.key == key))
     if instance is None:
-        instance = Setting(key=key, value=value, description=description, type=type)
+        instance = Setting(key=key, value=value, description=description, setting_type=setting_type)
         db.session.add(instance)
     else:
         instance.value = value
         if description is not None:
             instance.description = description
-        instance.type = type
+        instance.setting_type = setting_type
     db.session.commit()
     return instance
 
@@ -66,7 +66,7 @@ def get_setting_typed(key: str, default: str = "") -> str | bool | int | float |
     instance = db.session.scalar(select(Setting).where(Setting.key == key))
     if instance is None:
         return default
-    match instance.type:
+    match instance.setting_type:
         case "boolean":
             return instance.value.strip().lower() in {"1", "true", "yes", "on"}
         case "integer":

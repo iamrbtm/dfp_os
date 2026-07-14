@@ -209,6 +209,18 @@ def register_security_headers(app: Flask) -> None:
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+            "img-src 'self' data: blob: https:; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "connect-src 'self' https://api.weather.gov; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'; "
+            "base-uri 'self'",
+        )
         if app.config.get("SESSION_COOKIE_SECURE"):
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response
@@ -296,7 +308,6 @@ def register_context_processors(app: Flask) -> None:
             "promotion": "promotion",
             "prep_tasks": "prep_tasks",
             "cost_engine": "cost_engine",
-            "report_studio": "report_studio",
             "audit_logs": "audit_logs",
         }
 

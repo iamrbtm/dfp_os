@@ -62,6 +62,7 @@ from app.models.pos import (
     PosSessionStatus,
 )
 from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
+from app.models.print_failure_autopsy import PrintFailureAutopsy, PrintFailureCategory, PrintFailureSeverity
 from app.models.print_job import PrintJob, PrintJobStatus
 from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, SignAsset, SignStatus
 from app.models.setting import Setting
@@ -70,6 +71,9 @@ from app.models.trend import SourceHealthRecord, TrendCalibrationResult, TrendOp
 from app.models.user import User, UserRole
 
 __all__ = [
+    "PrintFailureAutopsy",
+    "PrintFailureCategory",
+    "PrintFailureSeverity",
     "AdjustmentType",
     "AllocationMethod",
     "AllocationType",
@@ -93,7 +97,6 @@ __all__ = [
     "ContentChannel",
     "ContentDraft",
     "ContentStatus",
-    "CostSnapshot",
     "CostSnapshotConfidence",
     "Customer",
     "Expense",

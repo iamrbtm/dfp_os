@@ -314,8 +314,9 @@ def fetch_weather_snapshot(market: Market, actor=None) -> MarketWeatherSnapshot:
         forecast_resp.raise_for_status()
         forecast_payload = forecast_resp.json()
         forecast_properties = forecast_payload.get("properties", {})
-        if not forecast_properties.get("periods") and forecast_properties.get("forecast"):
-            fallback_resp = client.get("forecast")
+        fallback_url = forecast_properties.get("forecast")
+        if not forecast_properties.get("periods") and fallback_url:
+            fallback_resp = client.get(fallback_url)
             fallback_resp.raise_for_status()
             forecast_payload = fallback_resp.json()
 

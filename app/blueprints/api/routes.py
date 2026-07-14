@@ -1818,19 +1818,19 @@ class SettingItem(MethodView):
         if "value" not in payload:
             return {"error": {"code": "validation_error", "message": "value is required.", "details": {}}}, 400
         before = db.session.scalar(select(Setting).where(Setting.key == key))
-        before_state = {"value": before.value, "type": before.type} if before else None
+        before_state = {"value": before.value, "type": before.setting_type} if before else None
         setting = set_setting(
             key=key,
             value=payload["value"],
             description=payload.get("description"),
-            type=payload.get("type", "string"),
+            setting_type=payload.get("type", "string"),
         )
         record_audit_event(
             action="settings.changed",
             entity_type="setting",
             entity_id=key,
             before_state=before_state,
-            after_state={"value": setting.value, "type": setting.type},
+            after_state={"value": setting.value, "type": setting.setting_type},
             source_module=__name__,
         )
         return {"data": SettingSchema().dump(setting)}

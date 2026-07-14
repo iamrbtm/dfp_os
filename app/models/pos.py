@@ -57,7 +57,7 @@ class PosSession(PrimaryKeyMixin, TimestampMixin, db.Model):
     closed_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True
     )
-    market_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
     inventory_location_id: Mapped[int | None] = mapped_column(
         ForeignKey("inventory_locations.id"), nullable=True, index=True
     )
