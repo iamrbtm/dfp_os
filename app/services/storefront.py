@@ -18,7 +18,9 @@ from app.models import (
     OrderStatus,
     Product,
     ProductType,
+    PickupSlot,
 )
+from app.services.pickup import assign_order_pickup, validate_pickup_slot
 
 CART_SESSION_KEY = "public_cart"
 
@@ -271,6 +273,7 @@ def create_online_order(
     phone: str | None,
     notes: str | None,
     fulfillment_method: str,
+    pickup_slot_id: int | None = None,
     payment_option: str,
     shipping: dict,
     config: dict,
@@ -278,6 +281,15 @@ def create_online_order(
     summary = build_cart_summary(config, fulfillment_method=fulfillment_method)
     if not summary.lines:
         raise StorefrontError("Your cart is empty.")
+    slot = None
+    if fulfillment_method == OrderFulfillmentMethod.PICKUP.value:
+        slot = db.session.get(PickupSlot, pickup_slot_id) if pickup_slot_id else None
+        if slot is None:
+            raise StorefrontError("Choose an available pickup window.")
+        try:
+            validate_pickup_slot(slot)
+        except ValueError as exc:
+            raise StorefrontError(str(exc)) from exc
 
     customer = upsert_customer(first_name, last_name, email, phone, shipping)
     order = create_order_from_cart(
@@ -286,6 +298,8 @@ def create_online_order(
         fulfillment_method=fulfillment_method,
         notes=notes,
     )
+    if slot is not None:
+        assign_order_pickup(order, slot)
     order.payment_provider = payment_option
     if payment_option != "square":
         order.external_payment_reference = config.get("SHOP_VENMO_HANDLE")

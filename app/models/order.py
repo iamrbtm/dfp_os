@@ -102,6 +102,14 @@ class Order(PrimaryKeyMixin, TimestampMixin, db.Model):
     market_id: Mapped[int | None] = mapped_column(
         Integer, nullable=True, index=True
     )
+    pickup_slot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pickup_slots.id"), nullable=True, index=True
+    )
+    pickup_status: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    pickup_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    picked_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pickup_no_show_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pickup_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     pos_session_id: Mapped[int | None] = mapped_column(
         Integer, nullable=True, index=True
     )
@@ -130,6 +138,7 @@ class Order(PrimaryKeyMixin, TimestampMixin, db.Model):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     customer = relationship("Customer", back_populates="orders")
+    pickup_slot = relationship("PickupSlot", back_populates="orders")
     items = relationship(
         "OrderItem",
         back_populates="order",

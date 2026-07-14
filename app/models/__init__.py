@@ -61,6 +61,13 @@ from app.models.pos import (
     PosSession,
     PosSessionStatus,
 )
+from app.models.pickup import (
+    PickupLocation,
+    PickupLocationType,
+    PickupSlot,
+    PickupSlotStatus,
+    PickupStatus,
+)
 from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_job import PrintJob, PrintJobStatus
 from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, SignAsset, SignStatus
@@ -134,6 +141,11 @@ __all__ = [
     "PosSaleStatus",
     "PosSession",
     "PosSessionStatus",
+    "PickupLocation",
+    "PickupLocationType",
+    "PickupSlot",
+    "PickupSlotStatus",
+    "PickupStatus",
     "PrepTask",
     "PrepTaskCategory",
     "PrepTaskStatus",

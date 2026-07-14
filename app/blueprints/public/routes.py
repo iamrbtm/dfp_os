@@ -15,6 +15,7 @@ from app.models import (
     MarketStatus,
     Order,
     OrderSource,
+    PickupSlot,
     Product,
     ProductStatus,
 )
@@ -33,6 +34,18 @@ from app.services.storefront import (
     square_checkout_available,
     update_cart_line,
 )
+from app.services.pickup import assign_custom_request_pickup, available_pickup_slots
+
+
+def _pickup_slot_choices():
+    return [
+        (
+            slot.id,
+            f"{slot.starts_at:%a, %b %-d %I:%M %p} - {slot.ends_at:%I:%M %p} at {slot.location.name}",
+        )
+        for slot in available_pickup_slots()
+        if slot.available_capacity > 0
+    ]
 
 
 def _public_product_query():
@@ -246,6 +259,7 @@ def cart_remove(line_key: str):
 @bp.route("/checkout", methods=["GET", "POST"])
 def checkout():
     form = CheckoutForm()
+    form.pickup_slot_id.choices = [(0, "Choose a pickup window")] + _pickup_slot_choices()
     square_enabled = square_checkout_available(current_app.config)
     if not square_enabled:
         form.payment_option.choices = [("venmo", "Reserve now, pay by Venmo")]
@@ -298,6 +312,7 @@ def checkout():
                 phone=form.phone.data,
                 notes=form.notes.data,
                 fulfillment_method=form.fulfillment_method.data,
+                pickup_slot_id=form.pickup_slot_id.data or None,
                 payment_option=form.payment_option.data,
                 shipping=shipping,
                 config=current_app.config,
@@ -365,6 +380,7 @@ def checkout_confirmation(order_number: str):
 @bp.route("/custom-orders", methods=["GET", "POST"])
 def custom_orders():
     form = PublicCustomRequestForm()
+    form.pickup_slot_id.choices = [(0, "No preference yet")] + _pickup_slot_choices()
     if form.validate_on_submit():
         custom_req = CustomRequest(
             name=form.name.data.strip(),
@@ -377,6 +393,9 @@ def custom_orders():
             source="website",
         )
         create_custom_request(custom_req, actor_type="anonymous")
+        if form.pickup_slot_id.data:
+            slot = db.session.get(PickupSlot, form.pickup_slot_id.data)
+            assign_custom_request_pickup(custom_req, slot)
         record_demand_event(
             InternalDemandEventType.CUSTOM_REQUEST_SUBMITTED,
             source="public_custom_orders",

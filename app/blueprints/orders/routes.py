@@ -9,8 +9,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.orders import bp
 from app.extensions import db
-from app.forms import OrderForm, OrderItemForm, PaymentForm
-from app.models import Order, OrderItem, Payment, UserRole
+from app.forms import OrderForm, OrderItemForm, PaymentForm, PickupLocationForm, PickupSlotForm
+from app.models import Order, OrderItem, Payment, PickupLocation, PickupSlot, PickupStatus, UserRole
 from app.services.crud import (
     apply_search,
     get_by_id,
@@ -91,6 +91,33 @@ ORDER_RESOURCES: dict[str, ResourceConfig] = {
             ("Date", lambda item: item.payment_date.strftime("%Y-%m-%d") if item.payment_date else "\u2014"),
         ],
     ),
+    "pickup-locations": ResourceConfig(
+        key="pickup-locations",
+        singular="Pickup Location",
+        plural="Pickup Locations",
+        model=PickupLocation,
+        form_class=PickupLocationForm,
+        search_fields=["name", "address"],
+        columns=[
+            ("Name", lambda item: item.name),
+            ("Type", lambda item: item.location_type),
+            ("Active", lambda item: item.active),
+        ],
+    ),
+    "pickup-slots": ResourceConfig(
+        key="pickup-slots",
+        singular="Pickup Slot",
+        plural="Pickup Slots",
+        model=PickupSlot,
+        form_class=PickupSlotForm,
+        search_fields=["public_label", "instructions"],
+        columns=[
+            ("Window", lambda item: f"{item.starts_at:%Y-%m-%d %I:%M %p}"),
+            ("Location", lambda item: item.location.name if item.location else "\u2014"),
+            ("Status", lambda item: item.status),
+            ("Capacity", lambda item: f"{item.scheduled_count}/{item.capacity}"),
+        ],
+    ),
 }
 
 
@@ -116,6 +143,53 @@ def _build_form(config: ResourceConfig, instance=None):
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def orders_root():
     return redirect(url_for("orders.list_resource", resource_key="orders"))
+
+
+@bp.get("/pickup-board")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def pickup_board():
+    from app.services.pickup import pickup_board_groups, pickup_board_summary
+
+    return render_template(
+        "orders/pickup_board.html",
+        groups=pickup_board_groups(),
+        summary=pickup_board_summary(),
+        pickup_statuses=PickupStatus,
+    )
+
+
+@bp.post("/pickup-board/<entity_type>/<int:entity_id>/<status>")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def pickup_board_transition(entity_type: str, entity_id: int, status: str):
+    from app.services.pickup import transition_pickup
+
+    try:
+        pickup_status = PickupStatus(status)
+    except ValueError:
+        return render_template("errors/404.html"), 404
+    if entity_type == "order":
+        entity = get_by_id(Order, entity_id)
+    elif entity_type == "custom-request":
+        from app.models import CustomRequest
+
+        entity = get_by_id(CustomRequest, entity_id)
+    else:
+        entity = None
+    if entity is None:
+        return render_template("errors/404.html"), 404
+    transition_pickup(entity, pickup_status, actor_id=current_user.id)
+    flash("Pickup status updated.", "success")
+    return redirect(url_for("orders.pickup_board"))
+
+
+@bp.post("/pickup-board/generate-prep-tasks")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def pickup_board_generate_prep_tasks():
+    from app.services.pickup import generate_pickup_batch_prep_tasks, pickup_board_groups
+
+    count = generate_pickup_batch_prep_tasks(pickup_board_groups(), actor_id=current_user.id)
+    flash(f"Generated {count} pickup prep task(s).", "success")
+    return redirect(url_for("orders.pickup_board"))
 
 
 @bp.route("/<resource_key>/")

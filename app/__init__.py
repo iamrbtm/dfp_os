@@ -338,6 +338,8 @@ def register_context_processors(app: Flask) -> None:
                 ("Orders", url_for("orders.list_resource", resource_key="orders")),
                 ("Items", url_for("orders.list_resource", resource_key="items")),
                 ("Payments", url_for("orders.list_resource", resource_key="payments")),
+                ("Pickup Board", url_for("orders.pickup_board")),
+                ("Pickup Slots", url_for("orders.list_resource", resource_key="pickup-slots")),
             ],
             "markets": [
                 ("Markets", url_for("markets.list_resource", resource_key="markets")),

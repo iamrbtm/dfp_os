@@ -48,6 +48,11 @@ from app.models import (
     OrderSource,
     Payment,
     PaymentMethod,
+    PickupLocation,
+    PickupLocationType,
+    PickupSlot,
+    PickupSlotStatus,
+    PickupStatus,
     PosSale,
     PosSession,
     PrepTask,
@@ -95,6 +100,8 @@ from app.schemas import (
     OrderItemSchema,
     OrderSchema,
     PaymentSchema,
+    PickupLocationSchema,
+    PickupSlotSchema,
     PosSaleSchema,
     PosSessionSchema,
     PrepTaskSchema,
@@ -156,6 +163,12 @@ class PosRefundRequestSchema(Schema):
     notes = fields.String(load_default=None, allow_none=True)
 
 
+class PickupTransitionSchema(Schema):
+    entity_type = fields.String(required=True)
+    entity_id = fields.Integer(required=True)
+    status = fields.String(required=True)
+
+
 @dataclass(frozen=True)
 class ApiResourceConfig:
     endpoint: str
@@ -182,6 +195,8 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "orders": ("orders",),
     "order-items": ("orders",),
     "payments": ("orders",),
+    "pickup-locations": ("orders",),
+    "pickup-slots": ("orders",),
     "print-jobs": ("orders",),
     "prep-task-templates": ("markets",),
     "prep-tasks": ("markets",),
@@ -409,6 +424,9 @@ def _apply_custom_request(instance: CustomRequest, data: dict):
     instance.admin_notes = data.get("admin_notes")
     instance.internal_notes = data.get("internal_notes")
     instance.customer_id = data.get("customer_id")
+    instance.pickup_slot_id = data.get("pickup_slot_id")
+    instance.pickup_status = data.get("pickup_status")
+    instance.pickup_notes = data.get("pickup_notes")
     instance.source = data.get("source", "api")
 
 
@@ -421,6 +439,9 @@ def _apply_order(instance: Order, data: dict):
     if data.get("fulfillment_method"):
         instance.fulfillment_method = OrderFulfillmentMethod(data["fulfillment_method"])
     instance.market_id = data.get("market_id")
+    instance.pickup_slot_id = data.get("pickup_slot_id")
+    instance.pickup_status = data.get("pickup_status")
+    instance.pickup_notes = data.get("pickup_notes")
     instance.notes = data.get("notes")
     instance.internal_notes = data.get("internal_notes")
     instance.customer_name = data.get("customer_name")
@@ -461,6 +482,29 @@ def _apply_payment(instance: Payment, data: dict):
     instance.method = PaymentMethod(data["method"])
     instance.reference = data.get("reference")
     instance.notes = data.get("notes")
+
+
+def _apply_pickup_location(instance: PickupLocation, data: dict):
+    instance.name = data["name"].strip()
+    instance.location_type = PickupLocationType(data["location_type"])
+    instance.address = data.get("address")
+    instance.instructions = data.get("instructions")
+    instance.active = data.get("active", True)
+
+
+def _apply_pickup_slot(instance: PickupSlot, data: dict):
+    starts_at = data["starts_at"]
+    ends_at = data["ends_at"]
+    if ends_at <= starts_at:
+        raise ValueError("Pickup slot end time must be after start time.")
+    instance.location_id = data["location_id"]
+    instance.market_id = data.get("market_id")
+    instance.starts_at = starts_at
+    instance.ends_at = ends_at
+    instance.capacity = data.get("capacity", 6) or 6
+    instance.status = PickupSlotStatus(data.get("status", PickupSlotStatus.OPEN.value))
+    instance.public_label = data.get("public_label")
+    instance.instructions = data.get("instructions")
 
 
 def _apply_print_job(instance: PrintJob, data: dict):
@@ -759,6 +803,21 @@ API_RESOURCES = {
     "payments": ApiResourceConfig(
         "payments", Payment, PaymentSchema, [], _apply_payment
     ),
+    "pickup-locations": ApiResourceConfig(
+        "pickup-locations",
+        PickupLocation,
+        PickupLocationSchema,
+        ["name", "address", "instructions"],
+        _apply_pickup_location,
+    ),
+    "pickup-slots": ApiResourceConfig(
+        "pickup-slots",
+        PickupSlot,
+        PickupSlotSchema,
+        ["public_label", "instructions"],
+        _apply_pickup_slot,
+        list_filters=lambda stmt: stmt.order_by(PickupSlot.starts_at.asc()),
+    ),
     "print-jobs": ApiResourceConfig(
         "print-jobs",
         PrintJob,
@@ -1037,6 +1096,64 @@ def _register_resource(config: ApiResourceConfig):
 
 for resource_config in API_RESOURCES.values():
     _register_resource(resource_config)
+
+
+@catalog_blp.route("/pickup-board", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Pickup"])
+@catalog_blp.response(200)
+def pickup_board_api():
+    denied = require_api_scopes("orders")
+    if denied:
+        return denied
+    from app.services.pickup import pickup_board_groups, pickup_board_summary
+
+    groups = pickup_board_groups()
+    return {
+        "summary": pickup_board_summary(),
+        "groups": [
+            {
+                "slot_id": group.slot.id,
+                "label": group.slot.public_label or group.slot.location.name,
+                "starts_at": group.slot.starts_at.isoformat(),
+                "location": group.slot.location.name,
+                "total_items": group.total_items,
+                "orders": [order.id for order in group.orders],
+                "custom_requests": [request.id for request in group.custom_requests],
+            }
+            for group in groups
+        ],
+    }
+
+
+@catalog_blp.route("/pickup-board/transition", methods=["POST"])
+@api_token_required
+@catalog_blp.arguments(PickupTransitionSchema)
+@catalog_blp.doc(tags=["Pickup"])
+@catalog_blp.response(200)
+def pickup_transition_api(body_data):
+    denied = require_api_scopes("orders")
+    if denied:
+        return denied
+    status = PickupStatus(body_data["status"])
+    entity_type = body_data["entity_type"]
+    if entity_type == "order":
+        entity = get_by_id(Order, body_data["entity_id"])
+    elif entity_type == "custom_request":
+        entity = get_by_id(CustomRequest, body_data["entity_id"])
+    else:
+        return _validation_error("entity_type must be order or custom_request.")
+    if entity is None:
+        return {"error": {"code": "not_found", "message": "Pickup item not found.", "details": {}}}, 404
+
+    from app.services.pickup import transition_pickup
+
+    transition_pickup(
+        entity,
+        status,
+        actor_id=getattr(getattr(g, "api_token", None), "user_id", None),
+    )
+    return {"status": entity.pickup_status}
 
 
 @catalog_blp.route("/themes")

@@ -25,6 +25,7 @@ from app.schemas.inventory import (
     InventoryRecordSchema,
 )
 from app.schemas.order import OrderItemSchema, OrderSchema, PaymentSchema
+from app.schemas.pickup import PickupLocationSchema, PickupSlotSchema
 from app.schemas.pos import (
     PosCloseSessionSchema,
     PosSaleCreateSchema,
@@ -65,6 +66,8 @@ __all__ = [
     "OrderSchema",
     "PaginationSchema",
     "PaymentSchema",
+    "PickupLocationSchema",
+    "PickupSlotSchema",
     "ContentDraftSchema",
     "SignAssetSchema",
     "PosCloseSessionSchema",

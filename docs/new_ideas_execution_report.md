@@ -55,3 +55,40 @@
 - [x] Empty states: All templates handle no-data scenarios
 - [x] Test file: 28 tests covering critical paths
 - [x] Design system: Uses design tokens, app-card, app-btn, app-table, app-input classes
+
+## Milestone 6: Orders / Custom Orders
+
+### Local Pickup Scheduler
+
+**Status**: Done
+**Date**: 2026-07-14
+
+**Files created**:
+- `app/models/pickup.py` - pickup locations, slots, slot status, and pickup status enums.
+- `app/forms/pickup.py` - admin forms for pickup locations and slots.
+- `app/schemas/pickup.py` - API schemas for pickup locations and slots.
+- `app/services/pickup.py` - availability validation, assignment, board grouping, status transitions, and prep-task generation.
+- `app/templates/orders/pickup_board.html` - internal pickup board grouped by slot/date/location.
+- `migrations/versions/0f1e2d3c4b5a_add_pickup_scheduler.py` - pickup tables and order/custom-request pickup fields.
+- `tests/test_milestone6_pickup_scheduler.py` - focused scheduler, checkout, board, prep-task, and API coverage.
+
+**Files modified**:
+- `app/models/order.py` and `app/models/custom_request.py` - linked pickup slot/status/timestamp fields.
+- `app/models/__init__.py` - exported pickup models/enums.
+- `app/forms/storefront.py`, `app/forms/order.py`, `app/forms/custom_request.py`, and `app/forms/__init__.py` - pickup selection fields and form exports.
+- `app/blueprints/public/routes.py` and `app/services/storefront.py` - public checkout/custom request pickup selection and validation.
+- `app/templates/public/checkout.html` and `app/templates/public/checkout_confirmation.html` - customer-facing pickup window selection and confirmation copy.
+- `app/blueprints/orders/routes.py` - pickup location/slot admin resources and pickup board actions.
+- `app/blueprints/api/routes.py`, `app/schemas/order.py`, `app/schemas/custom_request.py`, `app/schemas/__init__.py` - pickup API resources and pickup status action endpoint.
+- `app/module_registry.py` and `app/__init__.py` - Orders module resource/nav metadata.
+- `app/services/report_studio.py` - removed stale unused `get_cost_engine` import that blocked app import on this branch.
+- `tests/test_public_storefront.py` - storefront tests updated to use real pickup slots.
+
+**Tests/checks**:
+- `./.venv/bin/python -m py_compile app/models/pickup.py app/models/order.py app/models/custom_request.py app/services/pickup.py app/services/storefront.py app/blueprints/public/routes.py app/blueprints/orders/routes.py app/blueprints/api/routes.py app/forms/pickup.py app/forms/storefront.py app/forms/custom_request.py app/forms/order.py app/schemas/pickup.py app/schemas/order.py app/schemas/custom_request.py`
+- `env DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os TEST_DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test TEST_DATABASE_ADMIN_URL=mysql+pymysql://root:rootpassword@127.0.0.1:3306/mysql FILE_STORAGE_BACKEND=local RECEIPT_STORAGE_DRIVER=local S3_AUTO_CREATE_BUCKETS=0 CELERY_BROKER_URL=memory:// CELERY_RESULT_BACKEND=cache+memory:// ./.venv/bin/pytest -q tests/test_milestone6_pickup_scheduler.py tests/test_public_storefront.py`
+
+**Remaining risks**:
+- Email sending is not implemented; confirmation copy is email-ready but not sent.
+- Pickup availability is slot/capacity based; recurring availability rules and blackout calendars are future polish.
+- Custom request pickup selection is optional and early-stage; the quote/deposit workflow can later re-confirm or reschedule the slot.
