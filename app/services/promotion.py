@@ -295,9 +295,9 @@ def _generate_qr_svg(target_url: str | None) -> str:
     from qrcode.image.svg import SvgPathImage
 
     qr = qrcode.make(target_url, image_factory=SvgPathImage)
-    buf = io.StringIO()
+    buf = io.BytesIO()
     qr.save(buf)
-    return buf.getvalue()
+    return buf.getvalue().decode("utf-8")
 
 
 def _product_image_html(sign: SignAsset) -> str:
