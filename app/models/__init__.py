@@ -61,6 +61,14 @@ from app.models.pos import (
     PosSession,
     PosSessionStatus,
 )
+from app.models.product_ops import (
+    DeadStockRecommendation,
+    DeadStockRecommendationStatus,
+    ProductLaunchChecklistItem,
+    ProductLaunchChecklistKey,
+    ProductPhotoShot,
+    ProductPhotoShotType,
+)
 from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_job import PrintJob, PrintJobStatus
 from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, SignAsset, SignStatus
@@ -143,7 +151,13 @@ __all__ = [
     "PrintJob",
     "PrintJobStatus",
     "Product",
+    "ProductLaunchChecklistItem",
+    "ProductLaunchChecklistKey",
     "ProductImage",
+    "ProductPhotoShot",
+    "ProductPhotoShotType",
+    "DeadStockRecommendation",
+    "DeadStockRecommendationStatus",
     "Setting",
     "SignAsset",
     "SignStatus",

@@ -55,3 +55,43 @@
 - [x] Empty states: All templates handle no-data scenarios
 - [x] Test file: 28 tests covering critical paths
 - [x] Design system: Uses design tokens, app-card, app-btn, app-table, app-input classes
+
+## Milestone 4: Products
+
+### Product Studio Operational Controls
+
+**Status**: Done
+**Date**: 2026-07-14
+
+**Files created**:
+- `app/models/product_ops.py` - launch checklist, photo shot list, and dead-stock recommendation models.
+- `app/services/product_ops.py` - live readiness scoring, launch gate, story card, photo shot, dead-stock, and retirement workflows.
+- `migrations/versions/f6b7c8d9e0f1_add_product_ops.py` - product story/retirement fields plus product-ops tables.
+- `tests/test_milestone4_product_ops.py` - focused service, public rendering, API, and retirement coverage.
+
+**Files modified**:
+- `app/models/catalog.py` - product story card, launch override, retirement, block-reprint fields and relationships.
+- `app/models/__init__.py` - exported Product Ops models/enums.
+- `app/forms/studio.py` - launch override reason field.
+- `app/blueprints/products/studio_routes.py` - Product Studio readiness, checklist, photo shot, story card, dead-stock, and retirement actions.
+- `app/templates/products/studio.html` - operational Product Studio panels for readiness, launch, photo, story, rescue, and retirement.
+- `app/templates/public/product_detail.html` - public story-card detail panel that excludes internal compliance notes.
+- `app/schemas/catalog.py` - API fields for story, launch override, retirement, and block-reprint state.
+- `app/blueprints/api/routes.py` - product readiness, dead-stock, recommendation action, and retirement endpoints.
+- `app/services/report_studio.py` - removed stale unused `get_cost_engine` import that blocked app import on this branch.
+- `docs/production_readiness_scorecard.md` and `TODO.md` - milestone status updates.
+
+**Implementation notes**:
+- Readiness score is calculated live instead of stored as snapshots because it is derived from current product, cost, inventory, photo, license, and launch state. History can be added later if score trend analysis becomes useful.
+- Launch gate blocks public/active launch when critical readiness items fail unless an explicit override reason is present.
+- Retirement hides the product from public and POS sale surfaces, preserves history, records a reason, and sets `block_reprint`.
+- Dead-stock recommendations are explainable and can be accepted or dismissed without deleting product or historical order context.
+
+**Tests/checks**:
+- `./.venv/bin/python -m py_compile app/models/product_ops.py app/services/product_ops.py app/blueprints/products/studio_routes.py app/blueprints/api/routes.py app/forms/studio.py`
+- `env DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os TEST_DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test TEST_DATABASE_ADMIN_URL=mysql+pymysql://root:rootpassword@127.0.0.1:3306/mysql FILE_STORAGE_BACKEND=local RECEIPT_STORAGE_DRIVER=local S3_AUTO_CREATE_BUCKETS=0 CELERY_BROKER_URL=memory:// CELERY_RESULT_BACKEND=cache+memory:// ./.venv/bin/pytest -q tests/test_milestone4_product_ops.py`
+
+**Remaining risks**:
+- Readiness filters on the generic product admin list are not yet exposed as first-class UI filters.
+- Dead-stock scoring is intentionally heuristic until more sales, seasonality, and trend-scout history accumulates.
+- The photo shot workflow stores completion/reference metadata; it does not yet enforce linkage to a specific uploaded image record.
