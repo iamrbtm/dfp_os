@@ -55,3 +55,9 @@ class PrintJob(PrimaryKeyMixin, TimestampMixin, db.Model):
     product = relationship("Product")
     printer = relationship("Printer")
     assigned_to = relationship("User")
+    failure_autopsies = relationship(
+        "PrintFailureAutopsy",
+        back_populates="print_job",
+        cascade="all, delete-orphan",
+        order_by="PrintFailureAutopsy.created_at.desc()",
+    )
