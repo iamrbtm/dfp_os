@@ -323,7 +323,15 @@ def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
     prompt = ". ".join(prompt_parts) + ". Clean product photography style, warm inviting colors, solid background, no logos, no text rendering."
 
     image_url = None
-    for model, size_val in [("dall-e-3", "1024x1024"), ("dall-e-2", "1024x1024")]:
+    models_to_try = [
+        current_app.config.get("OPENAI_IMAGE_MODEL"),
+        "dall-e-3",
+        "dall-e-2",
+    ]
+    models_to_try = [m for m in models_to_try if m]
+
+    for model in models_to_try:
+        size_val = "1024x1024" if model == "dall-e-3" else "1024x1024"
         try:
             resp = httpx.post(
                 "https://api.openai.com/v1/images/generations",
@@ -344,6 +352,10 @@ def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
             continue
 
     if image_url is None:
+        current_app.logger.warning(
+            "No working OpenAI image model found. Set OPENAI_IMAGE_MODEL in .env to an available model "
+            "(e.g. 'dall-e-3'). The sign will remain text layout."
+        )
         return sign
 
     try:
