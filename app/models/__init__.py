@@ -1,5 +1,6 @@
 from app.models.api_token import ApiToken
 from app.models.business import Business, FeatureFlag
+from app.models.booth_mode import BoothModeHint, BoothHintStatus
 from app.models.notification import Notification
 from app.models.catalog import (
     Category,
@@ -85,6 +86,8 @@ __all__ = [
     "AMSUnitType",
     "ApiToken",
     "Business",
+    "BoothModeHint",
+    "BoothHintStatus",
     "Category",
     "Collection",
     "CustomRequest",
