@@ -91,6 +91,7 @@ class Config:
     S3_USE_SSL = _as_bool(os.getenv("S3_USE_SSL"), False)
     S3_AUTO_CREATE_BUCKETS = _as_bool(os.getenv("S3_AUTO_CREATE_BUCKETS"), True)
     RECEIPT_STORAGE_BUCKET = os.getenv("RECEIPT_STORAGE_BUCKET", "receipts")
+    SIGN_STORAGE_BUCKET = os.getenv("SIGN_STORAGE_BUCKET", "signs")
     MARKET_DOCUMENTS_BUCKET = os.getenv("MARKET_DOCUMENTS_BUCKET", "markets")
     PRODUCT_ASSETS_BUCKET = os.getenv("PRODUCT_ASSETS_BUCKET", "products")
     RECEIPT_MAX_UPLOAD_MB = int(os.getenv("RECEIPT_MAX_UPLOAD_MB", "25"))
@@ -104,6 +105,7 @@ class Config:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     OPENAI_MODEL_RECEIPTS = os.getenv("OPENAI_MODEL_RECEIPTS", OPENAI_MODEL)
     OPENAI_MODEL_ANALYTICS = os.getenv("OPENAI_MODEL_ANALYTICS", OPENAI_MODEL)
+    OPENAI_IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "dall-e-3")
     OPENAI_MODEL_TREND_SCOUT = os.getenv(
         "OPENAI_MODEL_TREND_SCOUT",
         os.getenv("OPENAI_MODEL_ANALYTICS", OPENAI_MODEL),

@@ -8,8 +8,20 @@
         <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ market.name }} — Performance</h1>
         <p class="mt-2" style="color: var(--color-text-muted);">{{ market.event_date }} &middot; {{ market.location_name }}</p>
       </div>
-      <a href="{{ url_for('markets.detail_resource', resource_key='markets', resource_id=market.id) }}" class="app-btn app-btn-secondary">Back to Market</a>
+      <a href="{{ url_for('markets.detail_resource', resource_id=market.id) }}" class="app-btn app-btn-secondary">Back to Market</a>
     </div>
+
+    <nav class="flex gap-1 border-b pb-0" style="border-color: var(--color-border);">
+      <a href="{{ url_for('markets.detail_resource', resource_id=market.id) }}"
+         class="px-4 py-2 text-sm font-medium rounded-t-lg -mb-px border border-b-0"
+         style="color: var(--color-text-muted); border-color: transparent;">Overview</a>
+      <a href="{{ url_for('markets.market_performance', market_id=market.id) }}"
+         class="px-4 py-2 text-sm font-medium rounded-t-lg -mb-px border border-b-0"
+         style="color: var(--color-text); border-color: var(--color-border); background: var(--color-surface);">Performance</a>
+      <a href="{{ url_for('table_layouts.list_layouts', market_id=market.id) }}"
+         class="px-4 py-2 text-sm font-medium rounded-t-lg -mb-px border border-b-0"
+         style="color: var(--color-text-muted); border-color: transparent;">Table Layout</a>
+    </nav>
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <article class="app-card p-5">

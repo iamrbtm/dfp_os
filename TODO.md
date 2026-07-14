@@ -12,6 +12,8 @@ This file is the live working list for AI agents and humans collaborating in thi
 
 ## Current Focus
 
+- `done` Milestone 2 Phase 2.1: Promotion Module Foundation — models, forms, schemas, blueprint, routes, service, templates, module registry, migration, tests.
+
 - `done` Production audit remediation pass for `docs/audit.md`: POS financial integrity, audit fail-closed, API token/workflow hardening, receipt upload/access security, production config/service auth, rate limiting, Docker hardening, and Playwright E2E scaffold.
 - `done` Reorganized agent guidance into `AGENTS.md`, `PROMPTS.md`, `ARCHITECTURE.md`, and this file.
 - `done` Built the public website + ecommerce storefront pass: polished public pages, session cart, online checkout, and payment fallback flow.
@@ -34,6 +36,8 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` **DFPos Intelligence microservice phases 7-10** — Added RAG-ready knowledge documents/chunks with lexical retrieval, safe allowlisted Ask DFP answers, Flask admin integration, and decision-outcome feedback records for recommendation follow-up.
 
 ## Next Priorities
+
+- `done` Milestone 3: Report Studio — Module foundation, report catalog home, vendor market heat map, and market application tracker report.
 
 - `todo` Normalize and map kept tables from the legacy import staging layer into warehouse fact tables.
 - `todo` Extend DFPos Intelligence with current DFPos snapshot sync and approved-action workflows that can create prep tasks or print jobs after human confirmation.

@@ -35,6 +35,16 @@ class PrepTaskCategory(StrEnum):
     GENERAL = "general"
 
 
+class FollowUpType(StrEnum):
+    CUSTOM_LEAD = "custom_lead"
+    REQUESTED_COLOR = "requested_color"
+    REQUESTED_PRODUCT = "requested_product"
+    UNPAID_DEPOSIT = "unpaid_deposit"
+    PICKUP_REMINDER = "pickup_reminder"
+    THANK_YOU = "thank_you"
+    QUOTE_FOLLOW_UP = "quote_follow_up"
+
+
 class PrepTaskTemplate(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "prep_task_templates"
 
@@ -75,7 +85,20 @@ class PrepTask(PrimaryKeyMixin, TimestampMixin, db.Model):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source: Mapped[str] = mapped_column(String(80), default="manual", nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    follow_up_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), nullable=True, index=True)
+    related_order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), nullable=True, index=True)
+    related_custom_request_id: Mapped[int | None] = mapped_column(
+        ForeignKey("custom_requests.id"), nullable=True, index=True
+    )
+    related_pos_sale_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pos_sales.id"), nullable=True, index=True
+    )
 
     market = relationship("Market")
     template = relationship("PrepTaskTemplate")
     assigned_user = relationship("User")
+    customer = relationship("Customer")
+    related_order = relationship("Order")
+    related_custom_request = relationship("CustomRequest")
+    related_pos_sale = relationship("PosSale")

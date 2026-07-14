@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Market Application Tracker | Report Studio | {{ app_name }}{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.x.x/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Report Studio</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Market Application Tracker</h1>
+      <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">Pipeline view of market applications: deadlines, costs, status counts, and follow-up needs.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary text-sm">&larr; Back to Reports</a>
+      <a href="/api/v1/report-studio/application-tracker/csv" class="app-btn app-btn-secondary text-sm">
+         Download CSV
+      </a>
+    </div>
+  </div>
+
+  {% if report.total_applications > 0 %}
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+    <article class="app-card p-4">
+      <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--color-text-muted);">Total Applications</p>
+      <p class="mt-1 text-2xl font-bold" style="color: var(--color-text);">{{ report.total_applications }}</p>
+    </article>
+    <article class="app-card p-4">
+      <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--color-text-muted);">Upcoming Deadlines</p>
+      <p class="mt-1 text-2xl font-bold" style="color: var(--color-warning);">{{ report.upcoming_deadlines }}</p>
+    </article>
+    <article class="app-card p-4">
+      <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--color-text-muted);">Fees at Risk</p>
+      <p class="mt-1 text-2xl font-bold" style="color: var(--color-danger);">${{ "%.2f"|format(report.fees_at_risk) }}</p>
+    </article>
+    <article class="app-card p-4">
+      <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--color-text-muted);">Missing Documents</p>
+      <p class="mt-1 text-2xl font-bold" style="{% if report.missing_documents_count > 0 %}color: var(--color-warning);{% else %}color: var(--color-text);{% endif %}">{{ report.missing_documents_count }}</p>
+    </article>
+    <article class="app-card p-4">
+      <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--color-text-muted);">Need Follow-Up</p>
+      <p class="mt-1 text-2xl font-bold" style="{% if report.needs_follow_up_count > 0 %}color: var(--color-warning);{% else %}color: var(--color-text);{% endif %}">{{ report.needs_follow_up_count }}</p>
+    </article>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-2">
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Status Breakdown</h2>
+      <canvas id="statusChart" height="180"></canvas>
+    </article>
+    <article class="app-card p-5">
+      <h2 class="text-lg font-semibold mb-4" style="color: var(--color-text);">Fees by Status</h2>
+      <div class="space-y-3">
+        {% for status, count in report.status_counts.items() %}
+        <div class="flex items-center justify-between">
+          <span class="text-sm" style="color: var(--color-text);">{{ status|replace('_', ' ')|title }}</span>
+          <span class="text-sm font-medium" style="color: var(--color-text-muted);">{{ count }} applications</span>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+  </div>
+  {% endif %}
+
+  <div class="app-card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th class="font-medium">Market</th>
+            <th class="font-medium">Status</th>
+            <th class="font-medium">Deadline</th>
+            <th class="font-medium">App Fee</th>
+            <th class="font-medium">Booth Fee</th>
+            <th class="font-medium">Total</th>
+            <th class="font-medium">Docs?</th>
+            <th class="font-medium">Follow-Up</th>
+            <th class="font-medium">Repeat?</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in report.pipeline %}
+          <tr>
+            <td>
+              <a href="{{ url_for('markets.detail_resource', resource_key='markets', resource_id=m.id) }}" class="app-link">{{ m.name }}</a>
+              {% if m.city %}<br><span class="text-xs" style="color: var(--color-text-muted);">{{ m.city }}{% if m.state %}, {{ m.state }}{% endif %}</span>{% endif %}
+            </td>
+            <td>
+              <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full"
+                    style="background-color: var(--color-bg-subtle); color: var(--color-text);">
+                {{ m.status|replace('_', ' ')|title if m.status else '\u2014' }}
+              </span>
+            </td>
+            <td>{{ m.application_deadline if m.application_deadline else '\u2014' }}</td>
+            <td>${{ "%.2f"|format(m.application_fee) }}</td>
+            <td>${{ "%.2f"|format(m.booth_fee) }}</td>
+            <td>${{ "%.2f"|format(m.total_fee) }}</td>
+            <td>
+              {% if m.has_documents %}
+              <span style="color: var(--color-success);">&#x2713;</span>
+              {% else %}
+              <span style="color: var(--color-warning);">&#x2717;</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if m.needs_follow_up %}
+              <span style="color: var(--color-warning);">Due {{ m.follow_up_date }}</span>
+              {% elif m.follow_up_date %}
+              {{ m.follow_up_date }}
+              {% else %}
+              <span style="color: var(--color-text-muted);">&#x2014;</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if m.worth_repeating is true %}
+              <span style="color: var(--color-success);">Yes</span>
+              {% elif m.worth_repeating is false %}
+              <span style="color: var(--color-danger);">No</span>
+              {% else %}
+              <span style="color: var(--color-text-muted);">&#x2014;</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="text-center py-8" style="color: var(--color-text-muted);">No applications in the pipeline. Add markets with application-related statuses to see them here.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+{% if report.total_applications > 0 %}
+<script>
+(function() {
+  var statusCtx = document.getElementById('statusChart');
+  if (!statusCtx) return;
+  new Chart(statusCtx, {
+    type: 'doughnut',
+    data: {
+      labels: [{% for status, count in report.status_counts.items() %}'{{ status|replace('_', ' ')|title }}'{% if not loop.last %},{% endif %}{% endfor %}],
+      datasets: [{
+        data: [{% for status, count in report.status_counts.items() %}{{ count }}{% if not loop.last %},{% endif %}{% endfor %}],
+        backgroundColor: ['rgba(99, 102, 241, 0.7)', 'rgba(251, 146, 60, 0.7)', 'rgba(46, 184, 92, 0.7)', 'rgba(250, 204, 21, 0.7)', 'rgba(220, 38, 38, 0.7)']
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom' }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

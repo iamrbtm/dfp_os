@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ draft.title }} | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="max-w-3xl mx-auto space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Content Draft</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ draft.title }}</h1>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('promotion.draft_edit', draft_id=draft.id) }}" class="app-btn app-btn-secondary">Edit</a>
+      {% if draft.status.value in ('draft', 'needs_review') %}
+      <form action="{{ url_for('promotion.draft_approve', draft_id=draft.id) }}" method="post" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="app-btn app-btn-primary">Approve</button>
+      </form>
+      {% endif %}
+      {% if draft.status.value == 'approved' %}
+      <form action="{{ url_for('promotion.draft_publish', draft_id=draft.id) }}" method="post" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="app-btn app-btn-primary">Mark Published</button>
+      </form>
+      {% endif %}
+      <form action="{{ url_for('promotion.draft_archive', draft_id=draft.id) }}" method="post" class="inline" onsubmit="return confirm('Archive this draft?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="app-btn app-btn-danger">Archive</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-card p-6 space-y-4">
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Channel</p>
+        <p style="color: var(--color-text);">{{ draft.channel.value|title }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Status</p>
+        <p style="color: var(--color-text);">{{ draft.status.value|replace('_', ' ')|title }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Planned Publish</p>
+        <p style="color: var(--color-text);">{{ draft.planned_publish_date|default('—', true) }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Published At</p>
+        <p style="color: var(--color-text);">{{ draft.published_at|default('—', true) }}</p>
+      </div>
+    </div>
+
+    {% if draft.caption %}
+    <div>
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Caption</p>
+      <p class="mt-1 whitespace-pre-wrap" style="color: var(--color-text);">{{ draft.caption }}</p>
+    </div>
+    {% endif %}
+
+    {% if draft.media_reference %}
+    <div>
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Media Reference</p>
+      <p class="mt-1" style="color: var(--color-link);">{{ draft.media_reference }}</p>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {% if draft.product %}
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Product</p>
+        <p style="color: var(--color-text);">{{ draft.product.name }}</p>
+      </div>
+      {% endif %}
+      {% if draft.market %}
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Market</p>
+        <p style="color: var(--color-text);">{{ draft.market.name }}</p>
+      </div>
+      {% endif %}
+      {% if draft.custom_request %}
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Custom Request</p>
+        <p style="color: var(--color-text);">#{{ draft.custom_request.id }}</p>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if draft.notes %}
+    <div>
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Notes</p>
+      <p class="mt-1" style="color: var(--color-text-muted);">{{ draft.notes }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <a href="{{ url_for('promotion.draft_list') }}" class="app-btn app-btn-secondary">&larr; Back to Drafts</a>
+</section>
+{% endblock %}

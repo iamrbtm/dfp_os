@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'create' %}New Content Draft{% else %}Edit Draft{% endif %} | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="max-w-3xl mx-auto space-y-6">
+  <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Promotion</p>
+  <h1 class="text-3xl font-semibold" style="color: var(--color-text);">
+    {% if mode == 'create' %}New Content Draft{% else %}Edit Draft{% endif %}
+  </h1>
+
+  <form method="post" class="app-card p-6 space-y-4">
+    {{ form.hidden_tag() }}
+
+    <div>
+      <label class="app-label">{{ form.title.label }}</label>
+      {{ form.title(class="app-input") }}
+      {% for error in form.title.errors %}<p class="app-field-error">{{ error }}</p>{% endfor %}
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="app-label">{{ form.channel.label }}</label>
+        {{ form.channel(class="app-input") }}
+        {% for error in form.channel.errors %}<p class="app-field-error">{{ error }}</p>{% endfor %}
+      </div>
+      <div>
+        <label class="app-label">{{ form.content_type.label }}</label>
+        {{ form.content_type(class="app-input") }}
+      </div>
+    </div>
+
+    <div>
+      <label class="app-label">{{ form.caption.label }}</label>
+      {{ form.caption(class="app-input", rows=6) }}
+      {% for error in form.caption.errors %}<p class="app-field-error">{{ error }}</p>{% endfor %}
+    </div>
+
+    <div>
+      <label class="app-label">{{ form.media_reference.label }}</label>
+      {{ form.media_reference(class="app-input", placeholder="URL or filename") }}
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <label class="app-label">{{ form.product_id.label }}</label>
+        {{ form.product_id(class="app-input") }}
+      </div>
+      <div>
+        <label class="app-label">{{ form.market_id.label }}</label>
+        {{ form.market_id(class="app-input") }}
+      </div>
+      <div>
+        <label class="app-label">{{ form.custom_request_id.label }}</label>
+        {{ form.custom_request_id(class="app-input") }}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="app-label">{{ form.status.label }}</label>
+        {{ form.status(class="app-input") }}
+      </div>
+      <div>
+        <label class="app-label">{{ form.planned_publish_date.label }}</label>
+        {{ form.planned_publish_date(class="app-input") }}
+      </div>
+    </div>
+
+    <div>
+      <label class="app-label">{{ form.notes.label }}</label>
+      {{ form.notes(class="app-input", rows=3) }}
+    </div>
+
+    <div class="flex gap-3 pt-4">
+      {{ form.submit(class="app-btn app-btn-primary") }}
+      <a href="{{ url_for('promotion.draft_list') }}" class="app-btn app-btn-secondary">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

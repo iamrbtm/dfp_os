@@ -1,0 +1,74 @@
+{% extends "dashboard/layout.html" %}
+{% block title %}{% if mode == 'create' %}New{% else %}Edit{% endif %} Table Layout — DFPos{% endblock %}
+{% block body_class %}bg-neutral-50{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <a href="{{ url_for('table_layouts.list_layouts') }}" class="text-sm" style="color: var(--color-link);">&larr; Back to Layouts</a>
+  <h1 class="text-2xl font-bold mt-1 mb-6" style="color: var(--color-text);">
+    {% if mode == 'create' %}New{% else %}Edit{% endif %} Table Layout
+  </h1>
+
+  <form method="post" enctype="multipart/form-data" class="app-card p-6 space-y-5">
+    {{ form.hidden_tag() }}
+
+    <div>
+      <label class="mb-1.5 block text-sm font-medium" style="color: var(--color-text);">{{ form.name.label.text }}</label>
+      {{ form.name(class="app-input") }}
+      {% for error in form.name.errors %}
+      <p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div>
+      <label class="mb-1.5 block text-sm font-medium" style="color: var(--color-text);">Market</label>
+      {% if mode == 'create' %}
+        {% if market %}
+          <p class="text-sm" style="color: var(--color-text);">{{ market.name }} <a href="{{ url_for('table_layouts.create_layout') }}" class="text-xs" style="color: var(--color-link);">(change)</a></p>
+        {% else %}
+          <p class="text-sm" style="color: var(--color-text-muted);">No market selected. <a href="{{ url_for('markets.list_resource', resource_key='markets') }}" class="text-xs" style="color: var(--color-link);">Browse markets</a></p>
+        {% endif %}
+      {% else %}
+        {% if layout.market %}
+          <p class="text-sm" style="color: var(--color-text);">{{ layout.market.name }}</p>
+        {% else %}
+          <p class="text-sm" style="color: var(--color-text-muted);">No market — template layout</p>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <div>
+      <label class="mb-1.5 block text-sm font-medium" style="color: var(--color-text);">{{ form.is_template.label.text }}</label>
+      <label class="flex items-center gap-2 text-sm" style="color: var(--color-text);">
+        {{ form.is_template(class="app-checkbox") }}
+        <span>Make this a reusable template</span>
+      </label>
+      {% for error in form.is_template.errors %}
+      <p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div>
+      <label class="mb-1.5 block text-sm font-medium" style="color: var(--color-text);">{{ form.photo.label.text }}</label>
+      {{ form.photo(class="app-input text-sm") }}
+      {% for error in form.photo.errors %}
+      <p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>
+      {% endfor %}
+      <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Optional: upload a reference photo or sketched layout.</p>
+    </div>
+
+    <div>
+      <label class="mb-1.5 block text-sm font-medium" style="color: var(--color-text);">{{ form.notes.label.text }}</label>
+      {{ form.notes(class="app-textarea", rows=3) }}
+      {% for error in form.notes.errors %}
+      <p class="mt-1 text-sm" style="color: var(--color-danger);">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div class="flex items-center gap-3 pt-2">
+      {{ form.submit(class="app-btn app-btn-primary") }}
+      <a href="{{ url_for('table_layouts.list_layouts') }}" class="app-btn app-btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends "dashboard/layout.html" %}
+{% block title %}Follow-Up Queue — DFPos{% endblock %}
+{% block body_class %}bg-neutral-50{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-navy">Follow-Up Queue</h1>
+    <nav class="flex items-center gap-3 text-sm">
+      <a href="{{ url_for('prep_tasks.list_resource', resource_key='tasks') }}" class="text-teal hover:underline">All Prep Tasks</a>
+    </nav>
+  </div>
+
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
+    <form method="get" action="{{ url_for('prep_tasks.follow_up_queue') }}" class="flex flex-wrap items-end gap-3">
+      <div>
+        <label for="q" class="block text-xs font-medium text-gray-500 mb-1">Search</label>
+        <input type="text" id="q" name="q" value="{{ search_term }}"
+               placeholder="Search follow-ups…"
+               class="rounded-lg border border-gray-300 px-3 py-2 text-sm w-60 focus:outline-none focus:ring-2 focus:ring-teal">
+      </div>
+      <div>
+        <label for="market_id" class="block text-xs font-medium text-gray-500 mb-1">Market</label>
+        <select id="market_id" name="market_id"
+                class="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal">
+          <option value="">All Markets</option>
+          {% for m in markets %}
+          <option value="{{ m.id }}" {% if current_market_id == m.id %}selected{% endif %}>{{ m.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="px-4 py-2 bg-teal text-white rounded-lg text-sm font-medium hover:bg-teal-600 transition">Filter</button>
+    </form>
+  </div>
+
+  {% if tasks %}
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-3 text-left font-semibold text-gray-600">Type</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-600">Title</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-600">Customer</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-600">Market</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-600">Due</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
+            <th class="px-4 py-3 text-right font-semibold text-gray-600">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for task in tasks %}
+          <tr class="hover:bg-gray-50 transition {% if task.due_at and task.due_at < now and task.status.value in ('open','reopened') %}bg-yellow-50{% endif %}">
+            <td class="px-4 py-3 whitespace-nowrap">
+              <span class="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium
+                {% if task.follow_up_type == 'thank_you' %}bg-green-100 text-green-700
+                {% elif task.follow_up_type == 'unpaid_deposit' %}bg-red-100 text-red-700
+                {% elif task.follow_up_type == 'custom_lead' %}bg-blue-100 text-blue-700
+                {% elif task.follow_up_type == 'pickup_reminder' %}bg-purple-100 text-purple-700
+                {% elif task.follow_up_type == 'quote_follow_up' %}bg-amber-100 text-amber-700
+                {% else %}bg-gray-100 text-gray-600{% endif %}">
+                {{ (task.follow_up_type or '').replace('_', ' ').title() }}
+              </span>
+            </td>
+            <td class="px-4 py-3 max-w-xs truncate">{{ task.title }}</td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              {% if task.customer %}
+              <a href="{{ url_for('customers.detail_resource', resource_key='customers', resource_id=task.customer.id) }}" class="text-teal hover:underline">{{ task.customer.name or task.customer.email or '-' }}</a>
+              {% else %}&mdash;{% endif %}
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              {% if task.market %}
+              <a href="{{ url_for('markets.detail_resource', resource_key='markets', resource_id=task.market.id) }}" class="text-teal hover:underline">{{ task.market.name }}</a>
+              {% else %}&mdash;{% endif %}
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              {% if task.due_at %}
+              <span class="{% if task.due_at < now %}text-red-600 font-medium{% endif %}">{{ task.due_at.strftime('%b %d, %Y') }}</span>
+              {% else %}&mdash;{% endif %}
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              <span class="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium
+                {% if task.status.value == 'open' %}bg-yellow-100 text-yellow-700
+                {% elif task.status.value == 'in_progress' %}bg-blue-100 text-blue-700
+                {% elif task.status.value == 'reopened' %}bg-orange-100 text-orange-700
+                {% elif task.status.value == 'completed' %}bg-green-100 text-green-700
+                {% else %}bg-gray-100 text-gray-500{% endif %}">
+                {{ task.status.value.replace('_', ' ').title() }}
+              </span>
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap text-right">
+              <div class="flex items-center justify-end gap-1">
+                {% if task.status.value in ('open', 'reopened') %}
+                <form method="post" action="{{ url_for('prep_tasks.follow_up_complete', task_id=task.id) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-teal text-white hover:bg-teal-600 transition">Complete</button>
+                </form>
+                {% endif %}
+                {% if task.status.value == 'completed' %}
+                <form method="post" action="{{ url_for('prep_tasks.follow_up_reopen', task_id=task.id) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition">Reopen</button>
+                </form>
+                {% endif %}
+                <form method="post" action="{{ url_for('prep_tasks.follow_up_archive', task_id=task.id) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="px-2.5 py-1 text-xs font-medium rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition">Archive</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if pagination.pages > 1 %}
+  <div class="flex items-center justify-between mt-4 text-sm text-gray-500">
+    <span>{{ pagination.total }} total</span>
+    <div class="flex gap-2">
+      {% if pagination.has_prev %}
+      <a href="?page={{ pagination.prev_num }}{% if search_term %}&q={{ search_term }}{% endif %}{% if current_market_id %}&market_id={{ current_market_id }}{% endif %}" class="px-3 py-1 rounded-lg border border-gray-300 hover:bg-gray-50">&larr; Prev</a>
+      {% endif %}
+      {% if pagination.has_next %}
+      <a href="?page={{ pagination.next_num }}{% if search_term %}&q={{ search_term }}{% endif %}{% if current_market_id %}&market_id={{ current_market_id }}{% endif %}" class="px-3 py-1 rounded-lg border border-gray-300 hover:bg-gray-50">Next &rarr;</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+    <div class="text-4xl text-gray-300 mb-2">&#10003;</div>
+    <p class="text-gray-500 text-lg font-medium">No pending follow-ups</p>
+    <p class="text-gray-400 text-sm mt-1">Follow-ups appear automatically after a market is completed.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

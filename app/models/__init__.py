@@ -61,9 +61,16 @@ from app.models.pos import (
     PosSession,
     PosSessionStatus,
 )
-from app.models.prep_task import PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
+from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
+from app.models.print_failure_autopsy import (
+    PrintFailureAutopsy,
+    PrintFailureCategory,
+    PrintFailureSeverity,
+)
 from app.models.print_job import PrintJob, PrintJobStatus
+from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, SignAsset, SignStatus
 from app.models.setting import Setting
+from app.models.table_layout import MarketTableLayout, MarketTablePlacement, MarketTableSection, TableSectionType
 from app.models.trend import SourceHealthRecord, TrendCalibrationResult, TrendOpportunityScore, TrendReport, TrendSnapshot, TrendTaskRun
 from app.models.user import User, UserRole
 
@@ -88,10 +95,15 @@ __all__ = [
     "CustomRequest",
     "CustomRequestStatus",
     "CostSnapshot",
+    "ContentChannel",
+    "ContentDraft",
+    "ContentStatus",
+    "CostSnapshot",
     "CostSnapshotConfidence",
     "Customer",
     "Expense",
     "ExpenseCategory",
+    "FollowUpType",
     "FilamentSpool",
     "FilamentStatus",
     "FeatureFlag",
@@ -133,11 +145,16 @@ __all__ = [
     "PrepTaskTemplate",
     "Printer",
     "PrinterStatus",
+    "PrintFailureAutopsy",
+    "PrintFailureCategory",
+    "PrintFailureSeverity",
     "PrintJob",
     "PrintJobStatus",
     "Product",
     "ProductImage",
     "Setting",
+    "SignAsset",
+    "SignStatus",
     "ProductStatus",
     "ProductType",
     "SourceHealthRecord",
@@ -147,6 +164,10 @@ __all__ = [
     "TrendCalibrationResult",
     "TrendTaskRun",
     "TrendSnapshot",
+    "TableSectionType",
+    "MarketTableLayout",
+    "MarketTableSection",
+    "MarketTablePlacement",
     "User",
     "UserRole",
 ]

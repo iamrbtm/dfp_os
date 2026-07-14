@@ -2,17 +2,21 @@ FROM python:3.14-slim
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+RUN useradd --create-home --shell /usr/sbin/nologin appuser
+
 WORKDIR /app
+RUN chown appuser:appuser /app
 
-COPY pyproject.toml uv.lock ./
+ENV UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_CACHE_DIR=/tmp/uv-cache
 
-RUN uv sync --frozen --no-dev
-
-COPY . .
-
-RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
-
+COPY --chown=appuser:appuser pyproject.toml uv.lock ./
 USER appuser
+RUN --mount=type=cache,uid=1000,gid=1000,target=/tmp/uv-cache \
+    uv sync --frozen --no-dev
+
+COPY --chown=appuser:appuser . .
 
 EXPOSE 8091
 

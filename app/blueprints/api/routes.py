@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from flask import current_app, g, jsonify, request
+from flask import Response, current_app, g, jsonify, request
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields
@@ -65,6 +65,7 @@ from app.models import (
     TrendOpportunityScore,
     TrendReport,
 )
+from app.models.promotion import ContentDraft, ContentStatus, SignAsset, SignStatus
 from app.models.receipt import (
     Receipt,
     ReceiptLineItem,
@@ -77,6 +78,7 @@ from app.schemas import (
     CategorySchema,
     CollectionSchema,
     SettingSchema,
+    ContentDraftSchema,
     CustomRequestSchema,
     CustomerSchema,
     ExpenseSchema,
@@ -101,6 +103,7 @@ from app.schemas import (
     PrintJobSchema,
     ProductSchema,
     ResourceListEnvelope,
+    SignAssetSchema,
     TrendOpportunityScoreSchema,
     TrendReportSchema,
     TrendSourceHealthRecordSchema,
@@ -196,6 +199,7 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "trend-reports": ("trend_scout",),
     "trend-opportunity-scores": ("trend_scout",),
     "trend-source-health": ("trend_scout",),
+    "report-studio": ("report_studio",),
 }
 
 
@@ -1830,6 +1834,417 @@ class SettingItem(MethodView):
             source_module=__name__,
         )
         return {"data": SettingSchema().dump(setting)}
+
+
+# --- Promotion: Content Drafts ---
+
+@catalog_blp.route("/content-drafts")
+class ContentDraftCollection(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(200)
+    def get(self):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        from app.services.crud import apply_search, paginate_query
+        from sqlalchemy import select
+        page = request.args.get("page", 1, type=int)
+        q = request.args.get("q", "").strip()
+        stmt = select(ContentDraft).order_by(ContentDraft.updated_at.desc())
+        if q:
+            stmt = apply_search(stmt, ContentDraft, q, ["title", "caption", "notes"])
+        pagination = paginate_query(stmt, page, 25)
+        return {
+            "data": ContentDraftSchema(many=True).dump(pagination.items),
+            "pagination": {"page": page, "per_page": 25, "total": pagination.total},
+        }
+
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(201)
+    def post(self):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        payload = request.get_json(silent=True) or {}
+        errors = ContentDraftSchema().validate(payload)
+        if errors:
+            return {"error": {"code": "validation_error", "message": str(errors), "details": errors}}, 400
+        draft = ContentDraft(
+            title=payload.get("title", ""),
+            content_type=payload.get("content_type", "social_post"),
+            channel=payload.get("channel", "other"),
+            caption=payload.get("caption"),
+            media_reference=payload.get("media_reference"),
+            product_id=payload.get("product_id"),
+            market_id=payload.get("market_id"),
+            custom_request_id=payload.get("custom_request_id"),
+            status=ContentStatus(payload.get("status", "draft")),
+        )
+        db.session.add(draft)
+        db.session.commit()
+        from app.services.audit import record_audit_event
+        record_audit_event(
+            action="content_draft.created",
+            entity_type="content_draft",
+            entity_id=draft.id,
+            source_module=__name__,
+        )
+        return {"data": ContentDraftSchema().dump(draft)}, 201
+
+
+@catalog_blp.route("/content-drafts/<int:draft_id>")
+class ContentDraftItem(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(200)
+    def get(self, draft_id: int):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        draft = db.session.get(ContentDraft, draft_id)
+        if draft is None:
+            return {"error": {"code": "not_found", "message": "Content draft not found.", "details": {}}}, 404
+        return {"data": ContentDraftSchema().dump(draft)}
+
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(200)
+    def put(self, draft_id: int):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        draft = db.session.get(ContentDraft, draft_id)
+        if draft is None:
+            return {"error": {"code": "not_found", "message": "Content draft not found.", "details": {}}}, 404
+        payload = request.get_json(silent=True) or {}
+        errors = ContentDraftSchema().validate(payload)
+        if errors:
+            return {"error": {"code": "validation_error", "message": str(errors), "details": errors}}, 400
+        from app.services.admin_mutations import snapshot_instance
+        before_state = snapshot_instance(draft)
+        for field in ("title", "content_type", "caption", "media_reference", "notes"):
+            if field in payload:
+                setattr(draft, field, payload[field])
+        if "channel" in payload:
+            draft.channel = payload["channel"]
+        if "status" in payload:
+            draft.status = ContentStatus(payload["status"])
+        if "product_id" in payload:
+            draft.product_id = payload.get("product_id")
+        if "market_id" in payload:
+            draft.market_id = payload.get("market_id")
+        if "custom_request_id" in payload:
+            draft.custom_request_id = payload.get("custom_request_id")
+        if "planned_publish_date" in payload:
+            draft.planned_publish_date = payload.get("planned_publish_date")
+        db.session.commit()
+        from app.services.audit import record_audit_event
+        record_audit_event(
+            action="content_draft.updated",
+            entity_type="content_draft",
+            entity_id=draft.id,
+            before_state=before_state,
+            source_module=__name__,
+        )
+        return {"data": ContentDraftSchema().dump(draft)}
+
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(200)
+    def delete(self, draft_id: int):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        draft = db.session.get(ContentDraft, draft_id)
+        if draft is None:
+            return {"error": {"code": "not_found", "message": "Content draft not found.", "details": {}}}, 404
+        draft.status = ContentStatus.ARCHIVED
+        db.session.commit()
+        from app.services.audit import record_audit_event
+        record_audit_event(
+            action="content_draft.archived",
+            entity_type="content_draft",
+            entity_id=draft.id,
+            source_module=__name__,
+        )
+        return {"status": "archived"}
+
+
+@catalog_blp.route("/content-drafts/generate-ai", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Promotion"])
+@catalog_blp.response(201)
+def content_draft_generate_ai():
+    denied = require_api_scopes("promotion")
+    if denied:
+        return denied
+    payload = request.get_json(silent=True) or {}
+    source_type = payload.get("source_type", "").strip()
+    source_id = payload.get("source_id", 0)
+    if not source_type or not source_id:
+        return {"error": {"code": "validation_error", "message": "source_type and source_id are required.", "details": {}}}, 400
+    from app.services.promotion import generate_ai_assisted_draft
+    actor_id = getattr(g, "api_user", None) and g.api_user.id
+    draft = generate_ai_assisted_draft(source_type, int(source_id), actor_id=actor_id)
+    if draft is None:
+        return {"error": {"code": "not_found", "message": f"Could not find {source_type} with id {source_id}.", "details": {}}}, 404
+    return {"data": ContentDraftSchema().dump(draft)}, 201
+
+
+# --- Promotion: Sign Assets ---
+
+@catalog_blp.route("/sign-assets")
+class SignAssetCollection(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(200)
+    def get(self):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        from app.services.crud import apply_search, paginate_query
+        from sqlalchemy import select
+        page = request.args.get("page", 1, type=int)
+        q = request.args.get("q", "").strip()
+        stmt = select(SignAsset).order_by(SignAsset.updated_at.desc())
+        if q:
+            stmt = apply_search(stmt, SignAsset, q, ["title", "subtitle", "short_description"])
+        pagination = paginate_query(stmt, page, 25)
+        return {
+            "data": SignAssetSchema(many=True).dump(pagination.items),
+            "pagination": {"page": page, "per_page": 25, "total": pagination.total},
+        }
+
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(201)
+    def post(self):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        payload = request.get_json(silent=True) or {}
+        errors = SignAssetSchema().validate(payload)
+        if errors:
+            return {"error": {"code": "validation_error", "message": str(errors), "details": errors}}, 400
+        sign = SignAsset(
+            title=payload.get("title", ""),
+            subtitle=payload.get("subtitle"),
+            price_display=payload.get("price_display"),
+            short_description=payload.get("short_description"),
+            care_note=payload.get("care_note"),
+            qr_target_url=payload.get("qr_target_url"),
+            layout=payload.get("layout", "text"),
+            product_id=payload.get("product_id"),
+            collection_id=payload.get("collection_id"),
+            is_active=payload.get("is_active", True),
+            status=SignStatus(payload.get("status", "draft")),
+        )
+        db.session.add(sign)
+        db.session.flush()
+        from app.services.promotion import save_sign_html
+        save_sign_html(sign)
+        db.session.commit()
+        from app.services.audit import record_audit_event
+        record_audit_event(
+            action="sign_asset.created",
+            entity_type="sign_asset",
+            entity_id=sign.id,
+            source_module=__name__,
+        )
+        return {"data": SignAssetSchema().dump(sign)}, 201
+
+
+@catalog_blp.route("/sign-assets/<int:sign_id>")
+class SignAssetItem(MethodView):
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(200)
+    def get(self, sign_id: int):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        sign = db.session.get(SignAsset, sign_id)
+        if sign is None:
+            return {"error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}}, 404
+        return {"data": SignAssetSchema().dump(sign)}
+
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(200)
+    def put(self, sign_id: int):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        sign = db.session.get(SignAsset, sign_id)
+        if sign is None:
+            return {"error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}}, 404
+        payload = request.get_json(silent=True) or {}
+        errors = SignAssetSchema().validate(payload)
+        if errors:
+            return {"error": {"code": "validation_error", "message": str(errors), "details": errors}}, 400
+        from app.services.admin_mutations import snapshot_instance
+        before_state = snapshot_instance(sign)
+        for field in ("title", "subtitle", "price_display", "short_description", "care_note", "qr_target_url", "layout"):
+            if field in payload:
+                setattr(sign, field, payload[field])
+        if "product_id" in payload:
+            sign.product_id = payload.get("product_id")
+        if "collection_id" in payload:
+            sign.collection_id = payload.get("collection_id")
+        if "is_active" in payload:
+            sign.is_active = bool(payload["is_active"])
+        if "status" in payload:
+            sign.status = SignStatus(payload["status"])
+        from app.services.promotion import save_sign_html
+        save_sign_html(sign)
+        db.session.commit()
+        from app.services.audit import record_audit_event
+        record_audit_event(
+            action="sign_asset.updated",
+            entity_type="sign_asset",
+            entity_id=sign.id,
+            before_state=before_state,
+            source_module=__name__,
+        )
+        return {"data": SignAssetSchema().dump(sign)}
+
+    @api_token_required
+    @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.response(200)
+    def delete(self, sign_id: int):
+        denied = require_api_scopes("promotion")
+        if denied:
+            return denied
+        sign = db.session.get(SignAsset, sign_id)
+        if sign is None:
+            return {"error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}}, 404
+        sign.status = SignStatus.ARCHIVED
+        db.session.commit()
+        from app.services.audit import record_audit_event
+        record_audit_event(
+            action="sign_asset.archived",
+            entity_type="sign_asset",
+            entity_id=sign.id,
+            source_module=__name__,
+        )
+        return {"status": "archived"}
+
+
+@catalog_blp.route("/report-studio/reports", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_reports():
+    from app.services.report_studio import get_report_catalog, get_data_quality_summary
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    catalog = get_report_catalog()
+    data_quality = get_data_quality_summary()
+    return {"data": {"catalog": catalog, "data_quality": data_quality}}
+
+
+@catalog_blp.route("/report-studio/heat-map", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_heat_map():
+    from app.services.report_studio import get_vendor_market_heat_map
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    data = get_vendor_market_heat_map(dict(request.args))
+    return {"data": data}
+
+
+@catalog_blp.route("/report-studio/application-tracker", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_application_tracker():
+    from app.services.report_studio import get_market_application_pipeline_report
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    data = get_market_application_pipeline_report(dict(request.args))
+    return {"data": data}
+
+
+@catalog_blp.route("/report-studio/heat-map/csv", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_heat_map_csv():
+    from app.services.report_studio import get_vendor_market_heat_map
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    data = get_vendor_market_heat_map(dict(request.args))
+    import csv, io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Name", "City", "State", "Status", "Date", "Booth Fee", "Revenue", "Profit", "Margin %", "Has Coordinates", "Worth Repeating"])
+    for m in data:
+        writer.writerow([
+            m["name"], m.get("city", ""), m.get("state", ""), m.get("status", ""),
+            m.get("event_date", ""), m.get("booth_fee", 0), m.get("revenue", 0),
+            m.get("profit", 0), m.get("margin_pct", ""),
+            "Yes" if m.get("has_coordinates") else "No",
+            "Yes" if m.get("worth_repeating") is True else ("No" if m.get("worth_repeating") is False else ""),
+        ])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=market_heat_map.csv"})
+
+
+@catalog_blp.route("/report-studio/application-tracker/csv", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Report Studio"])
+@catalog_blp.response(200)
+def report_studio_application_tracker_csv():
+    from app.services.report_studio import get_market_application_pipeline_report
+
+    denied = require_api_scopes("report_studio")
+    if denied:
+        return denied
+    data = get_market_application_pipeline_report(dict(request.args))
+    import csv, io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Market", "City", "State", "Status", "Deadline", "App Fee", "Booth Fee", "Total Fee", "Has Documents", "Follow-Up Date", "Needs Follow-Up", "Worth Repeating"])
+    for m in data.get("pipeline", []):
+        writer.writerow([
+            m["name"], m.get("city", ""), m.get("state", ""), m.get("status", ""),
+            m.get("application_deadline", ""), m.get("application_fee", 0),
+            m.get("booth_fee", 0), m.get("total_fee", 0),
+            "Yes" if m.get("has_documents") else "No",
+            m.get("follow_up_date", ""),
+            "Yes" if m.get("needs_follow_up") else "No",
+            "Yes" if m.get("worth_repeating") is True else ("No" if m.get("worth_repeating") is False else ""),
+        ])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=application_tracker.csv"})
+
+
+@catalog_blp.route("/sign-assets/<int:sign_id>/generate-ai-image", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Promotion"])
+@catalog_blp.response(200)
+def sign_asset_generate_ai_image(sign_id: int):
+    denied = require_api_scopes("promotion")
+    if denied:
+        return denied
+    sign = db.session.get(SignAsset, sign_id)
+    if sign is None:
+        return {"error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}}, 404
+    from app.services.promotion import generate_ai_sign_image
+    result = generate_ai_sign_image(sign)
+    return {"data": SignAssetSchema().dump(result)}
 
 
 def register_api_blueprints(api):

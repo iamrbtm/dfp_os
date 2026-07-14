@@ -1,6 +1,6 @@
 # Production Readiness Scorecard
 
-Date: 2026-07-08
+Date: 2026-07-13
 
 This scorecard reflects the current hardening pass. Scores are conservative and describe the foundation after the changes in this pass, not a claim that every feature is complete.
 
@@ -24,7 +24,9 @@ This scorecard reflects the current hardening pass. Scores are conservative and 
 | Documentation | AGENTS/DESIGN/README describe modular monolith, API docs, audit, and readiness direction. | 7 | Scorecard was missing. | Module docs per module are still shallow. | Added this scorecard and README foundation notes. | Docs need to track future schema resets carefully. | Not applicable. | Add per-module docs under `docs/modules/`. |
 | SaaS-Later Readiness | Default business/account model and nullable `business_id` fields added to major records. | 6 | No account foundation existed. | No tenant onboarding, billing, or tenant isolation policy yet by design. | Added `Business`, default-business seed, and major-record scoping fields. | Single-business assumptions remain throughout queries. | Migration and seed paths covered by tests. | Add query helpers that scope by active business without full multi-tenant complexity. |
 
-## 2026-07-08 Audit Remediation Update
+| Report Studio | New centralized reporting hub with market heat map, application tracker, report catalog, data quality warnings, CSV exports, and Chart.js visualizations. | 7 | None found. Report Studio is read-only and does not introduce write paths. | Scheduled/generated report persistence, geographic map rendering, and deeper product/inventory/POS reports still needed. | Created blueprint, module registry entry, service layer, 3 templates, API endpoints, CSV exports, feature flag enforcement, role-based access, sidebar nav, test suite. | Heat map relies on table view (no external map API). Full test suite blocked by Python 3.14 environment. | 28 focused tests added for service, routes, API, auth, feature flags, and CSV exports. | Add geographic map rendering for markets with coordinates, add data freshness/persisted report scheduling, and integrate deeper product/POS reports. |
+26: 
+27: ## 2026-07-08 Audit Remediation Update
 
 | Area | Score | Fixes made | Remaining risks | Tests/checks added |
 |---|---:|---|---|---|

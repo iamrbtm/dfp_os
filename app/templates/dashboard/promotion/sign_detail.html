@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ sign.title }} | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="max-w-4xl mx-auto space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Display Sign</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ sign.title }}</h1>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('promotion.sign_print', sign_id=sign.id) }}" class="app-btn app-btn-primary" target="_blank">Print</a>
+      <a href="{{ url_for('promotion.sign_edit', sign_id=sign.id) }}" class="app-btn app-btn-secondary">Edit</a>
+      <form action="{{ url_for('promotion.sign_regenerate', sign_id=sign.id) }}" method="post" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="app-btn app-btn-secondary">Regenerate HTML</button>
+      </form>
+      <form action="{{ url_for('promotion.sign_generate_ai_image', sign_id=sign.id) }}" method="post" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="app-btn app-btn-secondary" style="background: var(--color-teal, #0d9488); color: #fff;">Generate AI Image</button>
+      </form>
+      {% if sign.status.value in ('draft', 'needs_review') %}
+      <form action="{{ url_for('promotion.sign_approve', sign_id=sign.id) }}" method="post" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="app-btn app-btn-primary">Approve</button>
+      </form>
+      {% endif %}
+      <form action="{{ url_for('promotion.sign_archive', sign_id=sign.id) }}" method="post" class="inline" onsubmit="return confirm('Archive this sign?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="app-btn app-btn-danger">Archive</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="app-card p-6 space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Status</p>
+          <p style="color: var(--color-text);">{{ sign.status.value|replace('_', ' ')|title }}</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Layout</p>
+          <p style="color: var(--color-text);">{{ sign.layout|title }}</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Active</p>
+          <p style="color: var(--color-text);">{{ 'Yes' if sign.is_active else 'No' }}</p>
+        </div>
+        {% if sign.subtitle %}
+        <div class="col-span-2">
+          <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Subtitle</p>
+          <p style="color: var(--color-text);">{{ sign.subtitle }}</p>
+        </div>
+        {% endif %}
+        {% if sign.price_display %}
+        <div>
+          <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Price</p>
+          <p style="color: var(--color-text);">{{ sign.price_display }}</p>
+        </div>
+        {% endif %}
+        {% if sign.product %}
+        <div>
+          <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Product</p>
+          <p style="color: var(--color-text);">{{ sign.product.name }}</p>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if sign.short_description %}
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Description</p>
+        <p class="mt-1" style="color: var(--color-text);">{{ sign.short_description }}</p>
+      </div>
+      {% endif %}
+
+      {% if sign.care_note %}
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Care Note</p>
+        <p class="mt-1" style="color: var(--color-text-muted);">{{ sign.care_note }}</p>
+      </div>
+      {% endif %}
+
+      {% if sign.qr_target_url %}
+      <div>
+        <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">QR Target URL</p>
+        <p class="mt-1" style="color: var(--color-link);">{{ sign.qr_target_url }}</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <div>
+      <h3 class="text-sm font-medium mb-2" style="color: var(--color-text);">Preview</h3>
+      <div class="app-card p-4">
+        {% if sign.layout == 'graphical' and sign.ai_image_path %}
+        <div style="background: #fff; border-radius: 0.5rem; overflow: hidden;">
+          <img src="{{ sign.ai_image_path }}" alt="{{ sign.title }}" style="max-width: 100%; height: auto; display: block;" />
+        </div>
+        {% elif sign.preview_html %}
+        <div class="sign-preview" style="background: #fff; color: #111; padding: 1.5rem; border-radius: 0.5rem; font-family: system-ui, sans-serif;">
+          {{ sign.preview_html|safe }}
+        </div>
+        {% else %}
+        <p style="color: var(--color-text-muted);">No preview generated. Save the sign or generate an AI image.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <a href="{{ url_for('promotion.sign_list') }}" class="app-btn app-btn-secondary">&larr; Back to Signs</a>
+</section>
+{% endblock %}
