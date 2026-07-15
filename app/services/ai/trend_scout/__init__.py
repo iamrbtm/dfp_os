@@ -18,6 +18,7 @@ from app.services.ai.trend_scout.sources import (
     fetch_bgg,
     fetch_google_trends,
     fetch_internal_demand,
+    fetch_last30days,
     fetch_makerworld,
     fetch_printables,
     fetch_reddit,
@@ -35,6 +36,7 @@ DB_FETCHERS = {
 EXTERNAL_FETCHERS = {
     "myminifactory": fetch_myminifactory,
     "bgg": fetch_bgg,
+    "last30days": fetch_last30days,
     "makerworld": fetch_makerworld,
     "printables": fetch_printables,
     "reddit": fetch_reddit,
