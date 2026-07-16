@@ -21,3 +21,23 @@ class PrintJobSchema(Schema):
     label = fields.String(allow_none=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
+
+
+class PrintFailureAutopsySchema(Schema):
+    id = fields.Integer(dump_only=True)
+    print_job_id = fields.Integer(required=True)
+    printer_id = fields.Integer(allow_none=True)
+    product_id = fields.Integer(allow_none=True)
+    filament_spool_id = fields.Integer(allow_none=True)
+    user_id = fields.Integer(allow_none=True)
+    model_asset_id = fields.Integer(allow_none=True)
+    category = fields.String(required=True)
+    severity = fields.String(required=True)
+    notes = fields.String(allow_none=True)
+    photo_reference = fields.String(allow_none=True)
+    corrective_action = fields.String(allow_none=True)
+    maintenance_required = fields.Boolean()
+    resolved = fields.Boolean()
+    resolution_notes = fields.String(allow_none=True)
+    created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)

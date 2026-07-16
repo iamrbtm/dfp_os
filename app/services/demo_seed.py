@@ -369,7 +369,7 @@ def seed_demo_data(*, admin_email: str, admin_password: str) -> dict[str, int]:
         defaults={
             "business_id": business.id,
             "market_id": market_event.id,
-            "category": PrepTaskCategory.MARKET_SETUP,
+            "category": PrepTaskCategory.GENERAL,
             "status": PrepTaskStatus.OPEN,
         },
     )

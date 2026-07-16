@@ -67,8 +67,16 @@ from app.models.pickup import (
     PickupSlot,
     PickupSlotStatus,
     PickupStatus,
+from app.models.product_ops import (
+    DeadStockRecommendation,
+    DeadStockRecommendationStatus,
+    ProductLaunchChecklistItem,
+    ProductLaunchChecklistKey,
+    ProductPhotoShot,
+    ProductPhotoShotType,
 )
 from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
+from app.models.print_failure_autopsy import PrintFailureAutopsy, PrintFailureCategory, PrintFailureSeverity
 from app.models.print_job import PrintJob, PrintJobStatus
 from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, SignAsset, SignStatus
 from app.models.setting import Setting
@@ -77,6 +85,9 @@ from app.models.trend import SourceHealthRecord, TrendCalibrationResult, TrendOp
 from app.models.user import User, UserRole
 
 __all__ = [
+    "PrintFailureAutopsy",
+    "PrintFailureCategory",
+    "PrintFailureSeverity",
     "AdjustmentType",
     "AllocationMethod",
     "AllocationType",
@@ -100,7 +111,6 @@ __all__ = [
     "ContentChannel",
     "ContentDraft",
     "ContentStatus",
-    "CostSnapshot",
     "CostSnapshotConfidence",
     "Customer",
     "Expense",
@@ -152,10 +162,19 @@ __all__ = [
     "PrepTaskTemplate",
     "Printer",
     "PrinterStatus",
+    "PrintFailureAutopsy",
+    "PrintFailureCategory",
+    "PrintFailureSeverity",
     "PrintJob",
     "PrintJobStatus",
     "Product",
+    "ProductLaunchChecklistItem",
+    "ProductLaunchChecklistKey",
     "ProductImage",
+    "ProductPhotoShot",
+    "ProductPhotoShotType",
+    "DeadStockRecommendation",
+    "DeadStockRecommendationStatus",
     "Setting",
     "SignAsset",
     "SignStatus",

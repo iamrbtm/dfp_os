@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
 from app.models.base import PrimaryKeyMixin, TimestampMixin
+from app.models.business import Business
 
 
 class CustomRequestStatus(StrEnum):
@@ -56,8 +57,12 @@ class CustomRequest(PrimaryKeyMixin, TimestampMixin, db.Model):
     customer_id: Mapped[int | None] = mapped_column(
         ForeignKey("customers.id"), nullable=True, index=True
     )
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     source: Mapped[str | None] = mapped_column(String(40), default="website", nullable=True)
 
+    business: Mapped[Business | None] = relationship(back_populates="custom_requests")
     subtotal: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     tax: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))
     discount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))

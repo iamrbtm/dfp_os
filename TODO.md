@@ -19,7 +19,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` Built the public website + ecommerce storefront pass: polished public pages, session cart, online checkout, and payment fallback flow.
 - `done` Refactored product asset storage so uploaded model/image/generated files follow the per-product and per-variant folder layout used in production file management.
 - `done` Rebuilt Product Studio into isolated primary and variant accordions so each section owns its own fields, assets, previews, and cost calculations.
-- `done` Milestone 6: Orders / Custom Orders — Local pickup scheduler with pickup slots, checkout selection, internal pickup board, prep tasks, API resources, and tests.
+- `done` Milestone 4: Products — Product readiness score, launch checklist, photo shot list, story cards, dead-stock rescue, and retirement workflow.
 - `in-progress` Replace placeholder product pricing with evidence-backed cost snapshots, spool-aware material costing, historical print-job failure rates, and multi-axis profitability metrics.
 - `done` **Phase 1: AI Design Trend Scout — Database & Foundation** — Created `TrendSnapshot` and `TrendReport` models, generated migration, set up `app/services/ai/trend_scout/` directory structure.
 - `done` **Phase 2: AI Design Trend Scout — Source Integrations (The Fetchers)** — Built base utility (`_base.py` with rate limiter, UA rotation, `ScoutResult`), API fetchers (MyMiniFactory, Etsy, BGG), scrapers (MakerWorld, Printables, Reddit). All return standardized `ScoutResult` dicts. Pipeline orchestration in `trend_scout/__init__.py`.
@@ -39,7 +39,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 ## Next Priorities
 
 - `done` Milestone 3: Report Studio — Module foundation, report catalog home, vendor market heat map, and market application tracker report.
-- `done` Milestone 6: Orders / Custom Orders — Local Pickup Scheduler.
+- `done` Milestone 4: Products — Product Studio operational controls, API actions, migration, docs, and focused tests.
 
 - `todo` Normalize and map kept tables from the legacy import staging layer into warehouse fact tables.
 - `todo` Extend DFPos Intelligence with current DFPos snapshot sync and approved-action workflows that can create prep tasks or print jobs after human confirmation.

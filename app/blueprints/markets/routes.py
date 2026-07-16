@@ -27,6 +27,7 @@ from app.models import (
     MarketPackingList,
     MarketStatus,
     MarketTimelineEvent,
+    PrepTask,
     Product,
     UserRole,
 )

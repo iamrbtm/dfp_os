@@ -125,6 +125,10 @@
             <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.commercial_license_notes.label.text }}</label>
             {{ form.commercial_license_notes(class="app-input", rows=3) }}
           </div>
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.launch_override_reason.label.text }}</label>
+            {{ form.launch_override_reason(class="app-input", rows=2, placeholder="Required before launching with incomplete critical readiness items.") }}
+          </div>
 
           <div class="grid gap-5 md:grid-cols-2">
             <div>
@@ -161,6 +165,141 @@
       </form>
 
       {% if product %}
+      <div class="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div class="app-card p-5">
+          <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Readiness</p>
+          <p class="mt-2 text-5xl font-semibold" style="color: var(--color-primary);">{{ readiness.score if readiness else 0 }}</p>
+          <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Live score from license, cost, copy, inventory, photos, visibility, and model analysis.</p>
+          {% if readiness and readiness.critical_blockers %}
+          <div class="mt-4 space-y-2">
+            {% for blocker in readiness.critical_blockers %}
+            <p class="rounded-lg px-3 py-2 text-xs" style="background: var(--color-danger-soft); color: var(--color-danger);">{{ blocker }}</p>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        <div class="app-card p-5">
+          <h3 class="text-base font-semibold" style="color: var(--color-text);">Readiness Breakdown</h3>
+          <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {% for item in readiness.breakdown if readiness %}
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-medium" style="color: var(--color-text);">{{ item.label }}</p>
+                <span class="app-badge {{ 'app-badge-success' if item.passed else 'app-badge-warning' }}">{{ item.earned }}/{{ item.points }}</span>
+              </div>
+              <p class="mt-2 text-xs leading-5" style="color: var(--color-text-muted);">{{ item.reason if not item.passed else "Ready" }}</p>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="grid gap-6 xl:grid-cols-2">
+        <div class="app-card p-5 space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Launch Checklist</h3>
+            <span class="text-xs" style="color: var(--color-text-muted);">{{ launch_items|selectattr("completed")|list|length }}/{{ launch_items|length }} complete</span>
+          </div>
+          <div class="space-y-3">
+            {% for item in launch_items %}
+            <form method="post" action="{{ url_for('products.update_launch_checklist_item', product_id=product.id, item_id=item.id) }}" class="rounded-xl border p-3" style="border-color: var(--color-border);">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="flex items-center gap-3 text-sm font-medium" style="color: var(--color-text);">
+                <input type="checkbox" name="completed" class="app-checkbox" {% if item.completed %}checked{% endif %}>
+                <span>{{ item.label }}</span>
+              </label>
+              <div class="mt-3 grid gap-2 md:grid-cols-2">
+                <input name="notes" value="{{ item.notes or '' }}" class="app-input text-sm" placeholder="Notes">
+                <input name="override_reason" value="{{ item.override_reason or '' }}" class="app-input text-sm" placeholder="Override reason">
+              </div>
+              <button type="submit" class="app-btn app-btn-secondary mt-3 text-xs px-3 py-2">Save</button>
+            </form>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="app-card p-5 space-y-4">
+          <h3 class="text-base font-semibold" style="color: var(--color-text);">Photo Shot List</h3>
+          <div class="grid gap-3 md:grid-cols-2">
+            {% for shot in photo_shots %}
+            <form method="post" action="{{ url_for('products.update_product_photo_shot', product_id=product.id, shot_id=shot.id) }}" class="rounded-xl border p-3" style="border-color: var(--color-border);">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="flex items-center gap-3 text-sm font-medium" style="color: var(--color-text);">
+                <input type="checkbox" name="completed" class="app-checkbox" {% if shot.completed %}checked{% endif %}>
+                <span>{{ shot.label }}</span>
+              </label>
+              <input name="image_reference" value="{{ shot.image_reference or '' }}" class="app-input mt-3 text-sm" placeholder="Image/file reference">
+              <textarea name="notes" class="app-input mt-2 text-sm" rows="2" placeholder="Shot notes">{{ shot.notes or '' }}</textarea>
+              <button type="submit" class="app-btn app-btn-secondary mt-3 text-xs px-3 py-2">Save</button>
+            </form>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <form method="post" action="{{ url_for('products.update_product_story_card', product_id=product.id) }}" class="app-card p-5 space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <h3 class="text-base font-semibold" style="color: var(--color-text);">Product Story Card</h3>
+          <div class="grid gap-4 md:grid-cols-2">
+            <textarea name="story_what_it_is" class="app-input" rows="3" placeholder="What it is">{{ product.story_what_it_is or '' }}</textarea>
+            <textarea name="story_who_it_is_for" class="app-input" rows="3" placeholder="Who it is for">{{ product.story_who_it_is_for or '' }}</textarea>
+            <textarea name="story_materials" class="app-input" rows="3" placeholder="Materials">{{ product.story_materials or '' }}</textarea>
+            <textarea name="story_customization_options" class="app-input" rows="3" placeholder="Customization options">{{ product.story_customization_options or '' }}</textarea>
+          </div>
+          <textarea name="story_internal_compliance_notes" class="app-input" rows="3" placeholder="Internal compliance notes">{{ product.story_internal_compliance_notes or '' }}</textarea>
+          <button type="submit" class="app-btn app-btn-primary">Save Story Card</button>
+        </form>
+
+        <div class="space-y-4">
+          <div class="app-card p-5 space-y-3">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-base font-semibold" style="color: var(--color-text);">Dead Stock Rescue</h3>
+              <form method="post" action="{{ url_for('products.generate_product_dead_stock', product_id=product.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="app-btn app-btn-secondary text-xs px-3 py-2">Analyze</button>
+              </form>
+            </div>
+            {% for rec in dead_stock_recommendations %}
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-medium" style="color: var(--color-text);">{{ rec.suggested_action|replace('_', ' ')|title }}</p>
+                <span class="app-badge app-badge-warning">{{ rec.score }}</span>
+              </div>
+              <p class="mt-2 text-xs leading-5" style="color: var(--color-text-muted);">{{ rec.reason }}</p>
+              <p class="mt-2 text-xs uppercase" style="color: var(--color-text-muted);">{{ rec.status.value }}</p>
+              {% if rec.status.value == "open" %}
+              <div class="mt-3 grid gap-2">
+                <form method="post" action="{{ url_for('products.update_dead_stock_recommendation', recommendation_id=rec.id, action='accept') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input name="action_notes" class="app-input text-sm" placeholder="Action notes">
+                  <button type="submit" class="app-btn app-btn-primary mt-2 text-xs px-3 py-2">Accept</button>
+                </form>
+                <form method="post" action="{{ url_for('products.update_dead_stock_recommendation', recommendation_id=rec.id, action='dismiss') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="app-btn app-btn-secondary text-xs px-3 py-2">Dismiss</button>
+                </form>
+              </div>
+              {% endif %}
+            </div>
+            {% else %}
+            <p class="rounded-xl border border-dashed p-3 text-sm" style="border-color: var(--color-border); color: var(--color-text-muted);">No recommendations generated yet.</p>
+            {% endfor %}
+          </div>
+
+          <form method="post" action="{{ url_for('products.retire_studio_product', product_id=product.id) }}" class="app-card p-5 space-y-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Retirement Workflow</h3>
+            <textarea name="reason" class="app-input" rows="3" placeholder="Reason required before retirement"></textarea>
+            <label class="flex items-center gap-3 text-sm" style="color: var(--color-text);">
+              <input type="checkbox" name="discount_remaining" class="app-checkbox">
+              <span>Tag remaining stock for retirement discount</span>
+            </label>
+            <button type="submit" class="app-btn app-btn-secondary" onclick="return confirm('Retire this product and hide it from public/POS sales?')">Retire Product</button>
+          </form>
+        </div>
+      </div>
+
       <div class="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.95fr)]">
         <div class="space-y-4">
           <div class="app-card p-4" style="min-height: 540px;">

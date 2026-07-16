@@ -19,6 +19,7 @@ from app.models import (
     PosSession,
     PosSessionStatus,
     Product,
+    ProductStatus,
     TableSectionType,
 )
 from app.services.markets import record_market_audit
@@ -108,8 +109,8 @@ def get_impulse_tray_recommendations(market_id: int | None = None) -> dict:
         .filter(
             PosSession.status != PosSessionStatus.VOIDED,
             PosSaleItem.item_type == PosSaleItemType.PRODUCT,
-            ~Product.name.in_(names_in_impulse) if names_in_impulse else True,
-            Product.is_active == True,
+            ~Product.name.in_(names_in_impulse) if names_in_impulse else Product.id.isnot(None),
+            Product.status == ProductStatus.ACTIVE,
             Product.is_pos_visible == True,
         )
         .group_by(Product.id, Product.name, Product.base_price)

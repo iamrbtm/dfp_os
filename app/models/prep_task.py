@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
 from app.models.base import PrimaryKeyMixin, TimestampMixin
+from app.models.business import Business
 
 
 class PrepTaskStatus(StrEnum):
@@ -56,13 +57,21 @@ class PrepTaskTemplate(PrimaryKeyMixin, TimestampMixin, db.Model):
         index=True,
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     default_due_days_before: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
     default_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    business: Mapped[Business | None] = relationship(back_populates="prep_task_templates")
 
 
 class PrepTask(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "prep_tasks"
 
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("prep_task_templates.id"), nullable=True, index=True
@@ -95,6 +104,7 @@ class PrepTask(PrimaryKeyMixin, TimestampMixin, db.Model):
         ForeignKey("pos_sales.id"), nullable=True, index=True
     )
 
+    business: Mapped[Business | None] = relationship(back_populates="prep_tasks")
     market = relationship("Market")
     template = relationship("PrepTaskTemplate")
     assigned_user = relationship("User")

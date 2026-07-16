@@ -62,6 +62,10 @@
        style="{% if active_section == 'settings' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Settings
     </a>
+    <a href="{{ url_for('feature_flags.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+       style="{% if active_section == 'feature_flags' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+      Feature Flags
+    </a>
     <a href="{{ url_for('markets.list_resource', resource_key='markets') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'markets' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Markets

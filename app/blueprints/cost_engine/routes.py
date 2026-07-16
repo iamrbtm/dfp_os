@@ -35,7 +35,7 @@ def index():
             "cost_engine_failure_rate",
             "cost_engine_target_margin_percent",
         ):
-            set_setting(key, request.form.get(key, "").strip() or "0", type="decimal")
+            set_setting(key, request.form.get(key, "").strip() or "0", setting_type="decimal")
         flash("Cost engine settings saved.", "success")
         return redirect(url_for("cost_engine.index"))
 

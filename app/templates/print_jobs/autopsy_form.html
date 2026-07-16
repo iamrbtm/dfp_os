@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Failure Autopsy | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="mx-auto max-w-3xl space-y-6">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Print Jobs</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ "Edit" if mode == "edit" else "New" }} Failure Autopsy</h1>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">{{ print_job.label or "Print job" }}{% if print_job.printer %} on {{ print_job.printer.name }}{% endif %}</p>
+    </div>
+
+    <form method="post" class="app-card space-y-5 p-6">
+      {{ form.hidden_tag() }}
+      <div class="grid gap-4 md:grid-cols-2">
+        <div>
+          {{ form.category.label(class_="form-label") }}
+          {{ form.category(class_="form-control") }}
+        </div>
+        <div>
+          {{ form.severity.label(class_="form-label") }}
+          {{ form.severity(class_="form-control") }}
+        </div>
+        <div>
+          {{ form.filament_spool_id.label(class_="form-label") }}
+          {{ form.filament_spool_id(class_="form-control") }}
+        </div>
+        <div>
+          {{ form.model_asset_id.label(class_="form-label") }}
+          {{ form.model_asset_id(class_="form-control") }}
+        </div>
+      </div>
+      <div>
+        {{ form.notes.label(class_="form-label") }}
+        {{ form.notes(class_="form-control", rows="4") }}
+      </div>
+      <div>
+        {{ form.photo_reference.label(class_="form-label") }}
+        {{ form.photo_reference(class_="form-control") }}
+      </div>
+      <div>
+        {{ form.corrective_action.label(class_="form-label") }}
+        {{ form.corrective_action(class_="form-control", rows="4") }}
+      </div>
+      <div class="flex flex-wrap gap-6">
+        <label class="inline-flex items-center gap-2 text-sm" style="color: var(--color-text);">
+          {{ form.maintenance_required(class_="h-4 w-4") }}
+          <span>Maintenance required</span>
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm" style="color: var(--color-text);">
+          {{ form.resolved(class_="h-4 w-4") }}
+          <span>Resolved</span>
+        </label>
+      </div>
+      <div>
+        {{ form.resolution_notes.label(class_="form-label") }}
+        {{ form.resolution_notes(class_="form-control", rows="3") }}
+      </div>
+      <div class="flex flex-wrap gap-3">
+        {{ form.submit(class_="app-btn app-btn-primary") }}
+        <a href="{{ url_for('print_jobs.detail_resource', resource_id=print_job.id) }}" class="app-btn app-btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

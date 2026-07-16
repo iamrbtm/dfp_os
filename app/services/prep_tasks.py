@@ -153,6 +153,42 @@ def generate_market_prep_tasks(market_id: int, actor_id: int | None = None) -> l
     return generated
 
 
+def complete_prep_task(task: PrepTask, *, actor_id: int | None = None) -> PrepTask:
+    from app.models.base import utc_now
+
+    before_state = {"status": task.status.value if hasattr(task.status, "value") else task.status}
+    task.status = PrepTaskStatus.COMPLETED
+    task.completed_at = utc_now()
+    db.session.commit()
+    record_audit_event(
+        action="prep_task.completed",
+        entity_type="prep_task",
+        entity_id=task.id,
+        before_state=before_state,
+        after_state={"title": task.title, "market_id": task.market_id, "status": task.status.value},
+        source_module=__name__,
+        actor_id=actor_id,
+    )
+    return task
+
+
+def reopen_prep_task(task: PrepTask, *, actor_id: int | None = None) -> PrepTask:
+    before_state = {"status": task.status.value if hasattr(task.status, "value") else task.status}
+    task.status = PrepTaskStatus.REOPENED
+    task.completed_at = None
+    db.session.commit()
+    record_audit_event(
+        action="prep_task.reopened",
+        entity_type="prep_task",
+        entity_id=task.id,
+        before_state=before_state,
+        after_state={"title": task.title, "market_id": task.market_id, "status": task.status.value},
+        source_module=__name__,
+        actor_id=actor_id,
+    )
+    return task
+
+
 def market_readiness_score(market_id: int) -> dict[str, object]:
     tasks = PrepTask.query.filter_by(market_id=market_id).all()
     if not tasks:

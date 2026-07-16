@@ -22,7 +22,17 @@ from sqlalchemy.exc import IntegrityError
 from app.blueprints.products import bp
 from app.extensions import db
 from app.forms.studio import ProductModelUploadForm, ProductStudioForm
-from app.models import Category, Collection, Product, ProductImage, ProductStatus, UserRole
+from app.models import (
+    Category,
+    Collection,
+    DeadStockRecommendation,
+    Product,
+    ProductImage,
+    ProductLaunchChecklistItem,
+    ProductPhotoShot,
+    ProductStatus,
+    UserRole,
+)
 from app.services.admin_mutations import (
     create_resource as create_admin_resource,
     snapshot_instance,
@@ -32,6 +42,19 @@ from app.services.audit_client import get_audit_client
 from app.services.business import ensure_default_business
 from app.services.cost_engine import build_pricing_scenarios, calculate_product_cost, persist_cost_snapshot
 from app.services.crud import get_by_id
+from app.services.product_ops import (
+    accept_dead_stock_recommendation,
+    calculate_product_readiness,
+    dismiss_dead_stock_recommendation,
+    ensure_product_ops_defaults,
+    generate_dead_stock_recommendation,
+    launch_gate,
+    retire_product,
+    sync_launch_checklist,
+    update_checklist_item,
+    update_photo_shot,
+    update_story_card,
+)
 from app.services.storage import (
     content_type_for_name,
     image_storage_key,
@@ -84,6 +107,22 @@ def _preferred_image_filename(product: Product, original_filename: str) -> str:
 
 
 def _render_studio(product: Product | None, form: ProductStudioForm, mode: str, status_code: int = 200):
+    readiness = None
+    launch_items = []
+    photo_shots = []
+    dead_stock_recommendations = []
+    if product:
+        ensure_product_ops_defaults(product)
+        launch_items = sync_launch_checklist(product)
+        readiness = calculate_product_readiness(product)
+        photo_shots = list(product.photo_shots)
+        dead_stock_recommendations = (
+            DeadStockRecommendation.query.filter_by(product_id=product.id)
+            .order_by(DeadStockRecommendation.created_at.desc())
+            .limit(5)
+            .all()
+        )
+        db.session.commit()
     return (
         render_template(
             "products/studio.html",
@@ -94,6 +133,10 @@ def _render_studio(product: Product | None, form: ProductStudioForm, mode: str, 
             collections=Collection.query.order_by(Collection.name).all(),
             products=_load_products(),
             product_images=list(product.images) if product else [],
+            readiness=readiness,
+            launch_items=launch_items,
+            photo_shots=photo_shots,
+            dead_stock_recommendations=dead_stock_recommendations,
             storage_reference_name=storage_reference_name,
         ),
         status_code,
@@ -128,6 +171,17 @@ def studio(product_id: int | None = None):
 
         before_state = snapshot_instance(product)
         form.populate_product(product)
+        is_launching = product.is_public or product.status == ProductStatus.ACTIVE
+        if is_launching:
+            allowed, blockers = launch_gate(product)
+            if not allowed:
+                flash(
+                    "Product is not launch-ready yet. Complete launch items or add an explicit override reason.",
+                    "danger",
+                )
+                for blocker in blockers[:4]:
+                    flash(blocker, "warning")
+                return _render_studio(product, form, mode, 400)
         try:
             update_admin_resource(product, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
@@ -144,6 +198,115 @@ def studio(product_id: int | None = None):
             form.status.data = ProductStatus.DRAFT.value
 
     return _render_studio(product, form, mode)
+
+
+@bp.route("/studio/<int:product_id>/checklist/<int:item_id>", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def update_launch_checklist_item(product_id: int, item_id: int):
+    product = get_by_id(Product, product_id)
+    item = ProductLaunchChecklistItem.query.filter_by(id=item_id, product_id=product_id).first()
+    if product is None or item is None:
+        abort(404)
+    update_checklist_item(
+        item,
+        completed=bool(request.form.get("completed")),
+        notes=(request.form.get("notes") or "").strip() or None,
+        override_reason=(request.form.get("override_reason") or "").strip() or None,
+        actor_id=current_user.id,
+    )
+    flash("Launch checklist updated.", "success")
+    return redirect(url_for("products.studio", product_id=product.id))
+
+
+@bp.route("/studio/<int:product_id>/photo-shot/<int:shot_id>", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def update_product_photo_shot(product_id: int, shot_id: int):
+    product = get_by_id(Product, product_id)
+    shot = ProductPhotoShot.query.filter_by(id=shot_id, product_id=product_id).first()
+    if product is None or shot is None:
+        abort(404)
+    update_photo_shot(
+        shot,
+        completed=bool(request.form.get("completed")),
+        image_reference=(request.form.get("image_reference") or "").strip() or None,
+        notes=(request.form.get("notes") or "").strip() or None,
+        actor_id=current_user.id,
+    )
+    flash("Photo shot list updated.", "success")
+    return redirect(url_for("products.studio", product_id=product.id))
+
+
+@bp.route("/studio/<int:product_id>/story-card", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def update_product_story_card(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
+        abort(404)
+    update_story_card(
+        product,
+        {
+            "story_what_it_is": (request.form.get("story_what_it_is") or "").strip() or None,
+            "story_who_it_is_for": (request.form.get("story_who_it_is_for") or "").strip() or None,
+            "story_materials": (request.form.get("story_materials") or "").strip() or None,
+            "story_customization_options": (request.form.get("story_customization_options") or "").strip() or None,
+            "story_internal_compliance_notes": (request.form.get("story_internal_compliance_notes") or "").strip() or None,
+        },
+        actor_id=current_user.id,
+    )
+    flash("Product story card updated.", "success")
+    return redirect(url_for("products.studio", product_id=product.id))
+
+
+@bp.route("/studio/<int:product_id>/dead-stock/generate", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def generate_product_dead_stock(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
+        abort(404)
+    recommendation = generate_dead_stock_recommendation(product)
+    if recommendation is None:
+        flash("No dead-stock rescue recommendation is needed right now.", "info")
+    else:
+        flash("Dead-stock rescue recommendation generated.", "success")
+    return redirect(url_for("products.studio", product_id=product.id))
+
+
+@bp.route("/studio/dead-stock/<int:recommendation_id>/<action>", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def update_dead_stock_recommendation(recommendation_id: int, action: str):
+    recommendation = get_by_id(DeadStockRecommendation, recommendation_id)
+    if recommendation is None:
+        abort(404)
+    notes = (request.form.get("action_notes") or "").strip() or None
+    if action == "accept":
+        accept_dead_stock_recommendation(recommendation, notes=notes, actor_id=current_user.id)
+        flash("Dead-stock recommendation accepted.", "success")
+    elif action == "dismiss":
+        dismiss_dead_stock_recommendation(recommendation, notes=notes, actor_id=current_user.id)
+        flash("Dead-stock recommendation dismissed.", "info")
+    else:
+        abort(404)
+    return redirect(url_for("products.studio", product_id=recommendation.product_id))
+
+
+@bp.route("/studio/<int:product_id>/retire", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def retire_studio_product(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
+        abort(404)
+    reason = (request.form.get("reason") or "").strip()
+    if not reason:
+        flash("Retirement reason is required.", "danger")
+        return redirect(url_for("products.studio", product_id=product.id))
+    retire_product(
+        product,
+        reason=reason,
+        discount_remaining=bool(request.form.get("discount_remaining")),
+        actor_id=current_user.id,
+    )
+    flash("Product retired and hidden from public/POS sales.", "success")
+    return redirect(url_for("products.studio", product_id=product.id))
 
 
 @bp.route("/studio/<int:product_id>/upload-model", methods=["POST"])

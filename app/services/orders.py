@@ -14,6 +14,7 @@ from app.models import (
     Payment,
     PaymentMethod,
 )
+from app.services.audit import record_audit_event
 
 
 def convert_custom_request_to_order(
@@ -27,9 +28,11 @@ def convert_custom_request_to_order(
     if custom_request.email:
         customer = Customer.query.filter_by(email=custom_request.email).first()
     if customer is None:
+        name = (custom_request.name or "").strip()
+        name_parts = name.split(" ", 1) if " " in name else [name, ""]
         customer = Customer(
-            first_name=custom_request.name.split(" ", 1)[0] if " " in custom_request.name else custom_request.name,
-            last_name=custom_request.name.split(" ", 1)[1] if " " in custom_request.name else "",
+            first_name=name_parts[0] or name,
+            last_name=name_parts[1] if len(name_parts) > 1 else "",
             email=custom_request.email or None,
             phone=custom_request.phone,
         )
@@ -68,9 +71,53 @@ def convert_custom_request_to_order(
         )
         db.session.add(payment)
 
+    before_cr = {"status": custom_request.status.value if hasattr(custom_request.status, "value") else custom_request.status}
     custom_request.converted_to_order_id = order.id
     custom_request.customer_id = customer.id
     custom_request.status = CustomRequestStatus.DEPOSIT_COLLECTED
     db.session.commit()
+
+    record_audit_event(
+        action="custom_request.status_changed",
+        entity_type="custom_request",
+        entity_id=custom_request.id,
+        before_state=before_cr,
+        after_state={"status": CustomRequestStatus.DEPOSIT_COLLECTED.value},
+        source_module=__name__,
+    )
+    record_audit_event(
+        action="custom_request.converted",
+        entity_type="custom_request",
+        entity_id=custom_request.id,
+        after_state={"order_id": order.id, "customer_id": customer.id},
+        source_module=__name__,
+    )
+    record_audit_event(
+        action="order.created",
+        entity_type="order",
+        entity_id=order.id,
+        after_state={
+            "order_number": order.order_number,
+            "customer_id": customer.id,
+            "total": str(order.total),
+            "source": order.source.value,
+            "status": order.status.value,
+        },
+        source_module=__name__,
+    )
+    if deposit_amount > 0:
+        payment = Payment.query.filter_by(order_id=order.id).first()
+        if payment:
+            record_audit_event(
+                action="payment.recorded",
+                entity_type="payment",
+                entity_id=payment.id,
+                after_state={
+                    "order_id": order.id,
+                    "amount": str(payment.amount),
+                    "method": payment.method.value,
+                },
+                source_module=__name__,
+            )
 
     return order
