@@ -18,7 +18,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
         build-essential curl nodejs npm \
         tesseract-ocr tesseract-ocr-eng \
         imagemagick poppler-utils \
-        libgl1 libglib2.0-0 \
+        libgl1 libglib2.0-0 prusa-slicer \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=appuser:appuser pyproject.toml uv.lock .python-version ./

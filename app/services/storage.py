@@ -4,6 +4,7 @@ import io
 import mimetypes
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -179,7 +180,9 @@ def materialize_storage_reference(
     working_dir: str | Path | None = None,
 ) -> tuple[str, bool]:
     if is_s3_reference(reference):
-        tmp_dir = Path(working_dir) if working_dir else Path(tempfile.mkdtemp(prefix="dfpos-storage-"))
+        tmp_dir = (
+            Path(working_dir) if working_dir else Path(tempfile.mkdtemp(prefix="dfpos-storage-"))
+        )
         tmp_dir.mkdir(parents=True, exist_ok=True)
         extension = suffix or storage_reference_extension(reference)
         tmp_file = tmp_dir / f"object{extension}"
@@ -247,3 +250,47 @@ def gcode_storage_key(product_id: int, filename: str) -> str:
 
 def image_storage_key(product_id: int, filename: str) -> str:
     return product_asset_key(product_id, filename)
+
+
+def metadata_storage_key(product_id: int, filename: str = "metadata.json") -> str:
+    return product_asset_key(product_id, filename)
+
+
+def list_product_assets(product_id: int, *, bucket: str, local_root: str | Path) -> list[dict]:
+    """Return live object-storage entries for one product directory."""
+    prefix = f"products/{product_id}/"
+    assets: list[dict] = []
+    if using_s3_storage():
+        paginator = _s3_client().get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for item in page.get("Contents", []):
+                key = item["Key"]
+                if key.endswith("/"):
+                    continue
+                modified = item.get("LastModified")
+                assets.append(
+                    {
+                        "name": Path(key).name,
+                        "reference": build_s3_reference(bucket, key),
+                        "size": int(item.get("Size", 0)),
+                        "updated_at": modified.isoformat() if modified else None,
+                    }
+                )
+    else:
+        directory = Path(local_root) / prefix
+        if directory.exists():
+            for path in directory.iterdir():
+                if not path.is_file():
+                    continue
+                stat = path.stat()
+                assets.append(
+                    {
+                        "name": path.name,
+                        "reference": str(path.resolve()),
+                        "size": stat.st_size,
+                        "updated_at": datetime.fromtimestamp(
+                            stat.st_mtime, tz=timezone.utc
+                        ).isoformat(),
+                    }
+                )
+    return sorted(assets, key=lambda item: item["name"].lower())

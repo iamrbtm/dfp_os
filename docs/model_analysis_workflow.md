@@ -6,8 +6,10 @@ From file upload to finished cost calculation in the product-studio-only catalog
 
 ## 1. User drops a file in Product Studio
 
-- `app/static/src/js/studio.js` handles click, drag-and-drop, and filename preview.
-- The browser posts `FormData` with only the model file to `/products/studio/{product_id}/upload-model`.
+- `app/static/src/js/studio.js` handles click, drag-and-drop, filename preview, and
+  a slicer-settings confirmation modal.
+- The browser posts the model plus validated printer, material, slicing, retention,
+  and GLB-conversion choices to `/products/studio/{product_id}/upload-model`.
 
 ## 2. Flask stores the model on the product record
 
@@ -16,6 +18,8 @@ From file upload to finished cost calculation in the product-studio-only catalog
 - Validates the upload with `ProductModelUploadForm`.
 - Writes the file to product storage at `products/{product_id}/{filename}`.
 - Stores the path directly on `Product.model_file_path`.
+- Stores searchable settings in MariaDB and writes a versioned
+  `*.metadata.json` sidecar beside the source asset.
 - Resets analysis/conversion status fields on the same product row.
 - Dispatches Celery task `analyze_product_model.delay(product_id)` when Celery is available.
 
@@ -37,8 +41,11 @@ From file upload to finished cost calculation in the product-studio-only catalog
   - filament grams
   - print minutes
 - Writes parsed values back onto the `Product` row.
-- Uploads generated G-code to `Product.gcode_path`.
-- Triggers GLB conversion and stores the result on `Product.converted_model_path`.
+- Detects common embedded Prusa/Bambu/Orca settings in 3MF archives and applies
+  them when requested.
+- Uploads generated G-code when retention was requested.
+- Triggers GLB conversion only when requested.
+- Refreshes the JSON sidecar with geometry, results, warnings, and derived assets.
 
 ## 5. Cost engine uses product-level analysis
 
@@ -60,3 +67,9 @@ From file upload to finished cost calculation in the product-studio-only catalog
 
 - Product Studio reads analysis, pricing, model preview, and images from the same `Product` record.
 - There is no separate variant or model-asset layer in the active workflow anymore.
+
+## 7. Product-scoped assets
+
+- The existing Product Studio product selector is unchanged.
+- `Assets` opens a modal backed by a live listing of the selected product's S3 prefix.
+- Hover details come from the JSON sidecar; downloads use authenticated routes.

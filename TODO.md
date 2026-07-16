@@ -12,6 +12,15 @@ This file is the live working list for AI agents and humans collaborating in thi
 
 ## Current Focus
 
+- `done` Added Product Studio slicer-settings upload flow, optional GLB/G-code generation,
+  versioned JSON metadata sidecars, hardened G-code comment parsing, and a product-scoped
+  S3 Assets modal.
+- `done` Integrated PMP into compatible Product Studio STL/3MF asset cards with direct STL
+  ingestion, background packing, live progress/audit events, and packed 3MF plus JSON sidecar
+  storage in the product's S3 asset directory.
+- `todo` Add pre-upload 3MF inspection so embedded settings are displayed before the user
+  confirms whether to use or override them.
+
 - `done` Milestone 2 Phase 2.1: Promotion Module Foundation — models, forms, schemas, blueprint, routes, service, templates, module registry, migration, tests.
 
 - `done` Production audit remediation pass for `docs/audit.md`: POS financial integrity, audit fail-closed, API token/workflow hardening, receipt upload/access security, production config/service auth, rate limiting, Docker hardening, and Playwright E2E scaffold.

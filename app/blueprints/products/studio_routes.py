@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,14 +31,23 @@ from app.services.admin_mutations import (
 )
 from app.services.audit_client import get_audit_client
 from app.services.business import ensure_default_business
-from app.services.cost_engine import build_pricing_scenarios, calculate_product_cost, persist_cost_snapshot
+from app.services.cost_engine import (
+    build_pricing_scenarios,
+    calculate_product_cost,
+    persist_cost_snapshot,
+)
 from app.services.crud import get_by_id
 from app.services.storage import (
+    build_s3_reference,
     content_type_for_name,
+    delete_storage_reference,
+    download_storage_bytes,
     image_storage_key,
     is_s3_reference,
+    list_product_assets,
     normalize_storage_filename,
     product_storage_key,
+    send_storage_reference,
     storage_reference_name,
     upload_bytes_to_storage,
 )
@@ -76,14 +86,14 @@ def _unique_storage_filename(existing_names: set[str], desired_name: str) -> str
 
 def _preferred_image_filename(product: Product, original_filename: str) -> str:
     existing_names = {
-        storage_reference_name(image.file_path)
-        for image in product.images
-        if image.file_path
+        storage_reference_name(image.file_path) for image in product.images if image.file_path
     }
     return _unique_storage_filename(existing_names, original_filename)
 
 
-def _render_studio(product: Product | None, form: ProductStudioForm, mode: str, status_code: int = 200):
+def _render_studio(
+    product: Product | None, form: ProductStudioForm, mode: str, status_code: int = 200
+):
     return (
         render_template(
             "products/studio.html",
@@ -94,6 +104,7 @@ def _render_studio(product: Product | None, form: ProductStudioForm, mode: str, 
             collections=Collection.query.order_by(Collection.name).all(),
             products=_load_products(),
             product_images=list(product.images) if product else [],
+            upload_form=ProductModelUploadForm(),
             storage_reference_name=storage_reference_name,
         ),
         status_code,
@@ -171,8 +182,9 @@ def upload_model(product_id: int):
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
     key = product_storage_key(product.id, safe_filename)
     content_type = content_type_for_name(file.filename, "application/octet-stream")
+    source_bytes = file.read()
     storage_ref = upload_bytes_to_storage(
-        file.read(),
+        source_bytes,
         bucket=bucket,
         key=key,
         local_root=local_root,
@@ -180,6 +192,30 @@ def upload_model(product_id: int):
     )
 
     product.model_file_path = storage_ref
+    product.model_convert_to_glb = bool(upload_form.convert_to_glb.data)
+    product.model_analysis_config = {
+        "original_filename": file.filename,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": current_user.id,
+        "printer_profile": upload_form.printer_profile.data,
+        "material": upload_form.material.data,
+        "filament_density": str(upload_form.filament_density.data),
+        "nozzle_diameter": str(upload_form.nozzle_diameter.data),
+        "layer_height": str(upload_form.layer_height.data),
+        "perimeters": upload_form.perimeters.data,
+        "top_solid_layers": upload_form.top_solid_layers.data,
+        "bottom_solid_layers": upload_form.bottom_solid_layers.data,
+        "infill_percent": upload_form.infill_percent.data,
+        "infill_pattern": upload_form.infill_pattern.data,
+        "supports": upload_form.supports.data,
+        "brim_width": str(upload_form.brim_width.data),
+        "copies": upload_form.copies.data,
+        "scale_percent": str(upload_form.scale_percent.data),
+        "preserve_orientation": bool(upload_form.preserve_orientation.data),
+        "multicolor": bool(upload_form.multicolor.data),
+        "use_embedded_settings": bool(upload_form.use_embedded_settings.data),
+        "retain_gcode": bool(upload_form.retain_gcode.data),
+    }
     product.analysis_status = "pending"
     product.analysis_error = None
     product.analysis_requested_at = datetime.now(timezone.utc)
@@ -188,7 +224,37 @@ def upload_model(product_id: int):
     product.conversion_error = None
     product.converted_model_path = None
     product.gcode_path = None
+    from app.services.model_asset_metadata import write_model_metadata
+
+    write_model_metadata(product, source_bytes=source_bytes)
     db.session.commit()
+    get_audit_client().record(
+        action="product_model.uploaded",
+        entity_type="product",
+        entity_id=str(product.id),
+        actor_id=str(current_user.id),
+        actor_type="user",
+        actor_display_name=getattr(current_user, "display_name", None),
+        source_module="products.studio_routes",
+        tenant_id=str(product.business_id) if product.business_id else None,
+        after_state={"model_file_path": storage_ref},
+        metadata={
+            "filename": file.filename,
+            "convert_to_glb": product.model_convert_to_glb,
+            "printer_profile": product.model_analysis_config.get("printer_profile"),
+        },
+    )
+    get_audit_client().record(
+        action="model_analysis.queued",
+        entity_type="product",
+        entity_id=str(product.id),
+        actor_id=str(current_user.id),
+        actor_type="user",
+        actor_display_name=getattr(current_user, "display_name", None),
+        source_module="products.studio_routes",
+        tenant_id=str(product.business_id) if product.business_id else None,
+        metadata={"percent": 2, "message": "Model analysis queued"},
+    )
 
     celery = _get_celery()
     task_id = None
@@ -198,7 +264,204 @@ def upload_model(product_id: int):
         task = analyze_product_model.delay(product.id)
         task_id = task.id
 
-    return jsonify({"success": True, "product_id": product.id, "task_id": task_id, "file_location": storage_ref})
+    return jsonify(
+        {
+            "success": True,
+            "product_id": product.id,
+            "task_id": task_id,
+            "file_location": storage_ref,
+        }
+    )
+
+
+@bp.route("/studio/<int:product_id>/assets")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def product_assets(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
+        abort(404)
+    bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
+    local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
+    assets = list_product_assets(product.id, bucket=bucket, local_root=local_root)
+    metadata = {}
+    if product.model_metadata_path:
+        from app.services.model_asset_metadata import read_model_metadata
+
+        metadata = read_model_metadata(product)
+    assets_by_name = {asset["name"]: asset for asset in assets}
+    for asset in assets:
+        asset["kind"] = _asset_kind(asset["name"])
+        sidecar_name = f"{Path(asset['name']).stem}.metadata.json"
+        sidecar = assets_by_name.get(sidecar_name)
+        asset_metadata = {}
+        if sidecar and asset["kind"] != "metadata":
+            try:
+                asset_metadata = json.loads(download_storage_bytes(sidecar["reference"]))
+            except (OSError, ValueError, TypeError):
+                asset_metadata = {}
+        elif asset["reference"] in {product.model_file_path, product.converted_model_path, product.gcode_path}:
+            asset_metadata = metadata
+        asset["metadata"] = asset_metadata
+        asset["is_pmp_compatible"] = Path(asset["name"]).suffix.lower() in {".stl", ".3mf"}
+        asset["is_packed_plate"] = "__packed-plate__" in asset["name"] or asset_metadata.get("schema") == "dfpos.pmp-packed-plate"
+        asset["download_url"] = url_for(
+            "products.download_product_asset", product_id=product.id, filename=asset["name"]
+        )
+        asset["delete_url"] = url_for(
+            "products.delete_product_asset", product_id=product.id, filename=asset["name"]
+        )
+        asset["pmp_url"] = url_for(
+            "products.pack_product_asset", product_id=product.id, filename=asset["name"]
+        )
+        asset["metadata_will_delete"] = bool(sidecar) or asset["reference"] in {
+            product.model_file_path, product.converted_model_path, product.gcode_path
+        }
+    return jsonify({"success": True, "product_id": product.id, "assets": assets})
+
+
+@bp.route("/studio/<int:product_id>/assets/<path:filename>/pmp", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def pack_product_asset(product_id: int, filename: str):
+    product = get_by_id(Product, product_id)
+    if product is None or Path(filename).name != filename:
+        abort(404)
+    if Path(filename).suffix.lower() not in {".stl", ".3mf"}:
+        return jsonify({"success": False, "error": "PMP supports STL and 3MF assets only"}), 400
+    bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
+    local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
+    assets = list_product_assets(product.id, bucket=bucket, local_root=local_root)
+    asset = next((item for item in assets if item["name"] == filename), None)
+    if asset is None:
+        return jsonify({"success": False, "error": "Asset not found"}), 404
+
+    from app.tasks.model_analysis import pack_product_model
+
+    task = pack_product_model.delay(product.id, asset["reference"], filename, current_user.id)
+    get_audit_client().record(
+        action="product_model.pmp.queued",
+        entity_type="product",
+        entity_id=str(product.id),
+        actor_id=str(current_user.id),
+        actor_type="user",
+        actor_display_name=getattr(current_user, "display_name", None),
+        source_module="products.studio_routes",
+        tenant_id=str(product.business_id) if product.business_id else None,
+        metadata={"filename": filename, "task_id": task.id, "percent": 2},
+    )
+    return jsonify({"success": True, "task_id": task.id, "filename": filename})
+
+
+def _asset_kind(filename: str) -> str:
+    name = filename.lower()
+    if name.endswith(".metadata.json"):
+        return "metadata"
+    extension = Path(name).suffix
+    if extension in {".stl", ".3mf", ".obj", ".gltf"}:
+        return "model"
+    if extension == ".glb":
+        return "preview"
+    if extension in {".gcode", ".bgcode"}:
+        return "gcode"
+    if extension in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+        return "image"
+    return "file"
+
+
+@bp.route("/studio/<int:product_id>/assets/<path:filename>")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def download_product_asset(product_id: int, filename: str):
+    product = get_by_id(Product, product_id)
+    if product is None or Path(filename).name != filename:
+        abort(404)
+    bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
+    local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
+    reference = (
+        build_s3_reference(bucket, product_storage_key(product.id, filename))
+        if current_app.config.get("FILE_STORAGE_BACKEND", "local").lower() == "s3"
+        else str((Path(local_root) / product_storage_key(product.id, filename)).resolve())
+    )
+    return send_storage_reference(reference, download_name=filename, as_attachment=True)
+
+
+@bp.route("/studio/<int:product_id>/assets/<path:filename>", methods=["DELETE"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def delete_product_asset(product_id: int, filename: str):
+    product = get_by_id(Product, product_id)
+    if product is None or Path(filename).name != filename:
+        abort(404)
+
+    bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
+    local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
+    assets = list_product_assets(product.id, bucket=bucket, local_root=local_root)
+    asset = next((item for item in assets if item["name"] == filename), None)
+    if asset is None:
+        return jsonify({"success": False, "error": "Asset not found"}), 404
+
+    reference = asset["reference"]
+    kind = _asset_kind(filename)
+    deleted_references = [reference]
+    delete_storage_reference(reference)
+
+    metadata_deleted = kind == "metadata"
+    sidecar_name = f"{Path(filename).stem}.metadata.json"
+    sidecar = next((item for item in assets if item["name"] == sidecar_name), None)
+    if kind in {"model", "preview", "gcode"} and sidecar and sidecar["reference"] != reference:
+        delete_storage_reference(sidecar["reference"])
+        deleted_references.append(sidecar["reference"])
+        metadata_deleted = True
+        if product.model_metadata_path == sidecar["reference"]:
+            product.model_metadata_path = None
+    elif (
+        kind in {"model", "preview", "gcode"}
+        and reference in {product.model_file_path, product.converted_model_path, product.gcode_path}
+        and product.model_metadata_path
+        and product.model_metadata_path != reference
+    ):
+        delete_storage_reference(product.model_metadata_path)
+        deleted_references.append(product.model_metadata_path)
+        product.model_metadata_path = None
+        metadata_deleted = True
+
+    if product.model_file_path == reference:
+        product.model_file_path = None
+        product.analysis_status = None
+        product.analysis_error = None
+        product.analysis_completed_at = None
+        product.model_analysis_config = None
+    if product.converted_model_path == reference:
+        product.converted_model_path = None
+        product.convert_status = None
+        product.conversion_error = None
+    if product.gcode_path == reference:
+        product.gcode_path = None
+    if product.model_metadata_path == reference:
+        product.model_metadata_path = None
+
+    image = next((item for item in product.images if item.file_path == reference), None)
+    if image is not None:
+        if product.default_image_path == reference:
+            product.default_image_path = None
+        if product.pos_image_path == reference:
+            product.pos_image_path = None
+        db.session.delete(image)
+
+    db.session.commit()
+    get_audit_client().record(
+        action="product_asset.deleted",
+        entity_type="product",
+        entity_id=str(product.id),
+        actor_id=str(current_user.id),
+        actor_type="user",
+        actor_display_name=getattr(current_user, "display_name", None),
+        source_module="products.studio_routes",
+        tenant_id=str(product.business_id) if product.business_id else None,
+        before_state={"references": deleted_references},
+        after_state={},
+        metadata={"filename": filename, "kind": kind, "metadata_deleted": metadata_deleted},
+    )
+    return jsonify(
+        {"success": True, "deleted": filename, "metadata_deleted": metadata_deleted}
+    )
 
 
 @bp.route("/studio/<int:product_id>/calculate-costs", methods=["POST"])
@@ -332,11 +595,19 @@ def analysis_result(product_id: int):
             "status": product.analysis_status,
             "error": product.analysis_error,
             "volume_mm3": float(product.parsed_volume_mm3) if product.parsed_volume_mm3 else None,
-            "surface_area_mm2": float(product.parsed_surface_area_mm2) if product.parsed_surface_area_mm2 else None,
+            "surface_area_mm2": (
+                float(product.parsed_surface_area_mm2) if product.parsed_surface_area_mm2 else None
+            ),
             "triangle_count": product.parsed_triangle_count,
-            "filament_grams": float(product.parsed_filament_grams) if product.parsed_filament_grams else None,
-            "print_minutes": float(product.parsed_print_minutes) if product.parsed_print_minutes else None,
-            "material_cost": str(product.parsed_material_cost) if product.parsed_material_cost else None,
+            "filament_grams": (
+                float(product.parsed_filament_grams) if product.parsed_filament_grams else None
+            ),
+            "print_minutes": (
+                float(product.parsed_print_minutes) if product.parsed_print_minutes else None
+            ),
+            "material_cost": (
+                str(product.parsed_material_cost) if product.parsed_material_cost else None
+            ),
             "convert_status": product.convert_status,
             "converted_model_path": product.converted_model_path,
         }
@@ -389,7 +660,12 @@ def upload_product_image(product_id: int):
 
     ext = Path(file.filename).suffix.lower()
     if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
-        return jsonify({"success": False, "error": "Unsupported image type. Use JPG, PNG, WebP, or GIF."}), 400
+        return (
+            jsonify(
+                {"success": False, "error": "Unsupported image type. Use JPG, PNG, WebP, or GIF."}
+            ),
+            400,
+        )
 
     safe_filename = _preferred_image_filename(product, file.filename or f"image{ext}")
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
@@ -543,15 +819,13 @@ def trend_score(product_id: int):
         )
         from app.services.trend_match import match_product_to_term
 
-        products = (
-            db.session.query(Product)
-            .filter(Product.deleted_at.is_(None))
-            .all()
-        )
+        products = db.session.query(Product).filter(Product.deleted_at.is_(None)).all()
         catalog_metrics = _catalog_metrics(db.session)
         _ = compute_velocity_and_momentum(db.session, lookback_weeks=8)
     except Exception as e:
-        current_app.logger.error("Trend score catalog/metrics failed for product %s: %s", product_id, e, exc_info=True)
+        current_app.logger.error(
+            "Trend score catalog/metrics failed for product %s: %s", product_id, e, exc_info=True
+        )
         return jsonify({"success": False, "error": f"Catalog/metrics calculation failed: {e}"}), 500
 
     product_metrics = catalog_metrics.get(product.id, {})
@@ -588,9 +862,13 @@ def trend_score(product_id: int):
             revenue=revenue,
             base_price=float(product.base_price or 0),
             estimated_profit=float(product.estimated_profit or 0),
-            estimated_print_minutes=float(product.parsed_print_minutes or product.estimated_print_minutes or 0),
+            estimated_print_minutes=float(
+                product.parsed_print_minutes or product.estimated_print_minutes or 0
+            ),
             license_status=(
-                product.license_status.value if hasattr(product.license_status, "value") else str(product.license_status)
+                product.license_status.value
+                if hasattr(product.license_status, "value")
+                else str(product.license_status)
             ),
             model_commercial_use_allowed=bool(product.model_commercial_use_allowed),
             is_public=bool(product.is_public),
@@ -612,7 +890,9 @@ def trend_score(product_id: int):
 
         scored = _score_candidate(candidate)
     except Exception as e:
-        current_app.logger.error("Trend score candidate/scoring failed for product %s: %s", product_id, e, exc_info=True)
+        current_app.logger.error(
+            "Trend score candidate/scoring failed for product %s: %s", product_id, e, exc_info=True
+        )
         return jsonify({"success": False, "error": f"Scoring failed: {e}"}), 500
 
     try:
@@ -638,9 +918,11 @@ def trend_score(product_id: int):
     except Exception as e:
         current_app.logger.warning("Trend score audit failed (non-fatal): %s", e)
 
-    return jsonify({
-        "success": True,
-        "product_id": product.id,
-        "product_name": product.name,
-        "score": scored,
-    })
+    return jsonify(
+        {
+            "success": True,
+            "product_id": product.id,
+            "product_name": product.name,
+            "score": scored,
+        }
+    )

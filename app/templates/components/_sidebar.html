@@ -10,10 +10,14 @@
   </div>
 
   <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+    {% if is_module_enabled('dashboard') %}
     <a href="{{ url_for('dashboard.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'dashboard' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Dashboard
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('notifications') %}
     <a href="{{ url_for('notifications.notification_list') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'notifications' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Notifications
@@ -22,82 +26,136 @@
             style="background:var(--color-danger);color:white;">{{ unread_notification_count }}</span>
       {% endif %}
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('pos') %}
     <a href="{{ url_for('pos.session_list') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'pos' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       POS
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('products') %}
     <a href="{{ url_for('products.list_resource', resource_key='products') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'products' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Products
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('customers') %}
     <a href="{{ url_for('customers.list_resource', resource_key='customers') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'customers' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Customers
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('orders') %}
     <a href="{{ url_for('orders.list_resource', resource_key='orders') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'orders' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Orders
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('custom_orders') %}
     <a href="{{ url_for('custom_orders.list_resource', resource_key='requests') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'custom_orders' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Custom Orders
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('printers') %}
     <a href="{{ url_for('printers.list_resource', resource_key='printers') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'printers' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Printers
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('print_jobs') %}
     <a href="{{ url_for('print_jobs.list_resource', resource_key='print-jobs') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'print_jobs' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Print Jobs
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('inventory') %}
     <a href="{{ url_for('inventory.list_resource', resource_key='records') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'inventory' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Inventory
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('api') %}
     <a href="{{ url_for('api_tokens.list_tokens') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'api_tokens' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       API Tokens
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('settings') %}
     <a href="{{ url_for('settings.themes') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'settings' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Settings
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('feature_flags') %}
     <a href="{{ url_for('feature_flags.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'feature_flags' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Feature Flags
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('markets') %}
     <a href="{{ url_for('markets.list_resource', resource_key='markets') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'markets' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Markets
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('prep_tasks') %}
     <a href="{{ url_for('prep_tasks.list_resource', resource_key='tasks') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'prep_tasks' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Prep Tasks
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('promotion') %}
     <a href="{{ url_for('promotion.draft_list') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'promotion' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Promotion
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('expense_ledger') %}
     <div class="space-y-0.5">
       <a href="{{ url_for('expenses.list_resource', resource_key='expenses') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
          style="{% if active_section == 'expenses' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
         Expenses
       </a>
-      {% if active_section == 'expenses' %}
+      {% if active_section == 'expenses' and is_module_enabled('receipts') %}
       <a href="{{ url_for('receipts.dashboard') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
          style="color: var(--color-sidebar-muted);">
         Receipts
       </a>
       {% endif %}
     </div>
+    {% endif %}
+
+    {% if is_module_enabled('report_studio') %}
     <a href="{{ url_for('report_studio.home') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'report_studio' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Report Studio
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('analytics') %}
     <a href="{{ url_for('analytics.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'analytics' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Analytics
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('dfp_intelligence') %}
     <div>
       <a href="{{ url_for('intelligence.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
          style="{% if active_section == 'intelligence' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
@@ -116,6 +174,9 @@
          style="color: var(--color-sidebar-muted);">Normalized Pipeline</a>
       {% endif %}
     </div>
+    {% endif %}
+
+    {% if is_module_enabled('trend_scout') %}
     <div>
       <a href="{{ url_for('trend_scout.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
          style="{% if active_section == 'trend_scout' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
@@ -126,14 +187,21 @@
          style="color: var(--color-sidebar-muted);">Calibration</a>
       {% endif %}
     </div>
+    {% endif %}
+
+    {% if is_module_enabled('cost_engine') %}
     <a href="{{ url_for('cost_engine.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'cost_engine' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Cost Engine
     </a>
+    {% endif %}
+
+    {% if is_module_enabled('audit_logs') %}
     <a href="{{ url_for('audit_logs.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
        style="{% if active_section == 'audit_logs' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
       Audit Logs
     </a>
+    {% endif %}
   </nav>
 
   <div class="border-t px-4 py-4 flex-shrink-0" style="border-color: var(--color-sidebar-border);">

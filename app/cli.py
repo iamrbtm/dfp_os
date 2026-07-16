@@ -7,8 +7,10 @@ from flask import current_app
 from pathlib import Path
 
 from app.extensions import db
+from app.models.business import FeatureFlag
 from app.models.catalog import Product, ProductImage
 from app.models.trend import TrendOpportunityScore, TrendReport
+from app.module_registry import MODULES
 from app.services.storage import (
     converted_storage_key,
     delete_storage_reference,
@@ -62,6 +64,29 @@ def seed_demo() -> None:
     click.echo("Demo seed complete.")
     for key, value in counts.items():
         click.echo(f"- {key}: {value}")
+
+
+@seed_group.command("feature-flags")
+def seed_feature_flags() -> None:
+    """Seed feature flags from module registry defaults."""
+    created = 0
+    updated = 0
+    for module in MODULES.values():
+        flag = db.session.query(FeatureFlag).filter_by(key=module.feature_flag_key).first()
+        if flag is None:
+            flag = FeatureFlag(
+                key=module.feature_flag_key,
+                enabled=module.default_enabled,
+                description=f"Module: {module.display_name}",
+            )
+            db.session.add(flag)
+            created += 1
+        else:
+            flag.enabled = module.default_enabled
+            flag.description = f"Module: {module.display_name}"
+            updated += 1
+    db.session.commit()
+    click.echo(f"Feature flags seeded: {created} created, {updated} updated.")
 
 
 @seed_group.command("events-2026")

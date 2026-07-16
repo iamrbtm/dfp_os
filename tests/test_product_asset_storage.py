@@ -5,6 +5,8 @@ from app.services.storage import (
     converted_storage_key,
     gcode_storage_key,
     image_storage_key,
+    list_product_assets,
+    metadata_storage_key,
     normalize_storage_filename,
     product_storage_key,
     storage_slug,
@@ -20,6 +22,22 @@ def test_product_storage_keys_use_one_product_directory():
     assert converted_storage_key(14, "56eb2eba.glb") == "products/14/56eb2eba.glb"
     assert gcode_storage_key(14, "rainbow-dragon.gcode") == "products/14/rainbow-dragon.gcode"
     assert image_storage_key(14, "IMG_0204.jpeg") == "products/14/IMG_0204.jpeg"
+    assert metadata_storage_key(14, "model.metadata.json") == "products/14/model.metadata.json"
+
+
+def test_local_product_asset_listing_is_product_scoped(app, tmp_path):
+    app.config.update(FILE_STORAGE_BACKEND="local")
+    target = tmp_path / "products" / "14"
+    target.mkdir(parents=True)
+    (target / "dragon.stl").write_bytes(b"mesh")
+    other = tmp_path / "products" / "15"
+    other.mkdir(parents=True)
+    (other / "other.stl").write_bytes(b"other")
+
+    with app.app_context():
+        assets = list_product_assets(14, bucket="products", local_root=tmp_path)
+
+    assert [asset["name"] for asset in assets] == ["dragon.stl"]
 
 
 def test_storage_filename_helpers_normalize_expected_values():

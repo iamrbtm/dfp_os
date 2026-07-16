@@ -13,7 +13,7 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-from multipack import gcode, packing, threemf
+from . import gcode, packing, stl, threemf
 
 # Same defaults as ``multipack.cli`` so browser output matches the CLI exactly.
 DEFAULT_MARGIN = 3.5
@@ -174,6 +174,21 @@ def nest_bytes(
         "reserve": reserve,
         "out_path": str(out_path),
     }
+
+
+def pack_model_bytes(data: bytes, filename: str, **options) -> dict:
+    """Pack an STL or 3MF through one public, format-aware entry point."""
+    suffix = Path(filename).suffix.lower()
+    source_format = "3mf"
+    if suffix == ".stl":
+        mesh = stl.load(data)
+        data = stl.to_3mf(mesh)
+        source_format = mesh.source_format
+    elif suffix != ".3mf":
+        raise NestError("PMP supports STL and 3MF model assets")
+    result = nest_bytes(data, **options)
+    result["source_format"] = source_format
+    return result
 
 
 # --------------------------------------------------------------------------- #

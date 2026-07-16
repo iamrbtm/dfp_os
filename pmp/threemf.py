@@ -617,6 +617,7 @@ class ThreeMF:
 
         replace = replace_entries or {}
         with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as out:
+            written: set[str] = set()
             for info, data in entries:
                 name = info.filename
                 if name in replace:
@@ -627,6 +628,10 @@ class ThreeMF:
                     text = data.decode("utf-8")
                     data = _replace_build(text, items).encode("utf-8")
                 out.writestr(info, data)
+                written.add(name)
+            for name, data in replace.items():
+                if name not in written:
+                    out.writestr(name, data)
 
     def _read_source_entry(self, name: str) -> bytes | None:
         """Raw bytes of a source-zip entry, or ``None`` if absent/unreadable."""

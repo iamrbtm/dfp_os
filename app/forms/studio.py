@@ -8,12 +8,13 @@ from wtforms import (
     BooleanField,
     DateTimeLocalField,
     DecimalField,
+    IntegerField,
     SelectField,
     StringField,
     SubmitField,
     TextAreaField,
 )
-from wtforms.validators import DataRequired, Length, NumberRange, Optional
+from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional
 
 from app.forms.common import OptionalSelectField, enum_choices
 from app.models import (
@@ -115,7 +116,9 @@ class ProductStudioForm(FlaskForm):
         product.is_public = bool(self.is_public.data)
         product.is_pos_visible = bool(self.is_pos_visible.data)
         product.is_featured = bool(self.is_featured.data)
-        product.base_price = self.base_price.data if self.base_price.data is not None else Decimal("0")
+        product.base_price = (
+            self.base_price.data if self.base_price.data is not None else Decimal("0")
+        )
         product.tags = self.tags.data
         product.care_instructions = self.care_instructions.data
         product.safety_notes = self.safety_notes.data
@@ -172,3 +175,81 @@ class ProductModelUploadForm(FlaskForm):
             FileSize(max_size=256 * 1024 * 1024, message="File must be under 256 MB."),
         ],
     )
+    printer_profile = SelectField(
+        "Printer profile",
+        choices=[
+            ("bambu_a1.ini", "Bambu A1"),
+            ("bambu_x1c.ini", "Bambu X1 Carbon"),
+            ("bambu_p1p.ini", "Bambu P1P"),
+        ],
+        validators=[DataRequired()],
+    )
+    material = SelectField(
+        "Material",
+        choices=[("PLA", "PLA"), ("PETG", "PETG"), ("ABS", "ABS"), ("ASA", "ASA"), ("TPU", "TPU")],
+        validators=[DataRequired()],
+    )
+    filament_density = DecimalField(
+        "Filament density (g/cm³)",
+        default=Decimal("1.24"),
+        validators=[InputRequired(), NumberRange(min=0.5, max=3)],
+    )
+    nozzle_diameter = DecimalField(
+        "Nozzle diameter (mm)",
+        default=Decimal("0.4"),
+        validators=[InputRequired(), NumberRange(min=0.1, max=2)],
+    )
+    layer_height = DecimalField(
+        "Layer height (mm)",
+        default=Decimal("0.2"),
+        validators=[InputRequired(), NumberRange(min=0.04, max=1)],
+    )
+    perimeters = IntegerField(
+        "Walls", default=2, validators=[InputRequired(), NumberRange(min=1, max=20)]
+    )
+    top_solid_layers = IntegerField(
+        "Top layers", default=3, validators=[InputRequired(), NumberRange(min=0, max=30)]
+    )
+    bottom_solid_layers = IntegerField(
+        "Bottom layers", default=3, validators=[InputRequired(), NumberRange(min=0, max=30)]
+    )
+    infill_percent = IntegerField(
+        "Infill (%)", default=20, validators=[InputRequired(), NumberRange(min=0, max=100)]
+    )
+    infill_pattern = SelectField(
+        "Infill pattern",
+        choices=[
+            ("cubic", "Cubic"),
+            ("grid", "Grid"),
+            ("gyroid", "Gyroid"),
+            ("honeycomb", "Honeycomb"),
+        ],
+        validators=[DataRequired()],
+    )
+    supports = SelectField(
+        "Supports",
+        choices=[
+            ("none", "None"),
+            ("build_plate", "Build plate only"),
+            ("everywhere", "Everywhere"),
+        ],
+        validators=[DataRequired()],
+    )
+    brim_width = DecimalField(
+        "Brim width (mm)",
+        default=Decimal("0"),
+        validators=[InputRequired(), NumberRange(min=0, max=50)],
+    )
+    copies = IntegerField(
+        "Copies", default=1, validators=[InputRequired(), NumberRange(min=1, max=100)]
+    )
+    scale_percent = DecimalField(
+        "Scale (%)",
+        default=Decimal("100"),
+        validators=[InputRequired(), NumberRange(min=1, max=1000)],
+    )
+    preserve_orientation = BooleanField("Preserve uploaded orientation", default=True)
+    multicolor = BooleanField("Multicolor / wipe tower")
+    use_embedded_settings = BooleanField("Use embedded 3MF settings", default=True)
+    convert_to_glb = BooleanField("Convert to GLB for preview", default=True)
+    retain_gcode = BooleanField("Retain generated G-code", default=True)

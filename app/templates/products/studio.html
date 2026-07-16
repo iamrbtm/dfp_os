@@ -187,7 +187,7 @@
           <div id="cost-results" class="grid gap-4 md:grid-cols-4">
             <div class="app-card p-4 text-center">
               <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Material Cost</p>
-              <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">${{ "%.2f"|format(product.estimated_material_cost or 0) }}</p>
+              <p id="product-analysis-material-cost" class="text-2xl font-bold mt-1" style="color: var(--color-text);">${{ "%.2f"|format(product.estimated_material_cost or 0) }}</p>
             </div>
             <div class="app-card p-4 text-center">
               <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Profit</p>
@@ -195,11 +195,11 @@
             </div>
             <div class="app-card p-4 text-center">
               <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Print Time</p>
-              <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ (product.estimated_print_minutes or 0)|duration_minutes }}</p>
+              <p id="product-analysis-time" class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ (product.estimated_print_minutes or 0)|duration_minutes }}</p>
             </div>
             <div class="app-card p-4 text-center">
               <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Analysis</p>
-              <p class="text-sm font-semibold mt-2" style="color: var(--color-text);">{{ product.analysis_status or "none" }}</p>
+              <p id="product-analysis-status" class="text-sm font-semibold mt-2" style="color: var(--color-text);">{{ product.analysis_status or "none" }}</p>
             </div>
           </div>
 
@@ -221,6 +221,10 @@
             <div class="flex items-center justify-between gap-3">
               <h3 class="text-base font-semibold" style="color: var(--color-text);">Model File</h3>
               <div class="flex gap-2">
+                <button type="button" class="app-btn app-btn-secondary text-sm" id="open-assets-modal"
+                        data-url="{{ url_for('products.product_assets', product_id=product.id) }}">
+                  Assets
+                </button>
                 <button class="app-btn app-btn-secondary text-sm"
                         data-calc-costs
                         data-url="{{ url_for('products.calculate_product_costs', product_id=product.id) }}"
@@ -237,6 +241,7 @@
             </div>
 
             <form id="model-upload-form" data-product-id="{{ product.id }}" enctype="multipart/form-data" class="space-y-4">
+              {{ upload_form.csrf_token }}
               <div id="model-drop-zone" class="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer" style="border-color: var(--color-border);">
                 <div class="text-4xl mb-3">📁</div>
                 <p id="drop-zone-label" style="color: var(--color-text-muted);">
@@ -245,7 +250,51 @@
                 <p class="text-xs mt-2" style="color: var(--color-text-muted);">STL, GLB, GLTF, 3MF, OBJ up to 256 MB</p>
                 <input type="file" name="model_file" id="model_file" accept=".stl,.glb,.gltf,.3mf,.obj" class="hidden">
               </div>
-              <button type="submit" class="app-btn app-btn-primary w-full">Upload & Analyze</button>
+              <button type="button" id="open-upload-settings" class="app-btn app-btn-primary w-full">Upload &amp; Analyze</button>
+
+              <div id="analysis-live-status" class="hidden rounded-2xl border p-4" aria-live="polite" style="border-color: var(--color-border);">
+                <div class="flex items-center justify-between gap-3">
+                  <p id="analysis-live-message" class="text-sm font-medium" style="color: var(--color-text);">Preparing upload…</p>
+                  <span id="analysis-live-percent" class="text-xs font-semibold" style="color: var(--color-link);">0%</span>
+                </div>
+                <div class="mt-3 h-2 overflow-hidden rounded-full" style="background: var(--color-bg-surface-soft);">
+                  <div id="analysis-live-bar" class="h-full rounded-full transition-all" style="width: 0%; background: var(--color-primary);"></div>
+                </div>
+                <p id="analysis-live-step" class="mt-2 text-xs" style="color: var(--color-text-muted);">Waiting</p>
+              </div>
+
+              <div id="upload-settings-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="upload-settings-title">
+                <button type="button" class="absolute inset-0" style="background: rgb(15 23 42 / 0.58);" data-close-upload-modal aria-label="Close upload settings"></button>
+                <div class="app-card relative z-10 max-h-[90vh] w-full max-w-4xl overflow-y-auto p-6">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 id="upload-settings-title" class="text-xl font-semibold" style="color: var(--color-text);">Model slicing settings</h3>
+                      <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Confirm the settings used for analysis and quoting. Embedded 3MF settings can be preferred when present.</p>
+                    </div>
+                    <button type="button" class="app-btn app-btn-secondary" data-close-upload-modal aria-label="Close">×</button>
+                  </div>
+                  <div class="mt-6 grid gap-4 md:grid-cols-3">
+                    {% for field in [upload_form.printer_profile, upload_form.material, upload_form.filament_density, upload_form.nozzle_diameter, upload_form.layer_height, upload_form.perimeters, upload_form.top_solid_layers, upload_form.bottom_solid_layers, upload_form.infill_percent, upload_form.infill_pattern, upload_form.supports, upload_form.brim_width, upload_form.copies, upload_form.scale_percent] %}
+                    <div>
+                      <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);" for="{{ field.id }}">{{ field.label.text }}</label>
+                      {{ field(class="app-input") }}
+                    </div>
+                    {% endfor %}
+                  </div>
+                  <div class="mt-5 grid gap-3 md:grid-cols-2">
+                    {% for field in [upload_form.preserve_orientation, upload_form.multicolor, upload_form.use_embedded_settings, upload_form.convert_to_glb, upload_form.retain_gcode] %}
+                    <label class="app-card flex items-center gap-3 px-4 py-3 text-sm" style="color: var(--color-text);">
+                      {{ field(class="app-checkbox") }} <span>{{ field.label.text }}</span>
+                    </label>
+                    {% endfor %}
+                  </div>
+                  <div id="upload-settings-error" class="mt-4 hidden rounded-xl border px-4 py-3 text-sm" role="alert" style="border-color: var(--color-danger); color: var(--color-danger);"></div>
+                  <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" class="app-btn app-btn-secondary" data-close-upload-modal>Cancel</button>
+                    <button type="submit" class="app-btn app-btn-primary">Upload with these settings</button>
+                  </div>
+                </div>
+              </div>
             </form>
 
             {% if product.model_file_path %}
@@ -314,6 +363,23 @@
     </div>
   </div>
 </section>
+
+{% if product %}
+<div id="assets-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="assets-modal-title">
+  <button type="button" class="absolute inset-0" style="background: rgb(15 23 42 / 0.58);" data-close-assets-modal aria-label="Close assets"></button>
+  <div class="app-card relative z-10 max-h-[88vh] w-full max-w-5xl overflow-y-auto p-6">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 id="assets-modal-title" class="text-xl font-semibold" style="color: var(--color-text);">Assets — {{ product.name }}</h2>
+        <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Files currently stored in this product’s asset directory.</p>
+      </div>
+      <button type="button" class="app-btn app-btn-secondary" data-close-assets-modal aria-label="Close">×</button>
+    </div>
+    <div id="assets-modal-status" class="mt-6 text-sm" style="color: var(--color-text-muted);">Loading assets…</div>
+    <div id="assets-grid" class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

@@ -1,5 +1,5 @@
 {
- "accel_to_decel_enable": "1",
+  "accel_to_decel_enable": "1",
  "accel_to_decel_factor": "50%",
  "activate_air_filtration": [
   "0",

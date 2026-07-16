@@ -283,6 +283,7 @@ def register_context_processors(app: Flask) -> None:
         from flask import request, url_for
         from app.theme_registry import ALL_THEMES
         from app.services.storefront import cart_item_count
+        from app.module_registry import is_module_enabled, MODULES
 
         BLUEPRINT_SECTION_MAP: dict[str, str | None] = {
             "dashboard": "dashboard",
@@ -416,6 +417,8 @@ def register_context_processors(app: Flask) -> None:
             "context_title": context_title,
             "context_nav_items": context_nav_items,
             "public_cart_count": cart_item_count(),
+            "is_module_enabled": is_module_enabled,
+            "MODULES": MODULES,
         }
         notif_count = 0
         if current_user and current_user.is_authenticated:

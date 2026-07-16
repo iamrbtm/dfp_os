@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text, event
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
@@ -150,23 +150,18 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
         DateTime(timezone=True), nullable=True
     )
     parsed_volume_mm3: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
-    parsed_surface_area_mm2: Mapped[Decimal | None] = mapped_column(
-        Numeric(12, 4), nullable=True
-    )
+    parsed_surface_area_mm2: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     parsed_triangle_count: Mapped[int | None] = mapped_column(nullable=True)
-    parsed_filament_grams: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
-    parsed_print_minutes: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
-    parsed_material_cost: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
+    parsed_filament_grams: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    parsed_print_minutes: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    parsed_material_cost: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     convert_status: Mapped[str | None] = mapped_column(String(30), default=None, nullable=True)
     conversion_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     converted_model_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     gcode_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    model_metadata_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    model_analysis_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    model_convert_to_glb: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     category = relationship("Category", back_populates="products")
@@ -184,9 +179,7 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
 class ProductImage(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "product_images"
 
-    product_id: Mapped[int] = mapped_column(
-        ForeignKey("products.id"), nullable=False, index=True
-    )
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_pos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -199,11 +192,13 @@ class ProductImage(PrimaryKeyMixin, TimestampMixin, db.Model):
 @event.listens_for(ProductImage, "after_delete")
 def _cleanup_product_image_storage(mapper, connection, target: ProductImage) -> None:
     from app.services.storage import delete_storage_reference
+
     if target.file_path:
         try:
             delete_storage_reference(target.file_path)
         except Exception:
             import logging
+
             logging.getLogger(__name__).warning(
                 "Failed to delete image storage: %s", target.file_path
             )
@@ -212,6 +207,7 @@ def _cleanup_product_image_storage(mapper, connection, target: ProductImage) -> 
 @event.listens_for(Product, "after_delete")
 def _cleanup_product_model_storage(mapper, connection, target: Product) -> None:
     from app.services.storage import delete_storage_reference
+
     for ref in (
         target.model_file_path,
         target.model_proof_of_license_path,
@@ -223,6 +219,5 @@ def _cleanup_product_model_storage(mapper, connection, target: Product) -> None:
                 delete_storage_reference(ref)
             except Exception:
                 import logging
-                logging.getLogger(__name__).warning(
-                    "Failed to delete storage reference: %s", ref
-                )
+
+                logging.getLogger(__name__).warning("Failed to delete storage reference: %s", ref)
