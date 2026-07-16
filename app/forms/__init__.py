@@ -81,6 +81,7 @@ __all__ = [
     "PrepTaskAdminForm",
     "PrepTaskTemplateForm",
     "PrinterForm",
+    "PrintFailureAutopsyForm",
     "PrintJobForm",
     "ProductModelUploadForm",
     "ProductForm",

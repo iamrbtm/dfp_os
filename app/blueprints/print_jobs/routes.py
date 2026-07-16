@@ -8,8 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.print_jobs import bp
-from app.forms import PrintJobForm
-from app.models import PrintJob, UserRole
+from app.forms import PrintFailureAutopsyForm, PrintJobForm
+from app.models import PrintFailureAutopsy, PrintJob, UserRole
 from app.services.crud import (
     apply_search,
     get_by_id,
@@ -17,6 +17,12 @@ from app.services.crud import (
 )
 from app.services.admin_mutations import snapshot_instance
 from app.services.print_jobs import archive_print_job, create_print_job, update_print_job
+from app.services.printer_reliability import (
+    create_autopsy_for_failed_job,
+    needs_failure_autopsy,
+    resolve_autopsy,
+    update_autopsy,
+)
 from app.utils.auth import roles_required
 
 
@@ -160,7 +166,11 @@ def detail_resource(resource_id: int, resource_key: str = "print-jobs"):
         for label, getter in config.columns
     ]
     return render_template(
-        "dashboard/resource_detail.html", resource=config, instance=instance, details=details
+        "print_jobs/detail.html",
+        resource=config,
+        instance=instance,
+        details=details,
+        needs_autopsy=needs_failure_autopsy(instance),
     )
 
 
@@ -214,3 +224,62 @@ def archive_resource_view(resource_id: int, resource_key: str = "print-jobs"):
     archive_print_job(instance, actor_id=current_user.id)
     flash(f"{config.singular} archived.", "success")
     return redirect(url_for("print_jobs.list_resource", resource_key=resource_key))
+
+
+@bp.route("/<int:print_job_id>/autopsy", methods=["GET", "POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def create_autopsy(print_job_id: int):
+    print_job = get_by_id(PrintJob, print_job_id)
+    if print_job is None:
+        return render_template("errors/404.html"), 404
+    form = PrintFailureAutopsyForm()
+    if form.validate_on_submit():
+        autopsy = PrintFailureAutopsy()
+        form.apply(autopsy)
+        create_autopsy_for_failed_job(print_job, autopsy, actor_id=current_user.id)
+        flash("Failure autopsy saved.", "success")
+        return redirect(url_for("print_jobs.detail_resource", resource_id=print_job.id))
+    return render_template("print_jobs/autopsy_form.html", print_job=print_job, form=form, mode="create")
+
+
+@bp.route("/autopsies/<int:autopsy_id>/edit", methods=["GET", "POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def edit_autopsy(autopsy_id: int):
+    autopsy = get_by_id(PrintFailureAutopsy, autopsy_id)
+    if autopsy is None:
+        return render_template("errors/404.html"), 404
+    form = _build_autopsy_form(autopsy)
+    if form.validate_on_submit():
+        before_state = snapshot_instance(autopsy)
+        form.apply(autopsy)
+        update_autopsy(autopsy, before_state=before_state, actor_id=current_user.id)
+        flash("Failure autopsy updated.", "success")
+        return redirect(url_for("print_jobs.detail_resource", resource_id=autopsy.print_job_id))
+    return render_template("print_jobs/autopsy_form.html", print_job=autopsy.print_job, form=form, mode="edit", autopsy=autopsy)
+
+
+@bp.post("/autopsies/<int:autopsy_id>/resolve")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def resolve_autopsy_view(autopsy_id: int):
+    autopsy = get_by_id(PrintFailureAutopsy, autopsy_id)
+    if autopsy is None:
+        return render_template("errors/404.html"), 404
+    resolve_autopsy(
+        autopsy,
+        resolution_notes=request.form.get("resolution_notes", "").strip() or None,
+        actor_id=current_user.id,
+    )
+    flash("Failure autopsy resolved.", "success")
+    return redirect(url_for("print_jobs.detail_resource", resource_id=autopsy.print_job_id))
+
+
+def _build_autopsy_form(autopsy: PrintFailureAutopsy):
+    data = {}
+    for field_name in PrintFailureAutopsyForm()._fields:
+        if field_name in {"csrf_token", "submit"}:
+            continue
+        value = getattr(autopsy, field_name, None)
+        if hasattr(value, "value"):
+            value = value.value
+        data[field_name] = value
+    return PrintFailureAutopsyForm(data=data)

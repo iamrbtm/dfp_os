@@ -175,6 +175,12 @@ def _resolve_failure_rate(
     total = completed + failed
     if total > 0:
         return decimal4(Decimal(str(failed)) / Decimal(str(total)))
+    if printer_model:
+        from app.services.printer_reliability import get_failure_rate_for_cost_engine
+
+        model_rate = get_failure_rate_for_cost_engine(printer_model=printer_model)
+        if model_rate is not None:
+            return decimal4(model_rate)
     return decimal4(default_failure_rate)
 
 

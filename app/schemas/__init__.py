@@ -38,7 +38,7 @@ from app.schemas.pos import (
     PosSaleSchema,
     PosSessionSchema,
 )
-from app.schemas.print_job import PrintJobSchema
+from app.schemas.print_job import PrintFailureAutopsySchema, PrintJobSchema
 from app.schemas.setting import SettingSchema
 from app.schemas.promotion import ContentDraftSchema, SignAssetSchema
 from app.schemas.trend import (
@@ -85,6 +85,7 @@ __all__ = [
     "PrepTaskSchema",
     "PrepTaskTemplateSchema",
     "PrinterSchema",
+    "PrintFailureAutopsySchema",
     "PrintJobSchema",
     "ProductSchema",
     "SettingSchema",
