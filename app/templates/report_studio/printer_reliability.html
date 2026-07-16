@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Printer Reliability | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Report Studio</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Printer Reliability</h1>
+      <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">Failure rates, common causes, product impact, and filament patterns from failure autopsies.</p>
+    </div>
+    <a href="{{ url_for('report_studio.home') }}" class="app-btn app-btn-secondary">Back to Report Studio</a>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-3">
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Printers</p>
+      <p class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ report.printer_count }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Completed Prints</p>
+      <p class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ report.completed_count }}</p>
+    </article>
+    <article class="app-card p-5">
+      <p class="text-sm" style="color: var(--color-text-muted);">Failed Prints</p>
+      <p class="mt-2 text-3xl font-semibold" style="color: var(--color-danger);">{{ report.failed_count }}</p>
+    </article>
+  </div>
+
+  {% if report.printers %}
+    <div class="app-card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="app-table min-w-full">
+          <thead>
+            <tr>
+              <th>Printer</th>
+              <th>Model</th>
+              <th>Completed</th>
+              <th>Failed</th>
+              <th>Failure Rate</th>
+              <th>Trend</th>
+              <th>Common Causes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in report.printers %}
+              <tr>
+                <td>{{ row.printer_name }}</td>
+                <td>{{ row.printer_model }}</td>
+                <td>{{ row.completed_count }}</td>
+                <td>{{ row.failed_count }}</td>
+                <td>{{ "%.1f"|format(row.failure_rate_percent) }}%</td>
+                <td class="capitalize">{{ row.recent_trend.replace("_", " ") }}</td>
+                <td>
+                  {% if row.common_causes %}
+                    {{ row.common_causes|map(attribute='label')|join(', ') }}
+                  {% else %}
+                    No autopsies yet
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <div class="app-card p-8 text-center">
+      <p style="color: var(--color-text-muted);">No printer data yet. Add printers and print jobs to populate this report.</p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

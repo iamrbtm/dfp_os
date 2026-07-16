@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
 from app.models import (
@@ -11,6 +12,10 @@ from app.models import (
     Order,
     OrderPaymentStatus,
     OrderSource,
+    PickupLocation,
+    PickupLocationType,
+    PickupSlot,
+    PickupSlotStatus,
     Product,
     ProductStatus,
     ProductType,
@@ -56,6 +61,22 @@ def _create_public_product_with_inventory():
     location = InventoryLocation(name="Website Shelf", type="shelf", active=True)
     db.session.add_all([category, collection, product, location])
     db.session.flush()
+    pickup_location = PickupLocation(
+        name="Clarksville Porch Pickup",
+        location_type=PickupLocationType.PORCH,
+        instructions="Wait for ready text before arriving.",
+    )
+    db.session.add(pickup_location)
+    db.session.flush()
+    pickup_slot = PickupSlot(
+        location=pickup_location,
+        starts_at=datetime.now(timezone.utc) + timedelta(days=1),
+        ends_at=datetime.now(timezone.utc) + timedelta(days=1, hours=2),
+        capacity=6,
+        status=PickupSlotStatus.OPEN,
+        public_label="Tomorrow pickup",
+    )
+    db.session.add(pickup_slot)
     db.session.add(
         InventoryRecord(
             product_id=product.id,
@@ -107,6 +128,7 @@ def test_public_checkout_venmo_creates_order_and_reserves_inventory(client, app)
             "email": "jamie@example.com",
             "phone": "931-555-1111",
             "fulfillment_method": "pickup",
+            "pickup_slot_id": "1",
             "payment_option": "venmo",
             "notes": "Please save one teal one if possible.",
         },
@@ -161,6 +183,7 @@ def test_public_checkout_square_redirects_when_configured(client, app, monkeypat
             "email": "square@example.com",
             "phone": "931-555-2222",
             "fulfillment_method": "pickup",
+            "pickup_slot_id": "1",
             "payment_option": "square",
         },
         follow_redirects=False,

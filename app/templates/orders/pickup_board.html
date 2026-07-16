@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Pickup Board | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-7xl space-y-6">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Orders</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Pickup Board</h1>
+      <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Orders and custom requests grouped by pickup window.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a class="app-btn app-btn-secondary" href="{{ url_for('orders.list_resource', resource_key='pickup-slots') }}">Slots</a>
+      <a class="app-btn app-btn-secondary" href="{{ url_for('orders.list_resource', resource_key='pickup-locations') }}">Locations</a>
+      <form method="post" action="{{ url_for('orders.pickup_board_generate_prep_tasks') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="app-btn app-btn-primary" type="submit">Generate Prep Tasks</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-4">
+    {% for key, value in summary.items() %}
+    <div class="app-card p-4">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">{{ key|replace('_', ' ')|title }}</p>
+      <p class="mt-2 text-2xl font-semibold" style="color: var(--color-text);">{{ value }}</p>
+    </div>
+    {% else %}
+    <div class="app-card p-4 sm:col-span-4">
+      <p class="text-sm" style="color: var(--color-text-muted);">No scheduled pickups yet.</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="space-y-4">
+    {% for group in groups %}
+    <article class="app-card p-5 space-y-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-semibold" style="color: var(--color-text);">{{ group.slot.public_label or group.slot.location.name }}</h2>
+          <p class="text-sm" style="color: var(--color-text-muted);">
+            {{ group.slot.starts_at.strftime("%a, %b %-d %I:%M %p") }} - {{ group.slot.ends_at.strftime("%I:%M %p") }}
+            · {{ group.slot.location.name }}
+            · {{ group.slot.scheduled_count }}/{{ group.slot.capacity }}
+          </p>
+          {% if group.slot.instructions or group.slot.location.instructions %}
+          <p class="mt-2 text-sm" style="color: var(--color-text-muted);">{{ group.slot.instructions or group.slot.location.instructions }}</p>
+          {% endif %}
+        </div>
+        <span class="app-badge app-badge-info">{{ group.total_items }} item(s)</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="app-table min-w-full">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Customer</th>
+              <th>Status</th>
+              <th>Payment</th>
+              <th>Notes</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for order in group.orders %}
+            <tr>
+              <td>Order {{ order.order_number }}</td>
+              <td>{{ order.customer_name or (order.customer.full_name if order.customer else "Customer") }}<br><span class="text-xs" style="color: var(--color-text-muted);">{{ order.customer_email or "" }} {{ order.customer_phone or "" }}</span></td>
+              <td><span class="app-badge app-badge-info">{{ order.pickup_status or "scheduled" }}</span></td>
+              <td>{{ order.payment_status.value|replace('_', ' ')|title }}</td>
+              <td>{{ order.pickup_notes or order.notes or "" }}</td>
+              <td class="space-x-1">
+                {% for status in ["ready", "handed_off", "no_show"] %}
+                <form method="post" action="{{ url_for('orders.pickup_board_transition', entity_type='order', entity_id=order.id, status=status) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="app-btn app-btn-secondary text-xs px-2 py-1" type="submit">{{ status|replace('_', ' ')|title }}</button>
+                </form>
+                {% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
+            {% for request in group.custom_requests %}
+            <tr>
+              <td>Custom Request</td>
+              <td>{{ request.name }}<br><span class="text-xs" style="color: var(--color-text-muted);">{{ request.email }} {{ request.phone or "" }}</span></td>
+              <td><span class="app-badge app-badge-info">{{ request.pickup_status or "scheduled" }}</span></td>
+              <td>{{ request.status.value|replace('_', ' ')|title }}</td>
+              <td>{{ request.pickup_notes or request.admin_notes or "" }}</td>
+              <td class="space-x-1">
+                {% for status in ["ready", "handed_off", "no_show"] %}
+                <form method="post" action="{{ url_for('orders.pickup_board_transition', entity_type='custom-request', entity_id=request.id, status=status) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="app-btn app-btn-secondary text-xs px-2 py-1" type="submit">{{ status|replace('_', ' ')|title }}</button>
+                </form>
+                {% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+    {% else %}
+    <div class="app-card p-8 text-center">
+      <p class="text-sm" style="color: var(--color-text-muted);">Create pickup slots and assign orders or custom requests to see the board.</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

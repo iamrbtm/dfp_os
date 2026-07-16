@@ -61,6 +61,7 @@ _PROVIDER_CONFIG_CHECKS: dict[str, list[tuple[str, str]]] = {
     "google_trends": [("SERPAPI_API_KEY", "SerpAPI key")],
     "tiktok": [("TIKTOK_RESEARCH_ACCESS_TOKEN", "Research API token")],
     "pinterest": [("PINTEREST_API_KEY", "API key")],
+    "last30days": [("LAST30DAYS_RAW_FILE", "raw file path")],
     "makerworld": [],
     "printables": [],
     "myminifactory": [],

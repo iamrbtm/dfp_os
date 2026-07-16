@@ -51,6 +51,13 @@
         </div>
       </div>
 
+      <div class="rounded-[1.5rem] p-5" style="background-color: var(--color-surface-muted);">
+        <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.pickup_slot_id.label.text }}</label>
+        {{ form.pickup_slot_id(class="app-input") }}
+        {% for error in form.pickup_slot_id.errors %}<p class="mt-2 text-sm" style="color: var(--color-danger);">{{ error }}</p>{% endfor %}
+        <p class="mt-2 text-xs" style="color: var(--color-text-muted);">Required for local pickup. Choose shipping above if none of these windows work.</p>
+      </div>
+
       <div class="space-y-4 rounded-[1.5rem] p-5" style="background-color: var(--color-surface-muted);">
         <h2 class="text-lg font-semibold" style="color: var(--color-text);">Shipping details</h2>
         <div>

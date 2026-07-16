@@ -25,6 +25,7 @@ from app.schemas.inventory import (
     InventoryRecordSchema,
 )
 from app.schemas.order import OrderItemSchema, OrderSchema, PaymentSchema
+from app.schemas.pickup import PickupLocationSchema, PickupSlotSchema
 from app.schemas.receipt import (
     ReceiptDashboardSchema,
     ReceiptLineAllocationSchema,
@@ -38,7 +39,7 @@ from app.schemas.pos import (
     PosSaleSchema,
     PosSessionSchema,
 )
-from app.schemas.print_job import PrintJobSchema
+from app.schemas.print_job import PrintFailureAutopsySchema, PrintJobSchema
 from app.schemas.setting import SettingSchema
 from app.schemas.promotion import ContentDraftSchema, SignAssetSchema
 from app.schemas.trend import (
@@ -75,6 +76,8 @@ __all__ = [
     "OrderSchema",
     "PaginationSchema",
     "PaymentSchema",
+    "PickupLocationSchema",
+    "PickupSlotSchema",
     "ContentDraftSchema",
     "SignAssetSchema",
     "PosCloseSessionSchema",
@@ -85,6 +88,7 @@ __all__ = [
     "PrepTaskSchema",
     "PrepTaskTemplateSchema",
     "PrinterSchema",
+    "PrintFailureAutopsySchema",
     "PrintJobSchema",
     "ProductSchema",
     "SettingSchema",

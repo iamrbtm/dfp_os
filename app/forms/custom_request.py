@@ -7,8 +7,8 @@ from wtforms import DecimalField, SelectField, StringField, SubmitField, TextAre
 from wtforms.fields.datetime import DateTimeLocalField
 from wtforms.validators import DataRequired, Length, Optional
 
-from app.forms.common import enum_choices
-from app.models import CustomRequest, CustomRequestStatus
+from app.forms.common import OptionalSelectField, enum_choices
+from app.models import CustomRequest, CustomRequestStatus, PickupSlot
 
 
 class CustomRequestForm(FlaskForm):
@@ -23,6 +23,7 @@ class CustomRequestForm(FlaskForm):
     status = SelectField(
         "Status", choices=enum_choices(CustomRequestStatus), validators=[DataRequired()]
     )
+    pickup_slot_id = OptionalSelectField("Pickup Slot", coerce=int, validators=[Optional()])
     subtotal = DecimalField("Subtotal", validators=[Optional()], places=2, default=0)
     tax = DecimalField("Tax", validators=[Optional()], places=2, default=0)
     discount = DecimalField("Discount", validators=[Optional()], places=2, default=0)
@@ -32,6 +33,13 @@ class CustomRequestForm(FlaskForm):
     internal_notes = TextAreaField("Internal Notes", validators=[Optional()])
     submit = SubmitField("Save custom request")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pickup_slot_id.choices = [(0, "No pickup slot")] + [
+            (item.id, f"{item.starts_at:%Y-%m-%d %I:%M %p} - {item.location.name}")
+            for item in PickupSlot.query.order_by(PickupSlot.starts_at.asc())
+        ]
+
     def apply(self, request: CustomRequest) -> CustomRequest:
         request.name = self.name.data.strip()
         request.email = self.email.data.strip()
@@ -40,6 +48,7 @@ class CustomRequestForm(FlaskForm):
         request.estimated_budget = self.estimated_budget.data
         request.deadline = self.deadline.data
         request.status = CustomRequestStatus(self.status.data)
+        request.pickup_slot_id = self.pickup_slot_id.data or None
         request.subtotal = self.subtotal.data
         request.tax = self.tax.data or Decimal(0)
         request.discount = self.discount.data or Decimal(0)
@@ -60,4 +69,5 @@ class PublicCustomRequestForm(FlaskForm):
         description="Describe your idea: what it is, approximate size, colors, any reference images or links.",
     )
     estimated_budget = StringField("Approximate Budget (optional)", validators=[Optional()])
+    pickup_slot_id = OptionalSelectField("Preferred Pickup Window (optional)", coerce=int, validators=[Optional()])
     submit = SubmitField("Send Request")

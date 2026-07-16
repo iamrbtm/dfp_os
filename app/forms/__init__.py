@@ -31,6 +31,7 @@ from app.forms.inventory import (
     InventoryTransferForm,
 )
 from app.forms.order import OrderForm, OrderItemForm, PaymentForm
+from app.forms.pickup import PickupLocationForm, PickupSlotForm
 from app.forms.pos import PosCloseSessionForm, PosSessionForm
 from app.forms.print_job import PrintJobForm
 from app.forms.promotion import ContentDraftForm, SignAssetForm
@@ -76,11 +77,14 @@ __all__ = [
     "OrderForm",
     "OrderItemForm",
     "PaymentForm",
+    "PickupLocationForm",
+    "PickupSlotForm",
     "PosCloseSessionForm",
     "PosSessionForm",
     "PrepTaskAdminForm",
     "PrepTaskTemplateForm",
     "PrinterForm",
+    "PrintFailureAutopsyForm",
     "PrintJobForm",
     "ProductModelUploadForm",
     "ProductForm",

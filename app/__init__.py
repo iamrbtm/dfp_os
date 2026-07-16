@@ -14,6 +14,7 @@ from app.blueprints.analytics import bp as analytics_bp
 from app.blueprints.api import register_api_blueprints
 from app.blueprints.api_tokens import bp as api_tokens_bp
 from app.blueprints.audit_logs import bp as audit_logs_bp
+from app.blueprints.booth_mode import bp as booth_mode_bp
 from app.blueprints.cost_engine import bp as cost_engine_bp
 from app.blueprints.customers import bp as customers_bp
 from app.blueprints.expenses import bp as expenses_bp
@@ -124,6 +125,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(custom_orders_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(pos_bp)
+    app.register_blueprint(booth_mode_bp)
     app.register_blueprint(print_jobs_bp)
     app.register_blueprint(markets_bp)
     app.register_blueprint(prep_tasks_bp)
@@ -288,6 +290,7 @@ def register_context_processors(app: Flask) -> None:
         BLUEPRINT_SECTION_MAP: dict[str, str | None] = {
             "dashboard": "dashboard",
             "pos": "pos",
+            "booth_mode": "booth_mode",
             "analytics": "analytics",
             "products": "products",
             "customers": "customers",
@@ -334,6 +337,11 @@ def register_context_processors(app: Flask) -> None:
             "pos": [
                 ("Sessions", url_for("pos.session_list")),
                 ("New Session", url_for("pos.session_new")),
+                ("Booth Mode", url_for("booth_mode.index")),
+            ],
+            "booth_mode": [
+                ("Booth Mode", url_for("booth_mode.index")),
+                ("POS Sessions", url_for("pos.session_list")),
             ],
             "products": [
                 ("Product Studio", url_for("products.studio")),
@@ -353,6 +361,8 @@ def register_context_processors(app: Flask) -> None:
                 ("Orders", url_for("orders.list_resource", resource_key="orders")),
                 ("Items", url_for("orders.list_resource", resource_key="items")),
                 ("Payments", url_for("orders.list_resource", resource_key="payments")),
+                ("Pickup Board", url_for("orders.pickup_board")),
+                ("Pickup Slots", url_for("orders.list_resource", resource_key="pickup-slots")),
             ],
             "markets": [
                 ("Markets", url_for("markets.list_resource", resource_key="markets")),

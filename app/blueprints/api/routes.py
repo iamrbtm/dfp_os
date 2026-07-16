@@ -21,6 +21,7 @@ from app.models import (
     CustomRequest,
     CustomRequestStatus,
     Customer,
+    DeadStockRecommendation,
     Expense,
     FeatureFlag,
     ExpenseCategory,
@@ -48,6 +49,11 @@ from app.models import (
     OrderSource,
     Payment,
     PaymentMethod,
+    PickupLocation,
+    PickupLocationType,
+    PickupSlot,
+    PickupSlotStatus,
+    PickupStatus,
     PosSale,
     PosSession,
     PrepTask,
@@ -56,6 +62,9 @@ from app.models import (
     PrepTaskTemplate,
     Printer,
     PrinterStatus,
+    PrintFailureAutopsy,
+    PrintFailureCategory,
+    PrintFailureSeverity,
     PrintJob,
     PrintJobStatus,
     Product,
@@ -95,11 +104,14 @@ from app.schemas import (
     OrderItemSchema,
     OrderSchema,
     PaymentSchema,
+    PickupLocationSchema,
+    PickupSlotSchema,
     PosSaleSchema,
     PosSessionSchema,
     PrepTaskSchema,
     PrepTaskTemplateSchema,
     PrinterSchema,
+    PrintFailureAutopsySchema,
     PrintJobSchema,
     ProductSchema,
     ResourceListEnvelope,
@@ -124,6 +136,7 @@ from app.services.audit import record_audit_event
 from app.services.api_tokens import revoke_api_token
 from app.services.inventory import release_inventory, reserve_inventory, transfer_inventory
 from app.services.pos import refund_sale
+from app.services.printer_reliability import get_reliability_report_rows
 from app.utils import slugify
 from app.utils.auth import api_token_required, require_api_scopes
 
@@ -156,6 +169,15 @@ class PosRefundRequestSchema(Schema):
     notes = fields.String(load_default=None, allow_none=True)
 
 
+class ProductRetireRequestSchema(Schema):
+    reason = fields.String(required=True)
+    discount_remaining = fields.Boolean(load_default=False)
+
+
+class DeadStockRecommendationActionSchema(Schema):
+    notes = fields.String(load_default=None, allow_none=True)
+
+
 @dataclass(frozen=True)
 class ApiResourceConfig:
     endpoint: str
@@ -173,6 +195,7 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "collections": ("catalog",),
     "products": ("catalog",),
     "printers": ("inventory",),
+    "print-failure-autopsies": ("inventory",),
     "ams-units": ("inventory",),
     "filament-spools": ("inventory",),
     "inventory-locations": ("inventory",),
@@ -182,6 +205,8 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "orders": ("orders",),
     "order-items": ("orders",),
     "payments": ("orders",),
+    "pickup-locations": ("orders",),
+    "pickup-slots": ("orders",),
     "print-jobs": ("orders",),
     "prep-task-templates": ("markets",),
     "prep-tasks": ("markets",),
@@ -285,6 +310,14 @@ def _apply_product(instance: Product, data: dict):
     instance.tags = data.get("tags")
     instance.care_instructions = data.get("care_instructions")
     instance.safety_notes = data.get("safety_notes")
+    instance.launch_override_reason = data.get("launch_override_reason")
+    instance.story_what_it_is = data.get("story_what_it_is")
+    instance.story_who_it_is_for = data.get("story_who_it_is_for")
+    instance.story_materials = data.get("story_materials")
+    instance.story_customization_options = data.get("story_customization_options")
+    instance.story_internal_compliance_notes = data.get("story_internal_compliance_notes")
+    instance.retirement_reason = data.get("retirement_reason")
+    instance.block_reprint = data.get("block_reprint", False)
     instance.license_status = LicenseStatus(data["license_status"])
     instance.design_source = data.get("design_source")
     instance.commercial_license_notes = data.get("commercial_license_notes")
@@ -409,6 +442,9 @@ def _apply_custom_request(instance: CustomRequest, data: dict):
     instance.admin_notes = data.get("admin_notes")
     instance.internal_notes = data.get("internal_notes")
     instance.customer_id = data.get("customer_id")
+    instance.pickup_slot_id = data.get("pickup_slot_id")
+    instance.pickup_status = data.get("pickup_status")
+    instance.pickup_notes = data.get("pickup_notes")
     instance.source = data.get("source", "api")
 
 
@@ -421,6 +457,9 @@ def _apply_order(instance: Order, data: dict):
     if data.get("fulfillment_method"):
         instance.fulfillment_method = OrderFulfillmentMethod(data["fulfillment_method"])
     instance.market_id = data.get("market_id")
+    instance.pickup_slot_id = data.get("pickup_slot_id")
+    instance.pickup_status = data.get("pickup_status")
+    instance.pickup_notes = data.get("pickup_notes")
     instance.notes = data.get("notes")
     instance.internal_notes = data.get("internal_notes")
     instance.customer_name = data.get("customer_name")
@@ -463,14 +502,64 @@ def _apply_payment(instance: Payment, data: dict):
     instance.notes = data.get("notes")
 
 
+def _apply_pickup_location(instance: PickupLocation, data: dict):
+    instance.name = data["name"].strip()
+    instance.location_type = PickupLocationType(data["location_type"])
+    instance.address = data.get("address")
+    instance.instructions = data.get("instructions")
+    instance.active = data.get("active", True)
+
+
+def _apply_pickup_slot(instance: PickupSlot, data: dict):
+    starts_at = data["starts_at"]
+    ends_at = data["ends_at"]
+    if ends_at <= starts_at:
+        raise ValueError("Pickup slot end time must be after start time.")
+    instance.location_id = data["location_id"]
+    instance.market_id = data.get("market_id")
+    instance.starts_at = starts_at
+    instance.ends_at = ends_at
+    instance.capacity = data.get("capacity", 6) or 6
+    instance.status = PickupSlotStatus(data.get("status", PickupSlotStatus.OPEN.value))
+    instance.public_label = data.get("public_label")
+    instance.instructions = data.get("instructions")
+
+
 def _apply_print_job(instance: PrintJob, data: dict):
-    instance.label = data["label"].strip()
-    instance.status = PrintJobStatus(data["status"])
+    instance.label = (data.get("label") or "").strip() or None
+    instance.status = PrintJobStatus(data.get("status", PrintJobStatus.QUEUED.value))
     instance.printer_id = data.get("printer_id")
     instance.order_item_id = data.get("order_item_id")
-    instance.quantity = data.get("quantity", 1)
-    instance.priority = data.get("priority", 0)
+    instance.product_id = data.get("product_id")
+    instance.assigned_to_id = data.get("assigned_to_id")
+    instance.priority = data.get("priority", 0) or 0
+    instance.started_at = data.get("started_at")
+    instance.completed_at = data.get("completed_at")
+    instance.estimated_minutes = data.get("estimated_minutes", 0) or 0
+    instance.actual_minutes = data.get("actual_minutes")
+    instance.filament_used_grams = data.get("filament_used_grams")
+    instance.failure_reason = data.get("failure_reason")
     instance.notes = data.get("notes")
+
+
+def _apply_print_failure_autopsy(instance: PrintFailureAutopsy, data: dict):
+    instance.print_job_id = data["print_job_id"]
+    job = db.session.get(PrintJob, instance.print_job_id)
+    if job is None:
+        raise ValueError("Print job not found.")
+    instance.printer_id = data.get("printer_id", job.printer_id)
+    instance.product_id = data.get("product_id", job.product_id)
+    instance.filament_spool_id = data.get("filament_spool_id")
+    instance.user_id = data.get("user_id")
+    instance.model_asset_id = data.get("model_asset_id")
+    instance.category = PrintFailureCategory(data["category"])
+    instance.severity = PrintFailureSeverity(data["severity"])
+    instance.notes = data.get("notes")
+    instance.photo_reference = data.get("photo_reference")
+    instance.corrective_action = data.get("corrective_action")
+    instance.maintenance_required = data.get("maintenance_required", False)
+    instance.resolved = data.get("resolved", False)
+    instance.resolution_notes = data.get("resolution_notes")
 
 
 def _apply_prep_task_template(instance: PrepTaskTemplate, data: dict):
@@ -759,12 +848,34 @@ API_RESOURCES = {
     "payments": ApiResourceConfig(
         "payments", Payment, PaymentSchema, [], _apply_payment
     ),
+    "pickup-locations": ApiResourceConfig(
+        "pickup-locations",
+        PickupLocation,
+        PickupLocationSchema,
+        ["name", "address", "instructions"],
+        _apply_pickup_location,
+    ),
+    "pickup-slots": ApiResourceConfig(
+        "pickup-slots",
+        PickupSlot,
+        PickupSlotSchema,
+        ["public_label", "instructions"],
+        _apply_pickup_slot,
+        list_filters=lambda stmt: stmt.order_by(PickupSlot.starts_at.asc()),
+    ),
     "print-jobs": ApiResourceConfig(
         "print-jobs",
         PrintJob,
         PrintJobSchema,
         ["label", "notes"],
         _apply_print_job,
+    ),
+    "print-failure-autopsies": ApiResourceConfig(
+        "print-failure-autopsies",
+        PrintFailureAutopsy,
+        PrintFailureAutopsySchema,
+        ["notes", "corrective_action", "resolution_notes"],
+        _apply_print_failure_autopsy,
     ),
     "prep-task-templates": ApiResourceConfig(
         "prep-task-templates",
@@ -1037,6 +1148,136 @@ def _register_resource(config: ApiResourceConfig):
 
 for resource_config in API_RESOURCES.values():
     _register_resource(resource_config)
+
+
+@catalog_blp.route("/products/<int:product_id>/readiness", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Products"])
+@catalog_blp.response(200)
+def product_readiness(product_id: int):
+    denied = require_api_scopes("catalog")
+    if denied:
+        return denied
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return {"error": {"code": "not_found", "message": "Product not found.", "details": {}}}, 404
+    from app.services.product_ops import calculate_product_readiness, sync_launch_checklist
+
+    checklist = sync_launch_checklist(product)
+    readiness = calculate_product_readiness(product)
+    db.session.commit()
+    return {
+        "data": {
+            "product_id": product.id,
+            "score": readiness.score,
+            "breakdown": readiness.breakdown,
+            "critical_blockers": readiness.critical_blockers,
+            "launch_checklist": [
+                {
+                    "id": item.id,
+                    "key": item.key.value,
+                    "label": item.label,
+                    "completed": item.completed,
+                    "override_reason": item.override_reason,
+                    "notes": item.notes,
+                }
+                for item in checklist
+            ],
+        }
+    }
+
+
+@catalog_blp.route("/products/<int:product_id>/dead-stock", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Products"])
+@catalog_blp.response(201)
+def product_dead_stock_generate(product_id: int):
+    denied = require_api_scopes("catalog")
+    if denied:
+        return denied
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return {"error": {"code": "not_found", "message": "Product not found.", "details": {}}}, 404
+    from app.services.product_ops import generate_dead_stock_recommendation
+
+    recommendation = generate_dead_stock_recommendation(product)
+    if recommendation is None:
+        return {"data": None, "message": "No dead-stock recommendation needed."}, 200
+    return {
+        "data": {
+            "id": recommendation.id,
+            "product_id": recommendation.product_id,
+            "score": recommendation.score,
+            "suggested_action": recommendation.suggested_action,
+            "reason": recommendation.reason,
+            "status": recommendation.status.value,
+        }
+    }, 201
+
+
+@catalog_blp.route("/products/dead-stock/<int:recommendation_id>/<action>", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Products"])
+@catalog_blp.arguments(DeadStockRecommendationActionSchema)
+@catalog_blp.response(200)
+def product_dead_stock_action(body_data, recommendation_id: int, action: str):
+    denied = require_api_scopes("catalog")
+    if denied:
+        return denied
+    recommendation = get_by_id(DeadStockRecommendation, recommendation_id)
+    if recommendation is None:
+        return {"error": {"code": "not_found", "message": "Recommendation not found.", "details": {}}}, 404
+    from app.services.product_ops import accept_dead_stock_recommendation, dismiss_dead_stock_recommendation
+
+    actor_id = getattr(getattr(g, "api_token", None), "user_id", None)
+    if action == "accept":
+        recommendation = accept_dead_stock_recommendation(
+            recommendation,
+            notes=body_data.get("notes"),
+            actor_id=actor_id,
+        )
+    elif action == "dismiss":
+        recommendation = dismiss_dead_stock_recommendation(
+            recommendation,
+            notes=body_data.get("notes"),
+            actor_id=actor_id,
+        )
+    else:
+        return {"error": {"code": "not_found", "message": "Unsupported action.", "details": {}}}, 404
+    return {
+        "data": {
+            "id": recommendation.id,
+            "product_id": recommendation.product_id,
+            "status": recommendation.status.value,
+            "action_notes": recommendation.action_notes,
+        }
+    }
+
+
+@catalog_blp.route("/products/<int:product_id>/retire", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Products"])
+@catalog_blp.arguments(ProductRetireRequestSchema)
+@catalog_blp.response(200, ProductSchema)
+def product_retire(body_data, product_id: int):
+    denied = require_api_scopes("catalog")
+    if denied:
+        return denied
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return {"error": {"code": "not_found", "message": "Product not found.", "details": {}}}, 404
+    reason = (body_data.get("reason") or "").strip()
+    if not reason:
+        return _validation_error("Retirement reason is required.")
+    from app.services.product_ops import retire_product
+
+    product = retire_product(
+        product,
+        reason=reason,
+        discount_remaining=bool(body_data.get("discount_remaining")),
+        actor_id=getattr(getattr(g, "api_token", None), "user_id", None),
+    )
+    return product
 
 
 @catalog_blp.route("/themes")

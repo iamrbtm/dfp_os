@@ -1,5 +1,6 @@
 from app.models.api_token import ApiToken
 from app.models.business import Business, FeatureFlag
+from app.models.booth_mode import BoothModeHint, BoothHintStatus
 from app.models.notification import Notification
 from app.models.catalog import (
     Category,
@@ -61,6 +62,20 @@ from app.models.pos import (
     PosSession,
     PosSessionStatus,
 )
+from app.models.pickup import (
+    PickupLocation,
+    PickupLocationType,
+    PickupSlot,
+    PickupSlotStatus,
+    PickupStatus,
+from app.models.product_ops import (
+    DeadStockRecommendation,
+    DeadStockRecommendationStatus,
+    ProductLaunchChecklistItem,
+    ProductLaunchChecklistKey,
+    ProductPhotoShot,
+    ProductPhotoShotType,
+)
 from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_failure_autopsy import PrintFailureAutopsy, PrintFailureCategory, PrintFailureSeverity
 from app.models.print_job import PrintJob, PrintJobStatus
@@ -89,6 +104,8 @@ __all__ = [
     "AMSUnitType",
     "ApiToken",
     "Business",
+    "BoothModeHint",
+    "BoothHintStatus",
     "Category",
     "Collection",
     "CustomRequest",
@@ -137,16 +154,30 @@ __all__ = [
     "PosSaleStatus",
     "PosSession",
     "PosSessionStatus",
+    "PickupLocation",
+    "PickupLocationType",
+    "PickupSlot",
+    "PickupSlotStatus",
+    "PickupStatus",
     "PrepTask",
     "PrepTaskCategory",
     "PrepTaskStatus",
     "PrepTaskTemplate",
     "Printer",
     "PrinterStatus",
+    "PrintFailureAutopsy",
+    "PrintFailureCategory",
+    "PrintFailureSeverity",
     "PrintJob",
     "PrintJobStatus",
     "Product",
+    "ProductLaunchChecklistItem",
+    "ProductLaunchChecklistKey",
     "ProductImage",
+    "ProductPhotoShot",
+    "ProductPhotoShotType",
+    "DeadStockRecommendation",
+    "DeadStockRecommendationStatus",
     "Setting",
     "SignAsset",
     "SignStatus",

@@ -13,11 +13,12 @@ from wtforms import (
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
 from app.forms.common import OptionalSelectField, decimal_or_zero, enum_choices
-from app.models import Customer, Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod, Product
+from app.models import Customer, Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod, PickupSlot, Product
 
 
 class OrderForm(FlaskForm):
     customer_id = OptionalSelectField("Customer", coerce=int, validators=[Optional()])
+    pickup_slot_id = OptionalSelectField("Pickup Slot", coerce=int, validators=[Optional()])
     status = SelectField(
         "Status", choices=enum_choices(OrderStatus), validators=[DataRequired()]
     )
@@ -39,9 +40,14 @@ class OrderForm(FlaskForm):
             (item.id, f"{item.full_name} ({item.email or 'no email'})")
             for item in Customer.query.order_by(Customer.last_name, Customer.first_name)
         ]
+        self.pickup_slot_id.choices = [(0, "No pickup slot")] + [
+            (item.id, f"{item.starts_at:%Y-%m-%d %I:%M %p} - {item.location.name}")
+            for item in PickupSlot.query.order_by(PickupSlot.starts_at.asc())
+        ]
 
     def apply(self, order: Order) -> Order:
         order.customer_id = self.customer_id.data or None
+        order.pickup_slot_id = self.pickup_slot_id.data or None
         order.status = OrderStatus(self.status.data)
         order.source = OrderSource(self.source.data)
         order.notes = self.notes.data
