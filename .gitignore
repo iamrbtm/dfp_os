@@ -12,6 +12,8 @@ __pycache__/
 .ruff_cache/
 .playwright-mcp/
 .coverage*
+.opencode/
+.codex
 htmlcov/
 instance/
 uploads/*
