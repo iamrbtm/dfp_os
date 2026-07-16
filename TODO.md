@@ -19,6 +19,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` Built the public website + ecommerce storefront pass: polished public pages, session cart, online checkout, and payment fallback flow.
 - `done` Refactored product asset storage so uploaded model/image/generated files follow the per-product and per-variant folder layout used in production file management.
 - `done` Rebuilt Product Studio into isolated primary and variant accordions so each section owns its own fields, assets, previews, and cost calculations.
+- `done` Milestone 7: Booth Mode — Break-even/profit tracking screen, payment mix, expected cash, sales pace, persisted action hints, feature flag, and tests.
 - `done` Milestone 4: Products — Product readiness score, launch checklist, photo shot list, story cards, dead-stock rescue, and retirement workflow.
 - `in-progress` Replace placeholder product pricing with evidence-backed cost snapshots, spool-aware material costing, historical print-job failure rates, and multi-axis profitability metrics.
 - `done` **Phase 1: AI Design Trend Scout — Database & Foundation** — Created `TrendSnapshot` and `TrendReport` models, generated migration, set up `app/services/ai/trend_scout/` directory structure.
@@ -39,6 +40,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 ## Next Priorities
 
 - `done` Milestone 3: Report Studio — Module foundation, report catalog home, vendor market heat map, and market application tracker report.
+- `done` Milestone 7: Booth Mode — Booth Break-Even Timer and action hints.
 - `done` Milestone 4: Products — Product Studio operational controls, API actions, migration, docs, and focused tests.
 
 - `todo` Normalize and map kept tables from the legacy import staging layer into warehouse fact tables.

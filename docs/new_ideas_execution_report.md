@@ -56,6 +56,9 @@
 - [x] Test file: 28 tests covering critical paths
 - [x] Design system: Uses design tokens, app-card, app-btn, app-table, app-input classes
 
+## Milestone 7: Booth Mode
+
+### Booth Break-Even Timer
 ## Milestone 4: Products
 
 ### Product Studio Operational Controls
@@ -64,6 +67,17 @@
 **Date**: 2026-07-14
 
 **Files created**:
+- `app/models/booth_mode.py` - persisted Booth Mode hint state and statuses.
+- `app/services/booth_mode.py` - break-even, sales pace, projected revenue, payment mix context, and action-hint generation.
+- `app/blueprints/booth_mode/__init__.py` and `app/blueprints/booth_mode/routes.py` - `/booth-mode` staff/admin routes with local feature-flag enforcement.
+- `app/templates/booth_mode/index.html` - market-day command screen optimized for quick scanning.
+- `migrations/versions/1a2b3c4d5e6f_add_booth_mode_hints.py` - Booth Mode hint persistence.
+- `tests/test_milestone7_booth_mode.py` - focused auth, feature flag, break-even, route, hint, and suppression coverage.
+
+**Files modified**:
+- `app/__init__.py` - blueprint registration, section mapping, and context navigation.
+- `app/module_registry.py` - `booth_mode` module definition with feature flag and dependencies.
+- `app/models/__init__.py` - Booth Mode model exports.
 - `app/models/pickup.py` - pickup locations, slots, slot status, and pickup status enums.
 - `app/forms/pickup.py` - admin forms for pickup locations and slots.
 - `app/schemas/pickup.py` - API schemas for pickup locations and slots.
@@ -110,6 +124,19 @@
 - `docs/production_readiness_scorecard.md` and `TODO.md` - milestone status updates.
 
 **Implementation notes**:
+- Booth Mode is a separate route from POS checkout so it can be left open on a tablet without interrupting sales.
+- Break-even uses POS session net sales against booth fee, application fee, and linked market expenses.
+- Once break-even is reached, the primary display switches to profit tracking.
+- Action hints are persisted so accepted, dismissed, and snoozed hints do not repeatedly interrupt booth operations.
+
+**Tests/checks**:
+- `./.venv/bin/python -m py_compile app/models/booth_mode.py app/services/booth_mode.py app/blueprints/booth_mode/routes.py app/__init__.py app/module_registry.py tests/test_milestone7_booth_mode.py`
+- `env DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os TEST_DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test TEST_DATABASE_ADMIN_URL=mysql+pymysql://root:rootpassword@127.0.0.1:3306/mysql FILE_STORAGE_BACKEND=local RECEIPT_STORAGE_DRIVER=local S3_AUTO_CREATE_BUCKETS=0 CELERY_BROKER_URL=memory:// CELERY_RESULT_BACKEND=cache+memory:// ./.venv/bin/pytest -q tests/test_milestone7_booth_mode.py`
+
+**Remaining risks**:
+- Sales-pace projection assumes the market close time is accurate and stored on the Market.
+- Hints are deterministic and operational; they do not yet use deeper Trend Scout or historical market intelligence.
+- No live auto-refresh loop was added; operators can reload the page or this can be enhanced with HTMX polling later.
 - Readiness score is calculated live instead of stored as snapshots because it is derived from current product, cost, inventory, photo, license, and launch state. History can be added later if score trend analysis becomes useful.
 - Launch gate blocks public/active launch when critical readiness items fail unless an explicit override reason is present.
 - Retirement hides the product from public and POS sale surfaces, preserves history, records a reason, and sets `block_reprint`.

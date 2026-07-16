@@ -158,6 +158,16 @@ MODULES: dict[str, ModuleDefinition] = {
         api_resources=("pos-sessions", "pos-sales"),
         required_roles=("admin", "staff"),
     ),
+    "booth_mode": ModuleDefinition(
+        key="booth_mode",
+        display_name="Booth Mode",
+        description="Market-day command screen for break-even, payment mix, sales pace, and action hints.",
+        feature_flag_key="module.booth_mode.enabled",
+        dependencies=("pos", "markets", "inventory"),
+        blueprint_names=("booth_mode",),
+        admin_nav_entries=(NavEntry("Booth Mode", "booth_mode.index"),),
+        required_roles=("admin", "staff"),
+    ),
     "markets": ModuleDefinition(
         key="markets",
         display_name="Markets",

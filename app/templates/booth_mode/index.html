@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Booth Mode | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-7xl space-y-6">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Market Day</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Booth Mode</h1>
+      <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Break-even, cash, payment mix, and booth actions without interrupting POS checkout.</p>
+    </div>
+    <form method="get" class="flex flex-wrap items-end gap-2">
+      <label class="block">
+        <span class="mb-1 block text-xs" style="color: var(--color-text-muted);">Market</span>
+        <select name="market_id" class="app-input text-sm">
+          <option value="">Active session market</option>
+          {% for market in markets %}
+          <option value="{{ market.id }}" {% if selected_market_id == market.id %}selected{% endif %}>{{ market.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-xs" style="color: var(--color-text-muted);">POS Session</span>
+        <select name="session_id" class="app-input text-sm">
+          <option value="">Latest open session</option>
+          {% for session in sessions %}
+          <option value="{{ session.id }}" {% if selected_session_id == session.id %}selected{% endif %}>{{ session.session_number }} · {{ session.status.value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="app-btn app-btn-primary" type="submit">Load</button>
+    </form>
+  </div>
+
+  {% if booth %}
+  {% set be = booth.break_even %}
+  {% set summary = booth.summary %}
+  <div class="grid gap-4 lg:grid-cols-4">
+    <div class="app-card p-5 lg:col-span-2" style="background-color: {{ 'var(--color-success-bg)' if be.reached else 'var(--color-warning-bg)' }};">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">{{ "Profit Tracking" if be.reached else "Break-Even Remaining" }}</p>
+      <p class="mt-2 text-5xl font-semibold" style="color: var(--color-text);">${{ "%.2f"|format(be.profit if be.reached else be.remaining) }}</p>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Revenue ${{ "%.2f"|format(be.revenue) }} · Costs ${{ "%.2f"|format(be.costs) }}</p>
+    </div>
+    <div class="app-card p-5">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Sales Pace</p>
+      <p class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">${{ "%.2f"|format(be.sales_per_hour) }}/hr</p>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">{{ be.elapsed_minutes }} min elapsed</p>
+    </div>
+    <div class="app-card p-5">
+      <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Expected Cash</p>
+      <p class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">${{ "%.2f"|format(summary.expected_cash) }}</p>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">{{ summary.sale_count }} sale(s)</p>
+    </div>
+  </div>
+
+  {% if be.pace_warning %}
+  <div class="app-alert app-alert-warning">Current pace may miss break-even before close. Use hints below without interrupting checkout.</div>
+  {% endif %}
+
+  <div class="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+    <div class="app-card p-5">
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">Payment Mix</h2>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        {% for method, total in summary.payment_totals.items() %}
+        <div class="rounded-xl border p-4" style="border-color: var(--color-border);">
+          <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">{{ method|replace('_', ' ')|title }}</p>
+          <p class="mt-2 text-2xl font-semibold" style="color: var(--color-text);">${{ "%.2f"|format(total) }}</p>
+        </div>
+        {% else %}
+        <p class="text-sm" style="color: var(--color-text-muted);">No payments recorded yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="app-card p-5 space-y-4">
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">Action Hints</h2>
+      {% for hint in booth.hints %}
+      <div class="rounded-xl border p-4" style="border-color: var(--color-border);">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="font-medium" style="color: var(--color-text);">{{ hint.title }}</p>
+            <p class="mt-1 text-sm" style="color: var(--color-text-muted);">{{ hint.message }}</p>
+          </div>
+          <span class="app-badge {{ 'app-badge-warning' if hint.severity == 'warning' else 'app-badge-info' }}">{{ hint.severity }}</span>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          {% for status in ["accepted", "snoozed", "dismissed"] %}
+          <form method="post" action="{{ url_for('booth_mode.hint_status', hint_id=hint.id, status=status) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="app-btn app-btn-secondary text-xs px-3 py-2" type="submit">{{ status|title }}</button>
+          </form>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <p class="rounded-xl border border-dashed p-4 text-sm" style="border-color: var(--color-border); color: var(--color-text-muted);">No action hints right now.</p>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="app-card p-8 text-center">
+    <p class="text-sm" style="color: var(--color-text-muted);">Open a POS session for a market to use Booth Mode.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
