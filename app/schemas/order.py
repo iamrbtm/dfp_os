@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from marshmallow import Schema, fields
 
 
@@ -7,9 +9,9 @@ class OrderItemSchema(Schema):
     id = fields.Integer(dump_only=True)
     order_id = fields.Integer(dump_only=True)
     product_id = fields.Integer(allow_none=True)
-    quantity = fields.Integer()
-    unit_price = fields.Decimal(as_string=True)
-    line_total = fields.Decimal(as_string=True)
+    quantity = fields.Integer(load_default=1)
+    unit_price = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
+    line_total = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
     is_custom_item = fields.Boolean()
     custom_description = fields.String(allow_none=True)
     notes = fields.String(allow_none=True)
@@ -20,7 +22,7 @@ class OrderItemSchema(Schema):
 class PaymentSchema(Schema):
     id = fields.Integer(dump_only=True)
     order_id = fields.Integer(dump_only=True)
-    amount = fields.Decimal(as_string=True)
+    amount = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
     method = fields.String(required=True)
     reference = fields.String(allow_none=True)
     notes = fields.String(allow_none=True)
@@ -50,12 +52,12 @@ class OrderSchema(Schema):
     shipping_city = fields.String(allow_none=True)
     shipping_state = fields.String(allow_none=True)
     shipping_postal_code = fields.String(allow_none=True)
-    subtotal = fields.Decimal(as_string=True)
-    shipping_total = fields.Decimal(as_string=True)
-    tax_total = fields.Decimal(as_string=True)
-    discount_total = fields.Decimal(as_string=True)
-    total = fields.Decimal(as_string=True)
-    paid_amount = fields.Decimal(as_string=True)
+    subtotal = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
+    shipping_total = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
+    tax_total = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
+    discount_total = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
+    total = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
+    paid_amount = fields.Decimal(as_string=True, load_default=Decimal("0.00"))
     payment_provider = fields.String(allow_none=True)
     external_checkout_id = fields.String(allow_none=True)
     external_checkout_url = fields.String(allow_none=True)

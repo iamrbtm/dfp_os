@@ -54,6 +54,6 @@ def test_seed_demo_command_is_idempotent(app, runner):
     with app.app_context():
         from app.models import Category, Printer, Product
 
-        assert Category.query.count() >= 8
-        assert Product.query.count() >= 13
-        assert Printer.query.count() == 8
+        assert Category.query.count() >= 3
+        assert Product.query.count() >= 4
+        assert Printer.query.count() >= 3

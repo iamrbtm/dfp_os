@@ -100,10 +100,10 @@ class Order(PrimaryKeyMixin, TimestampMixin, db.Model):
         nullable=False,
     )
     market_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, index=True
+        ForeignKey("markets.id"), nullable=True, index=True
     )
     pos_session_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, index=True
+        ForeignKey("pos_sessions.id"), nullable=True, index=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)

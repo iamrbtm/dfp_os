@@ -195,7 +195,7 @@ def seed_default_weights() -> list[str]:
                     key=setting_key,
                     value=str(default_val),
                     description=f"Trend Scout {label} weight: {key}",
-                    type="float",
+                    setting_type="float",
                 ))
                 created.append(setting_key)
     if created:

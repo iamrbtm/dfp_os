@@ -9,7 +9,6 @@ from sqlalchemy import func, select
 
 from app.extensions import db
 from app.models import Market, MarketStatus
-from app.services.printer_reliability import get_reliability_report_rows
 
 
 REPORT_CATEGORIES = {

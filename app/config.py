@@ -127,9 +127,10 @@ class Config:
     AUDIT_LOG_BASE_URL = os.getenv("AUDIT_LOG_BASE_URL", "http://audit-log-service:8090")
     AUDIT_LOG_TOKEN = os.getenv("AUDIT_LOG_TOKEN", "")
     AUDIT_LOG_ENABLED = _as_bool(os.getenv("AUDIT_LOG_ENABLED"), False)
-    AUDIT_LOG_FAIL_CLOSED = _as_bool(
-        os.getenv("AUDIT_LOG_FAIL_CLOSED_FOR_FINANCIAL_ACTIONS", os.getenv("AUDIT_LOG_FAIL_CLOSED")),
-        False,
+    AUDIT_LOG_FAIL_CLOSED = _as_bool(os.getenv("AUDIT_LOG_FAIL_CLOSED"), False)
+    AUDIT_LOG_FAIL_CLOSED_FOR_FINANCIAL_ACTIONS = _as_bool(
+        os.getenv("AUDIT_LOG_FAIL_CLOSED_FOR_FINANCIAL_ACTIONS"),
+        AUDIT_LOG_FAIL_CLOSED,
     )
     ALLOW_NEGATIVE_INVENTORY = _as_bool(os.getenv("ALLOW_NEGATIVE_INVENTORY"), False)
     RATE_LIMIT_ENABLED = _as_bool(os.getenv("RATE_LIMIT_ENABLED"), True)

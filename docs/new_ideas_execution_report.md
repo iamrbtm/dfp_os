@@ -56,62 +56,42 @@
 - [x] Test file: 28 tests covering critical paths
 - [x] Design system: Uses design tokens, app-card, app-btn, app-table, app-input classes
 
-## Milestone 5: Printers
+## Milestone 4: Products
 
-### Phase 5.1: Failure Autopsy Data Model
+### Product Studio Operational Controls
 
-**Status**: Implemented and DB-verified
+**Status**: Done
 **Date**: 2026-07-14
 
 **Files created**:
-- `app/models/print_failure_autopsy.py` — Failure autopsy model plus category/severity enums.
-- `migrations/versions/f6a7b8c9d0e1_add_print_failure_autopsies.py` — Alembic table/index migration.
+- `app/models/product_ops.py` - launch checklist, photo shot list, and dead-stock recommendation models.
+- `app/services/product_ops.py` - live readiness scoring, launch gate, story card, photo shot, dead-stock, and retirement workflows.
+- `migrations/versions/f6b7c8d9e0f1_add_product_ops.py` - product story/retirement fields plus product-ops tables.
+- `tests/test_milestone4_product_ops.py` - focused service, public rendering, API, and retirement coverage.
 
 **Files modified**:
-- `app/models/print_job.py` — Added `failure_autopsies` relationship.
-- `app/models/__init__.py` — Exported autopsy model/enums.
+- `app/models/catalog.py` - product story card, launch override, retirement, block-reprint fields and relationships.
+- `app/models/__init__.py` - exported Product Ops models/enums.
+- `app/forms/studio.py` - launch override reason field.
+- `app/blueprints/products/studio_routes.py` - Product Studio readiness, checklist, photo shot, story card, dead-stock, and retirement actions.
+- `app/templates/products/studio.html` - operational Product Studio panels for readiness, launch, photo, story, rescue, and retirement.
+- `app/templates/public/product_detail.html` - public story-card detail panel that excludes internal compliance notes.
+- `app/schemas/catalog.py` - API fields for story, launch override, retirement, and block-reprint state.
+- `app/blueprints/api/routes.py` - product readiness, dead-stock, recommendation action, and retirement endpoints.
+- `app/services/report_studio.py` - removed stale unused `get_cost_engine` import that blocked app import on this branch.
+- `docs/production_readiness_scorecard.md` and `TODO.md` - milestone status updates.
 
-### Phase 5.2: Failure Autopsy Workflow
-
-**Status**: Implemented and DB-verified
-
-**Files created**:
-- `app/services/printer_reliability.py` — Autopsy create/update/resolve logic, audit dispatch, reliability summaries, cost-engine failure-rate helper.
-- `app/templates/print_jobs/detail.html` — Print job detail with failed-print autopsy prompt and autopsy table.
-- `app/templates/print_jobs/autopsy_form.html` — Staff/admin autopsy entry/edit form.
-
-**Files modified**:
-- `app/forms/print_job.py` — Added `PrintFailureAutopsyForm`.
-- `app/forms/__init__.py` — Exported autopsy form.
-- `app/blueprints/print_jobs/routes.py` — Added create/edit/resolve autopsy workflow.
-
-### Phase 5.3: Printer Reliability Reporting
-
-**Status**: Implemented and DB-verified
-
-**Files created**:
-- `app/templates/printers/reliability.html` — Printer reliability cards.
-- `app/templates/report_studio/printer_reliability.html` — Report Studio reliability report.
-- `tests/test_milestone5_printer_reliability.py` — Focused model/service/workflow/API/report tests.
-
-**Files modified**:
-- `app/blueprints/printers/routes.py` — Added `/printers/reliability`.
-- `app/blueprints/api/routes.py` — Added `print-failure-autopsies` resource, fixed print-job API field mapping, added `/api/v1/printers/reliability`.
-- `app/schemas/print_job.py` — Added `PrintFailureAutopsySchema`.
-- `app/schemas/__init__.py` — Exported autopsy schema.
-- `app/services/report_studio.py` — Added printer reliability catalog entry and report data.
-- `app/blueprints/report_studio/routes.py` — Added `/report-studio/printer-reliability`.
-- `app/services/cost_engine.py` — Uses printer-model failure history as fallback failure-rate evidence.
-- `TODO.md` — Added current Milestone 5 status.
+**Implementation notes**:
+- Readiness score is calculated live instead of stored as snapshots because it is derived from current product, cost, inventory, photo, license, and launch state. History can be added later if score trend analysis becomes useful.
+- Launch gate blocks public/active launch when critical readiness items fail unless an explicit override reason is present.
+- Retirement hides the product from public and POS sale surfaces, preserves history, records a reason, and sets `block_reprint`.
+- Dead-stock recommendations are explainable and can be accepted or dismissed without deleting product or historical order context.
 
 **Tests/checks**:
-- `./.venv/bin/python -m py_compile ...` passed for changed Python files.
-- App route-map smoke check passed and confirmed `/api/v1/printers/reliability`, `/report-studio/printer-reliability`, and `/printers/reliability` are registered.
-- `./.venv/bin/pytest -q tests/test_milestone5_printer_reliability.py` passed: 4 passed.
-- Broader `tests/test_report_studio.py` run against MariaDB exposed pre-existing Milestone 3 test/compatibility issues: MariaDB rejected `NULLS LAST` ordering, several route tests log in without creating an admin user, one helper call passes duplicate `name`, and CSV tests expect an exact `text/csv` content type while Flask returns `text/csv; charset=utf-8`.
-- Fixed the MariaDB `NULLS LAST` compatibility issue in `app/services/report_studio.py`.
+- `./.venv/bin/python -m py_compile app/models/product_ops.py app/services/product_ops.py app/blueprints/products/studio_routes.py app/blueprints/api/routes.py app/forms/studio.py`
+- `env DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os TEST_DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test TEST_DATABASE_ADMIN_URL=mysql+pymysql://root:rootpassword@127.0.0.1:3306/mysql FILE_STORAGE_BACKEND=local RECEIPT_STORAGE_DRIVER=local S3_AUTO_CREATE_BUCKETS=0 CELERY_BROKER_URL=memory:// CELERY_RESULT_BACKEND=cache+memory:// ./.venv/bin/pytest -q tests/test_milestone4_product_ops.py`
 
 **Remaining risks**:
-- Alembic migration upgrade still needs a dedicated `flask db upgrade` pass against a clean MariaDB database.
-- OpenAPI broad test still has an unrelated existing failure for `/api/v1/content-drafts` missing requestBody metadata.
-- No commit created yet.
+- Readiness filters on the generic product admin list are not yet exposed as first-class UI filters.
+- Dead-stock scoring is intentionally heuristic until more sales, seasonality, and trend-scout history accumulates.
+- The photo shot workflow stores completion/reference metadata; it does not yet enforce linkage to a specific uploaded image record.

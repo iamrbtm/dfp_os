@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Feature Flags | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex items-end justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-semibold" style="color: var(--color-text);">Feature Flags</h1>
+      <p class="mt-1 text-sm" style="color: var(--color-text-muted);">
+        Database-backed feature flag overrides. Toggled flags take precedence over defaults.
+      </p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{{ url_for('settings.module_status') }}" class="app-btn app-btn-secondary text-sm">
+        Module Status
+      </a>
+      <a href="{{ url_for('settings.feature_flag_new') }}" class="app-btn app-btn-primary text-sm">
+        New Flag
+      </a>
+    </div>
+  </div>
+
+  <form method="get" action="{{ url_for('feature_flags.index') }}" class="flex gap-3 items-center">
+    <input
+      type="search"
+      name="q"
+      value="{{ search }}"
+      placeholder="Search flags by key or description…"
+      class="app-input max-w-sm"
+    >
+    <button type="submit" class="app-btn app-btn-secondary text-sm">Search</button>
+    {% if search %}
+      <a href="{{ url_for('feature_flags.index') }}" class="text-sm hover:underline" style="color: var(--color-link);">Clear</a>
+    {% endif %}
+  </form>
+
+  <div class="app-card overflow-hidden">
+    <table class="app-table">
+      <thead>
+        <tr>
+          <th>Key</th>
+          <th>Module</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th class="w-32">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for flag in flags %}
+        <tr>
+          <td class="font-mono text-xs" style="color: var(--color-text);">{{ flag.key }}</td>
+          <td class="text-xs" style="color: var(--color-text-muted);">
+            {% set module_match = namespace(found=false) %}
+            {% for m in modules %}
+              {% if m.feature_flag_key == flag.key %}
+                {{ m.display_name }}
+                {% set module_match.found = true %}
+              {% endif %}
+            {% endfor %}
+            {% if not module_match.found %}
+              <span class="text-xs opacity-50">—</span>
+            {% endif %}
+          </td>
+          <td class="text-sm" style="color: var(--color-text-muted);">{{ flag.description or "—" }}</td>
+          <td>
+            {% if flag.enabled %}
+              <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    style="background-color: var(--color-success-bg, #d1fae5); color: var(--color-success-text, #065f46);">
+                <span class="w-1.5 h-1.5 rounded-full inline-block" style="background-color: var(--color-success-text, #065f46);"></span>
+                Enabled
+              </span>
+            {% else %}
+              <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    style="background-color: var(--color-danger-bg, #fee2e2); color: var(--color-danger-text, #991b1b);">
+                <span class="w-1.5 h-1.5 rounded-full inline-block" style="background-color: var(--color-danger-text, #991b1b);"></span>
+                Disabled
+              </span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="flex items-center gap-2">
+              <form method="post" action="{{ url_for('feature_flags.toggle', flag_id=flag.id) }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="app-btn text-xs px-3 py-1.5"
+                        style="{% if flag.enabled %}background-color: var(--color-danger); color: #fff;{% else %}background-color: var(--color-primary); color: var(--color-primary-text);{% endif %}">
+                  {{ "Disable" if flag.enabled else "Enable" }}
+                </button>
+              </form>
+              <a href="{{ url_for('settings.feature_flag_edit', flag_id=flag.id) }}" class="text-xs hover:underline" style="color: var(--color-link);">
+                Edit
+              </a>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5" class="py-12 text-center text-sm" style="color: var(--color-text-muted);">
+            <p class="mb-2">No feature flags found.</p>
+            <a href="{{ url_for('settings.feature_flag_new') }}" class="app-btn app-btn-primary text-sm">Create your first flag</a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

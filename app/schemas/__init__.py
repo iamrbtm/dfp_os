@@ -25,6 +25,12 @@ from app.schemas.inventory import (
     InventoryRecordSchema,
 )
 from app.schemas.order import OrderItemSchema, OrderSchema, PaymentSchema
+from app.schemas.receipt import (
+    ReceiptDashboardSchema,
+    ReceiptLineAllocationSchema,
+    ReceiptLineItemSchema,
+    ReceiptSchema,
+)
 from app.schemas.pos import (
     PosCloseSessionSchema,
     PosSaleCreateSchema,
@@ -42,6 +48,10 @@ from app.schemas.trend import (
 )
 
 __all__ = [
+    "ReceiptDashboardSchema",
+    "ReceiptLineAllocationSchema",
+    "ReceiptLineItemSchema",
+    "ReceiptSchema",
     "AMSUnitSchema",
     "ApiTokenSchema",
     "BusinessSchema",

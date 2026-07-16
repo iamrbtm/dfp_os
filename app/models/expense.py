@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.extensions import db
@@ -43,12 +43,12 @@ class Expense(PrimaryKeyMixin, TimestampMixin, db.Model):
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     payment_method: Mapped[str | None] = mapped_column(String(100), nullable=True)
     related_market_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, index=True
+        ForeignKey("markets.id"), nullable=True, index=True
     )
     related_order_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, index=True
+        ForeignKey("orders.id"), nullable=True, index=True
     )
-    receipt_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    receipt_id: Mapped[int | None] = mapped_column(ForeignKey("receipts.id"), nullable=True, index=True)
     receipt_file_path: Mapped[str | None] = mapped_column(String(300), nullable=True)
     tax_deductible: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

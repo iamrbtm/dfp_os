@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from marshmallow import Schema, fields, validate
 
 
@@ -10,7 +12,7 @@ class PosSessionSchema(Schema):
     market_id = fields.Integer(allow_none=True)
     inventory_location_id = fields.Integer(allow_none=True)
     status = fields.String(dump_only=True)
-    opening_cash = fields.Decimal(places=2, as_string=True)
+    opening_cash = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
     closing_cash = fields.Decimal(places=2, as_string=True, allow_none=True)
     expected_cash = fields.Decimal(places=2, as_string=True, dump_only=True)
     cash_difference = fields.Decimal(places=2, as_string=True, dump_only=True)
@@ -20,17 +22,17 @@ class PosSessionSchema(Schema):
 
 
 class PosCloseSessionSchema(Schema):
-    closing_cash = fields.Decimal(places=2, required=True)
+    closing_cash = fields.Decimal(places=2, required=True, load_default=Decimal("0.00"))
     notes = fields.String(allow_none=True)
 
 
 class PosSaleItemSchema(Schema):
     pos_sale_id = fields.Integer(dump_only=True)
     product_id = fields.Integer(allow_none=True)
-    quantity = fields.Integer(required=True, validate=validate.Range(min=1))
-    unit_price = fields.Decimal(places=2, as_string=True)
-    discount_amount = fields.Decimal(places=2, as_string=True, load_default=0)
-    line_total = fields.Decimal(places=2, as_string=True)
+    quantity = fields.Integer(required=True, validate=validate.Range(min=1), load_default=1)
+    unit_price = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
+    discount_amount = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
+    line_total = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
     item_type = fields.String(
         validate=validate.OneOf(["product", "custom_item", "custom_deposit", "discount", "fee"]),
         load_default="product",
@@ -44,7 +46,7 @@ class PosSaleCreateSchema(Schema):
         required=True,
         validate=validate.OneOf(["cash", "card_external", "venmo", "cash_app", "apple_pay", "other"]),
     )
-    amount_received = fields.Decimal(places=2, as_string=True, required=True)
+    amount_received = fields.Decimal(places=2, as_string=True, required=True, load_default=Decimal("0.00"))
     customer_id = fields.Integer(allow_none=True)
     notes = fields.String(allow_none=True)
     items = fields.List(fields.Nested(PosSaleItemSchema), required=True, validate=validate.Length(min=1))
@@ -55,13 +57,13 @@ class PosSaleSchema(Schema):
     order_id = fields.Integer(dump_only=True, allow_none=True)
     customer_id = fields.Integer(allow_none=True)
     sale_number = fields.String(dump_only=True)
-    subtotal = fields.Decimal(places=2, as_string=True)
-    discount_total = fields.Decimal(places=2, as_string=True)
-    tax_total = fields.Decimal(places=2, as_string=True)
-    total = fields.Decimal(places=2, as_string=True)
+    subtotal = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
+    discount_total = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
+    tax_total = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
+    total = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
     payment_method = fields.String()
-    amount_received = fields.Decimal(places=2, as_string=True)
-    change_due = fields.Decimal(places=2, as_string=True)
+    amount_received = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
+    change_due = fields.Decimal(places=2, as_string=True, load_default=Decimal("0.00"))
     status = fields.String(dump_only=True)
     notes = fields.String(allow_none=True)
     items = fields.List(fields.Nested(PosSaleItemSchema), dump_only=True)

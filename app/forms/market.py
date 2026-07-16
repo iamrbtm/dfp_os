@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP
+
 from flask_wtf import FlaskForm
 from sqlalchemy import func
 from wtforms import (
@@ -60,12 +62,12 @@ class MarketForm(FlaskForm):
     load_out_at = DateTimeLocalField("Load Out", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     load_in_notes = TextAreaField("Load-In Notes", validators=[Optional()])
     load_out_notes = TextAreaField("Load-Out Notes", validators=[Optional()])
-    booth_fee = StringField("Booth Fee", validators=[Optional()])
-    application_fee = StringField("Application Fee", validators=[Optional()])
+    booth_fee = DecimalField("Booth Fee", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
+    application_fee = DecimalField("Application Fee", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
     status = SelectField("Status", choices=enum_choices(MarketStatus), validators=[DataRequired()])
     expected_traffic = StringField("Expected Traffic", validators=[Optional(), Length(max=100)])
-    actual_revenue = StringField("Actual Revenue", validators=[Optional()])
-    actual_profit = StringField("Actual Profit", validators=[Optional()])
+    actual_revenue = DecimalField("Actual Revenue", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
+    actual_profit = DecimalField("Actual Profit", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
     follow_up_date = DateField("Follow-Up Date", format="%Y-%m-%d", validators=[Optional()])
     worth_repeating = SelectField("Worth Repeating", choices=[("", "---"), ("true", "Yes"), ("false", "No")], validators=[Optional()])
     notes = TextAreaField("Notes", validators=[Optional()])
@@ -98,12 +100,12 @@ class MarketForm(FlaskForm):
         market.load_out_at = self.load_out_at.data
         market.load_in_notes = self.load_in_notes.data
         market.load_out_notes = self.load_out_notes.data
-        market.booth_fee = self._parse_money(self.booth_fee.data)
-        market.application_fee = self._parse_money(self.application_fee.data)
+        market.booth_fee = self.booth_fee.data
+        market.application_fee = self.application_fee.data
         market.status = MarketStatus(self.status.data)
         market.expected_traffic = self.expected_traffic.data or None
-        market.actual_revenue = self._parse_money(self.actual_revenue.data)
-        market.actual_profit = self._parse_money(self.actual_profit.data)
+        market.actual_revenue = self.actual_revenue.data
+        market.actual_profit = self.actual_profit.data
         market.follow_up_date = self.follow_up_date.data
         wr = self.worth_repeating.data
         if wr == "true":
@@ -115,15 +117,6 @@ class MarketForm(FlaskForm):
         market.notes = self.notes.data
         return market
 
-    @staticmethod
-    def _parse_money(value: str | None) -> int | None:
-        if not value:
-            return None
-        try:
-            from decimal import Decimal
-            return Decimal(value)
-        except (ValueError, TypeError):
-            return None
 
 
 class MarketPackingListForm(FlaskForm):
