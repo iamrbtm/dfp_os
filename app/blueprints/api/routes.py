@@ -49,6 +49,11 @@ from app.models import (
     OrderSource,
     Payment,
     PaymentMethod,
+    PickupLocation,
+    PickupLocationType,
+    PickupSlot,
+    PickupSlotStatus,
+    PickupStatus,
     PosSale,
     PosSession,
     PrepTask,
@@ -99,6 +104,8 @@ from app.schemas import (
     OrderItemSchema,
     OrderSchema,
     PaymentSchema,
+    PickupLocationSchema,
+    PickupSlotSchema,
     PosSaleSchema,
     PosSessionSchema,
     PrepTaskSchema,
@@ -198,6 +205,8 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "orders": ("orders",),
     "order-items": ("orders",),
     "payments": ("orders",),
+    "pickup-locations": ("orders",),
+    "pickup-slots": ("orders",),
     "print-jobs": ("orders",),
     "prep-task-templates": ("markets",),
     "prep-tasks": ("markets",),
@@ -433,6 +442,9 @@ def _apply_custom_request(instance: CustomRequest, data: dict):
     instance.admin_notes = data.get("admin_notes")
     instance.internal_notes = data.get("internal_notes")
     instance.customer_id = data.get("customer_id")
+    instance.pickup_slot_id = data.get("pickup_slot_id")
+    instance.pickup_status = data.get("pickup_status")
+    instance.pickup_notes = data.get("pickup_notes")
     instance.source = data.get("source", "api")
 
 
@@ -445,6 +457,9 @@ def _apply_order(instance: Order, data: dict):
     if data.get("fulfillment_method"):
         instance.fulfillment_method = OrderFulfillmentMethod(data["fulfillment_method"])
     instance.market_id = data.get("market_id")
+    instance.pickup_slot_id = data.get("pickup_slot_id")
+    instance.pickup_status = data.get("pickup_status")
+    instance.pickup_notes = data.get("pickup_notes")
     instance.notes = data.get("notes")
     instance.internal_notes = data.get("internal_notes")
     instance.customer_name = data.get("customer_name")
@@ -485,6 +500,29 @@ def _apply_payment(instance: Payment, data: dict):
     instance.method = PaymentMethod(data["method"])
     instance.reference = data.get("reference")
     instance.notes = data.get("notes")
+
+
+def _apply_pickup_location(instance: PickupLocation, data: dict):
+    instance.name = data["name"].strip()
+    instance.location_type = PickupLocationType(data["location_type"])
+    instance.address = data.get("address")
+    instance.instructions = data.get("instructions")
+    instance.active = data.get("active", True)
+
+
+def _apply_pickup_slot(instance: PickupSlot, data: dict):
+    starts_at = data["starts_at"]
+    ends_at = data["ends_at"]
+    if ends_at <= starts_at:
+        raise ValueError("Pickup slot end time must be after start time.")
+    instance.location_id = data["location_id"]
+    instance.market_id = data.get("market_id")
+    instance.starts_at = starts_at
+    instance.ends_at = ends_at
+    instance.capacity = data.get("capacity", 6) or 6
+    instance.status = PickupSlotStatus(data.get("status", PickupSlotStatus.OPEN.value))
+    instance.public_label = data.get("public_label")
+    instance.instructions = data.get("instructions")
 
 
 def _apply_print_job(instance: PrintJob, data: dict):
@@ -809,6 +847,21 @@ API_RESOURCES = {
     ),
     "payments": ApiResourceConfig(
         "payments", Payment, PaymentSchema, [], _apply_payment
+    ),
+    "pickup-locations": ApiResourceConfig(
+        "pickup-locations",
+        PickupLocation,
+        PickupLocationSchema,
+        ["name", "address", "instructions"],
+        _apply_pickup_location,
+    ),
+    "pickup-slots": ApiResourceConfig(
+        "pickup-slots",
+        PickupSlot,
+        PickupSlotSchema,
+        ["public_label", "instructions"],
+        _apply_pickup_slot,
+        list_filters=lambda stmt: stmt.order_by(PickupSlot.starts_at.asc()),
     ),
     "print-jobs": ApiResourceConfig(
         "print-jobs",

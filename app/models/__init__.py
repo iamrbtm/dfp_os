@@ -61,6 +61,12 @@ from app.models.pos import (
     PosSession,
     PosSessionStatus,
 )
+from app.models.pickup import (
+    PickupLocation,
+    PickupLocationType,
+    PickupSlot,
+    PickupSlotStatus,
+    PickupStatus,
 from app.models.product_ops import (
     DeadStockRecommendation,
     DeadStockRecommendationStatus,
@@ -145,6 +151,11 @@ __all__ = [
     "PosSaleStatus",
     "PosSession",
     "PosSessionStatus",
+    "PickupLocation",
+    "PickupLocationType",
+    "PickupSlot",
+    "PickupSlotStatus",
+    "PickupStatus",
     "PrepTask",
     "PrepTaskCategory",
     "PrepTaskStatus",

@@ -122,7 +122,8 @@ MODULES: dict[str, ModuleDefinition] = {
         feature_flag_key="module.orders.enabled",
         dependencies=("customers", "products"),
         blueprint_names=("orders",),
-        api_resources=("orders", "order-items", "payments"),
+        api_resources=("orders", "order-items", "payments", "pickup-locations", "pickup-slots"),
+        admin_nav_entries=(NavEntry("Pickup Board", "orders.pickup_board"),),
         required_roles=("admin", "staff"),
     ),
     "custom_orders": ModuleDefinition(

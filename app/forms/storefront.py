@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from flask_wtf import FlaskForm
-from wtforms import HiddenField, IntegerField, RadioField, StringField, SubmitField, TextAreaField
+from wtforms import HiddenField, IntegerField, RadioField, SelectField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Email, Length, NumberRange, Optional
 
 
@@ -22,6 +22,7 @@ class CheckoutForm(FlaskForm):
         default="pickup",
         validators=[DataRequired()],
     )
+    pickup_slot_id = SelectField("Pickup window", coerce=int, validators=[Optional()], choices=[])
     shipping_name = StringField("Recipient name", validators=[Optional(), Length(max=255)])
     shipping_address_line_1 = StringField("Street address", validators=[Optional(), Length(max=255)])
     shipping_address_line_2 = StringField("Apartment, suite, etc. (optional)", validators=[Optional(), Length(max=255)])
@@ -57,5 +58,8 @@ class CheckoutForm(FlaskForm):
                     missing = True
             if missing:
                 return False
+        elif self.fulfillment_method.data == "pickup" and not self.pickup_slot_id.data:
+            self.pickup_slot_id.errors.append("Choose a pickup window.")
+            return False
 
         return True
