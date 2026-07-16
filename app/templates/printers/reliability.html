@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Printer Reliability | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Printers</p>
+        <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Printer Reliability</h1>
+        <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Failure rates, common causes, affected products, and filament patterns from completed and failed print jobs.</p>
+      </div>
+      <a href="{{ url_for('printers.list_resource', resource_key='printers') }}" class="app-btn app-btn-secondary">Back to Printers</a>
+    </div>
+
+    {% if summaries %}
+      <div class="grid gap-4 lg:grid-cols-2">
+        {% for summary in summaries %}
+          <article class="app-card p-5">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h2 class="text-xl font-semibold" style="color: var(--color-text);">{{ summary.printer_name }}</h2>
+                <p class="text-sm" style="color: var(--color-text-muted);">{{ summary.printer_model }}</p>
+              </div>
+              <span class="rounded-full px-3 py-1 text-sm font-semibold" style="background: var(--color-surface-alt); color: var(--color-text);">
+                {{ "%.1f"|format(summary.failure_rate * 100) }}% failed
+              </span>
+            </div>
+            <div class="mt-4 grid grid-cols-3 gap-3 text-center">
+              <div class="rounded-lg border p-3" style="border-color: var(--color-border);">
+                <p class="text-2xl font-semibold" style="color: var(--color-text);">{{ summary.completed_count }}</p>
+                <p class="text-xs" style="color: var(--color-text-muted);">Completed</p>
+              </div>
+              <div class="rounded-lg border p-3" style="border-color: var(--color-border);">
+                <p class="text-2xl font-semibold" style="color: var(--color-danger);">{{ summary.failed_count }}</p>
+                <p class="text-xs" style="color: var(--color-text-muted);">Failed</p>
+              </div>
+              <div class="rounded-lg border p-3" style="border-color: var(--color-border);">
+                <p class="text-2xl font-semibold" style="color: var(--color-text);">{{ summary.active_count }}</p>
+                <p class="text-xs" style="color: var(--color-text-muted);">Active</p>
+              </div>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <h3 class="text-sm font-semibold" style="color: var(--color-text);">Common Causes</h3>
+                {% if summary.common_causes %}
+                  <ul class="mt-2 space-y-1 text-sm" style="color: var(--color-text-muted);">
+                    {% for cause in summary.common_causes %}
+                      <li>{{ cause.label }}: {{ cause.count }}</li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <p class="mt-2 text-sm" style="color: var(--color-text-muted);">No autopsies yet.</p>
+                {% endif %}
+              </div>
+              <div>
+                <h3 class="text-sm font-semibold" style="color: var(--color-text);">Recent Trend</h3>
+                <p class="mt-2 text-sm capitalize" style="color: var(--color-text-muted);">{{ summary.recent_trend.replace("_", " ") }}</p>
+              </div>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="app-card p-6">
+        <p style="color: var(--color-text-muted);">No printers exist yet. Add printers and print jobs to populate reliability reporting.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

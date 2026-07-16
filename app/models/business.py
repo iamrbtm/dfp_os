@@ -26,6 +26,16 @@ class Business(PrimaryKeyMixin, TimestampMixin, db.Model):
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    customers = relationship("Customer", back_populates="business")
+    print_jobs = relationship("PrintJob", back_populates="business")
+    filament_spools = relationship("FilamentSpool", back_populates="business")
+    inventory_locations = relationship("InventoryLocation", back_populates="business")
+    inventory_records = relationship("InventoryRecord", back_populates="business")
+    prep_task_templates = relationship("PrepTaskTemplate", back_populates="business")
+    prep_tasks = relationship("PrepTask", back_populates="business")
+    custom_requests = relationship("CustomRequest", back_populates="business")
+    notifications = relationship("Notification", back_populates="business")
+
 
 class FeatureFlag(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "feature_flags"

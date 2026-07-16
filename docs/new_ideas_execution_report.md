@@ -59,6 +59,9 @@
 ## Milestone 7: Booth Mode
 
 ### Booth Break-Even Timer
+## Milestone 4: Products
+
+### Product Studio Operational Controls
 
 **Status**: Done
 **Date**: 2026-07-14
@@ -75,6 +78,48 @@
 - `app/__init__.py` - blueprint registration, section mapping, and context navigation.
 - `app/module_registry.py` - `booth_mode` module definition with feature flag and dependencies.
 - `app/models/__init__.py` - Booth Mode model exports.
+- `app/models/pickup.py` - pickup locations, slots, slot status, and pickup status enums.
+- `app/forms/pickup.py` - admin forms for pickup locations and slots.
+- `app/schemas/pickup.py` - API schemas for pickup locations and slots.
+- `app/services/pickup.py` - availability validation, assignment, board grouping, status transitions, and prep-task generation.
+- `app/templates/orders/pickup_board.html` - internal pickup board grouped by slot/date/location.
+- `migrations/versions/0f1e2d3c4b5a_add_pickup_scheduler.py` - pickup tables and order/custom-request pickup fields.
+- `tests/test_milestone6_pickup_scheduler.py` - focused scheduler, checkout, board, prep-task, and API coverage.
+
+**Files modified**:
+- `app/models/order.py` and `app/models/custom_request.py` - linked pickup slot/status/timestamp fields.
+- `app/models/__init__.py` - exported pickup models/enums.
+- `app/forms/storefront.py`, `app/forms/order.py`, `app/forms/custom_request.py`, and `app/forms/__init__.py` - pickup selection fields and form exports.
+- `app/blueprints/public/routes.py` and `app/services/storefront.py` - public checkout/custom request pickup selection and validation.
+- `app/templates/public/checkout.html` and `app/templates/public/checkout_confirmation.html` - customer-facing pickup window selection and confirmation copy.
+- `app/blueprints/orders/routes.py` - pickup location/slot admin resources and pickup board actions.
+- `app/blueprints/api/routes.py`, `app/schemas/order.py`, `app/schemas/custom_request.py`, `app/schemas/__init__.py` - pickup API resources and pickup status action endpoint.
+- `app/module_registry.py` and `app/__init__.py` - Orders module resource/nav metadata.
+- `app/services/report_studio.py` - removed stale unused `get_cost_engine` import that blocked app import on this branch.
+- `tests/test_public_storefront.py` - storefront tests updated to use real pickup slots.
+
+**Tests/checks**:
+- `./.venv/bin/python -m py_compile app/models/pickup.py app/models/order.py app/models/custom_request.py app/services/pickup.py app/services/storefront.py app/blueprints/public/routes.py app/blueprints/orders/routes.py app/blueprints/api/routes.py app/forms/pickup.py app/forms/storefront.py app/forms/custom_request.py app/forms/order.py app/schemas/pickup.py app/schemas/order.py app/schemas/custom_request.py`
+- `env DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os TEST_DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test TEST_DATABASE_ADMIN_URL=mysql+pymysql://root:rootpassword@127.0.0.1:3306/mysql FILE_STORAGE_BACKEND=local RECEIPT_STORAGE_DRIVER=local S3_AUTO_CREATE_BUCKETS=0 CELERY_BROKER_URL=memory:// CELERY_RESULT_BACKEND=cache+memory:// ./.venv/bin/pytest -q tests/test_milestone6_pickup_scheduler.py tests/test_public_storefront.py`
+
+**Remaining risks**:
+- Email sending is not implemented; confirmation copy is email-ready but not sent.
+- Pickup availability is slot/capacity based; recurring availability rules and blackout calendars are future polish.
+- Custom request pickup selection is optional and early-stage; the quote/deposit workflow can later re-confirm or reschedule the slot.
+- `app/models/product_ops.py` - launch checklist, photo shot list, and dead-stock recommendation models.
+- `app/services/product_ops.py` - live readiness scoring, launch gate, story card, photo shot, dead-stock, and retirement workflows.
+- `migrations/versions/f6b7c8d9e0f1_add_product_ops.py` - product story/retirement fields plus product-ops tables.
+- `tests/test_milestone4_product_ops.py` - focused service, public rendering, API, and retirement coverage.
+
+**Files modified**:
+- `app/models/catalog.py` - product story card, launch override, retirement, block-reprint fields and relationships.
+- `app/models/__init__.py` - exported Product Ops models/enums.
+- `app/forms/studio.py` - launch override reason field.
+- `app/blueprints/products/studio_routes.py` - Product Studio readiness, checklist, photo shot, story card, dead-stock, and retirement actions.
+- `app/templates/products/studio.html` - operational Product Studio panels for readiness, launch, photo, story, rescue, and retirement.
+- `app/templates/public/product_detail.html` - public story-card detail panel that excludes internal compliance notes.
+- `app/schemas/catalog.py` - API fields for story, launch override, retirement, and block-reprint state.
+- `app/blueprints/api/routes.py` - product readiness, dead-stock, recommendation action, and retirement endpoints.
 - `app/services/report_studio.py` - removed stale unused `get_cost_engine` import that blocked app import on this branch.
 - `docs/production_readiness_scorecard.md` and `TODO.md` - milestone status updates.
 
@@ -92,3 +137,16 @@
 - Sales-pace projection assumes the market close time is accurate and stored on the Market.
 - Hints are deterministic and operational; they do not yet use deeper Trend Scout or historical market intelligence.
 - No live auto-refresh loop was added; operators can reload the page or this can be enhanced with HTMX polling later.
+- Readiness score is calculated live instead of stored as snapshots because it is derived from current product, cost, inventory, photo, license, and launch state. History can be added later if score trend analysis becomes useful.
+- Launch gate blocks public/active launch when critical readiness items fail unless an explicit override reason is present.
+- Retirement hides the product from public and POS sale surfaces, preserves history, records a reason, and sets `block_reprint`.
+- Dead-stock recommendations are explainable and can be accepted or dismissed without deleting product or historical order context.
+
+**Tests/checks**:
+- `./.venv/bin/python -m py_compile app/models/product_ops.py app/services/product_ops.py app/blueprints/products/studio_routes.py app/blueprints/api/routes.py app/forms/studio.py`
+- `env DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os TEST_DATABASE_URL=mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test TEST_DATABASE_ADMIN_URL=mysql+pymysql://root:rootpassword@127.0.0.1:3306/mysql FILE_STORAGE_BACKEND=local RECEIPT_STORAGE_DRIVER=local S3_AUTO_CREATE_BUCKETS=0 CELERY_BROKER_URL=memory:// CELERY_RESULT_BACKEND=cache+memory:// ./.venv/bin/pytest -q tests/test_milestone4_product_ops.py`
+
+**Remaining risks**:
+- Readiness filters on the generic product admin list are not yet exposed as first-class UI filters.
+- Dead-stock scoring is intentionally heuristic until more sales, seasonality, and trend-scout history accumulates.
+- The photo shot workflow stores completion/reference metadata; it does not yet enforce linkage to a specific uploaded image record.

@@ -9,6 +9,7 @@ from app.models import UserRole
 from app.services.report_studio import (
     get_data_quality_summary,
     get_market_application_pipeline_report,
+    get_printer_reliability_report,
     get_report_catalog,
     get_vendor_market_heat_map,
 )
@@ -64,3 +65,10 @@ def application_tracker():
         "report_studio/application_tracker.html",
         report=data,
     )
+
+
+@bp.get("/printer-reliability")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def printer_reliability():
+    data = get_printer_reliability_report()
+    return render_template("report_studio/printer_reliability.html", report=data)

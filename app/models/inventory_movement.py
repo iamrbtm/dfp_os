@@ -44,4 +44,7 @@ class InventoryMovement(PrimaryKeyMixin, TimestampMixin, db.Model):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     inventory_record = relationship("InventoryRecord")
+    product = relationship("Product")
+    from_location = relationship("InventoryLocation", foreign_keys=[from_location_id])
+    to_location = relationship("InventoryLocation", foreign_keys=[to_location_id])
     actor = relationship("User")

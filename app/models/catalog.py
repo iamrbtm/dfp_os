@@ -167,6 +167,15 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     conversion_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     converted_model_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     gcode_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    story_what_it_is: Mapped[str | None] = mapped_column(Text, nullable=True)
+    story_who_it_is_for: Mapped[str | None] = mapped_column(Text, nullable=True)
+    story_materials: Mapped[str | None] = mapped_column(Text, nullable=True)
+    story_customization_options: Mapped[str | None] = mapped_column(Text, nullable=True)
+    story_internal_compliance_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    launch_override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retirement_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    block_reprint: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     category = relationship("Category", back_populates="products")
@@ -178,6 +187,24 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
         back_populates="product",
         cascade="all, delete-orphan",
         order_by="CostSnapshot.created_at.desc()",
+    )
+    launch_checklist_items = relationship(
+        "ProductLaunchChecklistItem",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductLaunchChecklistItem.key",
+    )
+    photo_shots = relationship(
+        "ProductPhotoShot",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductPhotoShot.shot_type",
+    )
+    dead_stock_recommendations = relationship(
+        "DeadStockRecommendation",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="DeadStockRecommendation.created_at.desc()",
     )
 
 

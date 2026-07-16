@@ -30,6 +30,16 @@
     {% else %}
       <p class="text-sm leading-7" style="color: var(--color-text-muted);">We’ll review your order and follow up if anything needs clarification.</p>
     {% endif %}
+    {% if order.pickup_slot %}
+      <div class="rounded-2xl p-4" style="background-color: var(--color-surface-muted);">
+        <p class="text-sm font-medium" style="color: var(--color-text);">Pickup window</p>
+        <p class="mt-2 text-sm" style="color: var(--color-text-muted);">
+          {{ order.pickup_slot.starts_at.strftime("%A, %B %-d at %-I:%M %p") }}
+          at {{ order.pickup_slot.location.name }}.
+          {{ order.pickup_slot.instructions or order.pickup_slot.location.instructions or "" }}
+        </p>
+      </div>
+    {% endif %}
   </div>
 
   <div class="app-card p-6">

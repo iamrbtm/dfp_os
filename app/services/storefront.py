@@ -18,7 +18,9 @@ from app.models import (
     OrderStatus,
     Product,
     ProductType,
+    PickupSlot,
 )
+from app.services.pickup import assign_order_pickup, validate_pickup_slot
 
 CART_SESSION_KEY = "public_cart"
 
@@ -211,19 +213,20 @@ def upsert_customer(first_name: str, last_name: str, email: str, phone: str | No
     customer.last_name = last_name.strip()
     customer.email = email.strip().lower()
     customer.phone = phone.strip() if phone else None
-    customer.shipping_name = shipping.get("shipping_name") or f"{first_name.strip()} {last_name.strip()}".strip()
-    customer.shipping_address_line_1 = shipping.get("shipping_address_line_1")
-    customer.shipping_address_line_2 = shipping.get("shipping_address_line_2")
-    customer.shipping_city = shipping.get("shipping_city")
-    customer.shipping_state = shipping.get("shipping_state")
-    customer.shipping_postal_code = shipping.get("shipping_postal_code")
+    customer.address_line_1 = shipping.get("shipping_address_line_1")
+    customer.address_line_2 = shipping.get("shipping_address_line_2")
+    customer.city = shipping.get("shipping_city")
+    customer.state = shipping.get("shipping_state")
+    customer.zip_code = shipping.get("shipping_postal_code")
     db.session.flush()
     return customer
 
 
-def create_order_from_cart(*, customer: Customer, summary: CartSummary, fulfillment_method: str, notes: str | None = None) -> Order:
+def create_order_from_cart(*, customer: Customer, summary: CartSummary, fulfillment_method: str, notes: str | None = None, shipping: dict | None = None) -> Order:
     if not summary.lines:
         raise StorefrontError("Your cart is empty.")
+
+    shipping = shipping or {}
 
     order = Order(
         customer_id=customer.id,
@@ -234,12 +237,12 @@ def create_order_from_cart(*, customer: Customer, summary: CartSummary, fulfillm
         customer_name=f"{customer.first_name} {customer.last_name}".strip(),
         customer_email=customer.email,
         customer_phone=customer.phone,
-        shipping_name=customer.shipping_name,
-        shipping_address_line_1=customer.shipping_address_line_1,
-        shipping_address_line_2=customer.shipping_address_line_2,
-        shipping_city=customer.shipping_city,
-        shipping_state=customer.shipping_state,
-        shipping_postal_code=customer.shipping_postal_code,
+        shipping_name=shipping.get("shipping_name"),
+        shipping_address_line_1=shipping.get("shipping_address_line_1") or customer.address_line_1,
+        shipping_address_line_2=shipping.get("shipping_address_line_2") or customer.address_line_2,
+        shipping_city=shipping.get("shipping_city") or customer.city,
+        shipping_state=shipping.get("shipping_state") or customer.state,
+        shipping_postal_code=shipping.get("shipping_postal_code") or customer.zip_code,
         subtotal=summary.subtotal,
         shipping_total=summary.shipping_total,
         total=summary.total,
@@ -271,6 +274,7 @@ def create_online_order(
     phone: str | None,
     notes: str | None,
     fulfillment_method: str,
+    pickup_slot_id: int | None = None,
     payment_option: str,
     shipping: dict,
     config: dict,
@@ -278,6 +282,15 @@ def create_online_order(
     summary = build_cart_summary(config, fulfillment_method=fulfillment_method)
     if not summary.lines:
         raise StorefrontError("Your cart is empty.")
+    slot = None
+    if fulfillment_method == OrderFulfillmentMethod.PICKUP.value:
+        slot = db.session.get(PickupSlot, pickup_slot_id) if pickup_slot_id else None
+        if slot is None:
+            raise StorefrontError("Choose an available pickup window.")
+        try:
+            validate_pickup_slot(slot)
+        except ValueError as exc:
+            raise StorefrontError(str(exc)) from exc
 
     customer = upsert_customer(first_name, last_name, email, phone, shipping)
     order = create_order_from_cart(
@@ -285,7 +298,10 @@ def create_online_order(
         summary=summary,
         fulfillment_method=fulfillment_method,
         notes=notes,
+        shipping=shipping,
     )
+    if slot is not None:
+        assign_order_pickup(order, slot)
     order.payment_provider = payment_option
     if payment_option != "square":
         order.external_payment_reference = config.get("SHOP_VENMO_HANDLE")

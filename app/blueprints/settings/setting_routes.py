@@ -37,14 +37,14 @@ def settings_update():
         if key in ("csrf_token",):
             continue
         existing = db.session.scalar(select(Setting).where(Setting.key == key))
-        before = {"key": key, "value": existing.value, "type": existing.type} if existing else None
+        before = {"key": key, "value": existing.value, "type": existing.setting_type} if existing else None
         set_setting(key, value)
         record_audit_event(
             action="settings.changed",
             entity_type="setting",
             entity_id=key,
             before_state=before,
-            after_state={"key": key, "value": value, "type": existing.type if existing else "string"},
+            after_state={"key": key, "value": value, "type": existing.setting_type if existing else "string"},
             source_module=__name__,
             actor_id=current_user.id,
         )

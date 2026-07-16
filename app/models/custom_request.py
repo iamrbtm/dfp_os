@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
 from app.models.base import PrimaryKeyMixin, TimestampMixin
+from app.models.business import Business
 
 
 class CustomRequestStatus(StrEnum):
@@ -45,11 +46,23 @@ class CustomRequest(PrimaryKeyMixin, TimestampMixin, db.Model):
     converted_to_order_id: Mapped[int | None] = mapped_column(
         ForeignKey("orders.id"), nullable=True, index=True
     )
+    pickup_slot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pickup_slots.id"), nullable=True, index=True
+    )
+    pickup_status: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    pickup_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    picked_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pickup_no_show_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pickup_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     customer_id: Mapped[int | None] = mapped_column(
         ForeignKey("customers.id"), nullable=True, index=True
     )
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     source: Mapped[str | None] = mapped_column(String(40), default="website", nullable=True)
 
+    business: Mapped[Business | None] = relationship(back_populates="custom_requests")
     subtotal: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     tax: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))
     discount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))
@@ -58,3 +71,4 @@ class CustomRequest(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     converted_to_order = relationship("Order", foreign_keys=[converted_to_order_id])
     customer = relationship("Customer", back_populates="custom_requests")
+    pickup_slot = relationship("PickupSlot", back_populates="custom_requests")

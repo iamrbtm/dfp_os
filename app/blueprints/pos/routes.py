@@ -20,6 +20,7 @@ from app.models import (
     UserRole,
 )
 from app.services.crud import apply_search, paginate_query
+from app.services.audit import record_audit_event
 from app.services.audit_client import AuditDispatchError
 from app.services.pos import (
     close_session,
@@ -271,6 +272,14 @@ def quick_customer():
     c.phone = data.get("phone", "").strip() or None
     db.session.add(c)
     db.session.commit()
+    record_audit_event(
+        action="customer.created",
+        entity_type="customer",
+        entity_id=c.id,
+        after_state={"first_name": c.first_name, "last_name": c.last_name, "email": c.email},
+        source_module=__name__,
+        actor_id=current_user.id,
+    )
     return {"id": c.id, "display_name": f"{c.first_name} {c.last_name}"}
 
 

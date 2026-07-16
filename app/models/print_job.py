@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
 from app.models.base import PrimaryKeyMixin, TimestampMixin
+from app.models.business import Business
 
 
 class PrintJobStatus(StrEnum):
@@ -49,9 +50,19 @@ class PrintJob(PrimaryKeyMixin, TimestampMixin, db.Model):
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     trend_opportunity_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
+    business: Mapped[Business | None] = relationship(back_populates="print_jobs")
     order_item = relationship("OrderItem", back_populates="print_jobs")
     product = relationship("Product")
     printer = relationship("Printer")
     assigned_to = relationship("User")
+    failure_autopsies = relationship(
+        "PrintFailureAutopsy",
+        back_populates="print_job",
+        cascade="all, delete-orphan",
+        order_by="PrintFailureAutopsy.created_at.desc()",
+    )

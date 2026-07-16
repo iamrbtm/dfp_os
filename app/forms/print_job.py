@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 from flask_wtf import FlaskForm
-from wtforms import IntegerField, SelectField, StringField, SubmitField, TextAreaField
+from wtforms import BooleanField, IntegerField, SelectField, StringField, SubmitField, TextAreaField
 from wtforms.fields.datetime import DateTimeLocalField
 from wtforms.validators import NumberRange, Optional
 
 from app.forms.common import OptionalSelectField, enum_choices
-from app.models import PrintJob, PrintJobStatus, Printer, Product, User
+from app.models import (
+    FilamentSpool,
+    PrintFailureAutopsy,
+    PrintFailureCategory,
+    PrintFailureSeverity,
+    PrintJob,
+    PrintJobStatus,
+    Printer,
+    Product,
+    User,
+)
 
 
 class PrintJobForm(FlaskForm):
@@ -63,3 +73,55 @@ class PrintJobForm(FlaskForm):
         job.started_at = self.started_at.data
         job.completed_at = self.completed_at.data
         return job
+
+
+class PrintFailureAutopsyForm(FlaskForm):
+    category = SelectField(
+        "Failure Category",
+        choices=enum_choices(PrintFailureCategory),
+        validators=[Optional()],
+    )
+    severity = SelectField(
+        "Severity",
+        choices=enum_choices(PrintFailureSeverity),
+        validators=[Optional()],
+    )
+    filament_spool_id = OptionalSelectField("Filament Spool", coerce=int, validators=[Optional()])
+    model_asset_id = IntegerField("Model Asset ID", validators=[Optional(), NumberRange(min=1)])
+    notes = TextAreaField("What happened?", validators=[Optional()])
+    photo_reference = StringField("Photo or File Reference", validators=[Optional()])
+    corrective_action = TextAreaField("Corrective Action", validators=[Optional()])
+    maintenance_required = BooleanField("Maintenance Required")
+    resolved = BooleanField("Resolved")
+    resolution_notes = TextAreaField("Resolution Notes", validators=[Optional()])
+    submit = SubmitField("Save failure autopsy")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filament_spool_id.choices = [(0, "No filament spool")] + [
+            (item.id, f"{item.brand} {item.material_type} {item.color_name}")
+            for item in FilamentSpool.query.order_by(
+                FilamentSpool.brand, FilamentSpool.material_type, FilamentSpool.color_name
+            )
+        ]
+
+    def apply(self, autopsy: PrintFailureAutopsy) -> PrintFailureAutopsy:
+        autopsy.category = (
+            PrintFailureCategory(self.category.data)
+            if self.category.data
+            else PrintFailureCategory.UNKNOWN
+        )
+        autopsy.severity = (
+            PrintFailureSeverity(self.severity.data)
+            if self.severity.data
+            else PrintFailureSeverity.MEDIUM
+        )
+        autopsy.filament_spool_id = self.filament_spool_id.data or None
+        autopsy.model_asset_id = self.model_asset_id.data
+        autopsy.notes = self.notes.data
+        autopsy.photo_reference = self.photo_reference.data
+        autopsy.corrective_action = self.corrective_action.data
+        autopsy.maintenance_required = bool(self.maintenance_required.data)
+        autopsy.resolved = bool(self.resolved.data)
+        autopsy.resolution_notes = self.resolution_notes.data
+        return autopsy

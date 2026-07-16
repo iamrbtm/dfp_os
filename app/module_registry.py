@@ -93,7 +93,7 @@ MODULES: dict[str, ModuleDefinition] = {
         description="Printer fleet and AMS tracking.",
         feature_flag_key="module.printers.enabled",
         blueprint_names=("printers",),
-        api_resources=("printers", "ams-units"),
+        api_resources=("printers", "printers/reliability", "ams-units"),
         required_roles=("admin", "staff"),
     ),
     "print_jobs": ModuleDefinition(
@@ -103,7 +103,7 @@ MODULES: dict[str, ModuleDefinition] = {
         feature_flag_key="module.print_jobs.enabled",
         dependencies=("products", "printers"),
         blueprint_names=("print_jobs",),
-        api_resources=("print-jobs",),
+        api_resources=("print-jobs", "print-failure-autopsies"),
         required_roles=("admin", "staff"),
     ),
     "customers": ModuleDefinition(
@@ -122,7 +122,8 @@ MODULES: dict[str, ModuleDefinition] = {
         feature_flag_key="module.orders.enabled",
         dependencies=("customers", "products"),
         blueprint_names=("orders",),
-        api_resources=("orders", "order-items", "payments"),
+        api_resources=("orders", "order-items", "payments", "pickup-locations", "pickup-slots"),
+        admin_nav_entries=(NavEntry("Pickup Board", "orders.pickup_board"),),
         required_roles=("admin", "staff"),
     ),
     "custom_orders": ModuleDefinition(
@@ -315,7 +316,9 @@ MODULES: dict[str, ModuleDefinition] = {
         feature_flag_key="module.feature_flags.enabled",
         default_enabled=True,
         dependencies=("settings",),
+        blueprint_names=("feature_flags",),
         api_resources=("feature-flags",),
+        admin_nav_entries=(NavEntry("Feature Flags", "feature_flags.index"),),
     ),
 }
 

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}{{ resource.singular }} | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Print Jobs</p>
+        <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ instance.label or "Print job" }}</h1>
+        {% if needs_autopsy %}
+          <p class="mt-2 text-sm font-medium" style="color: var(--color-danger);">This failed print needs a failure autopsy before the cause can be tracked.</p>
+        {% endif %}
+      </div>
+      <div class="flex flex-wrap gap-3">
+        {% if instance.status.value == "failed" %}
+          <a href="{{ url_for('print_jobs.create_autopsy', print_job_id=instance.id) }}" class="app-btn app-btn-primary">
+            Add Autopsy
+          </a>
+        {% endif %}
+        <a href="{{ url_for('print_jobs.edit_resource', resource_key=resource.key, resource_id=instance.id) }}" class="app-btn app-btn-secondary">
+          Edit
+        </a>
+        <a href="{{ url_for('print_jobs.list_resource', resource_key=resource.key) }}" class="app-btn app-btn-secondary">
+          Back to {{ resource.plural }}
+        </a>
+      </div>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+      {% for detail in details %}
+        <article class="app-card p-5">
+          <p class="text-sm" style="color: var(--color-text-muted);">{{ detail.label }}</p>
+          <p class="mt-2 text-lg font-medium" style="color: var(--color-text);">{{ detail.value }}</p>
+        </article>
+      {% endfor %}
+    </div>
+
+    <article class="app-card p-5">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-xl font-semibold" style="color: var(--color-text);">Failure Autopsies</h2>
+          <p class="text-sm" style="color: var(--color-text-muted);">Track the cause, corrective action, maintenance need, and resolution for failed prints.</p>
+        </div>
+        {% if instance.status.value == "failed" %}
+          <a href="{{ url_for('print_jobs.create_autopsy', print_job_id=instance.id) }}" class="app-btn app-btn-primary">Add Autopsy</a>
+        {% endif %}
+      </div>
+
+      {% if instance.failure_autopsies %}
+        <div class="mt-4 overflow-x-auto">
+          <table class="app-table min-w-full">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Severity</th>
+                <th>Maintenance</th>
+                <th>Resolved</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for autopsy in instance.failure_autopsies %}
+                <tr>
+                  <td>{{ autopsy.category.value.replace("_", " ").title() }}</td>
+                  <td>{{ autopsy.severity.value.title() }}</td>
+                  <td>{{ "Yes" if autopsy.maintenance_required else "No" }}</td>
+                  <td>{{ "Yes" if autopsy.resolved else "No" }}</td>
+                  <td class="flex flex-wrap gap-2">
+                    <a href="{{ url_for('print_jobs.edit_autopsy', autopsy_id=autopsy.id) }}" class="app-btn app-btn-secondary">Edit</a>
+                    {% if not autopsy.resolved %}
+                      <form method="post" action="{{ url_for('print_jobs.resolve_autopsy_view', autopsy_id=autopsy.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="app-btn app-btn-secondary" type="submit">Resolve</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% if autopsy.notes or autopsy.corrective_action or autopsy.resolution_notes %}
+                  <tr>
+                    <td colspan="5">
+                      <div class="grid gap-3 text-sm md:grid-cols-3" style="color: var(--color-text-muted);">
+                        <p><strong style="color: var(--color-text);">Notes:</strong> {{ autopsy.notes or "—" }}</p>
+                        <p><strong style="color: var(--color-text);">Corrective action:</strong> {{ autopsy.corrective_action or "—" }}</p>
+                        <p><strong style="color: var(--color-text);">Resolution:</strong> {{ autopsy.resolution_notes or "—" }}</p>
+                      </div>
+                    </td>
+                  </tr>
+                {% endif %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="mt-4 rounded-lg border border-dashed p-5" style="border-color: var(--color-border);">
+          <p style="color: var(--color-text-muted);">No failure autopsy has been recorded for this print job.</p>
+        </div>
+      {% endif %}
+    </article>
+  </section>
+{% endblock %}
