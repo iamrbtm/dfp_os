@@ -8,6 +8,7 @@ from app.services.ai.trend_scout.sources.printables import fetch_trending as fet
 from app.services.ai.trend_scout.sources.reddit import fetch_trending as fetch_reddit
 from app.services.ai.trend_scout.sources.pinterest import fetch_trending as fetch_pinterest
 from app.services.ai.trend_scout.sources.tiktok import fetch_trending as fetch_tiktok
+from app.services.ai.trend_scout.sources.last30days import fetch_trending as fetch_last30days
 from app.services.ai.trend_scout.sources._base import RateLimiter, ScoutResult
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "fetch_reddit",
     "fetch_pinterest",
     "fetch_tiktok",
+    "fetch_last30days",
 ]

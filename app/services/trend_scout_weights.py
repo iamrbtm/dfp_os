@@ -24,6 +24,7 @@ DEFAULT_SOURCE_WEIGHTS: dict[str, float] = {
     "internal_demand": 1.6,
     "google_trends": 1.3,
     "etsy": 1.25,
+    "last30days": 1.2,
     "makerworld": 1.15,
     "tiktok": 1.15,
     "printables": 1.1,
@@ -38,6 +39,7 @@ DEFAULT_BUYER_SOURCE_WEIGHTS: dict[str, float] = {
     "etsy": 0.65,
     "google_trends": 0.35,
     "tiktok": 0.25,
+    "last30days": 0.20,
     "reddit": 0.15,
     "pinterest": 0.15,
 }
