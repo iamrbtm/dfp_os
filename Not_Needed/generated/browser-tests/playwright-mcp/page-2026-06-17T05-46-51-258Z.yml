@@ -1,0 +1,104 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "Dude Fish OS" [ref=e4] [cursor=pointer]:
+      - /url: /dashboard/
+    - navigation [ref=e5]:
+      - link "Dashboard" [ref=e6] [cursor=pointer]:
+        - /url: /dashboard/
+      - link "POS" [ref=e7] [cursor=pointer]:
+        - /url: /pos/sessions
+      - link "Products" [ref=e8] [cursor=pointer]:
+        - /url: /products/products/
+      - link "Customers" [ref=e9] [cursor=pointer]:
+        - /url: /customers/customers/
+      - link "Orders" [ref=e10] [cursor=pointer]:
+        - /url: /orders/orders/
+      - link "Custom Orders" [ref=e11] [cursor=pointer]:
+        - /url: /custom-orders/requests/
+      - link "Printers" [ref=e12] [cursor=pointer]:
+        - /url: /printers/printers/
+      - link "Print Jobs" [ref=e13] [cursor=pointer]:
+        - /url: /print-jobs/print-jobs/
+      - link "Inventory" [ref=e14] [cursor=pointer]:
+        - /url: /inventory/records/
+      - link "API Tokens" [ref=e15] [cursor=pointer]:
+        - /url: /settings/api-tokens/
+      - link "Settings" [ref=e16] [cursor=pointer]:
+        - /url: /settings/themes
+      - link "Markets" [ref=e17] [cursor=pointer]:
+        - /url: /markets/markets/
+      - generic [ref=e18]:
+        - link "Expenses" [ref=e19] [cursor=pointer]:
+          - /url: /expenses/expenses/
+        - link "Receipts" [ref=e20] [cursor=pointer]:
+          - /url: /expenses/receipts/
+      - link "Analytics" [ref=e21] [cursor=pointer]:
+        - /url: /analytics/
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]: AU
+        - generic [ref=e25]:
+          - paragraph [ref=e26]: Admin User
+          - paragraph [ref=e27]: admin
+      - generic [ref=e28]:
+        - combobox [ref=e29]:
+          - option "DFP GitHub Light"
+          - option "DFP Atom One Light"
+          - option "DFP Catppuccin Latte"
+          - option "DFP Ayu Light"
+          - option "DFP Quiet Light"
+          - option "DFP One Dark Pro" [selected]
+          - option "DFP Dracula"
+          - option "DFP GitHub Dark"
+          - option "DFP Tokyo Night"
+          - option "DFP Catppuccin Mocha"
+        - button "Sign out" [ref=e31] [cursor=pointer]
+  - generic [ref=e32]:
+    - generic [ref=e33]:
+      - generic [ref=e34]: Expenses
+      - navigation [ref=e35]:
+        - link "Receipts" [ref=e36] [cursor=pointer]:
+          - /url: /expenses/receipts/
+        - link "Inbox" [ref=e37] [cursor=pointer]:
+          - /url: /expenses/receipts/inbox
+        - link "Upload" [ref=e38] [cursor=pointer]:
+          - /url: /expenses/receipts/upload
+        - link "Expenses" [ref=e39] [cursor=pointer]:
+          - /url: /expenses/expenses/
+        - link "New Expense" [ref=e40] [cursor=pointer]:
+          - /url: /expenses/expenses/new
+    - main [ref=e41]:
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - paragraph [ref=e44]: Expenses
+          - heading "Upload Receipts" [level=1] [ref=e45]
+          - paragraph [ref=e46]: Upload receipt images or PDFs for processing.
+        - generic [ref=e48]:
+          - generic [ref=e50]:
+            - img [ref=e51]
+            - paragraph [ref=e53]: Drag and drop files here, or click to browse
+            - paragraph [ref=e54]: JPG, PNG, HEIC, PDF up to 25MB
+            - button "Choose File" [ref=e55]
+          - generic [ref=e56]:
+            - generic [ref=e57]: Source
+            - combobox [ref=e58]:
+              - option "Upload" [selected]
+              - option "Camera"
+              - option "Email Import"
+              - option "Manual"
+          - generic [ref=e59]:
+            - button "Upload Receipts" [ref=e60] [cursor=pointer]
+            - link "Cancel" [ref=e61] [cursor=pointer]:
+              - /url: /expenses/receipts/
+    - contentinfo [ref=e62]:
+      - generic [ref=e63]:
+        - paragraph [ref=e64]: © 2025 Dude Fish Printing — Clarksville, Tennessee
+        - generic [ref=e65]:
+          - link "Privacy" [ref=e66] [cursor=pointer]:
+            - /url: /privacy
+          - link "Terms" [ref=e67] [cursor=pointer]:
+            - /url: /terms
+          - link "FAQ" [ref=e68] [cursor=pointer]:
+            - /url: /faq
+          - link "Contact" [ref=e69] [cursor=pointer]:
+            - /url: /contact
