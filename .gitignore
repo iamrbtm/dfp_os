@@ -11,7 +11,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .playwright-mcp/
-.coverage
+.coverage*
 htmlcov/
 instance/
 uploads/*
@@ -19,5 +19,12 @@ uploads/*
 node_modules/
 app/static/dist/
 .DS_Store
+test-results/
+test.json
 celerybeat-schedule*
 *.db
+
+# Preserve intentionally archived files even when their original names are ignored.
+!Not_Needed/
+!Not_Needed/**
+Not_Needed/local-tooling/

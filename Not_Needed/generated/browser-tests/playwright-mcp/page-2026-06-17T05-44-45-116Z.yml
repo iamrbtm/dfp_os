@@ -1,0 +1,167 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "Dude Fish OS" [ref=e4] [cursor=pointer]:
+      - /url: /dashboard/
+    - navigation [ref=e5]:
+      - link "Dashboard" [ref=e6] [cursor=pointer]:
+        - /url: /dashboard/
+      - link "POS" [ref=e7] [cursor=pointer]:
+        - /url: /pos/sessions
+      - link "Products" [ref=e8] [cursor=pointer]:
+        - /url: /products/products/
+      - link "Customers" [ref=e9] [cursor=pointer]:
+        - /url: /customers/customers/
+      - link "Orders" [ref=e10] [cursor=pointer]:
+        - /url: /orders/orders/
+      - link "Custom Orders" [ref=e11] [cursor=pointer]:
+        - /url: /custom-orders/requests/
+      - link "Printers" [ref=e12] [cursor=pointer]:
+        - /url: /printers/printers/
+      - link "Print Jobs" [ref=e13] [cursor=pointer]:
+        - /url: /print-jobs/print-jobs/
+      - link "Inventory" [ref=e14] [cursor=pointer]:
+        - /url: /inventory/records/
+      - link "API Tokens" [ref=e15] [cursor=pointer]:
+        - /url: /settings/api-tokens/
+      - link "Settings" [ref=e16] [cursor=pointer]:
+        - /url: /settings/themes
+      - link "Markets" [ref=e17] [cursor=pointer]:
+        - /url: /markets/markets/
+      - generic [ref=e18]:
+        - link "Expenses" [ref=e19] [cursor=pointer]:
+          - /url: /expenses/expenses/
+        - link "Receipts" [ref=e20] [cursor=pointer]:
+          - /url: /expenses/receipts/
+      - link "Analytics" [ref=e21] [cursor=pointer]:
+        - /url: /analytics/
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]: AU
+        - generic [ref=e25]:
+          - paragraph [ref=e26]: Admin User
+          - paragraph [ref=e27]: admin
+      - generic [ref=e28]:
+        - combobox [ref=e29]:
+          - option "DFP GitHub Light"
+          - option "DFP Atom One Light"
+          - option "DFP Catppuccin Latte"
+          - option "DFP Ayu Light"
+          - option "DFP Quiet Light"
+          - option "DFP One Dark Pro" [selected]
+          - option "DFP Dracula"
+          - option "DFP GitHub Dark"
+          - option "DFP Tokyo Night"
+          - option "DFP Catppuccin Mocha"
+        - button "Sign out" [ref=e31] [cursor=pointer]
+  - generic [ref=e32]:
+    - generic [ref=e33]:
+      - generic [ref=e34]: Expenses
+      - navigation [ref=e35]:
+        - link "Receipts" [ref=e36] [cursor=pointer]:
+          - /url: /expenses/receipts/
+        - link "Inbox" [ref=e37] [cursor=pointer]:
+          - /url: /expenses/receipts/inbox
+        - link "Upload" [ref=e38] [cursor=pointer]:
+          - /url: /expenses/receipts/upload
+        - link "Expenses" [ref=e39] [cursor=pointer]:
+          - /url: /expenses/expenses/
+        - link "New Expense" [ref=e40] [cursor=pointer]:
+          - /url: /expenses/expenses/new
+    - main [ref=e41]:
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - paragraph [ref=e44]: Expenses
+          - heading "Receipts Dashboard" [level=1] [ref=e45]
+          - paragraph [ref=e46]: Overview of receipt activity and pending items.
+        - generic [ref=e47]:
+          - article [ref=e48]:
+            - paragraph [ref=e49]: Receipts This Month
+            - paragraph [ref=e50]: "3"
+          - article [ref=e51]:
+            - paragraph [ref=e52]: Needs Review
+            - paragraph [ref=e53]: "0"
+          - article [ref=e54]:
+            - paragraph [ref=e55]: Possible Duplicates
+            - paragraph [ref=e56]: "0"
+          - article [ref=e57]:
+            - paragraph [ref=e58]: Approved Total
+            - paragraph [ref=e59]: $85.00
+        - generic [ref=e60]:
+          - link "Upload Receipt" [ref=e61] [cursor=pointer]:
+            - /url: /expenses/receipts/upload
+          - link "Receipt Inbox" [ref=e62] [cursor=pointer]:
+            - /url: /expenses/receipts/inbox
+          - link "Duplicate Warnings" [ref=e63] [cursor=pointer]:
+            - /url: /expenses/receipts/duplicates
+          - link "Receipt Workflow Help" [ref=e64] [cursor=pointer]:
+            - /url: /expenses/receipts/help
+        - generic [ref=e65]:
+          - heading "Recent Receipts" [level=2] [ref=e66]
+          - table [ref=e68]:
+            - rowgroup [ref=e69]:
+              - row "ID Merchant Date Total Status Actions" [ref=e70]:
+                - columnheader "ID" [ref=e71]
+                - columnheader "Merchant" [ref=e72]
+                - columnheader "Date" [ref=e73]
+                - columnheader "Total" [ref=e74]
+                - columnheader "Status" [ref=e75]
+                - columnheader "Actions" [ref=e76]
+            - rowgroup [ref=e77]:
+              - row "#4 — — $— Processing Failed Review" [ref=e78]:
+                - cell "#4" [ref=e79]
+                - cell "—" [ref=e80]
+                - cell "—" [ref=e81]
+                - cell "$—" [ref=e82]
+                - cell "Processing Failed" [ref=e83]
+                - cell "Review" [ref=e84]:
+                  - link "Review" [ref=e85] [cursor=pointer]:
+                    - /url: /expenses/receipts/4/review
+              - row "#1 ProtoPasta 2026-05-08 $48.60 Preprocessing Review" [ref=e86]:
+                - cell "#1" [ref=e87]
+                - cell "ProtoPasta" [ref=e88]
+                - cell "2026-05-08" [ref=e89]
+                - cell "$48.60" [ref=e90]
+                - cell "Preprocessing" [ref=e91]
+                - cell "Review" [ref=e92]:
+                  - link "Review" [ref=e93] [cursor=pointer]:
+                    - /url: /expenses/receipts/1/review
+              - row "#2 Clarksville Market 2026-05-10 $85.00 Approved Review" [ref=e94]:
+                - cell "#2" [ref=e95]
+                - cell "Clarksville Market" [ref=e96]
+                - cell "2026-05-10" [ref=e97]
+                - cell "$85.00" [ref=e98]
+                - cell "Approved" [ref=e99]
+                - cell "Review" [ref=e100]:
+                  - link "Review" [ref=e101] [cursor=pointer]:
+                    - /url: /expenses/receipts/2/review
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - heading "Top Vendors" [level=2] [ref=e104]
+            - generic [ref=e105]:
+              - generic [ref=e106]:
+                - generic [ref=e107]: Clarksville Market
+                - generic [ref=e108]: 1 receipts · $85.00
+              - generic [ref=e109]:
+                - generic [ref=e110]: ProtoPasta
+                - generic [ref=e111]: 1 receipts · $48.60
+          - generic [ref=e112]:
+            - heading "Quick Links" [level=2] [ref=e113]
+            - generic [ref=e114]:
+              - link "View All Expenses" [ref=e115] [cursor=pointer]:
+                - /url: /expenses/expenses/
+              - link "Receipt Settings" [ref=e116] [cursor=pointer]:
+                - /url: /expenses/receipts/settings
+              - link "Receipt Workflow Help" [ref=e117] [cursor=pointer]:
+                - /url: /expenses/receipts/help
+    - contentinfo [ref=e118]:
+      - generic [ref=e119]:
+        - paragraph [ref=e120]: © 2025 Dude Fish Printing — Clarksville, Tennessee
+        - generic [ref=e121]:
+          - link "Privacy" [ref=e122] [cursor=pointer]:
+            - /url: /privacy
+          - link "Terms" [ref=e123] [cursor=pointer]:
+            - /url: /terms
+          - link "FAQ" [ref=e124] [cursor=pointer]:
+            - /url: /faq
+          - link "Contact" [ref=e125] [cursor=pointer]:
+            - /url: /contact

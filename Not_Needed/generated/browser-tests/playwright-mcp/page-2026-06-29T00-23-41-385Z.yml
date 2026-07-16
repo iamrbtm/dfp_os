@@ -1,0 +1,762 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e5]:
+    - navigation [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - generic:
+            - generic "Open sidebar":
+              - img
+          - generic [ref=e9]:
+            - link [ref=e10] [cursor=pointer]:
+              - /url: /en
+              - img [ref=e11]
+            - generic "Close sidebar" [ref=e33]:
+              - img [ref=e34]
+        - generic [ref=e36]:
+          - list [ref=e37]:
+            - listitem [ref=e38] [cursor=pointer]:
+              - link "Home" [ref=e39]:
+                - /url: /en
+                - img [ref=e41]
+                - generic [ref=e45]: Home
+            - listitem [ref=e46] [cursor=pointer]:
+              - link "All Models" [ref=e47]:
+                - /url: /en/3d-models
+                - img [ref=e49]
+                - generic [ref=e52]: All Models
+            - listitem [ref=e53] [cursor=pointer]:
+              - link "MakerLab" [ref=e54]:
+                - /url: /en/makerlab?from=navbar
+                - img [ref=e56]
+                - generic [ref=e59]: MakerLab
+            - listitem [ref=e60] [cursor=pointer]:
+              - link "Contests" [ref=e61]:
+                - /url: /en/contests
+                - img [ref=e63]
+                - generic [ref=e66]: Contests
+            - listitem [ref=e67] [cursor=pointer]:
+              - link "Crowdfunding" [ref=e68]:
+                - /url: /en/crowdfunding
+                - img [ref=e70]
+                - generic [ref=e73]: Crowdfunding
+          - generic [ref=e74]:
+            - generic [ref=e75]: Explore
+            - list [ref=e76]:
+              - listitem [ref=e77] [cursor=pointer]:
+                - link "Maker's Supply" [ref=e78]:
+                  - /url: https://store.bambulab.com/maker-supply?from=mw_homepage_ms
+                  - img [ref=e80]
+                  - generic [ref=e83]: Maker's Supply
+              - listitem [ref=e84] [cursor=pointer]:
+                - link "CyberBrick" [ref=e85]:
+                  - /url: /en/cyberbrick
+                  - img [ref=e87]
+                  - generic [ref=e90]: CyberBrick
+              - listitem [ref=e91] [cursor=pointer]:
+                - link "Community" [ref=e92]:
+                  - /url: /en/community
+                  - img [ref=e94]
+                  - generic [ref=e97]: Community
+              - listitem [ref=e98] [cursor=pointer]:
+                - link "Forum" [ref=e99]:
+                  - /url: https://forum.bambulab.com/c/makerworld/144
+                  - img [ref=e101]
+                  - generic [ref=e104]: Forum
+        - generic [ref=e105]:
+          - generic [ref=e106]:
+            - link [ref=e107] [cursor=pointer]:
+              - /url: https://www.facebook.com/bambulab3D
+              - img [ref=e109]
+            - link [ref=e111] [cursor=pointer]:
+              - /url: https://www.instagram.com/makerworld_official
+              - img [ref=e113]
+            - link [ref=e116] [cursor=pointer]:
+              - /url: https://www.youtube.com/channel/UCDF3Sd2LNAsa-nKD17Jq3mw
+              - img [ref=e118]
+            - link [ref=e120] [cursor=pointer]:
+              - /url: https://twitter.com/BambulabGlobal
+              - img [ref=e122]
+            - link [ref=e124] [cursor=pointer]:
+              - /url: https://www.tiktok.com/@bambulab_official
+              - img [ref=e126]
+          - generic [ref=e128]:
+            - link "Privacy Notice" [ref=e129] [cursor=pointer]:
+              - /url: https://bambulab.com/policies/privacy
+              - text: Privacy
+            - link "Terms of Use" [ref=e130] [cursor=pointer]:
+              - /url: /en/user-agreement
+              - text: Terms
+            - link "Community Guidelines" [ref=e131] [cursor=pointer]:
+              - /url: /en/community-guidelines
+              - text: Guidelines
+            - link "FAQ" [ref=e132] [cursor=pointer]:
+              - /url: /en/faq
+            - generic "Cookie Settings" [ref=e133] [cursor=pointer]
+            - link "Hot Searches" [ref=e134] [cursor=pointer]:
+              - /url: /en/more-models
+          - generic [ref=e136]: © 2026 MakerWorld
+    - main [ref=e137]:
+      - generic [ref=e138]:
+        - generic [ref=e141]:
+          - img [ref=e143]
+          - generic [ref=e146]:
+            - textbox [ref=e147]
+            - generic [ref=e150]: Search models, users, collections, and posts
+          - button [ref=e151] [cursor=pointer]
+          - img [ref=e155] [cursor=pointer]
+        - generic [ref=e161]:
+          - img [ref=e164] [cursor=pointer]
+          - button "Log In" [ref=e167] [cursor=pointer]
+      - generic [ref=e169]:
+        - generic [ref=e171]:
+          - generic [ref=e173]:
+            - group [ref=e175]:
+              - button "3D Models" [ref=e176] [cursor=pointer]:
+                - img [ref=e178]
+                - generic [ref=e180]: 3D Models
+              - button "Laser & Cut Models" [ref=e181] [cursor=pointer]:
+                - img [ref=e183]
+                - generic [ref=e185]: Laser & Cut Models
+            - generic [ref=e186]:
+              - button "Hide Filters" [ref=e188] [cursor=pointer]:
+                - generic [ref=e189]: Hide Filters
+                - img [ref=e190]
+              - generic [ref=e195]:
+                - generic [ref=e197]:
+                  - button "Trending" [ref=e198] [cursor=pointer]:
+                    - link "Trending" [ref=e199]:
+                      - /url: /en/3d-models?orderBy=hotScore
+                  - button "Boosts" [ref=e200] [cursor=pointer]:
+                    - link "Boosts" [ref=e201]:
+                      - /url: /en/3d-models?orderBy=boosts
+                  - button "Newest" [ref=e202] [cursor=pointer]:
+                    - link "Newest" [ref=e203]:
+                      - /url: /en/3d-models?orderBy=newUploads
+                  - button "Downloads" [ref=e204] [cursor=pointer]:
+                    - link "Downloads" [ref=e205]:
+                      - /url: /en/3d-models?orderBy=downloadCount
+                  - button "Likes" [ref=e206] [cursor=pointer]:
+                    - link "Likes" [ref=e207]:
+                      - /url: /en/3d-models?orderBy=likeCount
+                  - button "Random" [ref=e208] [cursor=pointer]:
+                    - link "Random" [ref=e209]:
+                      - /url: /en/3d-models?orderBy=random
+                - generic [ref=e211]:
+                  - combobox [ref=e212] [cursor=pointer]: 7 Days
+                  - textbox: "7"
+                  - generic:
+                    - img
+                  - group
+          - generic [ref=e214]:
+            - generic [ref=e218]:
+              - generic [ref=e219]:
+                - generic [ref=e220]: Categories
+                - menu [ref=e221]:
+                  - menuitem "All" [ref=e222] [cursor=pointer]:
+                    - link "All" [ref=e223]:
+                      - /url: javascript:void(0)
+                      - generic [ref=e225]: All
+                  - menuitem "3D Printer" [ref=e226] [cursor=pointer]:
+                    - link "3D Printer" [ref=e227]:
+                      - /url: /en/3d-models/900-3d-printer
+                      - generic [ref=e228]:
+                        - generic [ref=e229]: 3D Printer
+                        - img [ref=e231]
+                  - menuitem "Art" [ref=e233] [cursor=pointer]:
+                    - link "Art" [ref=e234]:
+                      - /url: /en/3d-models/100-art
+                      - generic [ref=e235]:
+                        - generic [ref=e236]: Art
+                        - img [ref=e238]
+                  - menuitem "Education" [ref=e240] [cursor=pointer]:
+                    - link "Education" [ref=e241]:
+                      - /url: /en/3d-models/500-education
+                      - generic [ref=e242]:
+                        - generic [ref=e243]: Education
+                        - img [ref=e245]
+                  - menuitem "Fashion" [ref=e247] [cursor=pointer]:
+                    - link "Fashion" [ref=e248]:
+                      - /url: /en/3d-models/200-fashion
+                      - generic [ref=e249]:
+                        - generic [ref=e250]: Fashion
+                        - img [ref=e252]
+                  - menuitem "Hobby & DIY" [ref=e254] [cursor=pointer]:
+                    - link "Hobby & DIY" [ref=e255]:
+                      - /url: /en/3d-models/300-hobby-and-diy
+                      - generic [ref=e256]:
+                        - generic [ref=e257]: Hobby & DIY
+                        - img [ref=e259]
+                  - menuitem "Household" [ref=e261] [cursor=pointer]:
+                    - link "Household" [ref=e262]:
+                      - /url: /en/3d-models/400-household
+                      - generic [ref=e263]:
+                        - generic [ref=e264]: Household
+                        - img [ref=e266]
+                  - menuitem "Miniatures" [ref=e268] [cursor=pointer]:
+                    - link "Miniatures" [ref=e269]:
+                      - /url: /en/3d-models/600-miniatures
+                      - generic [ref=e270]:
+                        - generic [ref=e271]: Miniatures
+                        - img [ref=e273]
+                  - menuitem "Props & Cosplays" [ref=e275] [cursor=pointer]:
+                    - link "Props & Cosplays" [ref=e276]:
+                      - /url: /en/3d-models/1000-props-and-cosplays
+                      - generic [ref=e277]:
+                        - generic [ref=e278]: Props & Cosplays
+                        - img [ref=e280]
+                  - menuitem "Tools" [ref=e282] [cursor=pointer]:
+                    - link "Tools" [ref=e283]:
+                      - /url: /en/3d-models/700-tools
+                      - generic [ref=e284]:
+                        - generic [ref=e285]: Tools
+                        - img [ref=e287]
+                  - menuitem "Toys & Games" [ref=e289] [cursor=pointer]:
+                    - link "Toys & Games" [ref=e290]:
+                      - /url: /en/3d-models/800-toys-and-games
+                      - generic [ref=e291]:
+                        - generic [ref=e292]: Toys & Games
+                        - img [ref=e294]
+                  - menuitem "Generative 3D Model" [ref=e296] [cursor=pointer]:
+                    - link "Generative 3D Model" [ref=e297]:
+                      - /url: /en/3d-models/2000-generative-3d-model
+                      - generic [ref=e298]:
+                        - generic [ref=e299]: Generative 3D Model
+                        - img [ref=e301]
+              - generic [ref=e304]:
+                - generic [ref=e305]:
+                  - generic [ref=e306]: Model Tag
+                  - generic [ref=e309]:
+                    - generic [ref=e310] [cursor=pointer]: Featured
+                    - generic [ref=e311] [cursor=pointer]: Exclusive
+                    - generic [ref=e312] [cursor=pointer]: CyberBrick
+                    - generic [ref=e313] [cursor=pointer]: Maker's Supply
+                    - generic [ref=e314] [cursor=pointer]: Customizable
+                    - generic [ref=e315] [cursor=pointer]: Parametric
+                - generic [ref=e316]:
+                  - generic [ref=e317]: Print Profile
+                  - generic [ref=e319]:
+                    - generic [ref=e321]:
+                      - generic [ref=e322] [cursor=pointer]: Printer
+                      - generic [ref=e325] [cursor=pointer]:
+                        - generic [ref=e326]: Select
+                        - img [ref=e328]
+                    - generic [ref=e330]:
+                      - generic [ref=e331]:
+                        - generic [ref=e332] [cursor=pointer]: Nozzle Diameter
+                        - img [ref=e335] [cursor=pointer]
+                      - generic [ref=e342]:
+                        - generic [ref=e343] [cursor=pointer]: 0.2mm
+                        - generic [ref=e344] [cursor=pointer]: 0.4mm
+                        - generic [ref=e345] [cursor=pointer]: 0.6mm
+                        - generic [ref=e346] [cursor=pointer]: 0.8mm
+                    - generic [ref=e347]:
+                      - generic [ref=e348]:
+                        - generic [ref=e349] [cursor=pointer]: Color
+                        - img [ref=e352] [cursor=pointer]
+                      - generic [ref=e359]:
+                        - generic [ref=e360] [cursor=pointer]: Single Color Only
+                        - generic [ref=e361] [cursor=pointer]: Multi-Color Only
+                    - generic [ref=e362]:
+                      - generic [ref=e363]:
+                        - generic [ref=e364] [cursor=pointer]: Print Time
+                        - img [ref=e367] [cursor=pointer]
+                      - generic [ref=e374]:
+                        - generic [ref=e375] [cursor=pointer]:
+                          - slider [ref=e379]: "0"
+                          - slider [ref=e381]: "11"
+                        - generic [ref=e382]:
+                          - generic [ref=e383]: 1 min
+                          - generic [ref=e384]: ∞
+                    - generic [ref=e385]:
+                      - generic [ref=e386]:
+                        - generic [ref=e387] [cursor=pointer]: Total Weight
+                        - img [ref=e390] [cursor=pointer]
+                      - generic [ref=e397]:
+                        - generic [ref=e398] [cursor=pointer]:
+                          - slider [ref=e402]: "0"
+                          - slider [ref=e404]: "11"
+                        - generic [ref=e405]:
+                          - generic [ref=e406]: 1 g
+                          - generic [ref=e407]: ∞
+                - generic [ref=e408]:
+                  - generic [ref=e409]: Filament
+                  - generic [ref=e412]:
+                    - generic [ref=e414] [cursor=pointer]:
+                      - text: Filter with My Filaments
+                      - generic [ref=e415]: (0)
+                    - generic [ref=e418]:
+                      - generic [ref=e419]: Log in and add filaments to enable filament-based filtering.
+                      - generic [ref=e420] [cursor=pointer]:
+                        - text: Log In
+                        - img [ref=e422]
+                - generic [ref=e424]:
+                  - generic [ref=e425]: License
+                  - generic [ref=e428]:
+                    - generic [ref=e429] [cursor=pointer]: Public Domain
+                    - generic [ref=e430] [cursor=pointer]: BY
+                    - generic [ref=e431] [cursor=pointer]: BY-SA
+                    - generic [ref=e432] [cursor=pointer]: BY-ND
+                    - generic [ref=e433] [cursor=pointer]: BY-NC
+                    - generic [ref=e434] [cursor=pointer]: BY-NC-SA
+                    - generic [ref=e435] [cursor=pointer]: BY-NC-ND
+                    - generic [ref=e436] [cursor=pointer]: Standard Digital File License
+                  - generic [ref=e438]:
+                    - button "Reset All Filters" [ref=e440]
+                    - link "Set Blocked Categories & Tags" [ref=e442] [cursor=pointer]:
+                      - /url: /en/my/settings/preferences
+            - generic [ref=e444]:
+              - generic [ref=e446]:
+                - heading "3D Models" [level=1] [ref=e448]
+                - paragraph [ref=e449]: Explore our 'All' category, containing our entire collection of 3D printing models in one place. Browse through our diverse range of models and find the perfect one for your project or personal use. Start discovering and creating with our 3D printing models today!
+              - generic [ref=e451]:
+                - generic [ref=e455]:
+                  - link "GT-R R34 Mini \"Kit Card\" - A1 Mini, No Glue" [ref=e457] [cursor=pointer]:
+                    - /url: /en/models/2964241-gt-r-r34-mini-kit-card-a1-mini-no-glue
+                    - generic [ref=e459]:
+                      - img "GT-R R34 Mini \"Kit Card\" - A1 Mini, No Glue" [ref=e461]
+                      - img [ref=e465]
+                  - generic [ref=e467]:
+                    - link "GT-R R34 Mini \"Kit Card\" - A1 Mini, No Glue" [ref=e470] [cursor=pointer]:
+                      - /url: /en/models/2964241-gt-r-r34-mini-kit-card-a1-mini-no-glue
+                    - generic [ref=e471]:
+                      - link "Mr.Rod" [ref=e473] [cursor=pointer]:
+                        - /url: /en/@Mr.Rod
+                        - generic [ref=e477]:
+                          - generic [ref=e478]: Mr.Rod
+                          - img [ref=e480]
+                      - generic [ref=e484]:
+                        - generic [ref=e485]:
+                          - img [ref=e486]
+                          - generic [ref=e490]: 1.1 k
+                        - generic [ref=e491] [cursor=pointer]:
+                          - img [ref=e492]
+                          - generic [ref=e495]: 1.9 k
+                - generic [ref=e499]:
+                  - link "Coolclip - Kühlakkuhalter" [ref=e501] [cursor=pointer]:
+                    - /url: /en/models/2975292-coolclip-ice-pack-holder
+                    - img "Coolclip - Kühlakkuhalter" [ref=e505]
+                  - generic [ref=e506]:
+                    - link "Coolclip - Ice Pack Holder" [ref=e509] [cursor=pointer]:
+                      - /url: /en/models/2975292-coolclip-ice-pack-holder
+                    - generic [ref=e510]:
+                      - link "industrieservice-stein" [ref=e512] [cursor=pointer]:
+                        - /url: /en/@industrieservic
+                        - generic [ref=e517]: industrieservice-stein
+                      - generic [ref=e519]:
+                        - generic [ref=e520]:
+                          - img [ref=e521]
+                          - generic [ref=e525]: 5.4 k
+                        - generic [ref=e526] [cursor=pointer]:
+                          - img [ref=e527]
+                          - generic [ref=e530]: "583"
+                - generic [ref=e534]:
+                  - link "Articulated Pufferfish - Flexi" [ref=e536] [cursor=pointer]:
+                    - /url: /en/models/2964933-articulated-pufferfish-flexi
+                    - generic [ref=e538]:
+                      - img "Articulated Pufferfish - Flexi" [ref=e540]
+                      - img [ref=e544]
+                  - generic [ref=e546]:
+                    - link "Articulated Pufferfish - Flexi" [ref=e549] [cursor=pointer]:
+                      - /url: /en/models/2964933-articulated-pufferfish-flexi
+                    - generic [ref=e550]:
+                      - link "Wildflex" [ref=e552] [cursor=pointer]:
+                        - /url: /en/@aaroncin
+                        - generic [ref=e557]: Wildflex
+                      - generic [ref=e559]:
+                        - generic [ref=e560]:
+                          - img [ref=e561]
+                          - generic [ref=e565]: "923"
+                        - generic [ref=e566] [cursor=pointer]:
+                          - img [ref=e567]
+                          - generic [ref=e570]: 1.2 k
+                - generic [ref=e571]:
+                  - generic "Buy hardware parts for this model in a single click." [ref=e575]:
+                    - link "Maker's Supply" [ref=e576] [cursor=pointer]:
+                      - /url: https://store.bambulab.com/maker-supply?from=mw_outlook_2967695
+                      - generic [ref=e577]:
+                        - img [ref=e579]
+                        - generic [ref=e582]:
+                          - generic [ref=e583]: Maker's Supply
+                          - img [ref=e584]
+                  - generic [ref=e587]:
+                    - link "Universal Feeder – Push To Feed" [ref=e589] [cursor=pointer]:
+                      - /url: /en/models/2967695-universal-feeder-push-to-feed
+                      - generic [ref=e591]:
+                        - img "Universal Feeder – Push To Feed" [ref=e593]
+                        - img [ref=e597]
+                    - generic [ref=e599]:
+                      - link "Universal Feeder – Push To Feed" [ref=e602] [cursor=pointer]:
+                        - /url: /en/models/2967695-universal-feeder-push-to-feed
+                      - generic [ref=e603]:
+                        - link "3DRC_GRAPIX" [ref=e605] [cursor=pointer]:
+                          - /url: /en/@3DRCGRAPIX
+                          - generic [ref=e610]: 3DRC_GRAPIX
+                        - generic [ref=e612]:
+                          - generic [ref=e613]:
+                            - img [ref=e614]
+                            - generic [ref=e618]: "316"
+                          - generic [ref=e619] [cursor=pointer]:
+                            - img [ref=e620]
+                            - generic [ref=e623]: "819"
+                - generic [ref=e627]:
+                  - link "Automatic Pet Water Dispenser– Fit Standard Bottle" [ref=e629] [cursor=pointer]:
+                    - /url: /en/models/2965479-automatic-pet-water-dispenser-fit-standard-bottle
+                    - generic [ref=e631]:
+                      - img "Automatic Pet Water Dispenser– Fit Standard Bottle" [ref=e633]
+                      - img [ref=e637]
+                  - generic [ref=e639]:
+                    - link "Automatic Pet Water Dispenser– Fit Standard Bottle" [ref=e642] [cursor=pointer]:
+                      - /url: /en/models/2965479-automatic-pet-water-dispenser-fit-standard-bottle
+                    - generic [ref=e643]:
+                      - link "Boleq98" [ref=e645] [cursor=pointer]:
+                        - /url: /en/@Boleq98
+                        - generic [ref=e650]: Boleq98
+                      - generic [ref=e652]:
+                        - generic [ref=e653]:
+                          - img [ref=e654]
+                          - generic [ref=e658]: "687"
+                        - generic [ref=e659] [cursor=pointer]:
+                          - img [ref=e660]
+                          - generic [ref=e663]: "934"
+                - generic [ref=e667]:
+                  - link "Stitch / NO AMS" [ref=e669] [cursor=pointer]:
+                    - /url: /en/models/2965755-stitch-no-ams
+                    - generic [ref=e671]:
+                      - img "Stitch / NO AMS" [ref=e673]
+                      - img [ref=e677]
+                  - generic [ref=e679]:
+                    - link "Stitch / NO AMS" [ref=e682] [cursor=pointer]:
+                      - /url: /en/models/2965755-stitch-no-ams
+                    - generic [ref=e683]:
+                      - link "model lover" [ref=e685] [cursor=pointer]:
+                        - /url: /en/@ModelLover
+                        - generic [ref=e690]: model lover
+                      - generic [ref=e692]:
+                        - generic [ref=e693]:
+                          - img [ref=e694]
+                          - generic [ref=e698]: "737"
+                        - generic [ref=e699] [cursor=pointer]:
+                          - img [ref=e700]
+                          - generic [ref=e703]: "955"
+                - generic [ref=e707]:
+                  - link "Universal Fan Ice Pack Holder – DIY AC (Only 60g!)" [ref=e709] [cursor=pointer]:
+                    - /url: /en/models/2970798-universal-fan-ice-pack-holder-diy-ac-only-60g
+                    - generic [ref=e711]:
+                      - img "Universal Fan Ice Pack Holder – DIY AC (Only 60g!)" [ref=e713]
+                      - img [ref=e717]
+                  - generic [ref=e719]:
+                    - link "Universal Fan Ice Pack Holder – DIY AC (Only 60g!)" [ref=e722] [cursor=pointer]:
+                      - /url: /en/models/2970798-universal-fan-ice-pack-holder-diy-ac-only-60g
+                    - generic [ref=e723]:
+                      - link "Flux" [ref=e725] [cursor=pointer]:
+                        - /url: /en/@Flux_Designer
+                        - generic [ref=e730]: Flux
+                      - generic [ref=e732]:
+                        - generic [ref=e733]:
+                          - img [ref=e734]
+                          - generic [ref=e738]: "855"
+                        - generic [ref=e739] [cursor=pointer]:
+                          - img [ref=e740]
+                          - generic [ref=e743]: "560"
+                - generic [ref=e747]:
+                  - link "Gardena Schnellkupplung Y-Splitter, G3/4, Schlauch" [ref=e749] [cursor=pointer]:
+                    - /url: /en/models/2968674-gardena-quick-connector-y-splitter-g3-4-hose
+                    - generic [ref=e751]:
+                      - img "Gardena Schnellkupplung Y-Splitter, G3/4, Schlauch" [ref=e753]
+                      - img [ref=e757]
+                  - generic [ref=e759]:
+                    - link "Gardena Quick Connector Y-Splitter, G3/4, Hose" [ref=e762] [cursor=pointer]:
+                      - /url: /en/models/2968674-gardena-quick-connector-y-splitter-g3-4-hose
+                    - generic [ref=e763]:
+                      - link "Gorilla Labs" [ref=e765] [cursor=pointer]:
+                        - /url: /en/@_GLabs_
+                        - generic [ref=e770]: Gorilla Labs
+                      - generic [ref=e772]:
+                        - generic [ref=e773]:
+                          - img [ref=e774]
+                          - generic [ref=e778]: "284"
+                        - generic [ref=e779] [cursor=pointer]:
+                          - img [ref=e780]
+                          - generic [ref=e783]: "595"
+                - generic [ref=e787]:
+                  - link "Spirograph - easy and professional" [ref=e789] [cursor=pointer]:
+                    - /url: /en/models/2966934-spirograph-easy-and-professional
+                    - generic [ref=e791]:
+                      - img "Spirograph - easy and professional" [ref=e793]
+                      - img [ref=e797]
+                  - generic [ref=e799]:
+                    - link "Spirograph - easy and professional" [ref=e802] [cursor=pointer]:
+                      - /url: /en/models/2966934-spirograph-easy-and-professional
+                    - generic [ref=e803]:
+                      - link "H2Jack Concepts" [ref=e805] [cursor=pointer]:
+                        - /url: /en/@micmey78
+                        - generic [ref=e810]: H2Jack Concepts
+                      - generic [ref=e812]:
+                        - generic [ref=e813]:
+                          - img [ref=e814]
+                          - generic [ref=e818]: "732"
+                        - generic [ref=e819] [cursor=pointer]:
+                          - img [ref=e820]
+                          - generic [ref=e823]: "595"
+                - generic [ref=e824]:
+                  - generic "Buy hardware parts for this model in a single click." [ref=e828]:
+                    - link "Maker's Supply" [ref=e829] [cursor=pointer]:
+                      - /url: https://store.bambulab.com/maker-supply?from=mw_outlook_2966231
+                      - generic [ref=e830]:
+                        - img [ref=e832]
+                        - generic [ref=e835]:
+                          - generic [ref=e836]: Maker's Supply
+                          - img [ref=e837]
+                  - generic [ref=e840]:
+                    - link "Pet Bag Clip Squad GIF" [ref=e842] [cursor=pointer]:
+                      - /url: /en/models/2966231-pet-bag-clip-squad
+                      - generic [ref=e844]:
+                        - generic [ref=e845]:
+                          - img "Pet Bag Clip Squad" [ref=e846]
+                          - generic: GIF
+                        - img [ref=e850]
+                    - generic [ref=e852]:
+                      - link "Pet Bag Clip Squad" [ref=e855] [cursor=pointer]:
+                        - /url: /en/models/2966231-pet-bag-clip-squad
+                      - generic [ref=e856]:
+                        - link "MartinRimerS" [ref=e858] [cursor=pointer]:
+                          - /url: /en/@MartinRimerS
+                          - generic [ref=e863]: MartinRimerS
+                        - generic [ref=e865]:
+                          - generic [ref=e866]:
+                            - img [ref=e867]
+                            - generic [ref=e871]: "513"
+                          - generic [ref=e872] [cursor=pointer]:
+                            - img [ref=e873]
+                            - generic [ref=e876]: "638"
+                - generic [ref=e880]:
+                  - link "Modular Mini Golf Set" [ref=e882] [cursor=pointer]:
+                    - /url: /en/models/2969202-modular-mini-golf-set
+                    - generic [ref=e884]:
+                      - img "Modular Mini Golf Set" [ref=e886]
+                      - img [ref=e890]
+                  - generic [ref=e892]:
+                    - link "Modular Mini Golf Set" [ref=e895] [cursor=pointer]:
+                      - /url: /en/models/2969202-modular-mini-golf-set
+                    - generic [ref=e896]:
+                      - link "3D Paint Lab" [ref=e898] [cursor=pointer]:
+                        - /url: /en/@3dpaintlab
+                        - generic [ref=e902]:
+                          - generic [ref=e903]: 3D Paint Lab
+                          - img [ref=e905]
+                      - generic [ref=e909]:
+                        - generic [ref=e910]:
+                          - img [ref=e911]
+                          - generic [ref=e915]: "172"
+                        - generic [ref=e916] [cursor=pointer]:
+                          - img [ref=e917]
+                          - generic [ref=e920]: "575"
+                - generic [ref=e921]:
+                  - generic "Buy hardware parts for this model in a single click." [ref=e925]:
+                    - link "Maker's Supply" [ref=e926] [cursor=pointer]:
+                      - /url: https://store.bambulab.com/maker-supply?from=mw_outlook_2969996
+                      - generic [ref=e927]:
+                        - img [ref=e929]
+                        - generic [ref=e932]:
+                          - generic [ref=e933]: Maker's Supply
+                          - img [ref=e934]
+                  - generic [ref=e937]:
+                    - link "Lever Action Blaster | Working Slingshot GIF" [ref=e939] [cursor=pointer]:
+                      - /url: /en/models/2969996-lever-action-blaster-working-slingshot
+                      - generic [ref=e941]:
+                        - generic [ref=e942]:
+                          - img "Lever Action Blaster | Working Slingshot" [ref=e943]
+                          - generic: GIF
+                        - img [ref=e947]
+                    - generic [ref=e949]:
+                      - link "Lever Action Blaster | Working Slingshot" [ref=e952] [cursor=pointer]:
+                        - /url: /en/models/2969996-lever-action-blaster-working-slingshot
+                      - generic [ref=e953]:
+                        - link "Nathan Wise" [ref=e955] [cursor=pointer]:
+                          - /url: /en/@NathanWise
+                          - generic [ref=e960]: Nathan Wise
+                        - generic [ref=e962]:
+                          - generic [ref=e963]:
+                            - img [ref=e964]
+                            - generic [ref=e968]: "266"
+                          - generic [ref=e969] [cursor=pointer]:
+                            - img [ref=e970]
+                            - generic [ref=e973]: "594"
+                - generic [ref=e977]:
+                  - link "Arc Shelf" [ref=e979] [cursor=pointer]:
+                    - /url: /en/models/2964317-arc-shelf
+                    - generic [ref=e981]:
+                      - img "Arc Shelf" [ref=e983]
+                      - img [ref=e987]
+                  - generic [ref=e989]:
+                    - link "Arc Shelf" [ref=e992] [cursor=pointer]:
+                      - /url: /en/models/2964317-arc-shelf
+                    - generic [ref=e993]:
+                      - link "RJ" [ref=e995] [cursor=pointer]:
+                        - /url: /en/@RJ34
+                        - generic [ref=e1000]: RJ
+                      - generic [ref=e1002]:
+                        - generic [ref=e1003]:
+                          - img [ref=e1004]
+                          - generic [ref=e1008]: "404"
+                        - generic [ref=e1009] [cursor=pointer]:
+                          - img [ref=e1010]
+                          - generic [ref=e1013]: "623"
+                - generic [ref=e1017]:
+                  - link "Articulated Soriatitan" [ref=e1019] [cursor=pointer]:
+                    - /url: /en/models/2969779-articulated-soriatitan
+                    - generic [ref=e1021]:
+                      - img "Articulated Soriatitan" [ref=e1023]
+                      - img [ref=e1027]
+                  - generic [ref=e1029]:
+                    - link "Articulated Soriatitan" [ref=e1032] [cursor=pointer]:
+                      - /url: /en/models/2969779-articulated-soriatitan
+                    - generic [ref=e1033]:
+                      - link "PinkyWings" [ref=e1035] [cursor=pointer]:
+                        - /url: /en/@pinkywings
+                        - generic [ref=e1040]: PinkyWings
+                      - generic [ref=e1042]:
+                        - generic [ref=e1043]:
+                          - img [ref=e1044]
+                          - generic [ref=e1048]: "547"
+                        - generic [ref=e1049] [cursor=pointer]:
+                          - img [ref=e1050]
+                          - generic [ref=e1053]: "493"
+                - generic [ref=e1057]:
+                  - link "Flexi Meccha Chameleon Buddy Fidget Toy" [ref=e1059] [cursor=pointer]:
+                    - /url: /en/models/2965420-flexi-meccha-chameleon-buddy-fidget-toy
+                    - generic [ref=e1061]:
+                      - img "Flexi Meccha Chameleon Buddy Fidget Toy" [ref=e1063]
+                      - img [ref=e1067]
+                  - generic [ref=e1069]:
+                    - link "Flexi Meccha Chameleon Buddy Fidget Toy" [ref=e1072] [cursor=pointer]:
+                      - /url: /en/models/2965420-flexi-meccha-chameleon-buddy-fidget-toy
+                    - generic [ref=e1073]:
+                      - link "KORE-WORKS" [ref=e1075] [cursor=pointer]:
+                        - /url: /en/@phaul
+                        - generic [ref=e1080]: KORE-WORKS
+                      - generic [ref=e1082]:
+                        - generic [ref=e1083]:
+                          - img [ref=e1084]
+                          - generic [ref=e1088]: 1 k
+                        - generic [ref=e1089] [cursor=pointer]:
+                          - img [ref=e1090]
+                          - generic [ref=e1093]: "634"
+                - generic [ref=e1097]:
+                  - link "The Fjord Wave Flower Vase | Modern Japandi Design" [ref=e1099] [cursor=pointer]:
+                    - /url: /en/models/2970473-the-fjord-wave-flower-vase-modern-japandi-design
+                    - generic [ref=e1101]:
+                      - img "The Fjord Wave Flower Vase | Modern Japandi Design" [ref=e1103]
+                      - img [ref=e1107]
+                  - generic [ref=e1109]:
+                    - link "The Fjord Wave Flower Vase | Modern Japandi Design" [ref=e1112] [cursor=pointer]:
+                      - /url: /en/models/2970473-the-fjord-wave-flower-vase-modern-japandi-design
+                    - generic [ref=e1113]:
+                      - link "Ikigaiform" [ref=e1115] [cursor=pointer]:
+                        - /url: /en/@Ikigaiform
+                        - generic [ref=e1120]: Ikigaiform
+                      - generic [ref=e1122]:
+                        - generic [ref=e1123]:
+                          - img [ref=e1124]
+                          - generic [ref=e1128]: "299"
+                        - generic [ref=e1129] [cursor=pointer]:
+                          - img [ref=e1130]
+                          - generic [ref=e1133]: "389"
+                - generic [ref=e1137]:
+                  - link "Mini Flexi Galapagos Tortoise" [ref=e1139] [cursor=pointer]:
+                    - /url: /en/models/2965543-mini-flexi-galapagos-tortoise
+                    - generic [ref=e1141]:
+                      - img "Mini Flexi Galapagos Tortoise" [ref=e1143]
+                      - img [ref=e1147]
+                  - generic [ref=e1149]:
+                    - link "Mini Flexi Galapagos Tortoise" [ref=e1152] [cursor=pointer]:
+                      - /url: /en/models/2965543-mini-flexi-galapagos-tortoise
+                    - generic [ref=e1153]:
+                      - link "Flexi JIMGA" [ref=e1155] [cursor=pointer]:
+                        - /url: /en/@JIMGA
+                        - generic [ref=e1160]: Flexi JIMGA
+                      - generic [ref=e1162]:
+                        - generic [ref=e1163]:
+                          - img [ref=e1164]
+                          - generic [ref=e1168]: "480"
+                        - generic [ref=e1169] [cursor=pointer]:
+                          - img [ref=e1170]
+                          - generic [ref=e1173]: "610"
+                - generic [ref=e1177]:
+                  - link "The Moody Meow Bowl – Cat Feeding with Attitude" [ref=e1179] [cursor=pointer]:
+                    - /url: /en/models/2966562-the-moody-meow-bowl-cat-feeding-with-attitude
+                    - generic [ref=e1181]:
+                      - img "The Moody Meow Bowl – Cat Feeding with Attitude" [ref=e1183]
+                      - img [ref=e1187]
+                  - generic [ref=e1189]:
+                    - link "The Moody Meow Bowl – Cat Feeding with Attitude" [ref=e1192] [cursor=pointer]:
+                      - /url: /en/models/2966562-the-moody-meow-bowl-cat-feeding-with-attitude
+                    - generic [ref=e1193]:
+                      - link "Ligurio" [ref=e1195] [cursor=pointer]:
+                        - /url: /en/@Ligurio
+                        - generic [ref=e1200]: Ligurio
+                      - generic [ref=e1202]:
+                        - generic [ref=e1203]:
+                          - img [ref=e1204]
+                          - generic [ref=e1208]: "305"
+                        - generic [ref=e1209] [cursor=pointer]:
+                          - img [ref=e1210]
+                          - generic [ref=e1213]: "477"
+                - generic [ref=e1217]:
+                  - link "Elastic Band Launch Jet Glider" [ref=e1219] [cursor=pointer]:
+                    - /url: /en/models/2962831-elastic-band-launch-jet-glider
+                    - generic [ref=e1221]:
+                      - img "Elastic Band Launch Jet Glider" [ref=e1223]
+                      - img [ref=e1227]
+                  - generic [ref=e1229]:
+                    - link "Elastic Band Launch Jet Glider" [ref=e1232] [cursor=pointer]:
+                      - /url: /en/models/2962831-elastic-band-launch-jet-glider
+                    - generic [ref=e1233]:
+                      - link "LoganForgeMods" [ref=e1235] [cursor=pointer]:
+                        - /url: /en/@CraigL77
+                        - generic [ref=e1240]: LoganForgeMods
+                      - generic [ref=e1242]:
+                        - generic [ref=e1243]:
+                          - img [ref=e1244]
+                          - generic [ref=e1248]: "663"
+                        - generic [ref=e1249] [cursor=pointer]:
+                          - img [ref=e1250]
+                          - generic [ref=e1253]: "515"
+                - generic [ref=e1257]:
+                  - link "The Stitchborn Wolf – Dark Plush Guardian" [ref=e1259] [cursor=pointer]:
+                    - /url: /en/models/2965178-the-stitchborn-wolf-dark-plush-guardian
+                    - generic [ref=e1261]:
+                      - img "The Stitchborn Wolf – Dark Plush Guardian" [ref=e1263]
+                      - img [ref=e1267]
+                  - generic [ref=e1269]:
+                    - link "The Stitchborn Wolf – Dark Plush Guardian" [ref=e1272] [cursor=pointer]:
+                      - /url: /en/models/2965178-the-stitchborn-wolf-dark-plush-guardian
+                    - generic [ref=e1273]:
+                      - link "Ghost Wolff Lab" [ref=e1275] [cursor=pointer]:
+                        - /url: /en/@GHOSTWOLFF
+                        - generic [ref=e1280]: Ghost Wolff Lab
+                      - generic [ref=e1282]:
+                        - generic [ref=e1283]:
+                          - img [ref=e1284]
+                          - generic [ref=e1288]: "317"
+                        - generic [ref=e1289] [cursor=pointer]:
+                          - img [ref=e1290]
+                          - generic [ref=e1293]: "475"
+        - img [ref=e1298] [cursor=pointer]
+  - dialog "Cookie Consent Banner" [ref=e1302]:
+    - generic [ref=e1303]:
+      - generic [ref=e1304]:
+        - heading "We use cookies" [level=2] [ref=e1306]
+        - generic [ref=e1307]:
+          - text: This site uses cookies, including third party cookies, and related technologies (“Cookies”), to improve functionality and operation of the website, to enhance user experience, and for analytics and advertising purposes. Please refer to our
+          - link "Privacy Policy" [ref=e1308] [cursor=pointer]:
+            - /url: https://bambulab.com/policies/privacy
+          - text: and
+          - link "Cookie Policy" [ref=e1309] [cursor=pointer]:
+            - /url: https://bambulab.com/policies/cookie-policy
+          - text: for more information. You can accept Cookies that are not strictly necessary by clicking on “Accept All” or refuse them by clicking on “Reject All”. You can manage your Cookies preferences or withdraw consent at any time by accessing the “Cookie Settings”.
+      - generic [ref=e1311]:
+        - button "Cookie Settings" [ref=e1312] [cursor=pointer]
+        - button "Accept All" [ref=e1313] [cursor=pointer]
+        - button "Reject All" [ref=e1314] [cursor=pointer]
+  - alert [ref=e1315]
