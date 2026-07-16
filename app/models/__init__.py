@@ -61,6 +61,14 @@ from app.models.pos import (
     PosSession,
     PosSessionStatus,
 )
+from app.models.product_ops import (
+    DeadStockRecommendation,
+    DeadStockRecommendationStatus,
+    ProductLaunchChecklistItem,
+    ProductLaunchChecklistKey,
+    ProductPhotoShot,
+    ProductPhotoShotType,
+)
 from app.models.prep_task import FollowUpType, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate
 from app.models.print_failure_autopsy import PrintFailureAutopsy, PrintFailureCategory, PrintFailureSeverity
 from app.models.print_job import PrintJob, PrintJobStatus
@@ -146,7 +154,13 @@ __all__ = [
     "PrintJob",
     "PrintJobStatus",
     "Product",
+    "ProductLaunchChecklistItem",
+    "ProductLaunchChecklistKey",
     "ProductImage",
+    "ProductPhotoShot",
+    "ProductPhotoShotType",
+    "DeadStockRecommendation",
+    "DeadStockRecommendationStatus",
     "Setting",
     "SignAsset",
     "SignStatus",

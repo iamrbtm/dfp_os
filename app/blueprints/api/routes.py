@@ -21,6 +21,7 @@ from app.models import (
     CustomRequest,
     CustomRequestStatus,
     Customer,
+    DeadStockRecommendation,
     Expense,
     FeatureFlag,
     ExpenseCategory,
@@ -156,6 +157,15 @@ class PosRefundRequestSchema(Schema):
     notes = fields.String(load_default=None, allow_none=True)
 
 
+class ProductRetireRequestSchema(Schema):
+    reason = fields.String(required=True)
+    discount_remaining = fields.Boolean(load_default=False)
+
+
+class DeadStockRecommendationActionSchema(Schema):
+    notes = fields.String(load_default=None, allow_none=True)
+
+
 @dataclass(frozen=True)
 class ApiResourceConfig:
     endpoint: str
@@ -285,6 +295,14 @@ def _apply_product(instance: Product, data: dict):
     instance.tags = data.get("tags")
     instance.care_instructions = data.get("care_instructions")
     instance.safety_notes = data.get("safety_notes")
+    instance.launch_override_reason = data.get("launch_override_reason")
+    instance.story_what_it_is = data.get("story_what_it_is")
+    instance.story_who_it_is_for = data.get("story_who_it_is_for")
+    instance.story_materials = data.get("story_materials")
+    instance.story_customization_options = data.get("story_customization_options")
+    instance.story_internal_compliance_notes = data.get("story_internal_compliance_notes")
+    instance.retirement_reason = data.get("retirement_reason")
+    instance.block_reprint = data.get("block_reprint", False)
     instance.license_status = LicenseStatus(data["license_status"])
     instance.design_source = data.get("design_source")
     instance.commercial_license_notes = data.get("commercial_license_notes")
@@ -1037,6 +1055,136 @@ def _register_resource(config: ApiResourceConfig):
 
 for resource_config in API_RESOURCES.values():
     _register_resource(resource_config)
+
+
+@catalog_blp.route("/products/<int:product_id>/readiness", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Products"])
+@catalog_blp.response(200)
+def product_readiness(product_id: int):
+    denied = require_api_scopes("catalog")
+    if denied:
+        return denied
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return {"error": {"code": "not_found", "message": "Product not found.", "details": {}}}, 404
+    from app.services.product_ops import calculate_product_readiness, sync_launch_checklist
+
+    checklist = sync_launch_checklist(product)
+    readiness = calculate_product_readiness(product)
+    db.session.commit()
+    return {
+        "data": {
+            "product_id": product.id,
+            "score": readiness.score,
+            "breakdown": readiness.breakdown,
+            "critical_blockers": readiness.critical_blockers,
+            "launch_checklist": [
+                {
+                    "id": item.id,
+                    "key": item.key.value,
+                    "label": item.label,
+                    "completed": item.completed,
+                    "override_reason": item.override_reason,
+                    "notes": item.notes,
+                }
+                for item in checklist
+            ],
+        }
+    }
+
+
+@catalog_blp.route("/products/<int:product_id>/dead-stock", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Products"])
+@catalog_blp.response(201)
+def product_dead_stock_generate(product_id: int):
+    denied = require_api_scopes("catalog")
+    if denied:
+        return denied
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return {"error": {"code": "not_found", "message": "Product not found.", "details": {}}}, 404
+    from app.services.product_ops import generate_dead_stock_recommendation
+
+    recommendation = generate_dead_stock_recommendation(product)
+    if recommendation is None:
+        return {"data": None, "message": "No dead-stock recommendation needed."}, 200
+    return {
+        "data": {
+            "id": recommendation.id,
+            "product_id": recommendation.product_id,
+            "score": recommendation.score,
+            "suggested_action": recommendation.suggested_action,
+            "reason": recommendation.reason,
+            "status": recommendation.status.value,
+        }
+    }, 201
+
+
+@catalog_blp.route("/products/dead-stock/<int:recommendation_id>/<action>", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Products"])
+@catalog_blp.arguments(DeadStockRecommendationActionSchema)
+@catalog_blp.response(200)
+def product_dead_stock_action(body_data, recommendation_id: int, action: str):
+    denied = require_api_scopes("catalog")
+    if denied:
+        return denied
+    recommendation = get_by_id(DeadStockRecommendation, recommendation_id)
+    if recommendation is None:
+        return {"error": {"code": "not_found", "message": "Recommendation not found.", "details": {}}}, 404
+    from app.services.product_ops import accept_dead_stock_recommendation, dismiss_dead_stock_recommendation
+
+    actor_id = getattr(getattr(g, "api_token", None), "user_id", None)
+    if action == "accept":
+        recommendation = accept_dead_stock_recommendation(
+            recommendation,
+            notes=body_data.get("notes"),
+            actor_id=actor_id,
+        )
+    elif action == "dismiss":
+        recommendation = dismiss_dead_stock_recommendation(
+            recommendation,
+            notes=body_data.get("notes"),
+            actor_id=actor_id,
+        )
+    else:
+        return {"error": {"code": "not_found", "message": "Unsupported action.", "details": {}}}, 404
+    return {
+        "data": {
+            "id": recommendation.id,
+            "product_id": recommendation.product_id,
+            "status": recommendation.status.value,
+            "action_notes": recommendation.action_notes,
+        }
+    }
+
+
+@catalog_blp.route("/products/<int:product_id>/retire", methods=["POST"])
+@api_token_required
+@catalog_blp.doc(tags=["Products"])
+@catalog_blp.arguments(ProductRetireRequestSchema)
+@catalog_blp.response(200, ProductSchema)
+def product_retire(body_data, product_id: int):
+    denied = require_api_scopes("catalog")
+    if denied:
+        return denied
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return {"error": {"code": "not_found", "message": "Product not found.", "details": {}}}, 404
+    reason = (body_data.get("reason") or "").strip()
+    if not reason:
+        return _validation_error("Retirement reason is required.")
+    from app.services.product_ops import retire_product
+
+    product = retire_product(
+        product,
+        reason=reason,
+        discount_remaining=bool(body_data.get("discount_remaining")),
+        actor_id=getattr(getattr(g, "api_token", None), "user_id", None),
+    )
+    return product
 
 
 @catalog_blp.route("/themes")

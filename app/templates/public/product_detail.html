@@ -40,6 +40,37 @@
     </form>
 
     <div class="grid gap-4 md:grid-cols-2">
+      {% if product.story_what_it_is or product.story_who_it_is_for or product.story_materials or product.story_customization_options %}
+      <article class="app-card p-5 md:col-span-2">
+        <p class="text-sm font-medium" style="color: var(--color-text);">More details</p>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          {% if product.story_what_it_is %}
+          <div>
+            <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">What it is</p>
+            <p class="mt-2 text-sm leading-6" style="color: var(--color-text-muted);">{{ product.story_what_it_is }}</p>
+          </div>
+          {% endif %}
+          {% if product.story_who_it_is_for %}
+          <div>
+            <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Who it is for</p>
+            <p class="mt-2 text-sm leading-6" style="color: var(--color-text-muted);">{{ product.story_who_it_is_for }}</p>
+          </div>
+          {% endif %}
+          {% if product.story_materials %}
+          <div>
+            <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Materials</p>
+            <p class="mt-2 text-sm leading-6" style="color: var(--color-text-muted);">{{ product.story_materials }}</p>
+          </div>
+          {% endif %}
+          {% if product.story_customization_options %}
+          <div>
+            <p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Customization</p>
+            <p class="mt-2 text-sm leading-6" style="color: var(--color-text-muted);">{{ product.story_customization_options }}</p>
+          </div>
+          {% endif %}
+        </div>
+      </article>
+      {% endif %}
       <article class="app-card p-5">
         <p class="text-sm font-medium" style="color: var(--color-text);">Care notes</p>
         <p class="mt-3 text-sm leading-6" style="color: var(--color-text-muted);">{{ product.care_instructions or "Keep away from extreme heat and hot car dashboards. Wipe gently with a soft cloth." }}</p>
