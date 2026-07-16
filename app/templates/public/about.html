@@ -1,39 +1,6 @@
 {% extends "base.html" %}
-{% block title %}About Us | Dude Fish Printing{% endblock %}
+{% block title %}Our Story | Dude Fish Printing{% endblock %}
 {% block content %}
-<section class="mx-auto max-w-3xl space-y-8">
-  <div>
-    <h1 class="text-4xl font-semibold tracking-tight" style="color: var(--color-text);">About Dude Fish Printing</h1>
-    <p class="mt-4 text-lg" style="color: var(--color-text-muted);">Family-run 3D printing based in Clarksville, Tennessee.</p>
-  </div>
-
-  <div class="space-y-4" style="color: var(--color-text-muted);">
-    <p>Dude Fish Printing started as a creative outlet and grew into a family-run business. What began with a single printer has expanded into a small fleet serving customers at vendor markets, through word of mouth, and online.</p>
-    <p>We specialize in dragons, fidgets, flexi animals, personalized gifts, and Clarksville/Tennessee-themed products. We also help local businesses with custom display products, QR code signs, and practical printed parts.</p>
-    <p>Our move to Clarksville marks an exciting new chapter. We're building a shop that can serve the community, support military families, and grow with the needs of our customers.</p>
-  </div>
-
-  <div class="app-card p-6">
-    <h2 class="text-xl font-semibold" style="color: var(--color-text);">Our Printer Fleet</h2>
-    <ul class="mt-4 space-y-2 text-sm" style="color: var(--color-text-muted);">
-      <li>4 Bambu A1 printers</li>
-      <li>2 Bambu X1 Carbon printers</li>
-      <li>2 Bambu P1P printers</li>
-      <li>4 AMS Lite units + 1 standard AMS for multicolor printing</li>
-    </ul>
-  </div>
-
-  <div class="app-card p-6">
-    <h2 class="text-xl font-semibold" style="color: var(--color-text);">What We Make</h2>
-    <ul class="mt-4 space-y-2 text-sm" style="color: var(--color-text-muted);">
-      <li>Dragons — articulated and display models</li>
-      <li>Fidgets — satisfying prints for all ages</li>
-      <li>Flexi animals — fun, poseable creatures</li>
-      <li>Personalized gifts — name keychains, custom text items</li>
-      <li>Clarksville/Tennessee-themed decor and gifts</li>
-      <li>Small business products — QR signs, card holders, displays</li>
-      <li>Custom orders — your idea, brought to life</li>
-    </ul>
-  </div>
-</section>
+<section class="interior-hero about-hero"><div class="public-wrap about-hero__grid"><div><p class="public-kicker public-kicker--dark">A family-run print studio</p><h1>Small shop.<br><em>Big imagination.</em></h1><p>Dude Fish Printing makes playful gifts, practical pieces, and custom ideas for people around Clarksville and beyond.</p></div><div class="studio-mark" aria-hidden="true"><span>8</span><strong>working printers<br>in the fleet</strong><small>One X1 Carbon is currently down for repair.</small></div></div></section>
+<section class="story-section public-wrap"><div class="story-lede"><p>We’re building a business around a simple idea: 3D printing should feel approachable. You shouldn’t need to understand slicers, infill, or model files to ask whether something can be made.</p><p>Our job is to translate the technical parts, be clear about what will work, and make pieces people are excited to use or give.</p></div><div class="values-grid"><article><span>01</span><h2>Real conversation</h2><p>Custom work starts with listening, not a complicated specification.</p></article><article><span>02</span><h2>Useful honesty</h2><p>We explain material limits, licensing concerns, and realistic options before printing.</p></article><article><span>03</span><h2>Made with care</h2><p>Every print is a physical object built one layer at a time and checked by real people.</p></article></div><aside class="custom-ribbon"><div><p class="public-kicker">Have something in mind?</p><h2>Let’s see if we can print it.</h2></div><a href="{{ url_for('public.custom_orders') }}" class="public-button public-button--primary">Tell us your idea →</a></aside></section>
 {% endblock %}

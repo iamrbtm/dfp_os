@@ -1189,6 +1189,20 @@ At minimum test:
 - Upload validation rejects unsafe files
 - No card data fields exist in POS forms/API
 
+## GitHub Workflow
+
+Use the issue templates in `.github/ISSUE_TEMPLATE/` for filing bugs, features, and tasks. Use module labels (`module:pos`, `module:analytics`, etc.) and priority labels when creating issues. Reference issues in commits and PRs with `#123`.
+
+Before pushing, always run:
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest -v --tb=long
+```
+
+The CI workflow (`.github/workflows/ci.yml`) runs lint + tests on every push to `main` and PR branches.
+
 ## Build Behavior for Codex
 
 When asked to build:

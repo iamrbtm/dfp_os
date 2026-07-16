@@ -1,42 +1,6 @@
 {% extends "base.html" %}
 {% block title %}3D Printing Basics | {{ app_name }}{% endblock %}
 {% block content %}
-<section class="mx-auto max-w-4xl space-y-8">
-  <div>
-    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Helpful guide</p>
-    <h1 class="mt-2 text-4xl font-semibold" style="color: var(--color-text);">3D printing basics for normal people</h1>
-    <p class="mt-4 text-lg leading-8" style="color: var(--color-text-muted);">
-      If you’ve never bought a 3D printed item before, this page explains the basics without the jargon.
-    </p>
-  </div>
-
-  <div class="grid gap-5 md:grid-cols-2">
-    <article class="app-card p-6">
-      <h2 class="text-xl font-semibold" style="color: var(--color-text);">What is a 3D printed item?</h2>
-      <p class="mt-3 text-sm leading-7" style="color: var(--color-text-muted);">It’s a physical object built layer by layer from melted filament. That means tiny layer lines are normal and part of the handmade look.</p>
-    </article>
-    <article class="app-card p-6">
-      <h2 class="text-xl font-semibold" style="color: var(--color-text);">Will every item look identical?</h2>
-      <p class="mt-3 text-sm leading-7" style="color: var(--color-text-muted);">Close, but not factory-identical. Color transitions, shimmer, and tiny texture differences are part of what makes each print unique.</p>
-    </article>
-    <article class="app-card p-6">
-      <h2 class="text-xl font-semibold" style="color: var(--color-text);">What material do you use?</h2>
-      <p class="mt-3 text-sm leading-7" style="color: var(--color-text-muted);">Most gifts and desk items are printed in PLA. It’s lightweight, durable for normal indoor use, and available in lots of colors.</p>
-    </article>
-    <article class="app-card p-6">
-      <h2 class="text-xl font-semibold" style="color: var(--color-text);">How should I care for it?</h2>
-      <p class="mt-3 text-sm leading-7" style="color: var(--color-text-muted);">Avoid extreme heat, especially hot car interiors. Clean with a soft cloth and don’t bend articulated pieces farther than they naturally want to move.</p>
-    </article>
-  </div>
-
-  <div class="app-card p-6">
-    <h2 class="text-2xl font-semibold" style="color: var(--color-text);">Good to know before ordering</h2>
-    <ul class="mt-4 space-y-3 text-sm leading-7" style="color: var(--color-text-muted);">
-      <li>Small parts can be a choking hazard for young children.</li>
-      <li>Color-shift and rainbow filaments can vary from one batch or print to another.</li>
-      <li>Custom orders usually take longer than ready-made items because they need quoting, setup, and test prints.</li>
-      <li>If you are buying for a business or event, it helps to order early so there’s time for revisions.</li>
-    </ul>
-  </div>
-</section>
+<section class="interior-hero learn-hero"><div class="public-wrap"><p class="public-kicker public-kicker--dark">No jargon required</p><h1>3D printing, explained <em>like a person.</em></h1><p>What the layers mean, why colors vary, and how to care for your print—without turning this into an engineering lesson.</p></div></section>
+<section class="learn-page public-wrap"><div class="learn-intro"><div class="layer-demo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div><div><h2>A print grows from the bottom up.</h2><p>A printer melts a thin strand of material called filament and places it in precise paths. It repeats that process one thin layer at a time until the object is complete. Those fine lines are normal—they’re the fingerprints of how the piece was made.</p></div></div><div class="question-list"><article><small>Color</small><h2>Will every item look identical?</h2><p>Close, but not factory-identical. Rainbow transitions, shimmer, and tiny texture differences make each print a little different.</p></article><article><small>Material</small><h2>What are most gifts made from?</h2><p>Most indoor gifts and desk items use PLA. It is lightweight, holds detail well, and comes in many colors. We use other materials when the job calls for them.</p></article><article><small>Care</small><h2>How do I look after it?</h2><p>Keep most prints away from extreme heat, especially hot car interiors. Clean gently and do not force articulated joints beyond their natural movement.</p></article><article><small>Choosing</small><h2>What if I don’t know what I need?</h2><p>Tell us how the piece will be used. We can recommend a material, size, and approach without expecting you to know the technical terms.</p></article></div><a href="{{ url_for('public.materials') }}" class="public-button public-button--teal">Compare materials and finishes →</a></section>
 {% endblock %}

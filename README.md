@@ -273,3 +273,36 @@ uv run dfpos-docs-validate
 ```
 
 This checks that the spec is valid OpenAPI 3.x, has an info block, has paths with responses, and has no obvious structural issues. CI pipelines should run this check after any API changes.
+
+## GitHub Integration
+
+This repo uses GitHub Issues and Projects for tracking work.
+
+### Issues
+
+Use the issue templates to file bug reports, feature requests, and tasks. Each issue should be labeled with the appropriate type, module, and priority.
+
+### Labels
+
+Labels are organized into categories (type, module, priority, status). Sync labels to the repo with:
+
+```bash
+./scripts/sync-labels.sh
+```
+
+### Project Board
+
+A Kanban-style project board is configured with automated column transitions:
+- **Backlog** → new issues autolink here
+- **To Do** → issues targeted for the current milestone
+- **In Progress** → actively being worked on
+- **Review** → PR open, linked issue moves automatically
+- **Done** → PR merged, linked issue closes automatically
+
+### CI
+
+The CI workflow (`.github/workflows/ci.yml`) runs on every push/PR to `main`:
+1. **Lint job:** Ruff checks + format validation
+2. **Test job:** MariaDB service container, migration, seed, pytest
+
+See [docs/contributing.md](docs/contributing.md) for the full contribution workflow.

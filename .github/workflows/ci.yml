@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "Milestone-*"]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.14"
+  DATABASE_URL: "mysql+pymysql://dfpos:dfpos@127.0.0.1:3306/dfpos_test"
+  TEST_DATABASE_URL: "mysql+pymysql://dfpos:dfpos@127.0.0.1:3306/dfpos_test"
+  TEST_DATABASE_ADMIN_URL: "mysql+pymysql://root:root@127.0.0.1:3306/mysql"
+  MIGRATION_DATABASE_URL: "mysql+pymysql://dfpos:dfpos@127.0.0.1:3306/dfpos_migration_check"
+  SECRET_KEY: "ci-secret-key-do-not-use"
+  APP_NAME: "Dude Fish OS CI"
+  APP_BASE_URL: "http://localhost:5000"
+  ADMIN_EMAIL: "admin@example.com"
+  ADMIN_PASSWORD: "ci-admin-password"
+  FLASK_ENV: "testing"
+  AUDIT_LOG_ENABLED: "false"
+  AI_RECEIPT_PARSING_ENABLED: "false"
+  AI_ANALYTICS_INSIGHTS_ENABLED: "false"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint with ruff
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: dfpos_test
+          MARIADB_USER: dfpos
+          MARIADB_PASSWORD: dfpos
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mariadb-admin ping -h 127.0.0.1 -u root -proot --silent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential tesseract-ocr tesseract-ocr-eng \
+            libgl1 libglib2.0-0
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Wait for MariaDB
+        run: |
+          for i in $(seq 1 30); do
+            if mariadb-admin ping -h 127.0.0.1 -u root -proot --silent 2>/dev/null; then
+              echo "MariaDB is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MariaDB did not become ready"
+          exit 1
+
+      - name: Initialize test database
+        run: |
+          mariadb -h 127.0.0.1 -u root -proot -e "GRANT ALL ON dfpos_test.* TO dfpos@'%';"
+          mariadb -h 127.0.0.1 -u root -proot -e "GRANT ALL ON dfpos_migration_check.* TO dfpos@'%';"
+          mariadb -h 127.0.0.1 -u root -proot -e "FLUSH PRIVILEGES;"
+
+      - name: Run database migrations
+        run: uv run flask --app app:create_app db upgrade
+
+      - name: Seed feature flags
+        run: uv run flask --app app:create_app seed feature-flags
+
+      - name: Run tests
+        run: uv run pytest -v --tb=long -x
+
+      - name: Store test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            .pytest_cache/
+            test-reports/
+          retention-days: 7

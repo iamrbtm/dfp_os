@@ -141,14 +141,11 @@ def _render_studio(product: Product | None, form: ProductStudioForm, mode: str, 
             collections=Collection.query.order_by(Collection.name).all(),
             products=_load_products(),
             product_images=list(product.images) if product else [],
-<<<<<<< HEAD
             upload_form=ProductModelUploadForm(),
-=======
             readiness=readiness,
             launch_items=launch_items,
             photo_shots=photo_shots,
             dead_stock_recommendations=dead_stock_recommendations,
->>>>>>> c4403393ad006358abcd5b1c62f81bcb94975bc0
             storage_reference_name=storage_reference_name,
         ),
         status_code,

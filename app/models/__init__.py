@@ -68,6 +68,7 @@ from app.models.pickup import (
     PickupSlot,
     PickupSlotStatus,
     PickupStatus,
+)
 from app.models.product_ops import (
     DeadStockRecommendation,
     DeadStockRecommendationStatus,

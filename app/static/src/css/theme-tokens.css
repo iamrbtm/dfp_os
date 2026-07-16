@@ -9,6 +9,16 @@
 /* 0. DudeFish Brand Light (default) — warm off-white, coral primary, teal secondary, navy accent */
 :root,
 [data-theme="dfp-dudefish-light"] {
+  --public-cream: #fff8ed;
+  --public-paper: #ffffff;
+  --public-ink: #10233f;
+  --public-coral: #ff6243;
+  --public-coral-dark: #e64d32;
+  --public-teal: #12afa3;
+  --public-teal-dark: #087f78;
+  --public-sun: #f5c451;
+  --public-mist: #dceeea;
+  --public-line: #ded8cc;
   --color-bg: #f9f9f6;
   --color-bg-subtle: #f4f7f4;
   --color-bg-inset: #efede8;

@@ -33,7 +33,7 @@ from app.forms.inventory import (
 from app.forms.order import OrderForm, OrderItemForm, PaymentForm
 from app.forms.pickup import PickupLocationForm, PickupSlotForm
 from app.forms.pos import PosCloseSessionForm, PosSessionForm
-from app.forms.print_job import PrintJobForm
+from app.forms.print_job import PrintFailureAutopsyForm, PrintJobForm
 from app.forms.promotion import ContentDraftForm, SignAssetForm
 from app.forms.receipt import ReceiptUploadForm, ReceiptReviewForm, ReceiptLineItemForm, ReceiptAllocationForm, ReceiptSearchForm
 from app.forms.storefront import AddToCartForm, CheckoutForm

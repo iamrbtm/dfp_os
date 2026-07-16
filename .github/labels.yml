@@ -1,0 +1,126 @@
+# DFPos GitHub Labels
+# Sync with: gh label create --force <label> --color <color> --description "<desc>"
+
+- name: bug
+  color: d73a4a
+  description: Something isn't working
+
+- name: enhancement
+  color: a2eeef
+  description: New feature or request
+
+- name: task
+  color: 7057ff
+  description: Concrete piece of work for a milestone
+
+- name: "module: pos"
+  color: 1d76db
+  description: Point of Sale module
+
+- name: "module: inventory"
+  color: 1d76db
+  description: Inventory module
+
+- name: "module: analytics"
+  color: 1d76db
+  description: Analytics module
+
+- name: "module: markets"
+  color: 1d76db
+  description: Markets module
+
+- name: "module: receipts"
+  color: 1d76db
+  description: Receipts & Expenses module
+
+- name: "module: cost-engine"
+  color: 1d76db
+  description: Cost Engine module
+
+- name: "module: prep-tasks"
+  color: 1d76db
+  description: Prep Tasks module
+
+- name: "module: products"
+  color: 1d76db
+  description: Products/Catalog module
+
+- name: "module: print"
+  color: 1d76db
+  description: Printers / Print Jobs module
+
+- name: "module: auth"
+  color: 1d76db
+  description: Authentication / Users module
+
+- name: "module: api"
+  color: 1d76db
+  description: REST API module
+
+- name: "module: settings"
+  color: 1d76db
+  description: Settings / Feature Flags module
+
+- name: "module: audit"
+  color: 1d76db
+  description: Audit Logging module
+
+- name: priority:critical
+  color: b60205
+  description: Blocks release or breaks core workflow
+
+- name: priority:high
+  color: d93f0b
+  description: Important, should be addressed soon
+
+- name: priority:medium
+  color: fbca04
+  description: Normal priority
+
+- name: priority:low
+  color: 0e8a16
+  description: Nice-to-have, not urgent
+
+- name: tests
+  color: 5319e7
+  description: Test coverage, test improvements
+
+- name: documentation
+  color: 0075ca
+  description: Documentation improvements
+
+- name: security
+  color: b60205
+  description: Security-related issues
+
+- name: performance
+  color: 008672
+  description: Performance improvements
+
+- name: refactor
+  color: 7057ff
+  description: Code cleanup, architecture changes
+
+- name: good-first-issue
+  color: 0e8a16
+  description: Good for newcomers
+
+- name: blocked
+  color: 000000
+  description: Blocked by another issue or external dependency
+
+- name: needs-triage
+  color: d4c5f9
+  description: Needs initial review and categorization
+
+- name: duplicate
+  color: cfd3d7
+  description: This issue or pull request already exists
+
+- name: wontfix
+  color: ffffff
+  description: This will not be worked on
+
+- name: milestone
+  color: 5319e7
+  description: Milestone tracking issue

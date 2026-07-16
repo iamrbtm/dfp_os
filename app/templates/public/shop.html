@@ -1,54 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Shop | {{ app_name }}{% endblock %}
+{% block title %}Shop 3D Prints | {{ app_name }}{% endblock %}
 {% block content %}
-<section class="space-y-8">
-  <div class="space-y-3">
-    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Public shop</p>
-    <h1 class="text-4xl font-semibold" style="color: var(--color-text);">Easy-to-browse 3D printed gifts and useful finds</h1>
-    <p class="max-w-3xl text-base leading-7" style="color: var(--color-text-muted);">
-      Browse in-stock favorites, made-to-order pieces, and booth-ready gifts without guessing what they’re for.
-    </p>
-  </div>
-
-  <form method="get" class="grid gap-4 rounded-[1.5rem] p-5 lg:grid-cols-4"
-        style="background: linear-gradient(135deg, rgba(104,200,255,0.10), rgba(255,226,116,0.14)); border: 1px solid var(--color-border);">
-    <input type="search" name="q" value="{{ search_term }}" placeholder="Search dragons, fidgets, gifts..." class="app-input">
-    <select name="category" class="app-select">
-      <option value="">All categories</option>
-      {% for category in categories %}
-        <option value="{{ category.slug }}" {% if selected_category == category.slug %}selected{% endif %}>{{ category.name }}</option>
-      {% endfor %}
-    </select>
-    <select name="collection" class="app-select">
-      <option value="">All collections</option>
-      {% for collection in collections %}
-        <option value="{{ collection.slug }}" {% if selected_collection == collection.slug %}selected{% endif %}>{{ collection.name }}</option>
-      {% endfor %}
-    </select>
-    <button type="submit" class="app-btn app-btn-primary">Apply filters</button>
+<section class="interior-hero interior-hero--shop"><div class="public-wrap"><p class="public-kicker public-kicker--dark">The print table</p><h1>Find something <em>delightfully you.</em></h1><p>Browse playful gifts, useful pieces, and local favorites. Need a different color or idea? Custom is always an option.</p></div></section>
+<section class="storefront-section public-wrap">
+  <form method="get" class="shop-filters" aria-label="Filter products">
+    <label class="search-field"><span>Search the shop</span><input type="search" name="q" value="{{ search_term }}" placeholder="Try dragon, fidget, sign…"></label>
+    <label><span>Category</span><select name="category"><option value="">All categories</option>{% for category in categories %}<option value="{{ category.slug }}" {% if selected_category == category.slug %}selected{% endif %}>{{ category.name }}</option>{% endfor %}</select></label>
+    <label><span>Collection</span><select name="collection"><option value="">All collections</option>{% for collection in collections %}<option value="{{ collection.slug }}" {% if selected_collection == collection.slug %}selected{% endif %}>{{ collection.name }}</option>{% endfor %}</select></label>
+    <button type="submit" class="public-button public-button--primary">Show matches</button>
   </form>
-
-  <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-    {% for product in products %}
-      <article class="app-card p-6">
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <p class="text-sm uppercase tracking-[0.16em]" style="color: var(--color-link);">{{ product.category.name }}</p>
-            <h2 class="mt-3 text-2xl font-semibold" style="color: var(--color-text);">{{ product.name }}</h2>
-          </div>
-          <span class="app-badge app-badge-info">{{ available_stock_label(product) }}</span>
-        </div>
-        <p class="mt-3 text-sm leading-6" style="color: var(--color-text-muted);">{{ product.short_description or product.description or "Catalog details coming soon." }}</p>
-        <div class="mt-5 flex items-center justify-between">
-          <span class="text-lg font-semibold" style="color: var(--color-text);">From ${{ '%.2f'|format(product.base_price) }}</span>
-          <a href="{{ url_for('public.product_detail', slug=product.slug) }}" class="app-link">View details</a>
-        </div>
-      </article>
-    {% else %}
-      <div class="app-empty md:col-span-2 xl:col-span-3">
-        No public products match those filters yet.
-      </div>
-    {% endfor %}
-  </div>
+  <div class="shop-results"><div><strong>{{ products|length }} print{% if products|length != 1 %}s{% endif %}</strong>{% if search_term %}<span> matching “{{ search_term }}”</span>{% endif %}</div>{% if selected_category or selected_collection or search_term %}<a href="{{ url_for('public.shop') }}">Clear filters</a>{% endif %}</div>
+  {% if products %}<div class="product-grid">{% for product in products %}<article class="public-product-card"><a href="{{ url_for('public.product_detail', slug=product.slug) }}" class="product-photo"><span>Photo coming soon</span><b>{{ available_stock_label(product) }}</b></a><div class="product-card__body"><small>{{ product.category.name }}</small><h2><a href="{{ url_for('public.product_detail', slug=product.slug) }}">{{ product.name }}</a></h2><p>{{ product.short_description or product.description or "Details are being added to the print card." }}</p><div><strong>From ${{ '%.2f'|format(product.base_price) }}</strong><a href="{{ url_for('public.product_detail', slug=product.slug) }}" aria-label="View {{ product.name }}">→</a></div></div></article>{% endfor %}</div>
+  {% else %}<div class="public-empty"><strong>No prints match those filters yet.</strong><p>Clear a filter or tell us what you hoped to find—we may be able to make it.</p><div class="public-actions public-actions--center"><a href="{{ url_for('public.shop') }}" class="public-button public-button--outline">Clear filters</a><a href="{{ url_for('public.custom_orders') }}" class="public-button public-button--teal">Ask for something custom</a></div></div>{% endif %}
+  <aside class="custom-ribbon"><div><p class="public-kicker">Can’t find the exact thing?</p><h2>That’s where custom gets fun.</h2><p>Share a rough idea, color, name, or photo. We’ll help turn it into something printable.</p></div><a href="{{ url_for('public.custom_orders') }}" class="public-button public-button--primary">Start a custom order →</a></aside>
 </section>
 {% endblock %}

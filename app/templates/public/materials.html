@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Materials & Options | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-8">
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]">What we print with</p>
+    <h1 class="mt-2 text-4xl font-semibold">Materials & options</h1>
+    <p class="mt-4 text-lg leading-8">
+      Every material has its own look, feel, and best use. Here's what we offer and how to choose.
+    </p>
+  </div>
+
+  <div class="space-y-5">
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold">PLA — the everyday choice</h2>
+      <p class="mt-3 text-sm leading-7">
+        PLA (polylactic acid) is our go-to material. It's made from renewable resources, prints cleanly, and comes in hundreds of colors. Most of our dragons, fidgets, flexi animals, and desk items are printed in PLA. It's lightweight, durable for indoor use, and has a smooth matte finish.
+      </p>
+    </article>
+
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold">Silk PLA — shiny and smooth</h2>
+      <p class="mt-3 text-sm leading-7">
+        Silk PLA has a glossy, almost satin-like finish that makes details pop. It's great for decorative pieces, gifts, and items where appearance matters most. Colors include gold, copper, silver, and jewel tones.
+      </p>
+    </article>
+
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold">Rainbow & color-shift PLA</h2>
+      <p class="mt-3 text-sm leading-7">
+        Rainbow filament transitions through multiple colors as it prints, creating unique gradients on every item. Color-shift filaments change appearance depending on lighting and viewing angle. Because each print captures the transition at a different point, every piece is one of a kind.
+      </p>
+    </article>
+
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold">PETG — tough and outdoor-ready</h2>
+      <p class="mt-3 text-sm leading-7">
+        PETG is stronger and more heat-resistant than PLA. It handles sunlight, humidity, and outdoor conditions much better. Choose PETG for signs, business card holders, planters, light manufacturing parts, or anything that will live outside or in a hot car.
+      </p>
+    </article>
+
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold">Multicolor prints</h2>
+      <p class="mt-3 text-sm leading-7">
+        With our AMS (Automatic Material System) units, we can print items in multiple colors on the same layer. This lets us add text, logos, and details without painting or gluing. Multicolor printing takes longer and uses more material, so it's best for signs, ornaments, and personalized gifts.
+      </p>
+    </article>
+
+    <article class="app-card p-6">
+      <h2 class="text-xl font-semibold">Matte & specialty PLA</h2>
+      <p class="mt-3 text-sm leading-7">
+        Matte PLA reduces visible layer lines for a soft, premium look. Glow-in-the-dark, glitter, marble, wood-fill, and carbon-fiber blends are also available for special projects. These specialty materials may affect print speed and pricing — just ask if you have something specific in mind.
+      </p>
+    </article>
+  </div>
+
+  <div class="app-card p-6">
+    <h2 class="text-2xl font-semibold">Which material should I choose?</h2>
+    <table class="mt-4 w-full text-sm">
+      <thead>
+        <tr class="border-b">
+          <th class="pb-2 text-left font-semibold">Use case</th>
+          <th class="pb-2 text-left font-semibold">Recommended material</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        <tr>
+          <td class="py-2 pr-4">Desktop toys, gifts, decor</td>
+          <td class="py-2">PLA or Silk PLA</td>
+        </tr>
+        <tr>
+          <td class="py-2 pr-4">Outdoor signs, practical parts</td>
+          <td class="py-2">PETG</td>
+        </tr>
+        <tr>
+          <td class="py-2 pr-4">Personalized gifts with text</td>
+          <td class="py-2">Multicolor PLA / PETG</td>
+        </tr>
+        <tr>
+          <td class="py-2 pr-4">Unique, one-of-a-kind items</td>
+          <td class="py-2">Rainbow or color-shift PLA</td>
+        </tr>
+        <tr>
+          <td class="py-2 pr-4">Vendor or business displays</td>
+          <td class="py-2">PETG or Matte PLA</td>
+        </tr>
+        <tr>
+          <td class="py-2 pr-4">Light manufacturing parts</td>
+          <td class="py-2">PETG</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="app-card p-6">
+    <h2 class="text-xl font-semibold">Colors & finishes</h2>
+    <p class="mt-3 text-sm leading-7">
+      We stock a rotating selection of filaments in standard colors, pastels, neons, metallics, and earth tones. If you need a specific color for a custom order, let us know and we'll source it if available. Keep in mind that colors can vary slightly between filament brands and batches.
+    </p>
+    <p class="mt-3 text-sm leading-7">
+      Most items can be finished with light sanding, but because 3D printed objects have thin walls, aggressive sanding can damage details. For a polished look on certain materials, we can apply clear coat or light acetone vapor treatment for PETG.
+    </p>
+  </div>
+
+  <div class="app-card p-6">
+    <h2 class="text-xl font-semibold">Not sure what you need?</h2>
+    <p class="mt-3 text-sm leading-7">
+      If you're unsure which material or finish is right for your project, send us a message. We're happy to walk through the options and recommend what works best for your specific use case.
+    </p>
+    <a href="{{ url_for('public.custom_orders') }}" class="app-btn app-btn-primary mt-4 inline-block">Ask us about your project</a>
+  </div>
+</section>
+{% endblock %}

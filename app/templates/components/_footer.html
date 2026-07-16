@@ -1,17 +1,21 @@
-<footer class="app-nav" style="border-top: 1px solid var(--color-border);">
-  <div class="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 text-sm sm:px-6 lg:px-8 md:grid-cols-[1.2fr_0.8fr]" style="color: var(--color-nav-muted);">
-    <div class="space-y-2">
-      <p class="text-base font-semibold" style="color: var(--color-text);">Dude Fish Printing</p>
-      <p>Family-run 3D printing for dragons, fidgets, flexi animals, personalized gifts, and small business displays.</p>
-      <p>&copy; {{ now().year if now is defined else "2025" }} Dude Fish Printing &mdash; Clarksville, Tennessee</p>
-    </div>
-    <div class="flex flex-wrap gap-4 md:justify-end">
-      <a href="{{ url_for('public.returns') }}" class="hover:opacity-80">Returns</a>
-      <a href="{{ url_for('public.customer_policies') }}" class="hover:opacity-80">Policies</a>
-      <a href="{{ url_for('public.privacy') }}" class="hover:opacity-80">Privacy</a>
-      <a href="{{ url_for('public.terms') }}" class="hover:opacity-80">Terms</a>
-      <a href="{{ url_for('public.faq') }}" class="hover:opacity-80">FAQ</a>
-      <a href="{{ url_for('public.contact') }}" class="hover:opacity-80">Contact</a>
-    </div>
-  </div>
+{% if current_user.is_authenticated %}
+<footer class="app-nav admin-footer">
+  <div class="mx-auto w-full max-w-7xl px-4 py-6 text-sm sm:px-6 lg:px-8">{{ app_name }} · Internal operations</div>
 </footer>
+{% else %}
+<footer class="public-footer">
+  <div class="public-wrap public-footer__grid">
+    <div class="public-footer__brand">
+      <a href="{{ url_for('public.home') }}" class="brand-mark brand-mark--footer">
+        <span class="brand-mark__fish" aria-hidden="true">DF</span>
+        <span><strong>Dude Fish</strong><small>Printing · Clarksville, TN</small></span>
+      </a>
+      <p>Playful gifts, useful pieces, and custom ideas—made layer by layer by a family-run print studio.</p>
+    </div>
+    <div><h2>Shop</h2><a href="{{ url_for('public.shop') }}">All prints</a><a href="{{ url_for('public.custom_orders') }}">Custom orders</a><a href="{{ url_for('public.market_schedule') }}">Markets</a><a href="{{ url_for('public.gallery') }}">Gallery</a></div>
+    <div><h2>Good to know</h2><a href="{{ url_for('public.printing_basics') }}">3D printing basics</a><a href="{{ url_for('public.materials') }}">Materials &amp; care</a><a href="{{ url_for('public.faq') }}">Common questions</a><a href="{{ url_for('public.contact') }}">Contact us</a></div>
+    <div><h2>Policies</h2><a href="{{ url_for('public.customer_policies') }}">Customer policies</a><a href="{{ url_for('public.shipping_policy') }}">Shipping</a><a href="{{ url_for('public.returns') }}">Returns &amp; order help</a><a href="{{ url_for('public.privacy') }}">Privacy</a></div>
+  </div>
+  <div class="public-wrap public-footer__base"><span>&copy; {{ now().year if now is defined else "2026" }} Dude Fish Printing</span><div><a href="{{ url_for('public.terms') }}">Terms</a><a href="{{ url_for('public.accessibility') }}">Accessibility</a><a href="{{ url_for('auth.login') }}">Staff sign in</a></div></div>
+</footer>
+{% endif %}
