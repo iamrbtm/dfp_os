@@ -199,7 +199,7 @@ def draft_generate_from_product(product_id: int):
     if draft is None:
         flash("Product not found.", "danger")
         return redirect(request.referrer or url_for("promotion.draft_list"))
-    flash(f"Draft generated from product.", "success")
+    flash("Draft generated from product.", "success")
     return redirect(url_for("promotion.draft_edit", draft_id=draft.id))
 
 
@@ -210,7 +210,7 @@ def draft_generate_from_market(market_id: int):
     if draft is None:
         flash("Market not found.", "danger")
         return redirect(request.referrer or url_for("promotion.draft_list"))
-    flash(f"Draft generated from market.", "success")
+    flash("Draft generated from market.", "success")
     return redirect(url_for("promotion.draft_edit", draft_id=draft.id))
 
 
@@ -221,7 +221,7 @@ def draft_generate_from_custom_request(cr_id: int):
     if draft is None:
         flash("Custom request not found.", "danger")
         return redirect(request.referrer or url_for("promotion.draft_list"))
-    flash(f"Draft generated from custom request.", "success")
+    flash("Draft generated from custom request.", "success")
     return redirect(url_for("promotion.draft_edit", draft_id=draft.id))
 
 

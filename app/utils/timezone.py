@@ -39,7 +39,7 @@ def get_user_timezone() -> str:
     except Exception:
         pass
     try:
-        business = db.session.query(Business).filter(Business.is_active == True).first()
+        business = db.session.query(Business).filter(Business.is_active).first()
         if business and business.timezone:
             return business.timezone
     except Exception:

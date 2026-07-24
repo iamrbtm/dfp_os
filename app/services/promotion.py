@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Any
 
 from flask import url_for
-from flask_login import current_user
 
 from app.extensions import db
 from app.models import CustomRequest, Market, Product
@@ -302,7 +300,9 @@ def _generate_qr_svg(target_url: str | None) -> str:
 
 def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
     from flask import current_app
-    import io, uuid, httpx
+    import io
+    import uuid
+    import httpx
     from PIL import Image
 
     ai_enabled = bool(current_app.config.get("AI_RECEIPT_PARSING_ENABLED", False) or
@@ -311,7 +311,7 @@ def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
     if not ai_enabled or not api_key:
         return sign
 
-    prompt_parts = [f"A professional market display sign for 3D printed products."]
+    prompt_parts = ["A professional market display sign for 3D printed products."]
     if sign.product:
         prompt_parts.append(f"Product: {sign.product.name}")
         if sign.product.short_description:
@@ -409,7 +409,6 @@ def _product_image_html(sign: SignAsset) -> str:
         img_path = product.images[0].file_path
     if not img_path:
         return ""
-    from flask import url_for
     try:
         img_url = url_for("static", filename=img_path.lstrip("/"))
     except Exception:

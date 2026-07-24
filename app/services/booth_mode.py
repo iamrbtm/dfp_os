@@ -14,7 +14,6 @@ from app.models import (
     InventoryRecord,
     Market,
     PosSaleItem,
-    PosSaleItemType,
     PosSession,
     PosSessionStatus,
     Product,

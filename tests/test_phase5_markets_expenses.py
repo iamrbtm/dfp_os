@@ -51,6 +51,24 @@ def _scoped_token(client, *scopes: str) -> str:
         _token, raw = create_api_token(user, "Scoped API Token", scopes=list(scopes))
         return raw
 
+@pytest.fixture()
+def admin_headers(app, client):
+    """Create an admin user and return Bearer token auth headers."""
+    from app.models import User, UserRole
+    with app.app_context():
+        user = User(
+            email="admin-headers@example.com",
+            first_name="Admin",
+            last_name="Headers",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
+        user.set_password("secret")
+        db.session.add(user)
+        db.session.commit()
+        _token, raw = create_api_token(user, "Admin Headers Token", scopes=["admin", "markets", "receipts"])
+        return {"Authorization": f"Bearer {raw}"}
+
 
 def test_market_model_can_be_created(app):
     with app.app_context():
@@ -673,7 +691,7 @@ def _ensure_csrf_cookie(client):
 
 
 def test_follow_up_queue_requires_auth(client):
-    resp = client.get("/prep_tasks/follow_ups/")
+    resp = client.get("/prep-tasks/follow_ups/")
     assert resp.status_code == 302
 
 
@@ -699,7 +717,7 @@ def test_follow_up_queue_loads(app, client, admin_headers):
         db.session.add(task)
         db.session.commit()
 
-    resp = client.get("/prep_tasks/follow_ups/", headers=admin_headers)
+    resp = client.get("/prep-tasks/follow_ups/", headers=admin_headers)
     assert resp.status_code == 200
     assert "Thank customer for purchase" in resp.data.decode("utf-8")
 
@@ -722,7 +740,7 @@ def test_follow_up_complete(app, client, admin_headers):
         db.session.commit()
         task_id = task.id
 
-    resp = client.post(f"/prep_tasks/follow_ups/{task_id}/complete", headers=admin_headers)
+    resp = client.post(f"/prep-tasks/follow_ups/{task_id}/complete", headers=admin_headers)
     assert resp.status_code in (200, 302)
 
     with app.app_context():
@@ -750,7 +768,7 @@ def test_follow_up_reopen(app, client, admin_headers):
         db.session.commit()
         task_id = task.id
 
-    resp = client.post(f"/prep_tasks/follow_ups/{task_id}/reopen", headers=admin_headers)
+    resp = client.post(f"/prep-tasks/follow_ups/{task_id}/reopen", headers=admin_headers)
     assert resp.status_code in (200, 302)
 
     with app.app_context():
@@ -778,7 +796,7 @@ def test_follow_up_archive(app, client, admin_headers):
         db.session.commit()
         task_id = task.id
 
-    resp = client.post(f"/prep_tasks/follow_ups/{task_id}/archive", headers=admin_headers)
+    resp = client.post(f"/prep-tasks/follow_ups/{task_id}/archive", headers=admin_headers)
     assert resp.status_code in (200, 302)
 
     with app.app_context():
@@ -968,13 +986,13 @@ def test_table_layout_archive(app, client, admin_headers):
 
 
 def test_impulse_tray_requires_auth(client):
-    resp = client.get("/prep_tasks/impulse-tray/")
+    resp = client.get("/prep-tasks/impulse-tray/")
     assert resp.status_code == 302
 
 
 def test_impulse_tray_loads(app, client, admin_headers):
     _ensure_csrf_cookie(client)
-    resp = client.get("/prep_tasks/impulse-tray/", headers=admin_headers)
+    resp = client.get("/prep-tasks/impulse-tray/", headers=admin_headers)
     assert resp.status_code == 200
 
 

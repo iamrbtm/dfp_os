@@ -1,68 +1,205 @@
 {% extends "base.html" %}
 {% block title %}Dude Fish Printing | Fun, useful & custom 3D prints{% endblock %}
-{% block head %}<meta name="description" content="Shop playful gifts, useful pieces, and custom 3D prints made by Dude Fish Printing in Clarksville, Tennessee.">{% endblock %}
+{% block head %}
+<meta name="description" content="Shop playful gifts, useful pieces, and custom 3D prints made by Dude Fish Printing in Clarksville, Tennessee.">
+<link rel="stylesheet" href="{{ url_for('static', filename='src/css/gsap-layouts.css') }}">
+{% endblock %}
 {% block body_class %}public-site{% endblock %}
 {% block content %}
-<section class="public-hero" data-home-hero>
-  <div class="public-wrap public-hero__grid">
-    <div class="public-hero__copy">
-      <p class="public-kicker"><span></span> Family-run in Clarksville, Tennessee</p>
-      <h1>Good ideas,<br><em>made layer by layer.</em></h1>
-      <p class="public-hero__lede">Shop playful gifts and useful pieces, or bring us a one-of-a-kind idea. We make approachable 3D printing for real life.</p>
-      <div class="public-actions">
-        <a href="{{ url_for('public.shop') }}" class="public-button public-button--primary">Shop what’s ready <span aria-hidden="true">→</span></a>
-        <a href="{{ url_for('public.custom_orders') }}" class="public-button public-button--ghost">Make something custom</a>
+
+<!-- Hero: Artistic Asymmetry -->
+<section class="hero-asymmetry" data-hero-asymmetry>
+  <div class="hero-asymmetry__inner">
+    <div class="hero-asymmetry__copy">
+      <p class="hero-asymmetry__kicker"><span></span> Family-run in Clarksville, Tennessee</p>
+      <h1 class="hero-asymmetry__title">Good ideas,<br><em>made layer by layer.</em></h1>
+      <p class="hero-asymmetry__lede">Shop playful gifts and useful pieces, or bring us a one-of-a-kind idea. We make approachable 3D printing for real life.</p>
+      <div class="hero-asymmetry__actions">
+        <a href="{{ url_for('public.shop') }}" class="hero-asymmetry__btn hero-asymmetry__btn--primary">Shop what's ready <span aria-hidden="true">&rarr;</span></a>
+        <a href="{{ url_for('public.custom_orders') }}" class="hero-asymmetry__btn hero-asymmetry__btn--ghost">Make something custom</a>
       </div>
-      <ul class="public-trust" aria-label="About Dude Fish Printing">
-        <li>Made in Clarksville</li><li>Small-batch printing</li><li>Custom ideas welcome</li>
+      <ul class="hero-asymmetry__trust" aria-label="About Dude Fish Printing">
+        <li>Made in Clarksville</li>
+        <li>Small-batch printing</li>
+        <li>Custom ideas welcome</li>
       </ul>
     </div>
-    <div class="filament-stage" role="img" aria-label="Colorful filament paths forming an abstract fish, representing a print built layer by layer">
-      <div class="filament-ring filament-ring--one"></div><div class="filament-ring filament-ring--two"></div>
-      <div class="fish-form"><span class="fish-form__eye"></span><span class="fish-form__tail"></span><strong>idea<br>to<br>object</strong></div>
-      <span class="color-chip color-chip--coral" aria-hidden="true">Sketch</span><span class="color-chip color-chip--teal" aria-hidden="true">Print</span>
+    <div class="hero-asymmetry__art" role="img" aria-label="Colorful filament paths forming an abstract fish, representing a print built layer by layer">
+      <div class="hero-asymmetry__float">
+        <div class="hero-asymmetry__float-ring hero-asymmetry__float-ring--one"></div>
+        <div class="hero-asymmetry__float-ring hero-asymmetry__float-ring--two"></div>
+        <div class="hero-asymmetry__float-shape">
+          <strong>idea<br>to<br>object</strong>
+        </div>
+        <span class="hero-asymmetry__float-chip hero-asymmetry__float-chip--coral" aria-hidden="true">Sketch</span>
+        <span class="hero-asymmetry__float-chip hero-asymmetry__float-chip--teal" aria-hidden="true">Print</span>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="public-section public-wrap" data-reveal-section>
-  <div class="section-heading"><p class="public-kicker public-kicker--dark">Find your kind of print</p><h2>A little fun. A lot of possibility.</h2><p>Start with what you’re shopping for. No 3D-printing vocabulary required.</p></div>
-  <div class="lane-grid">
-    <a href="{{ url_for('public.shop', category='dragons') }}" class="lane-card lane-card--coral">
-      <span class="lane-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 14c3-7 7-9 13-7-2 1-3 3-3 5 2 0 4 1 5 3-4-1-7 0-9 4-1-3-3-4-6-5Z"/><path d="M9 11c1 1 2 2 2 4"/></svg></span>
-      <strong>Playful things</strong><small>Dragons, flexis & fidgets</small><b>Browse playful <span aria-hidden="true">→</span></b>
+<!-- Bento Grid: Product Lanes -->
+<section class="bento-section public-wrap" data-bento-reveal>
+  <div class="bento-heading">
+    <p class="bento-heading__kicker">Find your kind of print</p>
+    <h2>A little fun. A lot of possibility.</h2>
+    <p>Start with what you're shopping for. No 3D-printing vocabulary required.</p>
+  </div>
+  <div class="bento-grid">
+    <a href="{{ url_for('public.shop', category='dragons') }}" class="bento-card bento-card--coral">
+      <span class="bento-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 14c3-7 7-9 13-7-2 1-3 3-3 5 2 0 4 1 5 3-4-1-7 0-9 4-1-3-3-4-6-5Z"/><path d="M9 11c1 1 2 2 2 4"/></svg></span>
+      <h3>Playful things</h3>
+      <p>Dragons, flexis &amp; fidgets</p>
+      <span class="bento-card__action">Browse playful &rarr;</span>
     </a>
-    <a href="{{ url_for('public.custom_orders') }}" class="lane-card lane-card--yellow">
-      <span class="lane-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/><path d="m18.5 15 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></svg></span>
-      <strong>Made for someone</strong><small>Names, colors & personal gifts</small><b>Start personalizing <span aria-hidden="true">→</span></b>
+    <a href="{{ url_for('public.custom_orders') }}" class="bento-card bento-card--yellow">
+      <span class="bento-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/><path d="m18.5 15 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></svg></span>
+      <h3>Made for someone</h3>
+      <p>Names, colors &amp; personal gifts</p>
+      <span class="bento-card__action">Start personalizing &rarr;</span>
     </a>
-    <a href="{{ url_for('public.shop', category='clarksville-tennessee') }}" class="lane-card lane-card--teal">
-      <span class="lane-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s6-5 6-11a6 6 0 1 0-12 0c0 6 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg></span>
-      <strong>Local favorites</strong><small>Clarksville & Tennessee ideas</small><b>Shop local <span aria-hidden="true">→</span></b>
+    <a href="{{ url_for('public.shop', category='clarksville-tennessee') }}" class="bento-card bento-card--teal">
+      <span class="bento-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s6-5 6-11a6 6 0 1 0-12 0c0 6 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg></span>
+      <h3>Local favorites</h3>
+      <p>Clarksville &amp; Tennessee ideas</p>
+      <span class="bento-card__action">Shop local &rarr;</span>
     </a>
-    <a href="{{ url_for('public.small_business_products') }}" class="lane-card lane-card--navy">
-      <span class="lane-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11H4Z"/><path d="M9 20v-6h6v6M8 10h.01M12 10h.01M16 10h.01"/></svg></span>
-      <strong>Useful prints</strong><small>Displays, signs & practical parts</small><b>See useful ideas <span aria-hidden="true">→</span></b>
+    <a href="{{ url_for('public.small_business_products') }}" class="bento-card bento-card--navy">
+      <span class="bento-card__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11H4Z"/><path d="M9 20v-6h6v6M8 10h.01M12 10h.01M16 10h.01"/></svg></span>
+      <h3>Useful prints</h3>
+      <p>Displays, signs &amp; practical parts</p>
+      <span class="bento-card__action">See useful ideas &rarr;</span>
     </a>
   </div>
 </section>
 
-<section class="public-section public-section--paper" data-reveal-section>
+<!-- Product Shelf: Image Scale & Fade -->
+<section class="product-shelf-cinematic" data-products-reveal>
   <div class="public-wrap">
-    <div class="section-heading section-heading--row"><div><p class="public-kicker public-kicker--dark">From the print table</p><h2>Ready to bring home</h2></div><a href="{{ url_for('public.shop') }}" class="text-link">See everything →</a></div>
+    <div class="bento-heading bento-heading--row">
+      <div>
+        <p class="bento-heading__kicker">From the print table</p>
+        <h2>Ready to bring home</h2>
+      </div>
+      <a href="{{ url_for('public.shop') }}" class="text-link" style="font-family: 'Cabinet Grotesk', 'Avenir Next', ui-sans-serif, system-ui, sans-serif; font-weight: 600; font-size: 0.85rem;">See everything &rarr;</a>
+    </div>
     {% set homepage_products = featured if featured else latest_products %}
-    {% if homepage_products %}<div class="product-shelf">{% for product in homepage_products %}<article class="public-product-card"><a href="{{ url_for('public.product_detail', slug=product.slug) }}" class="product-photo"><span>Photo coming soon</span></a><div class="product-card__body"><small>{{ product.category.name if product.category else '3D print' }}</small><h3><a href="{{ url_for('public.product_detail', slug=product.slug) }}">{{ product.name }}</a></h3><div><strong>From ${{ '%.2f'|format(product.base_price) }}</strong><a href="{{ url_for('public.product_detail', slug=product.slug) }}" aria-label="View {{ product.name }}"><span aria-hidden="true">→</span></a></div></div></article>{% endfor %}</div>
-    {% else %}<div class="public-empty"><strong>The next batch is on the print table.</strong><p>Browse the full shop or tell us what you’d like made.</p><a href="{{ url_for('public.shop') }}" class="public-button public-button--primary">Browse the shop</a></div>{% endif %}
+    {% if homepage_products %}
+    <div class="product-grid-cinematic">
+      {% for product in homepage_products %}
+      <article class="product-card-cinematic">
+        <a href="{{ url_for('public.product_detail', slug=product.slug) }}" class="product-card-cinematic__image" tabindex="-1" aria-hidden="true">
+          <span>Photo coming soon</span>
+        </a>
+        <div class="product-card-cinematic__body">
+          <small class="product-card-cinematic__category">{{ product.category.name if product.category else '3D print' }}</small>
+          <h3><a href="{{ url_for('public.product_detail', slug=product.slug) }}">{{ product.name }}</a></h3>
+          <div class="product-card-cinematic__price">
+            <strong>From ${{ '%.2f'|format(product.base_price) }}</strong>
+            <a href="{{ url_for('public.product_detail', slug=product.slug) }}" aria-label="View {{ product.name }}"><span aria-hidden="true">&rarr;</span></a>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state-cinematic">
+      <strong>The next batch is on the print table.</strong>
+      <p>Browse the full shop or tell us what you'd like made.</p>
+      <a href="{{ url_for('public.shop') }}" class="hero-asymmetry__btn hero-asymmetry__btn--primary">Browse the shop</a>
+    </div>
+    {% endif %}
   </div>
 </section>
 
-<section class="public-section public-wrap custom-story" data-reveal-section><div><p class="public-kicker public-kicker--dark">Your idea is enough</p><h2>Custom doesn’t have to be complicated.</h2><p>Send a rough thought, photo, or sketch. We’ll help with the printable details and give you a clear quote before anything is made.</p><a href="{{ url_for('public.custom_orders') }}" class="public-button public-button--teal">Tell us your idea <span>→</span></a></div><ol><li><span>1</span><div><strong>Share the idea</strong><small>A sentence or picture works.</small></div></li><li><span>2</span><div><strong>Choose the details</strong><small>We’ll help with size, color, and material.</small></div></li><li><span>3</span><div><strong>Approve your quote</strong><small>No surprise printing or payment.</small></div></li><li><span>4</span><div><strong>We make it</strong><small>Pick it up locally or have it shipped.</small></div></li></ol></section>
+<!-- Split Screen: Custom Order Process -->
+<section class="public-wrap split-screen" data-split-reveal>
+  <div class="split-screen__text">
+    <p class="split-screen__kicker">Your idea is enough</p>
+    <h2>Custom doesn't have to be complicated.</h2>
+    <p>Send a rough thought, photo, or sketch. We'll help with the printable details and give you a clear quote before anything is made.</p>
+    <div class="split-screen__counter">
+      <div class="split-screen__counter-item">
+        <div class="split-screen__counter-number" data-count="500">0</div>
+        <div class="split-screen__counter-label">Ideas shared</div>
+      </div>
+      <div class="split-screen__counter-item">
+        <div class="split-screen__counter-number" data-count="98">0</div>
+        <div class="split-screen__counter-label">Satisfaction %</div>
+      </div>
+      <div class="split-screen__counter-item">
+        <div class="split-screen__counter-number" data-count="50">0</div>
+        <div class="split-screen__counter-label">Cities reached</div>
+      </div>
+    </div>
+    <a href="{{ url_for('public.custom_orders') }}" class="hero-asymmetry__btn hero-asymmetry__btn--primary" style="background: var(--public-teal);">Tell us your idea <span aria-hidden="true">&rarr;</span></a>
+  </div>
+  <div class="timeline-strip">
+    <div class="timeline-strip__item">
+      <span class="timeline-strip__number">1</span>
+      <div class="timeline-strip__content">
+        <h4>Share the idea</h4>
+        <p>A sentence or picture works.</p>
+      </div>
+    </div>
+    <div class="timeline-strip__item">
+      <span class="timeline-strip__number">2</span>
+      <div class="timeline-strip__content">
+        <h4>Choose the details</h4>
+        <p>We'll help with size, color, and material.</p>
+      </div>
+    </div>
+    <div class="timeline-strip__item">
+      <span class="timeline-strip__number">3</span>
+      <div class="timeline-strip__content">
+        <h4>Approve your quote</h4>
+        <p>No surprise printing or payment.</p>
+      </div>
+    </div>
+    <div class="timeline-strip__item">
+      <span class="timeline-strip__number">4</span>
+      <div class="timeline-strip__content">
+        <h4>We make it</h4>
+        <p>Pick it up locally or have it shipped.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-{% if upcoming_markets %}<section class="market-band" data-reveal-section><div class="public-wrap market-band__inner"><div><p class="public-kicker">See it in person</p><h2>Find us at the next market.</h2><p>Hold a flexi, test a fidget, and see the colors in real life.</p></div><div class="market-card"><small>Up next</small><strong>{{ upcoming_markets[0].name }}</strong><span>{{ upcoming_markets[0].event_date or 'Date coming soon' }}{% if upcoming_markets[0].location_name %} · {{ upcoming_markets[0].location_name }}{% endif %}</span><a href="{{ url_for('public.market_schedule') }}">View market details →</a></div></div></section>{% endif %}
+<!-- Market Band: Cinematic -->
+{% if upcoming_markets %}
+<section class="market-band-cinematic" data-reveal>
+  <div class="market-band-cinematic__inner">
+    <div>
+      <p class="split-screen__kicker" style="color: var(--public-teal);">See it in person</p>
+      <h2>Find us at the next market.</h2>
+      <p>Hold a flexi, test a fidget, and see the colors in real life.</p>
+    </div>
+    <div class="market-card-cinematic">
+      <small>Up next</small>
+      <strong>{{ upcoming_markets[0].name }}</strong>
+      <span>{{ upcoming_markets[0].event_date or 'Date coming soon' }}{% if upcoming_markets[0].location_name %} &middot; {{ upcoming_markets[0].location_name }}{% endif %}</span>
+      <a href="{{ url_for('public.market_schedule') }}">View market details &rarr;</a>
+    </div>
+  </div>
+</section>
+{% endif %}
 
-<section class="public-section public-wrap learn-strip" data-reveal-section><div><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M8.5 14.5a6 6 0 1 1 7 0c-.9.7-1.5 1.6-1.5 2.5h-4c0-.9-.6-1.8-1.5-2.5Z"/></svg></span><div><p class="public-kicker public-kicker--dark">New to 3D printing?</p><h2>We explain the useful bits in plain English.</h2><p>Learn what materials feel like, how to care for a print, and what to expect when ordering.</p></div><a href="{{ url_for('public.printing_basics') }}" class="public-button public-button--outline">Learn the basics</a></div></section>
+<!-- Learn Strip: Cinematic -->
+<section class="learn-strip-cinematic public-wrap" data-reveal>
+  <div>
+    <span class="learn-strip-cinematic__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M8.5 14.5a6 6 0 1 1 7 0c-.9.7-1.5 1.6-1.5 2.5h-4c0-.9-.6-1.8-1.5-2.5Z"/></svg></span>
+    <div>
+      <p class="bento-heading__kicker">New to 3D printing?</p>
+      <h2>We explain the useful bits in plain English.</h2>
+      <p>Learn what materials feel like, how to care for a print, and what to expect when ordering.</p>
+    </div>
+    <a href="{{ url_for('public.printing_basics') }}" class="hero-asymmetry__btn hero-asymmetry__btn--primary" style="background: transparent; border: 1.5px solid var(--public-ink); color: var(--public-ink);">Learn the basics</a>
+  </div>
+</section>
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='dist/vendor/gsap.min.js') }}"></script>
-<script src="{{ url_for('static', filename='src/js/home-animations.js') }}"></script>
+<script src="{{ url_for('static', filename='dist/vendor/ScrollTrigger.min.js') }}"></script>
+<script src="{{ url_for('static', filename='src/js/gsap-home.js') }}"></script>
 {% endblock %}

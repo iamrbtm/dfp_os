@@ -3,10 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import and_, delete, func, select, text
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -264,7 +263,7 @@ def _import_table_rows(
             quoted_cols = ", ".join(f"`{col}`" for col in col_names)
             cur.execute(f"SELECT COUNT(*) AS cnt FROM `{table_name}`")
             count_row = cur.fetchone()
-            total = count_row.get("cnt", 0) if count_row else 0
+            count_row.get("cnt", 0) if count_row else 0
 
             order_cols = ", ".join(f"`{c}`" for c in (pk_columns or [col_names[0]]))
             cur.execute(f"SELECT {quoted_cols} FROM `{table_name}` ORDER BY {order_cols}")

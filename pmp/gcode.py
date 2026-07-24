@@ -231,7 +231,7 @@ def _param(line: str, letter: str) -> float | None:
 
 def _scan(lines: list[str]) -> tuple[list[_Layer], list[int | None], float | None]:
     """Return (layers, boundary_line_index_per_layer, filament_diameter)."""
-    if any(_is_boundary(l) for l in lines):
+    if any(_is_boundary(line) for line in lines):
         return _scan_comment(lines)
     return _scan_zfallback(lines)
 
@@ -402,9 +402,9 @@ def _compute_segments(
 ) -> dict[int, list[tuple[int, int]]]:
     """Per tool, maximal contiguous extruding runs, merging gaps < min_gap."""
     tool_layers: dict[int, list[int]] = defaultdict(list)
-    for l in layer_infos:
-        for t in l.tools:
-            tool_layers[t].append(l.index)
+    for layer in layer_infos:
+        for t in layer.tools:
+            tool_layers[t].append(layer.index)
 
     segments: dict[int, list[tuple[int, int]]] = {}
     for t in sorted(tool_layers):
@@ -447,18 +447,18 @@ def analyze(
 
     layer_infos = [
         LayerInfo(
-            index=l.index,
-            z=l.z,
-            tools=set(l.extrusion.keys()),
-            extrusion_by_tool=dict(l.extrusion),
+            index=layer.index,
+            z=layer.z,
+            tools=set(layer.extrusion.keys()),
+            extrusion_by_tool=dict(layer.extrusion),
         )
-        for l in layers
+        for layer in layers
     ]
 
     conflicts = [
-        Conflict(layer=l.index, tools=set(l.extrusion.keys()))
-        for l in layers
-        if len(l.extrusion) > max_tools
+        Conflict(layer=layer.index, tools=set(layer.extrusion.keys()))
+        for layer in layers
+        if len(layer.extrusion) > max_tools
     ]
 
     last_index = len(layers) - 1
@@ -616,13 +616,13 @@ def _merged_plan(
     """Plan for the report with each loser tool's extrusion given to its survivor."""
     mapping = {loser: survivor for loser, survivor in merges}
     layers: list[LayerInfo] = []
-    for l in report.layers:
+    for layer in report.layers:
         ext: dict[int, float] = {}
-        for t, v in l.extrusion_by_tool.items():
+        for t, v in layer.extrusion_by_tool.items():
             tt = mapping.get(t, t)
             ext[tt] = ext.get(tt, 0.0) + v
         layers.append(
-            LayerInfo(index=l.index, z=l.z, tools=set(ext), extrusion_by_tool=ext)
+            LayerInfo(index=layer.index, z=layer.z, tools=set(ext), extrusion_by_tool=ext)
         )
     stub = GcodeReport(
         layers=layers, first_use={}, last_use={}, conflicts=[],
@@ -648,7 +648,7 @@ def _merge_label(
         return f"T{t} ({hexv})" if hexv else f"T{t}"
 
     parts = [
-        f"merge {tool_desc(l)} into {tool_desc(s)}" for l, s in merges
+        f"merge {tool_desc(loser)} into {tool_desc(survivor)}" for loser, survivor in merges
     ]
     phrase = _shade_phrase(max(delta_es))
     before = f"{pauses_before} pauses" if base_feasible else "infeasible"

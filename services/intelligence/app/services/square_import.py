@@ -74,7 +74,9 @@ def _batch_response(batch: ImportBatch) -> ImportBatchResponse:
     )
 
 
-async def import_square_items_csv(db: AsyncSession, content: bytes, source_name: str | None = None) -> SquareImportResponse:
+async def import_square_items_csv(
+    db: AsyncSession, content: bytes, source_name: str | None = None
+) -> SquareImportResponse:
     text = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
     if reader.fieldnames is None:

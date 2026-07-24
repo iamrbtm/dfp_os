@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.prep_tasks import bp
 from app.forms.admin import PrepTaskAdminForm, PrepTaskTemplateForm
-from app.models import PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate, UserRole
+from app.models import PrepTask, PrepTaskStatus, PrepTaskTemplate, UserRole
 from app.services.admin_mutations import (
     create_resource as create_admin_resource,
     snapshot_instance,

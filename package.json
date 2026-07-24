@@ -5,7 +5,7 @@
   "description": "Tailwind asset pipeline for Dude Fish OS.",
   "scripts": {
     "build:css": "tailwindcss -i ./app/static/src/input.css -o ./app/static/dist/app.css --minify",
-    "build:js": "mkdir -p ./app/static/dist/vendor && cp ./node_modules/gsap/dist/gsap.min.js ./app/static/dist/vendor/gsap.min.js",
+    "build:js": "mkdir -p ./app/static/dist/vendor && cp ./node_modules/gsap/dist/gsap.min.js ./app/static/dist/vendor/gsap.min.js && cp ./node_modules/gsap/dist/ScrollTrigger.min.js ./app/static/dist/vendor/ScrollTrigger.min.js",
     "build": "npm run build:css && npm run build:js",
     "watch:css": "tailwindcss -i ./app/static/src/input.css -o ./app/static/dist/app.css --watch",
     "test:e2e": "playwright test"

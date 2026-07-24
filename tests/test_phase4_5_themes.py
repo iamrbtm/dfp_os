@@ -78,7 +78,7 @@ def test_api_list_themes(client, api_token):
     assert response.status_code == 200
     data = response.get_json()
     assert isinstance(data, list)
-    assert len(data) == 10
+    assert len(data) == 12
 
 
 def test_api_current_theme(client, login_admin):

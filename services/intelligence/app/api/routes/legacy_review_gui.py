@@ -6,12 +6,12 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.schemas.imports import LegacyTableReviewRequest
 from app.security import verify_internal_token
 from app.services.legacy_mariadb import list_imported_tables, review_table
 from app.services.legacy_promotion import promote_kept_tables
-from app.config import settings
 
 router = APIRouter(
     prefix="/admin",
@@ -46,10 +46,10 @@ def _recommend(table_name: str) -> tuple[str, str]:
         return ("exclude", f"Likely system/internal table based on name pattern ({lower}).")
 
     if any(p in lower for p in PRODUCT_PATTERNS):
-        return ("keep", f"Contains product-related data — likely useful for normalization.")
+        return ("keep", "Contains product-related data — likely useful for normalization.")
 
     if any(p in lower for p in BUSINESS_PATTERNS):
-        return ("keep", f"Contains business records — likely useful for normalization.")
+        return ("keep", "Contains business records — likely useful for normalization.")
 
     return ("keep", "No obvious system pattern detected. Keep by default for human review.")
 

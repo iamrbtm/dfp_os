@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -142,7 +142,7 @@ def get_data_quality_summary() -> dict[str, Any]:
 
     from app.models import Product
 
-    total_products = db.session.query(func.count(Product.id)).scalar() or 0
+    db.session.query(func.count(Product.id)).scalar() or 0
     products_no_price = (
         db.session.query(func.count(Product.id))
         .filter((Product.base_price.is_(None)) | (Product.base_price == 0))
@@ -211,7 +211,6 @@ def get_vendor_market_heat_map(params: dict[str, str]) -> list[dict[str, Any]]:
 
         revenue = market.calculated_revenue
         margin_pct = market.profit_margin_pct
-        distance = None
 
         data.append(
             {
@@ -302,6 +301,7 @@ def get_market_application_pipeline_report(params: dict[str, str]) -> dict[str, 
 
 
 def get_printer_reliability_report() -> dict[str, Any]:
+    from app.services.printer_reliability import get_reliability_report_rows
     rows = get_reliability_report_rows()
     highest_risk = sorted(rows, key=lambda row: (row["failure_rate"], row["failed_count"]), reverse=True)
     return {

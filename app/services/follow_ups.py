@@ -2,18 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func
 
 from app.extensions import db
 from app.models import (
     CustomRequest,
     CustomRequestStatus,
-    Customer,
     FollowUpType,
     Market,
     MarketStatus,
-    Order,
-    OrderStatus,
     PosSale,
     PosSaleStatus,
     PosSession,
@@ -93,7 +89,7 @@ def _gen_from_pos_sales(market: Market, existing: list[PrepTask], actor=None) ->
                 tasks.append(_make_task(
                     market=market,
                     follow_up_type=FollowUpType.THANK_YOU,
-                    title=f"Send thank-you to customer from market sale",
+                    title="Send thank-you to customer from market sale",
                     customer_id=customer_id,
                     related_pos_sale_id=sale.id,
                     due_days=1,

@@ -36,10 +36,18 @@
     {% endif %}
 
     {% if is_module_enabled('products') %}
-    <a href="{{ url_for('products.list_resource', resource_key='products') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'products' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Products
-    </a>
+    <div>
+      <a href="{{ url_for('products.studio') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+         style="{% if active_section == 'products' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+        Products
+      </a>
+      {% if active_section == 'products' %}
+      <a href="{{ url_for('products.list_resource', resource_key='categories') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">Categories</a>
+      <a href="{{ url_for('products.list_resource', resource_key='collections') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">Collections</a>
+      {% endif %}
+    </div>
     {% endif %}
 
     {% if is_module_enabled('customers') %}
@@ -64,10 +72,16 @@
     {% endif %}
 
     {% if is_module_enabled('printers') %}
-    <a href="{{ url_for('printers.list_resource', resource_key='printers') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'printers' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Printers
-    </a>
+    <div>
+      <a href="{{ url_for('printers.list_resource', resource_key='printers') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+         style="{% if active_section == 'printers' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+        Printers
+      </a>
+      {% if active_section == 'printers' %}
+      <a href="{{ url_for('printers.reliability') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">Reliability</a>
+      {% endif %}
+    </div>
     {% endif %}
 
     {% if is_module_enabled('print_jobs') %}
@@ -92,10 +106,20 @@
     {% endif %}
 
     {% if is_module_enabled('settings') %}
-    <a href="{{ url_for('settings.themes') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'settings' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Settings
-    </a>
+    <div>
+      <a href="{{ url_for('settings.settings_list') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+         style="{% if active_section == 'settings' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+        Settings
+      </a>
+      {% if active_section == 'settings' %}
+      <a href="{{ url_for('settings.business_settings') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">Business</a>
+      <a href="{{ url_for('settings.module_status') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">Modules</a>
+      <a href="{{ url_for('settings.themes') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">Themes</a>
+      {% endif %}
+    </div>
     {% endif %}
 
     {% if is_module_enabled('feature_flags') %}
@@ -113,10 +137,18 @@
     {% endif %}
 
     {% if is_module_enabled('prep_tasks') %}
-    <a href="{{ url_for('prep_tasks.list_resource', resource_key='tasks') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'prep_tasks' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Prep Tasks
-    </a>
+    <div>
+      <a href="{{ url_for('prep_tasks.list_resource', resource_key='tasks') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+         style="{% if active_section == 'prep_tasks' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+        Prep Tasks
+      </a>
+      {% if active_section == 'prep_tasks' %}
+      <a href="{{ url_for('prep_tasks.follow_up_queue') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">Follow-Up Queue</a>
+      <a href="{{ url_for('prep_tasks.impulse_tray_optimizer') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
+         style="color: var(--color-sidebar-muted);">Impulse Tray</a>
+      {% endif %}
+    </div>
     {% endif %}
 
     {% if is_module_enabled('promotion') %}

@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable
 
-from sqlalchemy import func, select
 
 from app.extensions import db
 from app.models import (

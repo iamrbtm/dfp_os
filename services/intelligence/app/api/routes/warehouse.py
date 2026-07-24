@@ -48,4 +48,6 @@ async def seasonal_summaries(
     limit: int = Query(default=25, ge=1, le=250),
     db: AsyncSession = Depends(get_db),
 ):
-    return SeasonalProductPerformanceListResponse(items=await list_seasonal_summaries(db, sale_month=sale_month, limit=limit))
+    return SeasonalProductPerformanceListResponse(
+        items=await list_seasonal_summaries(db, sale_month=sale_month, limit=limit)
+    )
