@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 
+from flask import current_app
 from sqlalchemy import func
 
 from app.extensions import db
@@ -120,26 +121,156 @@ def _latest_model_analysis(product: Product) -> dict[str, object] | None:
     }
 
 
-def _best_spool_match() -> tuple[Decimal, int | None]:
-    query = FilamentSpool.query.filter(
+@dataclass
+class CostResolverResult:
+    """Outcome of resolving a filament cost for a product (Issues 13, 25, 47).
+
+    ``cost_per_gram`` is the resolved price to apply. ``spool_id`` is the
+    primary spool behind the resolution (the exact spool when one is selected,
+    otherwise the most-recently-updated spool in the matched set, or ``None``
+    when no spools exist). ``confidence`` follows the Issue 25 rules and never
+    depends on the print failure rate. ``evidence`` records how the value was
+    derived for audit/debugging.
+    """
+
+    cost_per_gram: Decimal
+    spool_id: int | None
+    confidence: str
+    evidence: dict = field(default_factory=dict)
+
+
+def _spool_sort_key(spool: FilamentSpool):
+    return spool.updated_at or spool.created_at
+
+
+def _weighted_average(spoons: list[FilamentSpool]) -> Decimal:
+    total_grams = sum(Decimal(str(s.remaining_weight_grams or 0)) for s in spoons)
+    if total_grams <= 0:
+        return Decimal("0.0000")
+    weighted = sum(
+        Decimal(str(s.remaining_weight_grams or 0)) * Decimal(str(s.cost_per_gram or 0))
+        for s in spoons
+    )
+    return decimal4(weighted / total_grams)
+
+
+def resolve_material_cost(
+    business_id: int | None,
+    material_type: str | None,
+    *,
+    color: str | None = None,
+    spool_id: int | None = None,
+    fallback_policy: str = "business_material",
+) -> CostResolverResult:
+    """Resolve a cost-per-gram for a product's filament (Issues 13, 25, 47).
+
+    Matching priority:
+
+    (a) ``spool_id`` given and exists and matches ``business_id`` (or
+        ``business_id`` is None) -> use that spool's cost, confidence "high".
+    (b) same business + same ``material_type`` (color optional refinement) ->
+        weighted-average ``cost_per_gram`` by ``remaining_weight_grams`` across
+        matched spools, confidence "high".
+    (c) same business, no material match -> fallback average across that
+        business's spools, confidence "medium", evidence["fallback_reason"]
+        = "no_material_match".
+    (d) no spools at all -> cost_per_gram=0, confidence "none",
+        evidence["fallback_reason"] = "no_spools".
+
+    When ``business_id`` is not None, every query is filtered to that business
+    (cross-business isolation is the core fix of Issue 13). Only spools with
+    remaining weight and a positive cost are considered for averaging.
+    """
+    base_query = FilamentSpool.query.filter(
         FilamentSpool.remaining_weight_grams > 0,
         FilamentSpool.cost_per_gram > 0,
     )
-    candidates = query.all()
-    if not candidates:
-        return Decimal("0.0000"), None
+    if business_id is not None:
+        base_query = base_query.filter(FilamentSpool.business_id == business_id)
 
-    total_grams = sum(Decimal(str(candidate.remaining_weight_grams or 0)) for candidate in candidates)
-    if total_grams <= 0:
-        return Decimal("0.0000"), None
+    # (a) explicit spool selection.
+    if spool_id is not None:
+        spool = db.session.get(FilamentSpool, spool_id)
+        if spool is not None and (business_id is None or spool.business_id == business_id):
+            return CostResolverResult(
+                cost_per_gram=decimal4(spool.cost_per_gram),
+                spool_id=spool.id,
+                confidence="high",
+                evidence={
+                    "matched_spool_ids": [spool.id],
+                    "weighted_average": False,
+                    "match_type": "spool_id",
+                },
+            )
 
-    weighted_cost = sum(
-        Decimal(str(candidate.remaining_weight_grams or 0))
-        * Decimal(str(candidate.cost_per_gram or 0))
-        for candidate in candidates
+    # (b) same business + same material_type (color optional refinement).
+    material_query = base_query
+    if material_type is not None:
+        material_query = material_query.filter(
+            FilamentSpool.material_type.ilike(material_type)
+        )
+    if color is not None:
+        material_query = material_query.filter(FilamentSpool.color_name.ilike(color))
+    matched = material_query.all()
+    if matched:
+        return CostResolverResult(
+            cost_per_gram=_weighted_average(matched),
+            spool_id=max(matched, key=_spool_sort_key).id,
+            confidence="high",
+            evidence={
+                "matched_spool_ids": [s.id for s in matched],
+                "weighted_average": True,
+                "match_type": "material",
+                "business_id": business_id,
+                "material_type": material_type,
+            },
+        )
+
+    # (c) fallback average across the business's spools (no material match).
+    # When business_id is None this averages across every spool globally.
+    fallback_query = base_query
+    fallback = fallback_query.all()
+    if fallback:
+        return CostResolverResult(
+            cost_per_gram=_weighted_average(fallback),
+            spool_id=max(fallback, key=_spool_sort_key).id,
+            confidence="medium",
+            evidence={
+                "matched_spool_ids": [s.id for s in fallback],
+                "weighted_average": True,
+                "match_type": "fallback",
+                "business_id": business_id,
+                "fallback_reason": "no_material_match",
+                "fallback_policy": fallback_policy,
+            },
+        )
+
+    # (d) no spools at all.
+    return CostResolverResult(
+        cost_per_gram=Decimal("0.0000"),
+        spool_id=None,
+        confidence="none",
+        evidence={
+            "matched_spool_ids": [],
+            "weighted_average": False,
+            "match_type": "none",
+            "business_id": business_id,
+            "fallback_reason": "no_spools",
+            "fallback_policy": fallback_policy,
+        },
     )
-    latest = max(candidates, key=lambda candidate: candidate.updated_at or candidate.created_at)
-    return decimal4(weighted_cost / total_grams), latest.id
+
+
+def _best_spool_match() -> tuple[Decimal, int | None]:
+    """Backward-compatible global weighted average (Issue 13).
+
+    Existing callers (app/tasks/model_analysis.py) expect a global
+    weighted-average cost and the most-recent spool id. This is a thin wrapper
+    around :func:`resolve_material_cost` with no business or material filter so
+    pre-existing behavior is preserved.
+    """
+    result = resolve_material_cost(business_id=None, material_type=None)
+    return result.cost_per_gram, result.spool_id
 
 
 def _count_jobs(
@@ -197,8 +328,8 @@ def calculate_product_cost(
     labor_rate: Decimal | None = None,
     packaging_cost: Decimal | None = None,
     machine_hour_rate: Decimal | None = None,
-    payment_fee_rate: Decimal = Decimal("0.00"),
-    market_allocation: Decimal = Decimal("0.00"),
+    payment_fee_rate: Decimal | None = None,
+    market_allocation: Decimal | None = None,
     failure_rate: Decimal | None = None,
     target_margin_percent: Decimal | None = None,
     printer_model: str | None = None,
@@ -214,7 +345,28 @@ def calculate_product_cost(
         str(target_margin_percent if target_margin_percent is not None else settings["target_margin_percent"])
     )
 
-    resolved_cost_per_gram, selected_spool_id = _best_spool_match()
+    # Issue 38 — product-level overrides. The caller may pass None to mean "use
+    # the product's configured override if one exists, else 0". The override
+    # columns are added by the integrator later; getattr keeps this working
+    # whether or not they exist yet.
+    if payment_fee_rate is None:
+        payment_fee_rate = getattr(product, "payment_fee_rate_override", None)
+    payment_fee_rate = Decimal(str(payment_fee_rate or "0"))
+    if market_allocation is None:
+        market_allocation = getattr(product, "market_allocation_override", None)
+    market_allocation = Decimal(str(market_allocation or "0"))
+
+    # Issue 25 — resolve filament cost from the product's business + material.
+    material_type: str | None = None
+    analysis_config = product.model_analysis_config or {}
+    if isinstance(analysis_config, dict):
+        material_type = analysis_config.get("material")
+    resolver = resolve_material_cost(
+        business_id=product.business_id,
+        material_type=material_type,
+    )
+    resolved_cost_per_gram = resolver.cost_per_gram
+    selected_spool_id = resolver.spool_id
     model_data = _latest_model_analysis(product)
     if model_data is None:
         filament_grams = Decimal("0.00")
@@ -232,7 +384,14 @@ def calculate_product_cost(
         model_volume_cm3 = decimal4(model_data["model_volume_cm3"])
         material_cost = money(filament_grams * resolved_cost_per_gram)
         machine_cost = money((print_minutes / Decimal("60")) * machine_hour_rate)
-        evidence_source = str(model_data["evidence_source"])
+        # Issue 25 — confidence comes from the resolver and never depends on
+        # the failure rate. cost_per_gram == 0 means no spool cost data.
+        if resolved_cost_per_gram <= 0:
+            evidence_source = "no_spool_cost"
+            confidence = "none"
+        else:
+            evidence_source = str(model_data["evidence_source"])
+            confidence = resolver.confidence
         resolved_failure_rate = _resolve_failure_rate(
             product=product,
             printer_model=printer_model,
@@ -240,9 +399,6 @@ def calculate_product_cost(
                 str(failure_rate if failure_rate is not None else settings["failure_rate"])
             ),
         )
-        confidence = "high" if selected_spool_id is not None and resolved_failure_rate > Decimal("0") else "medium"
-        if selected_spool_id is None:
-            confidence = "low"
 
     labor_cost = money((labor_minutes / Decimal("60")) * labor_rate)
     base_cost = money(material_cost + labor_cost + machine_cost + packaging_cost + market_allocation)
@@ -319,14 +475,20 @@ def persist_cost_snapshot(
     scale_percent: int | None = None,
     copies: int | None = None,
     cost_resolver_evidence: dict | None = None,
+    actor_id: int | None = None,
+    audit_client=None,
 ) -> CostSnapshot:
-    """Persist one cost snapshot with full evidence (Issues 15, 26).
+    """Persist one cost snapshot with full evidence (Issues 15, 26, 17).
 
     Acquires a row lock on the product so two concurrent calculations cannot
     both create a "current" snapshot. Within the same transaction the prior
     current snapshot is marked stale, the new one inserted, then the caller
     commits to release the lock. The new snapshot always links to a model
     asset / analysis run when one is available (Issue 15).
+
+    Issue 17 — an optional audit hook fires when ``audit_client`` is supplied
+    or when the app-level audit client is enabled via ``AUDIT_LOG_ENABLED``.
+    A missing/unavailable audit service never breaks snapshot creation.
     """
     # Issue 26 — SELECT ... FOR UPDATE on the product row.
     db.session.query(Product).filter(Product.id == product.id).with_for_update().first()
@@ -381,7 +543,49 @@ def persist_cost_snapshot(
     db.session.add(snapshot)
     db.session.flush()
     breakdown.snapshot_id = snapshot.id
+
+    # Issue 17 — best-effort audit event for the new snapshot.
+    _record_snapshot_audit(
+        snapshot=snapshot,
+        breakdown=breakdown,
+        analysis_run_id=analysis_run_id,
+        actor_id=actor_id,
+        audit_client=audit_client,
+    )
     return snapshot
+
+
+def _record_snapshot_audit(
+    *,
+    snapshot: CostSnapshot,
+    breakdown: CostBreakdown,
+    analysis_run_id: int | None,
+    actor_id: int | None,
+    audit_client=None,
+) -> None:
+    """Fire a ``cost_snapshot.created`` audit event, swallowing errors (Issue 17)."""
+    try:
+        client = audit_client
+        if client is None:
+            if not current_app.config.get("AUDIT_LOG_ENABLED", False):
+                return
+            from app.services.audit_client import get_audit_client
+
+            client = get_audit_client()
+        client.record(
+            action="cost_snapshot.created",
+            entity_type="cost_snapshot",
+            entity_id=str(snapshot.id),
+            actor_id=str(actor_id) if actor_id is not None else None,
+            after_state={
+                "snapshot_id": snapshot.id,
+                "analysis_run_id": analysis_run_id,
+                "confidence": breakdown.confidence,
+                "formula_version": breakdown.formula_version,
+            },
+        )
+    except Exception:  # noqa: BLE001 — audit must never break snapshot creation.
+        current_app.logger.warning("cost_snapshot audit event failed for snapshot %s", snapshot.id)
 
 
 def recalculate_snapshot(snapshot_id: int, *, snapshot_reason: str = "recalculate") -> CostSnapshot | None:
