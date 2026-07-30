@@ -23,6 +23,33 @@ PRUSA_BED_SHAPES: dict[str, str] = {
     "bambu_p1p": "0x0,256x0,256x256,0x256",
 }
 
+# Issue 8 — quotable vs preview-only formats. Quotable formats can be sliced and
+# costed; preview-only formats are converted to GLB for the viewer but are not
+# sliced (the upload route skips slicing for these).
+QUOTABLE_FORMATS: frozenset[str] = frozenset({".stl", ".3mf", ".obj"})
+PREVIEW_ONLY_FORMATS: frozenset[str] = frozenset({".glb", ".gltf"})
+
+
+def is_quotable_format(path: str | Path) -> bool:
+    """Return ``True`` if ``path`` is a slicable, costable model format."""
+    return Path(path).suffix.lower() in QUOTABLE_FORMATS
+
+
+def task_envelope(success: bool, data: dict | None = None, error: str = "") -> dict:
+    """Standard Celery task result envelope (Issue 5).
+
+    The integrator's ``/task-status`` route reads ``result["success"]`` and then
+    pulls the task-specific keys from ``result["data"]``. Existing task payloads
+    are nested inside ``data`` so callers keep working.
+    """
+    return {"success": success, "data": data or {}, "error": error}
+
+
+def ensure_slicer_profiles_dir() -> Path:
+    """Create the slicer profiles directory if missing (Issue 23/49). No-op if it exists."""
+    SLICER_PROFILES_DIR.mkdir(parents=True, exist_ok=True)
+    return SLICER_PROFILES_DIR
+
 
 @dataclass
 class ValidationResult:
@@ -57,9 +84,13 @@ class ModelAnalysisResult:
 
 
 def slicer_profile_path(profile_name: str | None = None) -> Path:
+    # Issue 23/49 — accept a bare name like "bambu_a1" (no .ini) by appending
+    # the suffix when it is missing before resolving against the profiles dir.
     name = profile_name or DEFAULT_SLICER_PROFILE
+    if not name.lower().endswith(".ini"):
+        name = f"{name}.ini"
     path = SLICER_PROFILES_DIR / name
-    if not path.exists() or not path.suffix == ".ini":
+    if not path.exists():
         path = SLICER_PROFILES_DIR / DEFAULT_SLICER_PROFILE
     return path
 
@@ -111,6 +142,55 @@ def extract_3mf_slicer_settings(file_path: str | Path) -> dict:
     return extracted
 
 
+def _coerce_to_mesh(loaded: object) -> tuple[object, str | None]:
+    """Merge a trimesh Scene into a single mesh (Issue 11).
+
+    ``trimesh.load_mesh`` returns a ``Scene`` for multi-mesh files (many 3MF/OBJ
+    exports). Slicing and geometry reads need one mesh, so concatenate all of
+    the scene's geometries. Returns ``(mesh, warning)``; on merge failure the
+    warning is set and the mesh is ``None`` so the caller can fall back to
+    approximate/zero values rather than crashing.
+    """
+    if hasattr(loaded, "geometry") and getattr(loaded, "geometry", None):
+        try:
+            import trimesh
+
+            merged = trimesh.util.concatenate(list(loaded.geometry.values()))
+            return merged, None
+        except Exception as exc:  # pragma: no cover - defensive merge failure
+            return None, f"Scene merge failed: {exc}"
+    return loaded, None
+
+
+def apply_scale(mesh_or_path: object, scale_percent: float | int | str | None) -> object:
+    """Apply ``scale_percent`` to a mesh (or a path to one) and return the mesh.
+
+    ``scale_percent`` of 100 leaves the geometry unchanged; 200 doubles it. The
+    returned mesh is scaled in place — callers pass it to the slicer and to
+    geometry reads so volume/grams/time reflect the scaled size (Issue 9/30).
+
+    Scale is applied BEFORE slicing; copies divides plate cost for per-unit
+    cost (see the analysis task).
+    """
+    import trimesh
+
+    if isinstance(mesh_or_path, (str, Path)):
+        loaded = trimesh.load_mesh(str(mesh_or_path))
+        loaded, _ = _coerce_to_mesh(loaded)
+    else:
+        loaded = mesh_or_path
+
+    if loaded is None or scale_percent is None:
+        return loaded
+    try:
+        factor = float(Decimal(str(scale_percent)) / Decimal("100"))
+    except Exception:
+        return loaded
+    if factor and factor != 1.0:
+        loaded = loaded.apply_scale(factor)
+    return loaded
+
+
 def validate_model_file(file_path: str | Path) -> ValidationResult:
     result = ValidationResult()
 
@@ -129,7 +209,15 @@ def validate_model_file(file_path: str | Path) -> ValidationResult:
         return result
 
     try:
-        mesh = trimesh.load_mesh(str(path))
+        loaded = trimesh.load_mesh(str(path))
+        # Issue 11 — merge multi-mesh Scenes before reading geometry.
+        mesh, merge_warning = _coerce_to_mesh(loaded)
+        if merge_warning:
+            result.scale_warning = merge_warning
+        if mesh is None:
+            # Merge failed: continue with approximate/zero values rather than crash.
+            result.success = True
+            return result
 
         result.volume_mm3 = float(mesh.volume) if mesh.volume else 0.0
         result.surface_area_mm2 = float(mesh.area) if mesh.area else 0.0
@@ -194,6 +282,7 @@ def slice_with_prusaslicer(
     output_path: str | Path | None = None,
     center: str | None = "128,128",
     slicer_options: dict | None = None,
+    preserve_orientation: bool | None = None,
 ) -> SlicerResult:
     result = SlicerResult()
 
@@ -234,9 +323,12 @@ def slice_with_prusaslicer(
         "--output",
         str(output_path),
     ]
-    if center is not None:
-        cmd.extend(["--center", center])
     options = slicer_options or {}
+    # Issue 29/31 — preserve_orientation skips --center so the model keeps its
+    # original placement. The retry path already passes center=None; threading
+    # preserve_orientation here ensures the FIRST slice also omits --center.
+    if center is not None and not preserve_orientation:
+        cmd.extend(["--center", center])
     cli_values = {
         "layer_height": "--layer-height",
         "perimeters": "--perimeters",
@@ -254,6 +346,16 @@ def slice_with_prusaslicer(
         cmd.extend(["--support-material", "1"])
         if options["supports"] == "build_plate":
             cmd.extend(["--support-material-buildplate-only", "1"])
+    # Issue 29/31 — nozzle / filament options added conditionally.
+    if options.get("nozzle_diameter") is not None:
+        cmd.extend(["--nozzle-diameter", str(options["nozzle_diameter"])])
+    if options.get("filament_density") is not None:
+        cmd.extend(["--filament-density", str(options["filament_density"])])
+    filament_type = options.get("filament_type") or options.get("material")
+    if filament_type is not None:
+        cmd.extend(["--filament-type", str(filament_type)])
+    # multicolor: (metadata only — not supported by slicer integration). The
+    # wipe-tower flag is not exposed by PrusaSlicer's CLI, so this is a no-op.
     cmd.append(str(model_path))
 
     try:
@@ -314,13 +416,31 @@ def _parse_gcode_stats(
     print_minutes = Decimal("0")
     found_filament = False
     found_time = False
+    filament_source_pattern: str | None = None
+    time_source_pattern: str | None = None
+    filament_cost: Decimal | None = None
+    cost_source_pattern: str | None = None
 
-    grams_pattern = re.compile(r";\s*total filament used\s*\[g\]\s*=\s*([\d.]+)", re.IGNORECASE)
+    # Issue 12 — grams patterns across Prusa/Bambu/Orca. Order matters: the
+    # explicit "total filament used [g]" wins, then Bambu's "filament used [g]",
+    # then the cm3 volume fallback (converted with the chosen density).
+    grams_patterns: list[tuple[str, re.Pattern[str]]] = [
+        ("total_filament_used_g", re.compile(r";\s*total filament used\s*\[g\]\s*=\s*([\d.]+)", re.IGNORECASE)),
+        ("filament_used_g", re.compile(r";\s*filament used\s*\[g\]\s*=\s*([\d.]+)", re.IGNORECASE)),
+    ]
     volume_pattern = re.compile(r";\s*filament used\s*\[cm3\]\s*=\s*([\d.]+)", re.IGNORECASE)
-    time_pattern = re.compile(
-        r";\s*estimated (?:printing|print) time(?:\s*\(normal mode\))?\s*=\s*(.+)",
-        re.IGNORECASE,
-    )
+    cost_pattern = re.compile(r";\s*total filament cost\s*=\s*([\d.]+)", re.IGNORECASE)
+    # Time patterns across slicers; first match wins per line.
+    time_patterns: list[tuple[str, re.Pattern[str]]] = [
+        ("estimated_printing_time_normal", re.compile(
+            r";\s*estimated printing time\s*\(normal mode\)\s*=\s*(.+)", re.IGNORECASE)),
+        ("estimated_printing_time", re.compile(
+            r";\s*estimated (?:printing|print) time\s*=\s*(.+)", re.IGNORECASE)),
+        ("total_estimated_time", re.compile(
+            r";\s*total estimated time\s*=\s*(.+)", re.IGNORECASE)),
+        ("estimated_time", re.compile(
+            r";\s*estimated time\s*=\s*(.+)", re.IGNORECASE)),
+    ]
     layer_pattern = re.compile(
         r";\s*(?:total layers count|layer_count)\s*[:=]\s*(\d+)", re.IGNORECASE
     )
@@ -328,27 +448,41 @@ def _parse_gcode_stats(
 
     for line in lines:
         if not found_filament:
-            m = grams_pattern.search(line)
-            if m:
-                val = Decimal(m.group(1))
-                if val > 0:
-                    filament_grams = val
-                    found_filament = True
+            for source_name, pattern in grams_patterns:
+                m = pattern.search(line)
+                if m:
+                    val = Decimal(m.group(1))
+                    if val > 0:
+                        filament_grams = val
+                        filament_source_pattern = source_name
+                        found_filament = True
+                        break
 
-            m = volume_pattern.search(line)
-            if m and not found_filament:
-                val = Decimal(m.group(1))
-                if val > 0:
-                    filament_grams = (val * density).quantize(Decimal("0.01"))
-                    found_filament = True
+            if not found_filament:
+                m = volume_pattern.search(line)
+                if m:
+                    val = Decimal(m.group(1))
+                    if val > 0:
+                        filament_grams = (val * density).quantize(Decimal("0.01"))
+                        filament_source_pattern = "filament_used_cm3"
+                        found_filament = True
+
+        if cost_source_pattern is None:
+            m = cost_pattern.search(line)
+            if m:
+                filament_cost = Decimal(m.group(1))
+                cost_source_pattern = "total_filament_cost"
 
         if not found_time:
-            m = time_pattern.search(line)
-            if m:
-                minutes = _parse_time_string(m.group(1).strip())
-                if minutes is not None:
-                    print_minutes = Decimal(str(minutes))
-                    found_time = True
+            for source_name, pattern in time_patterns:
+                m = pattern.search(line)
+                if m:
+                    minutes = _parse_time_string(m.group(1).strip())
+                    if minutes is not None:
+                        print_minutes = Decimal(str(minutes))
+                        time_source_pattern = source_name
+                        found_time = True
+                        break
         m = layer_pattern.search(line)
         if m:
             layer_count = int(m.group(1))
@@ -356,11 +490,17 @@ def _parse_gcode_stats(
     lines.close()
 
     if found_filament and found_time:
-        return {
+        stats: dict = {
             "filament_grams": filament_grams,
             "print_minutes": print_minutes,
             "layer_count": layer_count,
+            "filament_source_pattern": filament_source_pattern,
+            "time_source_pattern": time_source_pattern,
         }
+        if filament_cost is not None:
+            stats["filament_cost"] = filament_cost
+            stats["cost_source_pattern"] = cost_source_pattern
+        return stats
     return None
 
 
@@ -401,7 +541,11 @@ def convert_to_glb(file_path: str | Path, output_path: str | Path | None = None)
     try:
         import trimesh
 
-        mesh = trimesh.load_mesh(str(path))
+        loaded = trimesh.load_mesh(str(path))
+        # Issue 11 — merge multi-mesh Scenes before exporting to GLB.
+        mesh, merge_warning = _coerce_to_mesh(loaded)
+        if mesh is None:
+            return None
         mesh.export(str(output_path), file_type="glb")
         return str(output_path)
     except Exception:

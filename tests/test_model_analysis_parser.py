@@ -22,11 +22,12 @@ def test_gcode_parser_finds_stats_before_long_configuration_footer(tmp_path):
 
     result = _parse_gcode_stats(path)
 
-    assert result == {
-        "filament_grams": Decimal("56.58"),
-        "print_minutes": Decimal("1563.5"),
-        "layer_count": 422,
-    }
+    # Issue 12 — _parse_gcode_stats now also records which pattern supplied each
+    # value (filament_source_pattern/time_source_pattern/cost_source_pattern),
+    # so assert the core stats as a subset rather than an exact-equality dict.
+    assert result["filament_grams"] == Decimal("56.58")
+    assert result["print_minutes"] == Decimal("1563.5")
+    assert result["layer_count"] == 422
 
 
 def test_gcode_parser_uses_selected_material_density_for_volume_fallback(tmp_path):
