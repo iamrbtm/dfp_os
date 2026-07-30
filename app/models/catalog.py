@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text, event
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
@@ -47,6 +47,104 @@ class ModelSourceType(StrEnum):
     CUSTOMER_PROVIDED = "customer_provided"
     COMMISSIONED_DESIGN = "commissioned_design"
     UNKNOWN = "unknown"
+
+
+class AssetKind(StrEnum):
+    SOURCE_MODEL = "source_model"
+    GCODE = "gcode"
+    GLB_PREVIEW = "glb_preview"
+    IMAGE = "image"
+    METADATA = "metadata"
+    REFERENCE = "reference"
+
+
+class AnalysisRunStatus(StrEnum):
+    QUEUED = "queued"
+    STARTED = "started"
+    VALIDATING = "validating"
+    SLICING = "slicing"
+    STORING_GCODE = "storing_gcode"
+    COSTING = "costing"
+    CONVERTING = "converting"
+    COMPLETE = "complete"
+    FAILED = "failed"
+    SUPERSEDED = "superseded"
+
+
+class ProductModelAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
+    """One file uploaded or generated for a product (source STL, G-code, GLB preview, ...).
+
+    The run references its produced assets (gcode/preview/metadata) via FKs on
+    ProductAnalysisRun, so this table only needs to point back to its product.
+    """
+
+    __tablename__ = "product_model_assets"
+
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
+    business_id: Mapped[int | None] = mapped_column(ForeignKey("businesses.id"), nullable=True, index=True)
+    storage_reference: Mapped[str] = mapped_column(String(500), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    safe_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(default=0, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    asset_kind: Mapped[AssetKind] = mapped_column(
+        Enum(AssetKind, native_enum=False, length=30), nullable=False, index=True
+    )
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+
+    product = relationship("Product", back_populates="model_assets")
+
+
+class ProductAnalysisRun(PrimaryKeyMixin, TimestampMixin, db.Model):
+    """One attempt at analyzing a product's model. Race-proof replacement for
+    writing analysis state directly on the Product row (Issue 6). A task only
+    publishes its results to the Product summary fields if it is still the
+    current run for that product.
+    """
+
+    __tablename__ = "product_analysis_runs"
+
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
+    business_id: Mapped[int | None] = mapped_column(ForeignKey("businesses.id"), nullable=True, index=True)
+    source_asset_id: Mapped[int] = mapped_column(ForeignKey("product_model_assets.id"), nullable=False, index=True)
+    requested_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    status: Mapped[AnalysisRunStatus] = mapped_column(
+        Enum(AnalysisRunStatus, native_enum=False, length=30),
+        default=AnalysisRunStatus.QUEUED,
+        nullable=False,
+        index=True,
+    )
+    settings_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    embedded_settings_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    geometry_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    slicer_stats_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    parsed_volume_mm3: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    parsed_surface_area_mm2: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    parsed_triangle_count: Mapped[int | None] = mapped_column(nullable=True)
+    parsed_filament_grams: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    parsed_print_minutes: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    parsed_material_cost: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    gcode_asset_id: Mapped[int | None] = mapped_column(ForeignKey("product_model_assets.id"), nullable=True)
+    preview_asset_id: Mapped[int | None] = mapped_column(ForeignKey("product_model_assets.id"), nullable=True)
+    metadata_asset_id: Mapped[int | None] = mapped_column(ForeignKey("product_model_assets.id"), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    product = relationship("Product", back_populates="analysis_runs")
+    source_asset = relationship("ProductModelAsset", foreign_keys=[source_asset_id])
+    gcode_asset = relationship("ProductModelAsset", foreign_keys=[gcode_asset_id])
+    preview_asset = relationship("ProductModelAsset", foreign_keys=[preview_asset_id])
+    metadata_asset = relationship("ProductModelAsset", foreign_keys=[metadata_asset_id])
+    requested_by = relationship("User", foreign_keys=[requested_by_id])
+
+    __table_args__ = (
+        # Partial-style filter aid: find the current run for a product quickly.
+        Index("ix_analysis_runs_product_current", "product_id", "is_current", unique=False),
+    )
 
 
 class Category(PrimaryKeyMixin, TimestampMixin, db.Model):
@@ -141,7 +239,7 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     model_proof_of_license_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     model_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     model_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    analysis_status: Mapped[str | None] = mapped_column(String(30), default=None, nullable=True)
+    analysis_status: Mapped[str | None] = mapped_column(String(30), default=None, nullable=True, index=True)
     analysis_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     analysis_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -200,6 +298,18 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
         back_populates="product",
         cascade="all, delete-orphan",
         order_by="DeadStockRecommendation.created_at.desc()",
+    )
+    model_assets = relationship(
+        "ProductModelAsset",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductModelAsset.created_at.desc()",
+    )
+    analysis_runs = relationship(
+        "ProductAnalysisRun",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductAnalysisRun.created_at.desc()",
     )
 
 

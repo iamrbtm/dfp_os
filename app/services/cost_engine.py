@@ -25,7 +25,7 @@ from app.services.settings import get_setting
 
 CENT = Decimal("0.01")
 FOUR_PLACES = Decimal("0.0001")
-COST_FORMULA_VERSION = "2026-06-26.product-studio-v1"
+COST_FORMULA_VERSION = "1.0.0"
 
 
 def money(value: Decimal | int | str | None) -> Decimal:
@@ -309,11 +309,32 @@ def persist_cost_snapshot(
     product: Product,
     breakdown: CostBreakdown,
     snapshot_reason: str | None = None,
+    analysis_run_id: int | None = None,
+    model_asset_id: int | None = None,
+    file_sha256: str | None = None,
+    slicer_settings_hash: str | None = None,
+    material: str | None = None,
+    density: Decimal | None = None,
+    density_source: str | None = None,
+    scale_percent: int | None = None,
+    copies: int | None = None,
+    cost_resolver_evidence: dict | None = None,
 ) -> CostSnapshot:
-    CostSnapshot.query.filter(
+    """Persist one cost snapshot with full evidence (Issues 15, 26).
+
+    Acquires a row lock on the product so two concurrent calculations cannot
+    both create a "current" snapshot. Within the same transaction the prior
+    current snapshot is marked stale, the new one inserted, then the caller
+    commits to release the lock. The new snapshot always links to a model
+    asset / analysis run when one is available (Issue 15).
+    """
+    # Issue 26 — SELECT ... FOR UPDATE on the product row.
+    db.session.query(Product).filter(Product.id == product.id).with_for_update().first()
+
+    db.session.query(CostSnapshot).filter(
         CostSnapshot.product_id == product.id,
         CostSnapshot.stale.is_(False),
-    ).update({"stale": True}, synchronize_session=False)
+    ).update({CostSnapshot.stale: True}, synchronize_session=False)
 
     inputs = {
         "product_id": product.id,
@@ -321,18 +342,39 @@ def persist_cost_snapshot(
         "estimated_labor_minutes": str(product.estimated_labor_minutes or 0),
         "printer_model": breakdown.printer_model,
         "formula_version": breakdown.formula_version,
+        "material": material,
+        "density": _serialize_value(density),
+        "density_source": density_source,
+        "scale_percent": scale_percent,
+        "copies": copies,
+        "analysis_run_id": analysis_run_id,
+        "model_asset_id": model_asset_id,
     }
     outputs = breakdown.as_dict_str()
 
     snapshot = CostSnapshot(
         product_id=product.id,
         filament_spool_id=breakdown.selected_spool_id,
+        model_asset_id=model_asset_id,
+        analysis_run_id=analysis_run_id,
         formula_version=breakdown.formula_version,
         evidence_source=breakdown.evidence_source,
         confidence=breakdown.confidence,
         snapshot_reason=snapshot_reason,
         printer_model=breakdown.printer_model,
         stale=False,
+        file_sha256=file_sha256,
+        slicer_settings_hash=slicer_settings_hash,
+        material=material,
+        density=density,
+        density_source=density_source,
+        scale_percent=scale_percent,
+        copies=copies,
+        parsed_filament_grams=breakdown.filament_grams,
+        parsed_print_minutes=breakdown.print_minutes,
+        cost_resolver_evidence_json=(
+            json.dumps(cost_resolver_evidence, sort_keys=True) if cost_resolver_evidence else None
+        ),
         inputs_json=json.dumps(inputs, sort_keys=True),
         outputs_json=json.dumps(outputs, sort_keys=True),
     )
@@ -340,6 +382,43 @@ def persist_cost_snapshot(
     db.session.flush()
     breakdown.snapshot_id = snapshot.id
     return snapshot
+
+
+def recalculate_snapshot(snapshot_id: int, *, snapshot_reason: str = "recalculate") -> CostSnapshot | None:
+    """Re-run the current cost formula against an old snapshot (Issue 43).
+
+    The old snapshot's identity/evidence is preserved; a fresh snapshot is
+    written with the current ``COST_FORMULA_VERSION`` and the prior one is
+    marked stale. Returns the new snapshot, or ``None`` if the input is gone.
+    """
+    original = db.session.get(CostSnapshot, snapshot_id)
+    if original is None:
+        return None
+    product = db.session.get(Product, original.product_id)
+    if product is None:
+        return None
+    breakdown = calculate_product_cost(
+        product=product,
+        printer_model=original.printer_model,
+    )
+    product.estimated_material_cost = breakdown.material_cost
+    product.estimated_profit = breakdown.margin_dollars
+    product.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
+    new_snapshot = persist_cost_snapshot(
+        product=product,
+        breakdown=breakdown,
+        snapshot_reason=snapshot_reason,
+        analysis_run_id=original.analysis_run_id,
+        model_asset_id=original.model_asset_id,
+        file_sha256=original.file_sha256,
+        slicer_settings_hash=original.slicer_settings_hash,
+        material=original.material,
+        density=original.density,
+        density_source=original.density_source,
+        scale_percent=original.scale_percent,
+        copies=original.copies,
+    )
+    return new_snapshot
 
 
 def build_pricing_scenarios(

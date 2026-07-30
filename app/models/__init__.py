@@ -3,16 +3,20 @@ from app.models.business import Business, FeatureFlag
 from app.models.booth_mode import BoothModeHint, BoothHintStatus
 from app.models.notification import Notification
 from app.models.catalog import (
+    AssetKind,
+    AnalysisRunStatus,
     Category,
     Collection,
     LicenseStatus,
     ModelSourceType,
     Product,
+    ProductAnalysisRun,
     ProductImage,
+    ProductModelAsset,
     ProductStatus,
     ProductType,
 )
-from app.models.cost_snapshot import CostSnapshot, CostSnapshotConfidence
+from app.models.cost_snapshot import CostSnapshot, CostSnapshotConfidence, CostSnapshotDensitySource
 from app.models.custom_request import CustomRequest, CustomRequestStatus
 from app.models.customer import Customer
 from app.models.demand import InternalDemandEvent, InternalDemandEventType
@@ -104,6 +108,8 @@ __all__ = [
     "AMSUnitStatus",
     "AMSUnitType",
     "ApiToken",
+    "AssetKind",
+    "AnalysisRunStatus",
     "Business",
     "BoothModeHint",
     "BoothHintStatus",
@@ -112,10 +118,11 @@ __all__ = [
     "CustomRequest",
     "CustomRequestStatus",
     "CostSnapshot",
+    "CostSnapshotConfidence",
+    "CostSnapshotDensitySource",
     "ContentChannel",
     "ContentDraft",
     "ContentStatus",
-    "CostSnapshotConfidence",
     "Customer",
     "Expense",
     "ExpenseCategory",
@@ -172,9 +179,11 @@ __all__ = [
     "PrintJob",
     "PrintJobStatus",
     "Product",
+    "ProductAnalysisRun",
+    "ProductImage",
     "ProductLaunchChecklistItem",
     "ProductLaunchChecklistKey",
-    "ProductImage",
+    "ProductModelAsset",
     "ProductPhotoShot",
     "ProductPhotoShotType",
     "DeadStockRecommendation",
