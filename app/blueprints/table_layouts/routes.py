@@ -18,7 +18,6 @@ from app.models import (
     MarketTableLayout,
     MarketTablePlacement,
     MarketTableSection,
-    Product,
     TableSectionType,
     UserRole,
 )
@@ -218,7 +217,7 @@ def delete_section(layout_id: int, section_id: int):
     db.session.delete(section)
     db.session.commit()
     flash("Section deleted.", "success")
-    return redirect(url_for("table_layouts.detail_layout", layout_id=layout.id))
+    return redirect(url_for("table_layouts.detail_layout", layout_id=layout_id))
 
 
 @bp.route("/<int:layout_id>/placements/new", methods=["POST"])
@@ -265,7 +264,7 @@ def delete_placement(layout_id: int, placement_id: int):
     db.session.delete(placement)
     db.session.commit()
     flash("Placement removed.", "success")
-    return redirect(url_for("table_layouts.detail_layout", layout_id=layout.id))
+    return redirect(url_for("table_layouts.detail_layout", layout_id=layout_id))
 
 
 @bp.post("/<int:layout_id>/apply-to-market")

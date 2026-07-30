@@ -1,20 +1,14 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from app.main import create_app
 from app.models import (
     LegacyImportRowStage,
-    LegacyTableManifest,
     LegacyTableReviewState,
-    TableReviewDecision,
-    ImportBatch,
-    ImportSource,
-    LegacyMariaDbTableSnapshot,
 )
 from app.schemas.imports import (
     LegacyImportAllRequest,
-    LegacyImportAllResponse,
     LegacyTableReviewRequest,
 )
 
@@ -115,7 +109,7 @@ async def test_import_preserves_raw_payloads(async_session):
     )
 
     with _patch_legacy_fetch(payload):
-        response = await import_all_legacy_tables(
+        await import_all_legacy_tables(
             async_session, payload, schema_rows=MOCK_SCHEMA
         )
 
@@ -250,7 +244,7 @@ async def test_delete_staging_requires_confirm(async_session):
 
 @pytest.mark.asyncio
 async def test_delete_staging_removes_rows(async_session):
-    from app.services.legacy_mariadb import import_all_legacy_tables, delete_table_staging
+    from app.services.legacy_mariadb import delete_table_staging, import_all_legacy_tables
 
     payload = LegacyImportAllRequest(
         host="legacy.example.test",
@@ -390,7 +384,7 @@ async def test_import_then_review_api(async_session, auth_headers):
 
 @pytest.mark.asyncio
 async def test_double_delete_raises(async_session):
-    from app.services.legacy_mariadb import import_all_legacy_tables, delete_table_staging
+    from app.services.legacy_mariadb import delete_table_staging, import_all_legacy_tables
 
     payload = LegacyImportAllRequest(
         host="legacy.example.test",
@@ -411,8 +405,8 @@ async def test_double_delete_raises(async_session):
 
 @pytest.mark.asyncio
 async def test_json_upload_imports_rows(async_session):
-    from app.services.legacy_mariadb import import_legacy_json_export
     from app.schemas.imports import LegacyJsonExportFile
+    from app.services.legacy_mariadb import import_legacy_json_export
 
     export = LegacyJsonExportFile(
         source_name="test_db",
@@ -535,7 +529,8 @@ def _patch_legacy_fetch(payload, extra_empty=None):
 
         for i, row in enumerate(rows, start=1):
             raw = {col: row.get(col) for col in col_names}
-            import hashlib, json
+            import hashlib
+            import json
             joined = "\x1f".join(f"{k}={json.dumps(raw.get(k), default=str)}" for k in sorted(raw))
             h = hashlib.sha256(joined.encode("utf-8")).hexdigest()
             pk_value = "|".join(str(row.get(c, "NULL")) for c in pk_cols) if pk_cols else None

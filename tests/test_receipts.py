@@ -254,7 +254,7 @@ class TestReceiptServices:
         client = app_with_receipts.test_client()
         client.post("/auth/login", data={"email": "viewer@test.com", "password": "password"})
 
-        response = client.get(f"/receipts/{sample_receipt}/image")
+        response = client.get(f"/expenses/receipts/{sample_receipt}/image")
 
         assert response.status_code != 200
 

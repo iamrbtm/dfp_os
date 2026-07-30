@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 
-import pytest
 
 from app.extensions import db
 from app.models import Category, CustomRequest, CustomRequestStatus, Market, MarketStatus, Product, ProductStatus, ProductType, UserRole
 from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, SignAsset, SignStatus
-from app.services.admin_mutations import create_resource, snapshot_instance, update_resource
+from app.services.admin_mutations import create_resource
 from app.services.api_tokens import create_api_token
 from app.services.promotion import (
     approve_draft,

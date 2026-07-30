@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from decimal import Decimal
 
 from sqlalchemy import func
@@ -9,7 +8,6 @@ from app.extensions import db
 from app.models import (
     Market,
     MarketPackingList,
-    MarketStatus,
     MarketTableLayout,
     MarketTablePlacement,
     MarketTableSection,
@@ -111,7 +109,7 @@ def get_impulse_tray_recommendations(market_id: int | None = None) -> dict:
             PosSaleItem.item_type == PosSaleItemType.PRODUCT,
             ~Product.name.in_(names_in_impulse) if names_in_impulse else Product.id.isnot(None),
             Product.status == ProductStatus.ACTIVE,
-            Product.is_pos_visible == True,
+            Product.is_pos_visible,
         )
         .group_by(Product.id, Product.name, Product.base_price)
         .order_by(func.sum(PosSaleItem.line_total).desc())
@@ -202,11 +200,11 @@ def optimize_impulse_tray(
         .first()
     )
     if layout:
-        impulse_section = MarketTableSection.query.filter_by(
+        MarketTableSection.query.filter_by(
             layout_id=layout.id, section_type=TableSectionType.IMPULSE_TRAY
         ).first()
     else:
-        impulse_section = None
+        pass
 
     recommendations = get_impulse_tray_recommendations()
     suggestions = []

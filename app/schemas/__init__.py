@@ -27,14 +27,11 @@ from app.schemas.inventory import (
 from app.schemas.order import OrderItemSchema, OrderSchema, PaymentSchema
 from app.schemas.pickup import PickupLocationSchema, PickupSlotSchema
 from app.schemas.receipt import (
-    ReceiptDashboardSchema,
-    ReceiptLineAllocationSchema,
     ReceiptLineItemSchema,
     ReceiptSchema,
 )
 from app.schemas.pos import (
     PosCloseSessionSchema,
-    PosSaleCreateSchema,
     PosSaleItemSchema,
     PosSaleSchema,
     PosSessionSchema,
@@ -49,8 +46,6 @@ from app.schemas.trend import (
 )
 
 __all__ = [
-    "ReceiptDashboardSchema",
-    "ReceiptLineAllocationSchema",
     "ReceiptLineItemSchema",
     "ReceiptSchema",
     "AMSUnitSchema",
@@ -81,7 +76,6 @@ __all__ = [
     "ContentDraftSchema",
     "SignAssetSchema",
     "PosCloseSessionSchema",
-    "PosSaleCreateSchema",
     "PosSaleItemSchema",
     "PosSaleSchema",
     "PosSessionSchema",

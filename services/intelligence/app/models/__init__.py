@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, DateTime, Float, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -60,7 +60,9 @@ class ImportBatch(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     import_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
 
 class PromotedLegacyTable(Base):
@@ -76,7 +78,9 @@ class PromotedLegacyTable(Base):
     normalized_data: Mapped[list[dict]] = mapped_column(JSON, nullable=False)
     promoted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
     __table_args__ = (
         UniqueConstraint("import_batch_id", "table_name", name="uq_promoted_legacy_table_batch_table"),
@@ -99,7 +103,10 @@ class LegacyImportRowStage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     __table_args__ = (
-        UniqueConstraint("import_batch_id", "source_table_name", "row_number", name="uq_legacy_row_stage_batch_table_row"),
+        UniqueConstraint(
+            "import_batch_id", "source_table_name", "row_number",
+            name="uq_legacy_row_stage_batch_table_row",
+        ),
     )
 
 
@@ -108,13 +115,17 @@ class LegacyTableReviewState(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     table_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
-    decision: Mapped[str] = mapped_column(String(40), nullable=False, default=TableReviewDecision.PENDING.value, index=True)
+    decision: Mapped[str] = mapped_column(
+        String(40), nullable=False, default=TableReviewDecision.PENDING.value, index=True
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     decided_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
 
 class SquareItemRaw(Base):
@@ -228,7 +239,9 @@ class ProductSalesSummary(Base):
     avg_net_sales_cents_per_unit: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     first_sale_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_sale_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
 
 class SeasonalProductPerformance(Base):
@@ -241,7 +254,9 @@ class SeasonalProductPerformance(Base):
     total_units: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False, default=0)
     total_net_sales_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     transaction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
     __table_args__ = (
         UniqueConstraint("product_key", "sale_month", name="uq_seasonal_product_key_month"),
@@ -256,7 +271,9 @@ class ChannelPerformanceSummary(Base):
     total_net_sales_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     transaction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     active_months: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
 
 class HistoricalAliasMapping(Base):
@@ -276,7 +293,9 @@ class HistoricalAliasMapping(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
 
 class WarehouseBuild(Base):
@@ -306,7 +325,9 @@ class KnowledgeDocument(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     document_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
 
 class KnowledgeChunk(Base):

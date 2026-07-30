@@ -1,22 +1,22 @@
-<header class="public-header" x-data="{ menuOpen: false }">
-  <div class="public-header__inner">
-      <a href="{{ url_for('public.home') }}" class="brand-mark" aria-label="Dude Fish Printing home">
-        <span class="brand-mark__fish" aria-hidden="true">DF</span>
-        <span><strong>Dude Fish</strong><small>Printing · Clarksville, TN</small></span>
-      </a>
-      <div class="flex items-center gap-3">
-        <a href="{{ url_for('public.cart') }}" class="cart-link" aria-label="Cart{% if public_cart_count %}, {{ public_cart_count }} items{% endif %}">
-          <span aria-hidden="true">Bag</span>{% if public_cart_count %}<b>{{ public_cart_count }}</b>{% endif %}
-        </a>
-        <button class="menu-toggle" type="button" @click="menuOpen = !menuOpen" :aria-expanded="menuOpen" aria-controls="public-nav">Menu</button>
-      </div>
-    <nav id="public-nav" class="public-nav" :class="menuOpen && 'is-open'">
-      <a href="{{ url_for('public.shop') }}" {% if request.endpoint in ['public.shop', 'public.product_detail', 'public.collection_detail'] %}aria-current="page"{% endif %}>Shop</a>
-      <a href="{{ url_for('public.market_schedule') }}" {% if request.endpoint == 'public.market_schedule' %}aria-current="page"{% endif %}>Markets</a>
-      <a href="{{ url_for('public.gallery') }}" {% if request.endpoint == 'public.gallery' %}aria-current="page"{% endif %}>Gallery</a>
-      <a href="{{ url_for('public.printing_basics') }}" {% if request.endpoint in ['public.printing_basics', 'public.materials', 'public.faq'] %}aria-current="page"{% endif %}>Learn</a>
-      <a href="{{ url_for('public.about') }}" {% if request.endpoint == 'public.about' %}aria-current="page"{% endif %}>Our story</a>
-      <a href="{{ url_for('public.custom_orders') }}" class="public-nav__cta">Start a custom order</a>
-    </nav>
+<header class="glass-nav" x-data="{ menuOpen: false }" role="banner">
+  <a href="{{ url_for('public.home') }}" class="brand-mark" aria-label="Dude Fish Printing home">
+    <span class="brand-mark__fish" aria-hidden="true">DF</span>
+    <span><strong>Dude Fish</strong><small>Printing &middot; Clarksville, TN</small></span>
+  </a>
+  <nav id="public-nav" class="glass-nav__links" :class="menuOpen && 'is-open'">
+    <a href="{{ url_for('public.shop') }}" {% if request.endpoint in ['public.shop', 'public.product_detail', 'public.collection_detail'] %}aria-current="page"{% endif %}>Shop</a>
+    <a href="{{ url_for('public.market_schedule') }}" {% if request.endpoint == 'public.market_schedule' %}aria-current="page"{% endif %}>Markets</a>
+    <a href="{{ url_for('public.gallery') }}" {% if request.endpoint == 'public.gallery' %}aria-current="page"{% endif %}>Gallery</a>
+    <a href="{{ url_for('public.printing_basics') }}" {% if request.endpoint in ['public.printing_basics', 'public.materials', 'public.faq'] %}aria-current="page"{% endif %}>Learn</a>
+    <a href="{{ url_for('public.about') }}" {% if request.endpoint == 'public.about' %}aria-current="page"{% endif %}>Our story</a>
+    <a href="{{ url_for('public.custom_orders') }}" class="glass-nav__cta">Start a custom order</a>
+  </nav>
+  <div class="glass-nav__right">
+    <a href="{{ url_for('public.cart') }}" class="glass-nav__cart" aria-label="Cart{% if public_cart_count %}, {{ public_cart_count }} items{% endif %}">
+      Bag{% if public_cart_count %}<b>{{ public_cart_count }}</b>{% endif %}
+    </a>
+    <button class="glass-nav__toggle" type="button" @click="menuOpen = !menuOpen" :aria-expanded="menuOpen" aria-controls="public-nav" aria-label="Toggle menu">
+      <span x-text="menuOpen ? 'Close' : 'Menu'">Menu</span>
+    </button>
   </div>
 </header>

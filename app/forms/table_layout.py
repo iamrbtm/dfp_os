@@ -5,9 +5,7 @@ from flask_wtf.file import FileAllowed, FileField
 from wtforms import BooleanField, IntegerField, SelectField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
-from app.forms.common import enum_choices
 from app.models import Product
-from app.models.table_layout import TableSectionType
 
 
 class MarketTableLayoutForm(FlaskForm):
@@ -17,12 +15,6 @@ class MarketTableLayoutForm(FlaskForm):
     is_template = BooleanField("Save as Template")
     submit = SubmitField("Save Layout")
 
-
-class MarketTableSectionForm(FlaskForm):
-    section_type = SelectField("Section Type", choices=enum_choices(TableSectionType), validators=[DataRequired()])
-    label = StringField("Label", validators=[DataRequired(), Length(max=200)])
-    sort_order = IntegerField("Sort Order", default=0, validators=[Optional()])
-    submit = SubmitField("Add Section")
 
 
 class MarketTablePlacementForm(FlaskForm):

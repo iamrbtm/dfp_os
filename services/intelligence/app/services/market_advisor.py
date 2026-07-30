@@ -63,8 +63,17 @@ async def generate_market_advisor_run(db: AsyncSession, payload: MarketAdvisorRe
         velocity = Decimal(summary.avg_units_per_active_month)
         total_units = Decimal(summary.total_units)
         transaction_weight = Decimal(summary.transaction_count) / Decimal("10")
-        score = (velocity * Decimal("2.0")) + (seasonal_units * Decimal("1.5")) + transaction_weight + (total_units / Decimal("20"))
-        if summary.category_name and payload.event_type and payload.event_type.casefold() in summary.category_name.casefold():
+        score = (
+            (velocity * Decimal("2.0"))
+            + (seasonal_units * Decimal("1.5"))
+            + transaction_weight
+            + (total_units / Decimal("20"))
+        )
+        if (
+            summary.category_name
+            and payload.event_type
+            and payload.event_type.casefold() in summary.category_name.casefold()
+        ):
             score += Decimal("5.0")
         scored.append((score, summary, seasonal))
 

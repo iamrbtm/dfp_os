@@ -5,9 +5,7 @@ from decimal import ROUND_HALF_UP
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField
 from wtforms import (
-    BooleanField,
     DecimalField,
-    IntegerField,
     SelectField,
     SelectMultipleField,
     StringField,
@@ -60,24 +58,6 @@ class ReceiptReviewForm(FlaskForm):
     submit_reject = SubmitField("Reject Receipt")
     submit_draft = SubmitField("Save Draft")
 
-
-class ReceiptLineItemForm(FlaskForm):
-    description = StringField("Description", validators=[Optional(), Length(max=500)])
-    sku = StringField("SKU", validators=[Optional(), Length(max=100)])
-    quantity = IntegerField("Quantity", validators=[Optional()], filters=[lambda x: x or None])
-    unit_price = DecimalField("Unit Price", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    line_total = DecimalField("Line Total", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    line_discount = DecimalField("Discount", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    line_tax = DecimalField("Tax", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    taxable_status = SelectField(
-        "Taxable",
-        choices=[("unknown", "Unknown"), ("taxable", "Taxable"), ("non_taxable", "Non-Taxable")],
-        default="unknown",
-    )
-    is_inventory_candidate = BooleanField("Inventory Candidate")
-    is_personal_or_excluded = BooleanField("Personal/Excluded")
-    notes = TextAreaField("Notes", validators=[Optional()])
-    submit = SubmitField("Save Line Item")
 
 
 class ReceiptAllocationForm(FlaskForm):

@@ -41,7 +41,7 @@ def mark_notification_read(notification_id: int) -> Notification | None:
 
 
 def mark_all_read(user_id: int | None = None) -> int:
-    query = db.session.query(Notification).filter(Notification.is_read == False)
+    query = db.session.query(Notification).filter(not Notification.is_read)
     if user_id is not None:
         query = query.filter(Notification.user_id == user_id)
     count = query.count()
@@ -54,7 +54,7 @@ def mark_all_read(user_id: int | None = None) -> int:
 
 
 def get_unread_count(user_id: int | None = None) -> int:
-    query = db.session.query(Notification).filter(Notification.is_read == False)
+    query = db.session.query(Notification).filter(not Notification.is_read)
     if user_id is not None:
         query = query.filter(Notification.user_id == user_id)
     return query.count()
@@ -69,5 +69,5 @@ def get_notifications(
     if user_id is not None:
         query = query.filter(Notification.user_id == user_id)
     if unread_only:
-        query = query.filter(Notification.is_read == False)
+        query = query.filter(not Notification.is_read)
     return query.order_by(Notification.created_at.desc()).limit(limit).all()

@@ -7,7 +7,7 @@ from wtforms.validators import DataRequired, Length, Optional
 
 from app.forms.common import enum_choices
 from app.models import Collection, CustomRequest, Market, Product
-from app.models.promotion import ContentChannel, ContentStatus, SignStatus
+from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, SignAsset, SignStatus
 
 
 class ContentDraftForm(FlaskForm):

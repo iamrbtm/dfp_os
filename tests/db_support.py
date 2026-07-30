@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import URL, make_url
+from sqlalchemy.engine import make_url
 
 
 DEFAULT_TEST_DATABASE_URL = "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test"

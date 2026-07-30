@@ -21,7 +21,6 @@ from app.models import (
 )
 from app.services.admin_mutations import create_resource
 from app.services.api_tokens import create_api_token
-from app.services.business import ensure_default_business
 from app.services.pos import create_sale, open_session
 
 

@@ -83,25 +83,4 @@ class ReceiptLineItemSchema(Schema):
     updated_at = fields.DateTime(dump_only=True)
 
 
-class ReceiptLineAllocationSchema(Schema):
-    id = fields.Integer(dump_only=True)
-    receipt_line_item_id = fields.Integer()
-    allocation_type = fields.String()
-    market_id = fields.Integer(allow_none=True)
-    custom_job_id = fields.Integer(allow_none=True)
-    inventory_item_id = fields.Integer(allow_none=True)
-    expense_category_id = fields.Integer(allow_none=True)
-    amount = fields.Decimal(as_string=True, allow_none=True)
-    percent = fields.Decimal(as_string=True, allow_none=True)
-    quantity_allocated = fields.Decimal(as_string=True, allow_none=True)
-    notes = fields.String(allow_none=True)
 
-
-class ReceiptDashboardSchema(Schema):
-    total_this_month = fields.Integer()
-    needs_review = fields.Integer()
-    possible_duplicates = fields.Integer()
-    approved_total = fields.Decimal(as_string=True)
-    unallocated = fields.Integer()
-    recent = fields.List(fields.Nested(ReceiptSchema))
-    vendors = fields.List(fields.Dict)

@@ -41,16 +41,6 @@ class PosSaleItemSchema(Schema):
     custom_notes = fields.String(allow_none=True)
 
 
-class PosSaleCreateSchema(Schema):
-    payment_method = fields.String(
-        required=True,
-        validate=validate.OneOf(["cash", "card_external", "venmo", "cash_app", "apple_pay", "other"]),
-    )
-    amount_received = fields.Decimal(places=2, as_string=True, required=True)
-    customer_id = fields.Integer(allow_none=True)
-    notes = fields.String(allow_none=True)
-    items = fields.List(fields.Nested(PosSaleItemSchema), required=True, validate=validate.Length(min=1))
-
 
 class PosSaleSchema(Schema):
     pos_session_id = fields.Integer(dump_only=True)

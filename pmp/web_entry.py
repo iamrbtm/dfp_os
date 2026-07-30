@@ -245,7 +245,7 @@ def analyze_lines(lines: list[str], max_tools: int = 4) -> dict:
     options = gcode.suggest_merges(report, max_tools=max_tools)
 
     colors_used = sorted(report.tool_totals)
-    max_on_layer = max((len(l.tools) for l in report.layers), default=0)
+    max_on_layer = max((len(layer.tools) for layer in report.layers), default=0)
 
     plan_dict = {
         "feasible": plan.feasible,
@@ -269,7 +269,7 @@ def analyze_lines(lines: list[str], max_tools: int = 4) -> dict:
 
     merge_options = [
         {
-            "merges": [[l, s] for l, s in o.merges],
+            "merges": [[loser, survivor] for loser, survivor in o.merges],
             "delta_es": [float(de) for de in o.delta_es],
             "shade_phrase": gcode._shade_phrase(max(o.delta_es)),
             "pauses_before": o.pauses_before,
@@ -320,7 +320,7 @@ def process_lines(
     summary = {
         "feasible": plan.feasible,
         "blocking": plan.blocking,
-        "merges_applied": [[l, s] for l, s in merges],
+        "merges_applied": [[loser, survivor] for loser, survivor in merges],
         "swaps": len(plan.swaps),
         "pauses": injected,
         "pause_layers": placed,

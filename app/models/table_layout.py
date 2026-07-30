@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db

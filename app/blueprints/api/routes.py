@@ -53,7 +53,6 @@ from app.models import (
     PickupLocationType,
     PickupSlot,
     PickupSlotStatus,
-    PickupStatus,
     PosSale,
     PosSession,
     PrepTask,
@@ -136,7 +135,6 @@ from app.services.audit import record_audit_event
 from app.services.api_tokens import revoke_api_token
 from app.services.inventory import release_inventory, reserve_inventory, transfer_inventory
 from app.services.pos import refund_sale
-from app.services.printer_reliability import get_reliability_report_rows
 from app.utils import slugify
 from app.utils.auth import api_token_required, require_api_scopes
 
@@ -2445,7 +2443,8 @@ def report_studio_heat_map_csv():
     if denied:
         return denied
     data = get_vendor_market_heat_map(dict(request.args))
-    import csv, io
+    import csv
+    import io
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -2478,7 +2477,8 @@ def report_studio_application_tracker_csv():
     if denied:
         return denied
     data = get_market_application_pipeline_report(dict(request.args))
-    import csv, io
+    import csv
+    import io
 
     output = io.StringIO()
     writer = csv.writer(output)

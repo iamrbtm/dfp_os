@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import delete, select
@@ -140,7 +140,8 @@ async def rebuild_legacy_warehouse(db: AsyncSession) -> dict[str, Any]:
     await db.flush()
 
     # Aggregate into summaries
-    facts = (await db.execute(select(SalesFactLine).where(SalesFactLine.source == ImportSource.LEGACY_MARIADB.value))).scalars().all()
+    stmt = select(SalesFactLine).where(SalesFactLine.source == ImportSource.LEGACY_MARIADB.value)
+    facts = (await db.execute(stmt)).scalars().all()
 
     product_groups: dict[str, list[SalesFactLine]] = defaultdict(list)
     seasonal_groups: dict[tuple[str, int], list[SalesFactLine]] = defaultdict(list)
@@ -159,7 +160,11 @@ async def rebuild_legacy_warehouse(db: AsyncSession) -> dict[str, Any]:
         active_months = {(row.sale_year, row.sale_month) for row in rows if row.sale_year and row.sale_month}
         dated = [row.sale_date for row in rows if row.sale_date]
         avg_units = total_units / Decimal(max(len(active_months), 1)) if active_months else Decimal("0")
-        avg_cents = int((Decimal(total_net) / total_units).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) if total_units else 0
+        avg_cents = (
+            int((Decimal(total_net) / total_units).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            if total_units
+            else 0
+        )
         db.add(
             ProductSalesSummary(
                 product_key=product_key,

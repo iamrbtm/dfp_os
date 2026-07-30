@@ -156,7 +156,11 @@ async def rebuild_square_sales_warehouse(db: AsyncSession) -> WarehouseBuild:
             active_months = {(row.sale_year, row.sale_month) for row in rows if row.sale_year and row.sale_month}
             dated = [row.sale_date for row in rows if row.sale_date]
             avg_units = total_units / Decimal(max(len(active_months), 1))
-            avg_cents = int((Decimal(total_net) / total_units).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) if total_units else 0
+            avg_cents = (
+                int((Decimal(total_net) / total_units).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+                if total_units
+                else 0
+            )
             db.add(
                 ProductSalesSummary(
                     product_key=product_key,
@@ -243,6 +247,9 @@ async def list_seasonal_summaries(
     stmt = select(SeasonalProductPerformance)
     if sale_month is not None:
         stmt = stmt.where(SeasonalProductPerformance.sale_month == sale_month)
-    stmt = stmt.order_by(SeasonalProductPerformance.total_units.desc(), SeasonalProductPerformance.total_net_sales_cents.desc()).limit(limit)
+    stmt = stmt.order_by(
+        SeasonalProductPerformance.total_units.desc(),
+        SeasonalProductPerformance.total_net_sales_cents.desc(),
+    ).limit(limit)
     result = await db.execute(stmt)
     return list(result.scalars().all())

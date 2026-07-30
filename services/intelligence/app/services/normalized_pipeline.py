@@ -93,8 +93,12 @@ def _map_order(row: dict) -> dict[str, Any] | None:
         "entity_type": "order",
         "name": _str(row.get("orderNumber") or row.get("order_number") or row.get("name") or row.get("id")),
         "sku": _str(row.get("orderNumber") or row.get("order_number")),
-        "amount_cents": _cents(row.get("total") or row.get("totalAmount") or row.get("amount") or row.get("grandTotal")),
-        "date_value": _date_val(row.get("date") or row.get("orderDate") or row.get("createdAt") or row.get("created_at")),
+        "amount_cents": _cents(
+            row.get("total") or row.get("totalAmount") or row.get("amount") or row.get("grandTotal")
+        ),
+        "date_value": _date_val(
+            row.get("date") or row.get("orderDate") or row.get("createdAt") or row.get("created_at")
+        ),
         "status_value": _str(row.get("status") or row.get("orderStatus")),
         "customer_name": _str(row.get("customer") or row.get("customerName") or row.get("customer_name")),
         "original_primary_key": _str(row.get("id") or row.get("orderId")),
@@ -148,7 +152,9 @@ def _map_print_job(row: dict) -> dict[str, Any] | None:
         "sku": _str(row.get("sku") or row.get("productCode")),
         "status_value": _str(row.get("status") or row.get("jobStatus") or row.get("state")),
         "quantity": _int_val(row.get("copies") or row.get("qty") or row.get("count")),
-        "date_value": _date_val(row.get("date") or row.get("startedAt") or row.get("started_at") or row.get("createdAt")),
+        "date_value": _date_val(
+            row.get("date") or row.get("startedAt") or row.get("started_at") or row.get("createdAt")
+        ),
         "category": _str(row.get("printer") or row.get("printerName") or row.get("printer_id")),
         "description": _str(row.get("notes") or row.get("error") or row.get("failureReason")),
         "original_primary_key": _str(row.get("id") or row.get("jobId") or row.get("printJobId")),

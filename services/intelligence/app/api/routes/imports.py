@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import LegacyTableReviewState, TableReviewDecision
+from app.models import LegacyTableReviewState
 from app.schemas.imports import (
     LegacyImportAllRequest,
     LegacyImportAllResponse,
@@ -13,8 +13,8 @@ from app.schemas.imports import (
     LegacyJsonUploadResponse,
     LegacyMariaDbInspectRequest,
     LegacyMariaDbInspectResponse,
-    LegacyPromoteResponse,
     LegacyPromotedTableInfo,
+    LegacyPromoteResponse,
     LegacyTableDeleteResponse,
     LegacyTableListResponse,
     LegacyTableReviewRequest,
@@ -58,7 +58,11 @@ async def import_square_items(file: UploadFile = File(...), db: AsyncSession = D
         ) from exc
 
 
-@router.post("/legacy-mariadb/inspect", response_model=LegacyMariaDbInspectResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/legacy-mariadb/inspect",
+    response_model=LegacyMariaDbInspectResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def inspect_legacy_database(
     payload: LegacyMariaDbInspectRequest,
     db: AsyncSession = Depends(get_db),
@@ -72,7 +76,11 @@ async def inspect_legacy_database(
         ) from exc
 
 
-@router.post("/legacy-mariadb/upload-json", response_model=LegacyJsonUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/legacy-mariadb/upload-json",
+    response_model=LegacyJsonUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def upload_legacy_json(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
