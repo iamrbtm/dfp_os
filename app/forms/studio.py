@@ -50,7 +50,10 @@ class ProductStudioForm(FlaskForm):
     tags = TextAreaField("Tags", validators=[Optional()])
     care_instructions = TextAreaField("Care Instructions", validators=[Optional()])
     safety_notes = TextAreaField("Safety Notes", validators=[Optional()])
-    launch_override_reason = TextAreaField("Launch Override Reason", validators=[Optional()])
+    launch_override_reason = TextAreaField(
+        "Launch Override Reason",
+        validators=[Optional(), Length(min=10, max=2000)],
+    )
     license_status = SelectField(
         "License Status", choices=enum_choices(LicenseStatus), validators=[DataRequired()]
     )
@@ -123,7 +126,12 @@ class ProductStudioForm(FlaskForm):
         product.tags = self.tags.data
         product.care_instructions = self.care_instructions.data
         product.safety_notes = self.safety_notes.data
-        product.launch_override_reason = self.launch_override_reason.data or None
+        # Issue 55 — strip and cap the override reason server-side as a second
+        # line of defense behind the Length(min=10, max=2000) validator.
+        override = self.launch_override_reason.data
+        if override:
+            override = override.strip()[:2000]
+        product.launch_override_reason = override or None
         product.license_status = LicenseStatus(self.license_status.data)
         product.design_source = self.design_source.data or None
         product.commercial_license_notes = self.commercial_license_notes.data

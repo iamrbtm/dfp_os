@@ -83,6 +83,22 @@ def _get_celery():
     return _celery_instance
 
 
+def _audit_launch_override(product: Product, override: str, *, actor_id: int) -> None:
+    """Record that the launch gate was bypassed with an explicit override (Issue 2/42)."""
+    get_audit_client().record(
+        action="product.launch_override",
+        entity_type="product",
+        entity_id=str(product.id),
+        actor_id=str(actor_id),
+        actor_type="user",
+        actor_display_name=getattr(current_user, "display_name", None),
+        source_module="products.studio_routes",
+        tenant_id=str(product.business_id) if product.business_id else None,
+        after_state={"launch_override_reason": override[:2000]},
+        metadata={"override_length": len(override)},
+    )
+
+
 def _load_products() -> list[Product]:
     return (
         Product.query.filter(Product.deleted_at.is_(None))
@@ -114,7 +130,9 @@ def _preferred_image_filename(product: Product, original_filename: str) -> str:
     return _unique_storage_filename(existing_names, original_filename)
 
 
-def _render_studio(product: Product | None, form: ProductStudioForm, mode: str, status_code: int = 200):
+def _render_studio(
+    product: Product | None, form: ProductStudioForm, mode: str, status_code: int = 200
+):
     readiness = None
     launch_items = []
     photo_shots = []
@@ -165,25 +183,64 @@ def studio(product_id: int | None = None):
 
     if form.validate_on_submit():
         if product is None:
+            # ---- CREATE (Issue 2): the launch gate must cover new products too ----
             business = ensure_default_business()
             product = Product()
             product.business_id = business.id
             form.populate_product(product)
+
+            used_override = False
+            override_text = ""
+            is_launching = product.is_public or product.status == ProductStatus.ACTIVE
+            if is_launching:
+                allowed, blockers = launch_gate(product)
+                override = (product.launch_override_reason or "").strip()
+                if not allowed:
+                    if override:
+                        # Override present but insufficient/invalid — block loudly.
+                        db.session.rollback()
+                        flash(
+                            blockers[0] if blockers else "Launch gate blocked this product.",
+                            "danger",
+                        )
+                        for blocker in blockers[:4]:
+                            flash(blocker, "warning")
+                        return _render_studio(None, form, "create", 400)
+                    # No override: new products cannot go live unready — force Draft.
+                    product.status = ProductStatus.DRAFT
+                    product.is_public = False
+                    flash(
+                        "New products start as Draft. Add a model, price, license, and photo, "
+                        "then publish — or add a 10+ character override reason.",
+                        "warning",
+                    )
+                else:
+                    override_text = override
+                    used_override = bool(override)
+
             try:
                 product = create_admin_resource(product, actor_id=current_user.id)
             except IntegrityError:
                 db.session.rollback()
                 flash("Unable to save that product. Please check for duplicates.", "danger")
                 return _render_studio(None, form, "create", 400)
+            # Audit the override only once the product has an id (Issue 2 step 4).
+            if used_override:
+                _audit_launch_override(product, override_text, actor_id=current_user.id)
             flash("Product created successfully.", "success")
             return redirect(url_for("products.studio", product_id=product.id))
 
+        # ---- EDIT (Issue 1): stage the change, gate it, commit only if allowed ----
         before_state = snapshot_instance(product)
         form.populate_product(product)
         is_launching = product.is_public or product.status == ProductStatus.ACTIVE
         if is_launching:
             allowed, blockers = launch_gate(product)
             if not allowed:
+                # The blocked edit must NOT persist. Roll back the dirty product
+                # row and reload the clean version from the database.
+                db.session.rollback()
+                product = get_by_id(Product, product_id)
                 flash(
                     "Product is not launch-ready yet. Complete launch items or add an explicit override reason.",
                     "danger",
@@ -191,6 +248,9 @@ def studio(product_id: int | None = None):
                 for blocker in blockers[:4]:
                     flash(blocker, "warning")
                 return _render_studio(product, form, mode, 400)
+            override = (product.launch_override_reason or "").strip()
+            if override:
+                _audit_launch_override(product, override, actor_id=current_user.id)
         try:
             update_admin_resource(product, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
@@ -257,8 +317,14 @@ def update_product_story_card(product_id: int):
             "story_what_it_is": (request.form.get("story_what_it_is") or "").strip() or None,
             "story_who_it_is_for": (request.form.get("story_who_it_is_for") or "").strip() or None,
             "story_materials": (request.form.get("story_materials") or "").strip() or None,
-            "story_customization_options": (request.form.get("story_customization_options") or "").strip() or None,
-            "story_internal_compliance_notes": (request.form.get("story_internal_compliance_notes") or "").strip() or None,
+            "story_customization_options": (
+                request.form.get("story_customization_options") or ""
+            ).strip()
+            or None,
+            "story_internal_compliance_notes": (
+                request.form.get("story_internal_compliance_notes") or ""
+            ).strip()
+            or None,
         },
         actor_id=current_user.id,
     )
@@ -458,13 +524,20 @@ def product_assets(product_id: int):
         if sidecar and asset["kind"] != "metadata":
             try:
                 asset_metadata = json.loads(download_storage_bytes(sidecar["reference"]))
-            except (OSError, ValueError, TypeError):
+            except OSError, ValueError, TypeError:
                 asset_metadata = {}
-        elif asset["reference"] in {product.model_file_path, product.converted_model_path, product.gcode_path}:
+        elif asset["reference"] in {
+            product.model_file_path,
+            product.converted_model_path,
+            product.gcode_path,
+        }:
             asset_metadata = metadata
         asset["metadata"] = asset_metadata
         asset["is_pmp_compatible"] = Path(asset["name"]).suffix.lower() in {".stl", ".3mf"}
-        asset["is_packed_plate"] = "__packed-plate__" in asset["name"] or asset_metadata.get("schema") == "dfpos.pmp-packed-plate"
+        asset["is_packed_plate"] = (
+            "__packed-plate__" in asset["name"]
+            or asset_metadata.get("schema") == "dfpos.pmp-packed-plate"
+        )
         asset["download_url"] = url_for(
             "products.download_product_asset", product_id=product.id, filename=asset["name"]
         )
@@ -475,7 +548,9 @@ def product_assets(product_id: int):
             "products.pack_product_asset", product_id=product.id, filename=asset["name"]
         )
         asset["metadata_will_delete"] = bool(sidecar) or asset["reference"] in {
-            product.model_file_path, product.converted_model_path, product.gcode_path
+            product.model_file_path,
+            product.converted_model_path,
+            product.gcode_path,
         }
     return jsonify({"success": True, "product_id": product.id, "assets": assets})
 
@@ -620,9 +695,7 @@ def delete_product_asset(product_id: int, filename: str):
         after_state={},
         metadata={"filename": filename, "kind": kind, "metadata_deleted": metadata_deleted},
     )
-    return jsonify(
-        {"success": True, "deleted": filename, "metadata_deleted": metadata_deleted}
-    )
+    return jsonify({"success": True, "deleted": filename, "metadata_deleted": metadata_deleted})
 
 
 @bp.route("/studio/<int:product_id>/calculate-costs", methods=["POST"])

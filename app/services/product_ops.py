@@ -73,7 +73,9 @@ def calculate_product_readiness(product: Product) -> ReadinessResult:
 
     def add(label: str, points: int, passed: bool, reason: str, critical: bool = False):
         earned = points if passed else 0
-        breakdown.append({"label": label, "points": points, "earned": earned, "passed": passed, "reason": reason})
+        breakdown.append(
+            {"label": label, "points": points, "earned": earned, "passed": passed, "reason": reason}
+        )
         if critical and not passed:
             blockers.append(reason)
 
@@ -83,8 +85,18 @@ def calculate_product_readiness(product: Product) -> ReadinessResult:
         LicenseStatus.CUSTOMER_OWNED,
     } or bool(product.model_commercial_use_allowed)
     add("License", 20, license_ok, "Commercial rights need review.", critical=True)
-    add("Model analysis", 12, product.analysis_status == "complete" or bool(product.gcode_path), "Model analysis is missing.")
-    add("Cost data", 12, bool(product.cost_snapshots) or (product.estimated_material_cost or 0) > 0, "Cost snapshot or material cost is missing.")
+    add(
+        "Model analysis",
+        12,
+        product.analysis_status == "complete" or bool(product.gcode_path),
+        "Model analysis is missing.",
+    )
+    add(
+        "Cost data",
+        12,
+        bool(product.cost_snapshots) or (product.estimated_material_cost or 0) > 0,
+        "Cost snapshot or material cost is missing.",
+    )
     completed_shots = sum(1 for shot in product.photo_shots if shot.completed)
     has_photo_record = bool(product.images) or bool(product.default_image_path)
     add(
@@ -93,14 +105,41 @@ def calculate_product_readiness(product: Product) -> ReadinessResult:
         has_photo_record or completed_shots >= 2,
         "Product photos or shot-list completion are missing.",
     )
-    add("Public copy", 12, bool(product.description and product.short_description), "Public description is incomplete.")
-    add("Price", 10, Decimal(str(product.base_price or 0)) > 0, "Base price is missing.", critical=True)
-    add("POS/public visibility", 8, bool(product.is_pos_visible or product.is_public), "Product is hidden from both POS and public catalog.")
-    add("Safety/care", 7, bool(product.safety_notes and product.care_instructions), "Safety or care notes are missing.")
-    add("Inventory", 7, _inventory_on_hand(product) > 0, "No finished goods inventory is available.")
+    add(
+        "Public copy",
+        12,
+        bool(product.description and product.short_description),
+        "Public description is incomplete.",
+    )
+    add(
+        "Price",
+        10,
+        Decimal(str(product.base_price or 0)) > 0,
+        "Base price is missing.",
+        critical=True,
+    )
+    add(
+        "POS/public visibility",
+        8,
+        bool(product.is_pos_visible or product.is_public),
+        "Product is hidden from both POS and public catalog.",
+    )
+    add(
+        "Safety/care",
+        7,
+        bool(product.safety_notes and product.care_instructions),
+        "Safety or care notes are missing.",
+    )
+    add(
+        "Inventory", 7, _inventory_on_hand(product) > 0, "No finished goods inventory is available."
+    )
 
     score = sum(int(item["earned"]) for item in breakdown)
-    if product.license_status in {LicenseStatus.PERSONAL_ONLY, LicenseStatus.RESTRICTED, LicenseStatus.NEEDS_REVIEW}:
+    if product.license_status in {
+        LicenseStatus.PERSONAL_ONLY,
+        LicenseStatus.RESTRICTED,
+        LicenseStatus.NEEDS_REVIEW,
+    }:
         score = min(score, 45)
     return ReadinessResult(score=min(score, 100), breakdown=breakdown, critical_blockers=blockers)
 
@@ -110,15 +149,25 @@ def sync_launch_checklist(product: Product) -> list[ProductLaunchChecklistItem]:
     readiness = calculate_product_readiness(product)
     completed_shots = sum(1 for shot in product.photo_shots if shot.completed)
     status_by_key = {
-        ProductLaunchChecklistKey.LICENSE_VERIFIED: not any("Commercial rights" in b for b in readiness.critical_blockers),
-        ProductLaunchChecklistKey.MODEL_ANALYZED: product.analysis_status == "complete" or bool(product.gcode_path),
-        ProductLaunchChecklistKey.COST_SNAPSHOT: bool(product.cost_snapshots) or (product.estimated_material_cost or 0) > 0,
-        ProductLaunchChecklistKey.PRODUCT_PHOTOS: bool(product.images) or bool(product.default_image_path) or completed_shots >= 2,
+        ProductLaunchChecklistKey.LICENSE_VERIFIED: not any(
+            "Commercial rights" in b for b in readiness.critical_blockers
+        ),
+        ProductLaunchChecklistKey.MODEL_ANALYZED: product.analysis_status == "complete"
+        or bool(product.gcode_path),
+        ProductLaunchChecklistKey.COST_SNAPSHOT: bool(product.cost_snapshots)
+        or (product.estimated_material_cost or 0) > 0,
+        ProductLaunchChecklistKey.PRODUCT_PHOTOS: bool(product.images)
+        or bool(product.default_image_path)
+        or completed_shots >= 2,
         ProductLaunchChecklistKey.POS_TILE: bool(product.pos_image_path or product.is_pos_visible),
-        ProductLaunchChecklistKey.PUBLIC_DESCRIPTION: bool(product.description and product.short_description),
+        ProductLaunchChecklistKey.PUBLIC_DESCRIPTION: bool(
+            product.description and product.short_description
+        ),
         ProductLaunchChecklistKey.INVENTORY_TARGET: _inventory_on_hand(product) > 0,
         ProductLaunchChecklistKey.MARKET_TEST_PLAN: bool(product.tags),
-        ProductLaunchChecklistKey.SAFETY_CARE_NOTES: bool(product.safety_notes and product.care_instructions),
+        ProductLaunchChecklistKey.SAFETY_CARE_NOTES: bool(
+            product.safety_notes and product.care_instructions
+        ),
     }
     for item in product.launch_checklist_items:
         if item.override_reason:
@@ -128,29 +177,59 @@ def sync_launch_checklist(product: Product) -> list[ProductLaunchChecklistItem]:
     return list(product.launch_checklist_items)
 
 
-def update_checklist_item(item: ProductLaunchChecklistItem, *, completed: bool, notes: str | None, override_reason: str | None, actor_id: int | None = None) -> ProductLaunchChecklistItem:
+def update_checklist_item(
+    item: ProductLaunchChecklistItem,
+    *,
+    completed: bool,
+    notes: str | None,
+    override_reason: str | None,
+    actor_id: int | None = None,
+) -> ProductLaunchChecklistItem:
     before_state = snapshot_instance(item)
     item.completed = completed
     item.notes = notes
     item.override_reason = override_reason
     db.session.add(item)
     db.session.commit()
-    _audit("product_launch_checklist.updated", "product_launch_checklist_item", item.id, before_state, snapshot_instance(item), actor_id)
+    _audit(
+        "product_launch_checklist.updated",
+        "product_launch_checklist_item",
+        item.id,
+        before_state,
+        snapshot_instance(item),
+        actor_id,
+    )
     return item
 
 
-def update_photo_shot(shot: ProductPhotoShot, *, completed: bool, image_reference: str | None, notes: str | None, actor_id: int | None = None) -> ProductPhotoShot:
+def update_photo_shot(
+    shot: ProductPhotoShot,
+    *,
+    completed: bool,
+    image_reference: str | None,
+    notes: str | None,
+    actor_id: int | None = None,
+) -> ProductPhotoShot:
     before_state = snapshot_instance(shot)
     shot.completed = completed
     shot.image_reference = image_reference
     shot.notes = notes
     db.session.add(shot)
     db.session.commit()
-    _audit("product_photo_shot.updated", "product_photo_shot", shot.id, before_state, snapshot_instance(shot), actor_id)
+    _audit(
+        "product_photo_shot.updated",
+        "product_photo_shot",
+        shot.id,
+        before_state,
+        snapshot_instance(shot),
+        actor_id,
+    )
     return shot
 
 
-def update_story_card(product: Product, data: dict[str, str | None], *, actor_id: int | None = None) -> Product:
+def update_story_card(
+    product: Product, data: dict[str, str | None], *, actor_id: int | None = None
+) -> Product:
     before_state = snapshot_instance(product)
     product.story_what_it_is = data.get("story_what_it_is")
     product.story_who_it_is_for = data.get("story_who_it_is_for")
@@ -159,7 +238,14 @@ def update_story_card(product: Product, data: dict[str, str | None], *, actor_id
     product.story_internal_compliance_notes = data.get("story_internal_compliance_notes")
     db.session.add(product)
     db.session.commit()
-    _audit("product_story_card.updated", "product", product.id, before_state, snapshot_instance(product), actor_id)
+    _audit(
+        "product_story_card.updated",
+        "product",
+        product.id,
+        before_state,
+        snapshot_instance(product),
+        actor_id,
+    )
     return product
 
 
@@ -167,7 +253,12 @@ def generate_dead_stock_recommendation(product: Product) -> DeadStockRecommendat
     quantity = _inventory_on_hand(product)
     if quantity <= 0:
         return None
-    sold = db.session.query(func.coalesce(func.sum(OrderItem.quantity), 0)).filter(OrderItem.product_id == product.id).scalar() or 0
+    sold = (
+        db.session.query(func.coalesce(func.sum(OrderItem.quantity), 0))
+        .filter(OrderItem.product_id == product.id)
+        .scalar()
+        or 0
+    )
     margin = Decimal(str(product.estimated_profit or 0))
     score = 0
     reasons = []
@@ -197,27 +288,53 @@ def generate_dead_stock_recommendation(product: Product) -> DeadStockRecommendat
     return recommendation
 
 
-def accept_dead_stock_recommendation(recommendation: DeadStockRecommendation, *, notes: str | None = None, actor_id: int | None = None) -> DeadStockRecommendation:
+def accept_dead_stock_recommendation(
+    recommendation: DeadStockRecommendation,
+    *,
+    notes: str | None = None,
+    actor_id: int | None = None,
+) -> DeadStockRecommendation:
     before_state = snapshot_instance(recommendation)
     recommendation.status = DeadStockRecommendationStatus.ACCEPTED
     recommendation.action_notes = notes
     db.session.add(recommendation)
     db.session.commit()
-    _audit("dead_stock_recommendation.accepted", "dead_stock_recommendation", recommendation.id, before_state, snapshot_instance(recommendation), actor_id)
+    _audit(
+        "dead_stock_recommendation.accepted",
+        "dead_stock_recommendation",
+        recommendation.id,
+        before_state,
+        snapshot_instance(recommendation),
+        actor_id,
+    )
     return recommendation
 
 
-def dismiss_dead_stock_recommendation(recommendation: DeadStockRecommendation, *, notes: str | None = None, actor_id: int | None = None) -> DeadStockRecommendation:
+def dismiss_dead_stock_recommendation(
+    recommendation: DeadStockRecommendation,
+    *,
+    notes: str | None = None,
+    actor_id: int | None = None,
+) -> DeadStockRecommendation:
     before_state = snapshot_instance(recommendation)
     recommendation.status = DeadStockRecommendationStatus.DISMISSED
     recommendation.action_notes = notes
     db.session.add(recommendation)
     db.session.commit()
-    _audit("dead_stock_recommendation.dismissed", "dead_stock_recommendation", recommendation.id, before_state, snapshot_instance(recommendation), actor_id)
+    _audit(
+        "dead_stock_recommendation.dismissed",
+        "dead_stock_recommendation",
+        recommendation.id,
+        before_state,
+        snapshot_instance(recommendation),
+        actor_id,
+    )
     return recommendation
 
 
-def retire_product(product: Product, *, reason: str, actor_id: int | None = None, discount_remaining: bool = False) -> Product:
+def retire_product(
+    product: Product, *, reason: str, actor_id: int | None = None, discount_remaining: bool = False
+) -> Product:
     before_state = snapshot_instance(product)
     product.status = ProductStatus.RETIRED
     product.is_public = False
@@ -230,24 +347,46 @@ def retire_product(product: Product, *, reason: str, actor_id: int | None = None
         product.tags = f"{product.tags or ''},retirement-discount".strip(",")
     db.session.add(product)
     db.session.commit()
-    _audit("product.retired", "product", product.id, before_state, snapshot_instance(product), actor_id)
+    _audit(
+        "product.retired", "product", product.id, before_state, snapshot_instance(product), actor_id
+    )
     return product
 
 
 def launch_gate(product: Product) -> tuple[bool, list[str]]:
     readiness = calculate_product_readiness(product)
-    if product.launch_override_reason:
+    # Issue 42 — the override reason must be a meaningful (10-2000 char) string.
+    # A single space or "lol" must NOT bypass the gate, and this check is
+    # server-side so it cannot be skirted by sending raw data past the form.
+    override = (product.launch_override_reason or "").strip()
+    if override:
+        if len(override) < 10:
+            return False, [
+                "Override reason must be at least 10 characters to bypass the launch gate.",
+                *readiness.critical_blockers,
+            ]
+        if len(override) > 2000:
+            return False, ["Override reason must be 2000 characters or fewer."]
         return True, []
     if readiness.critical_blockers:
         return False, readiness.critical_blockers
-    return readiness.score >= 70, [item["reason"] for item in readiness.breakdown if not item["passed"]]
+    return readiness.score >= 70, [
+        item["reason"] for item in readiness.breakdown if not item["passed"]
+    ]
 
 
 def _inventory_on_hand(product: Product) -> int:
     return sum(record.quantity_on_hand for record in product.inventory_records)
 
 
-def _audit(action: str, entity_type: str, entity_id: int, before_state: dict | None, after_state: dict | None, actor_id: int | None) -> None:
+def _audit(
+    action: str,
+    entity_type: str,
+    entity_id: int,
+    before_state: dict | None,
+    after_state: dict | None,
+    actor_id: int | None,
+) -> None:
     record_audit_event(
         action=action,
         entity_type=entity_type,
