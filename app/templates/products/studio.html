@@ -44,6 +44,20 @@
       <form method="post" action="{{ url_for('products.studio', product_id=product.id) if product else url_for('products.studio') }}" class="space-y-6">
         {{ form.hidden_tag() }}
 
+        {#- Issue 3 — error summary banner + per-field error lists -#}
+        {%- macro field_errors(field) -%}
+          {%- if field.errors -%}
+            <ul class="text-red-500 text-sm mt-1 space-y-0.5">
+              {%- for error in field.errors -%}<li>{{ error }}</li>{%- endfor -%}
+            </ul>
+          {%- endif -%}
+        {%- endmacro -%}
+        {%- if form.errors -%}
+          <div class="app-card p-4 border border-red-400/60 rounded-lg" role="alert">
+            <p class="font-semibold text-red-500">Please correct the errors below.</p>
+          </div>
+        {%- endif -%}
+
         <div class="app-card p-6 space-y-6">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-xl font-semibold" style="color: var(--color-text);">
@@ -56,22 +70,27 @@
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.name.label.text }}</label>
               {{ form.name(class="app-input") }}
+              {{ field_errors(form.name) }}
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.slug.label.text }}</label>
               {{ form.slug(class="app-input font-mono text-sm") }}
+              {{ field_errors(form.slug) }}
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.sku_base.label.text }}</label>
               {{ form.sku_base(class="app-input font-mono text-sm") }}
+              {{ field_errors(form.sku_base) }}
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.base_price.label.text }}</label>
               {{ form.base_price(class="app-input") }}
+              {{ field_errors(form.base_price) }}
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.category_id.label.text }}</label>
               {{ form.category_id(class="app-input") }}
+              {{ field_errors(form.category_id) }}
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.collection_id.label.text }}</label>
@@ -111,6 +130,52 @@
             </label>
           </div>
 
+          {% set cd = cost_defaults or {} %}
+          <div class="app-card p-5">
+            <h3 class="mb-1 text-base font-semibold" style="color: var(--color-text);">Cost Inputs</h3>
+            <p class="mb-4 text-xs" style="color: var(--color-text-muted, var(--color-text));">
+              Override the global cost-engine defaults for this product only. Leave a field blank to use the global default shown beside it.
+            </p>
+            <div class="grid gap-5 md:grid-cols-2">
+              <div>
+                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.estimated_labor_minutes.label.text }}</label>
+                {{ form.estimated_labor_minutes(class="app-input") }}
+                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text));">Global default labor rate: ${{ cd.labor_rate }}/hr</p>
+                {{ field_errors(form.estimated_labor_minutes) }}
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.packaging_cost_override.label.text }}</label>
+                {{ form.packaging_cost_override(class="app-input") }}
+                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text));">Global default: ${{ cd.packaging_cost }}</p>
+                {{ field_errors(form.packaging_cost_override) }}
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.target_margin_percent_override.label.text }}</label>
+                {{ form.target_margin_percent_override(class="app-input") }}
+                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text);">Global default: {{ cd.target_margin_percent }}%</p>
+                {{ field_errors(form.target_margin_percent_override) }}
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.market_allocation_override.label.text }}</label>
+                {{ form.market_allocation_override(class="app-input") }}
+                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text);">Global default: ${{ cd.market_allocation }}</p>
+                {{ field_errors(form.market_allocation_override) }}
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.payment_fee_rate_override.label.text }}</label>
+                {{ form.payment_fee_rate_override(class="app-input") }}
+                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text);">Global default: {{ cd.payment_fee_rate }}</p>
+                {{ field_errors(form.payment_fee_rate_override) }}
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.material_spool_override.label.text }}</label>
+                {{ form.material_spool_override(class="app-input") }}
+                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text);">Pick a specific spool, or let the cost engine choose by material.</p>
+                {{ field_errors(form.material_spool_override) }}
+              </div>
+            </div>
+          </div>
+
           <div class="grid gap-5 md:grid-cols-2">
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.license_status.label.text }}</label>
@@ -127,17 +192,20 @@
           </div>
           <div>
             <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.launch_override_reason.label.text }}</label>
-            {{ form.launch_override_reason(class="app-input", rows=2, placeholder="Required before launching with incomplete critical readiness items.") }}
+            {{ form.launch_override_reason(class="app-input", rows=2, placeholder="Required (10–2000 characters) before launching with incomplete critical readiness items.") }}
+            {{ field_errors(form.launch_override_reason) }}
           </div>
 
           <div class="grid gap-5 md:grid-cols-2">
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_source_type.label.text }}</label>
               {{ form.model_source_type(class="app-input") }}
+              {{ field_errors(form.model_source_type) }}
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_source_url.label.text }}</label>
               {{ form.model_source_url(class="app-input") }}
+              {{ field_errors(form.model_source_url) }}
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_designer_name.label.text }}</label>
@@ -387,6 +455,7 @@
                   {% if product.model_file_path %}{{ storage_reference_name(product.model_file_path) }}{% else %}Drop a 3D model file here or click to browse{% endif %}
                 </p>
                 <p class="text-xs mt-2" style="color: var(--color-text-muted);">STL, GLB, GLTF, 3MF, OBJ up to 256 MB</p>
+                <p class="text-xs mt-1" style="color: var(--color-text-muted);">STL, 3MF, and OBJ can be analyzed for filament/time. GLB and GLTF are preview-only and cannot be analyzed.</p>
                 <input type="file" name="model_file" id="model_file" accept=".stl,.glb,.gltf,.3mf,.obj" class="hidden">
               </div>
               <button type="button" id="open-upload-settings" class="app-btn app-btn-primary w-full">Upload &amp; Analyze</button>

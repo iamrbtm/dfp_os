@@ -411,7 +411,7 @@ def analyze_product_model(self, product_id: int) -> dict:
                 entity_id=str(product.id),
                 actor_type="system",
                 source_module="app.tasks.model_analysis",
-                metadata={"step": "validation", "error": validation.error},
+                metadata={"step": "validation", "error": validation.error, "outcome": "failure"},
             )
             return task_envelope(False, error=validation.error)
 
@@ -535,7 +535,7 @@ def analyze_product_model(self, product_id: int) -> dict:
                 entity_id=str(product.id),
                 actor_type="system",
                 source_module="app.tasks.model_analysis",
-                metadata={"step": "slicing", "errors": slicer_errors},
+                metadata={"step": "slicing", "errors": slicer_errors, "outcome": "failure"},
             )
             return task_envelope(
                 False,
@@ -666,7 +666,11 @@ def analyze_product_model(self, product_id: int) -> dict:
             actor_type="system",
             source_module="app.tasks.model_analysis",
             tenant_id=str(product.business_id) if product.business_id else None,
-            metadata={"percent": 100, "conversion_queued": bool(convert_task)},
+            metadata={
+                "percent": 100,
+                "conversion_queued": bool(convert_task),
+                "outcome": "success",
+            },
         )
         return task_envelope(
             True,
@@ -697,7 +701,7 @@ def analyze_product_model(self, product_id: int) -> dict:
             entity_id=str(product.id),
             actor_type="system",
             source_module="app.tasks.model_analysis",
-            metadata={"error": str(exc)},
+            metadata={"error": str(exc), "outcome": "failure"},
         )
         raise analyze_product_model.retry(exc=exc)
     finally:
@@ -768,7 +772,7 @@ def convert_product_model_for_viewer(self, product_id: int) -> dict:
             actor_type="system",
             source_module="app.tasks.model_analysis",
             tenant_id=str(product.business_id) if product.business_id else None,
-            metadata={"converted_model_path": storage_ref},
+            metadata={"converted_model_path": storage_ref, "outcome": "success"},
         )
         return task_envelope(True, data={"converted_path": storage_ref})
     except Exception as exc:

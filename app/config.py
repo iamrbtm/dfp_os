@@ -32,7 +32,10 @@ class Config:
     REMEMBER_COOKIE_HTTPONLY = True
     SESSION_COOKIE_HTTPONLY = True
     TEMPLATES_AUTO_RELOAD = True
-    MAX_CONTENT_LENGTH_MB = int(os.getenv("MAX_CONTENT_LENGTH_MB", "16"))
+    # Issue 20 — one upload limit for everything. 256 MB matches the
+    # ProductModelUploadForm FileSize validator so Flask no longer rejects
+    # files the form says are acceptable.
+    MAX_CONTENT_LENGTH_MB = int(os.getenv("MAX_CONTENT_LENGTH_MB", "256"))
     MAX_CONTENT_LENGTH = MAX_CONTENT_LENGTH_MB * 1024 * 1024
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "uploads"))
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@example.com")
@@ -94,6 +97,9 @@ class Config:
     SIGN_STORAGE_BUCKET = os.getenv("SIGN_STORAGE_BUCKET", "signs")
     MARKET_DOCUMENTS_BUCKET = os.getenv("MARKET_DOCUMENTS_BUCKET", "markets")
     PRODUCT_ASSETS_BUCKET = os.getenv("PRODUCT_ASSETS_BUCKET", "products")
+    # Issue 34 — product images get their own (much smaller) per-file cap.
+    PRODUCT_IMAGE_MAX_MB = int(os.getenv("PRODUCT_IMAGE_MAX_MB", "5"))
+    PRODUCT_IMAGE_MAX_BYTES = PRODUCT_IMAGE_MAX_MB * 1024 * 1024
     RECEIPT_MAX_UPLOAD_MB = int(os.getenv("RECEIPT_MAX_UPLOAD_MB", "25"))
     RECEIPT_ALLOWED_TYPES = os.getenv(
         "RECEIPT_ALLOWED_TYPES",
@@ -133,6 +139,8 @@ class Config:
         AUDIT_LOG_FAIL_CLOSED,
     )
     ALLOW_NEGATIVE_INVENTORY = _as_bool(os.getenv("ALLOW_NEGATIVE_INVENTORY"), False)
+    # Issue 4 — inline (synchronous) analysis is dev/test only. Never enable in prod.
+    ANALYSIS_SYNC_MODE = _as_bool(os.getenv("ANALYSIS_SYNC_MODE"), False)
     RATE_LIMIT_ENABLED = _as_bool(os.getenv("RATE_LIMIT_ENABLED"), True)
     LOGIN_RATE_LIMIT_ATTEMPTS = int(os.getenv("LOGIN_RATE_LIMIT_ATTEMPTS", "5"))
     LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("LOGIN_RATE_LIMIT_WINDOW_SECONDS", "60"))

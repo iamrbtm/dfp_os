@@ -23,13 +23,27 @@ def _decimal_string(value: Any) -> str | None:
     return str(value) if value is not None else None
 
 
-def build_model_metadata(product: Product, *, source_bytes: bytes | None = None) -> dict:
+def build_model_metadata(
+    product: Product,
+    *,
+    source_bytes: bytes | None = None,
+    sha256: str | None = None,
+    size_bytes: int | None = None,
+) -> dict:
     source = product.model_file_path
-    if source_bytes is None and source:
-        try:
-            source_bytes = download_storage_bytes(source)
-        except Exception:
-            source_bytes = None
+    # Issue 21 — when the caller already computed the hash/size while streaming
+    # the upload, use those values and skip re-reading the whole file.
+    if sha256 is None or size_bytes is None:
+        if source_bytes is None and source:
+            try:
+                source_bytes = download_storage_bytes(source)
+            except Exception:
+                source_bytes = None
+        if source_bytes is not None:
+            if sha256 is None:
+                sha256 = hashlib.sha256(source_bytes).hexdigest()
+            if size_bytes is None:
+                size_bytes = len(source_bytes)
 
     config = dict(product.model_analysis_config or {})
     return {
@@ -41,10 +55,8 @@ def build_model_metadata(product: Product, *, source_bytes: bytes | None = None)
         "source": {
             "filename": config.get("original_filename") or storage_reference_name(source),
             "reference": source,
-            "size_bytes": len(source_bytes) if source_bytes is not None else None,
-            "sha256": (
-                hashlib.sha256(source_bytes).hexdigest() if source_bytes is not None else None
-            ),
+            "size_bytes": size_bytes,
+            "sha256": sha256,
             "uploaded_at": config.get("uploaded_at"),
             "uploaded_by": config.get("uploaded_by"),
         },
@@ -80,8 +92,16 @@ def build_model_metadata(product: Product, *, source_bytes: bytes | None = None)
     }
 
 
-def write_model_metadata(product: Product, *, source_bytes: bytes | None = None) -> str:
-    payload = build_model_metadata(product, source_bytes=source_bytes)
+def write_model_metadata(
+    product: Product,
+    *,
+    source_bytes: bytes | None = None,
+    sha256: str | None = None,
+    size_bytes: int | None = None,
+) -> str:
+    payload = build_model_metadata(
+        product, source_bytes=source_bytes, sha256=sha256, size_bytes=size_bytes
+    )
     filename = (
         f"{Path(storage_reference_name(product.model_file_path)).stem or 'model'}.metadata.json"
     )

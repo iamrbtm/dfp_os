@@ -161,7 +161,11 @@ def register_request_guards(app: Flask) -> None:
     def assign_request_id_and_enforce_modules():
         g.request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
 
-        from app.module_registry import API_RESOURCE_TO_MODULE, BLUEPRINT_TO_MODULE, is_module_enabled
+        from app.module_registry import (
+            API_RESOURCE_TO_MODULE,
+            BLUEPRINT_TO_MODULE,
+            is_module_enabled,
+        )
         from app.services.audit import record_audit_event
 
         module_key: str | None = None
@@ -212,7 +216,9 @@ def register_security_headers(app: Flask) -> None:
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        response.headers.setdefault(
+            "Permissions-Policy", "geolocation=(), microphone=(), camera=()"
+        )
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; "
@@ -226,7 +232,9 @@ def register_security_headers(app: Flask) -> None:
             "base-uri 'self'",
         )
         if app.config.get("SESSION_COOKIE_SECURE"):
-            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            )
         return response
 
 
@@ -250,6 +258,24 @@ def register_error_handlers(app: Flask) -> None:
         db.session.rollback()
         return render_template("errors/500.html"), 500
 
+    @app.errorhandler(413)
+    def request_entity_too_large(_: Exception):
+        # Issue 28 / 20 — oversized uploads get a friendly, limit-aware
+        # response. AJAX/JSON callers get JSON; everyone else gets the 413 page.
+        limit_mb = app.config.get("MAX_CONTENT_LENGTH_MB", 256)
+        wants_json = request.is_json or request.headers.get("Accept", "") == "application/json"
+        if wants_json:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"File too large. The maximum upload size is {limit_mb} MB.",
+                    }
+                ),
+                413,
+            )
+        return render_template("errors/413.html", limit_mb=limit_mb), 413
+
 
 def register_context_processors(app: Flask) -> None:
     from app.config_markdown import render_markdown
@@ -265,7 +291,7 @@ def register_context_processors(app: Flask) -> None:
     def duration_minutes(value: object) -> str:
         try:
             total_minutes = int(round(float(value or 0)))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             total_minutes = 0
 
         days, remainder = divmod(total_minutes, 60 * 24)
@@ -434,7 +460,10 @@ def register_context_processors(app: Flask) -> None:
         if current_user and current_user.is_authenticated:
             try:
                 from app.models import Notification
-                notif_count = db.session.query(Notification).filter(Notification.is_read.is_(False)).count()
+
+                notif_count = (
+                    db.session.query(Notification).filter(Notification.is_read.is_(False)).count()
+                )
             except Exception:
                 notif_count = 0
         ctx["unread_notification_count"] = notif_count

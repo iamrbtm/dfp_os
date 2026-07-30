@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}File Too Large | {{ app_name }}{% endblock %}
+{% block content %}
+  <div class="mx-auto max-w-2xl app-card p-8 text-center">
+    <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-warning);">413</p>
+    <h1 class="mt-3 text-3xl font-semibold" style="color: var(--color-text);">That file is too large to upload.</h1>
+    <p class="mt-3" style="color: var(--color-text-muted);">
+      The maximum upload size is {{ limit_mb }} MB. Try compressing the file or
+      uploading a smaller version.
+    </p>
+    <p class="mt-4">
+      <a href="javascript:history.back()" class="app-btn app-btn-primary">Go back</a>
+    </p>
+  </div>
+{% endblock %}

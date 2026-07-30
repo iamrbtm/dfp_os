@@ -210,6 +210,15 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     estimated_labor_minutes: Mapped[int] = mapped_column(default=0, nullable=False)
     estimated_print_minutes: Mapped[int] = mapped_column(default=0, nullable=False)
     estimated_profit: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    # Issue 14 / Issue 38 — per-product cost-engine overrides. All default to
+    # None so the cost engine falls back to the global settings when unset.
+    packaging_cost_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    target_margin_percent_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    market_allocation_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    payment_fee_rate_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
+    material_spool_override: Mapped[int | None] = mapped_column(
+        ForeignKey("filament_spools.id"), nullable=True
+    )
     default_image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     pos_image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -3,6 +3,76 @@
 
   var POLL_TIMEOUT_MS = 120000;
 
+  // Issue 18/35 — guard so a successful analysis only reloads the page once,
+  // even when both the analysis and the (optional) conversion task report success.
+  var reloaded = false;
+  function reloadOnce() {
+    if (reloaded) return;
+    reloaded = true;
+    window.setTimeout(function () { location.reload(); }, 800);
+  }
+
+  // Issue 19 — friendly, consistent labels for the standardized task statuses.
+  function statusLabel(status) {
+    var labels = {
+      queued: "Queued",
+      started: "Started",
+      validating: "Validating",
+      slicing: "Slicing",
+      storing_gcode: "Storing G-code",
+      costing: "Costing",
+      converting: "Converting",
+      complete: "Complete",
+      failed: "Failed",
+      superseded: "Superseded"
+    };
+    var key = String(status == null ? "" : status).trim();
+    if (labels[key]) return labels[key];
+    var fallback = key.replace(/_/g, " ");
+    return fallback.charAt(0).toUpperCase() + fallback.slice(1);
+  }
+
+  // Build a {step, percent, message} progress object from the task-status envelope.
+  function progressFromEnvelope(data) {
+    var payload = (data && data.data) || {};
+    var status = (data && data.status) || "";
+    var step = payload.step || status || "working";
+    var percent = payload.percent != null ? payload.percent : 0;
+    var message = payload.message || statusLabel(step) || "Processing model";
+    return { step: step, percent: percent, message: message };
+  }
+
+  // Issue 19 — show a red failure message in the live-status area and, when a
+  // retry URL is available, a Retry button that reuses the existing reanalyze
+  // action (via the [data-reanalyze] delegated handler).
+  function showAnalysisFailure(message, retryUrl) {
+    var container = document.getElementById("analysis-live-status");
+    if (container) {
+      container.classList.remove("hidden");
+      var msg = document.getElementById("analysis-live-message");
+      if (msg) { msg.textContent = message; msg.style.color = "var(--color-danger)"; }
+      var pct = document.getElementById("analysis-live-percent");
+      if (pct) { pct.textContent = statusLabel("failed"); pct.style.color = "var(--color-danger)"; }
+      var bar = document.getElementById("analysis-live-bar");
+      if (bar) { bar.style.width = "100%"; bar.style.background = "var(--color-danger)"; }
+      var step = document.getElementById("analysis-live-step");
+      if (step) { step.textContent = statusLabel("failed"); step.style.color = "var(--color-danger)"; }
+      var existing = document.getElementById("analysis-retry-btn");
+      if (existing) existing.remove();
+      if (retryUrl) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.id = "analysis-retry-btn";
+        btn.className = "app-btn app-btn-secondary mt-3 text-sm";
+        btn.setAttribute("data-reanalyze", "");
+        btn.setAttribute("data-url", retryUrl);
+        btn.textContent = "Retry";
+        container.appendChild(btn);
+      }
+    }
+    showFlash(message, "danger");
+  }
+
   function getCSRFToken() {
     var meta = document.querySelector("meta[name='csrf-token']");
     if (meta) return meta.getAttribute("content");
@@ -102,6 +172,7 @@
           showFlash("Model uploaded. Analysis started.", "success");
           updateLiveProgress({step: "queued", percent: 2, message: "Upload complete; analysis queued"});
           if (data.task_id) {
+            var reanalyzeUrl = "/products/studio/reanalyze/" + productId;
             pollTask(data.task_id, function (result) {
               updateLiveProgress({step: "complete", percent: 100, message: "Model analysis complete"});
               refreshAnalysisResult(productId);
@@ -109,14 +180,19 @@
                 pollTask(result.convert_task_id, function () {
                   updateLiveProgress({step: "complete", percent: 100, message: "Analysis and GLB preview complete"});
                   refreshAnalysisResult(productId);
+                  // reloadOnce() is triggered by reloadOnSuccess below.
                 }, null, function (progress) {
                   updateLiveProgress(progress, "GLB preview");
-                });
+                }, { retryUrl: reanalyzeUrl, reloadOnSuccess: true });
+              } else {
+                // Issue 18/35 — refresh readiness score/checklist after success.
+                reloadOnce();
               }
-            }, null, updateLiveProgress);
+            }, null, updateLiveProgress, { retryUrl: reanalyzeUrl });
           } else {
             updateLiveProgress({step: "uploaded", percent: 100, message: "Upload complete"});
             refreshAnalysisResult(productId);
+            reloadOnce();
           }
         })
         .catch(function (err) {
@@ -148,10 +224,20 @@
     if (!container) return;
     var percent = Math.max(0, Math.min(100, Number(progress.percent || 0)));
     container.classList.remove("hidden");
-    document.getElementById("analysis-live-message").textContent = (prefix ? prefix + ": " : "") + (progress.message || "Processing model");
-    document.getElementById("analysis-live-percent").textContent = Math.round(percent) + "%";
-    document.getElementById("analysis-live-bar").style.width = percent + "%";
-    document.getElementById("analysis-live-step").textContent = String(progress.step || "working").replace(/_/g, " ");
+    var msg = document.getElementById("analysis-live-message");
+    if (msg) {
+      msg.textContent = (prefix ? prefix + ": " : "") + (progress.message || "Processing model");
+      msg.style.color = "var(--color-text)";
+    }
+    var pct = document.getElementById("analysis-live-percent");
+    if (pct) { pct.textContent = Math.round(percent) + "%"; pct.style.color = "var(--color-link)"; }
+    var bar = document.getElementById("analysis-live-bar");
+    if (bar) { bar.style.width = percent + "%"; bar.style.background = "var(--color-primary)"; }
+    var step = document.getElementById("analysis-live-step");
+    if (step) { step.textContent = statusLabel(progress.step || "working"); step.style.color = "var(--color-text-muted)"; }
+    // Clear any prior Retry button + red styling when progress resumes.
+    var retryBtn = document.getElementById("analysis-retry-btn");
+    if (retryBtn) retryBtn.remove();
   }
 
   function refreshAnalysisResult(productId) {
@@ -441,10 +527,11 @@
           showFlash("Re-analysis started.", "success");
           if (data.task_id) {
             pollTask(data.task_id, function () {
-              location.reload();
-            });
+              updateLiveProgress({step: "complete", percent: 100, message: "Model analysis complete"});
+              // reloadOnce() is triggered by reloadOnSuccess below.
+            }, null, updateLiveProgress, { retryUrl: url, reloadOnSuccess: true });
           } else {
-            location.reload();
+            reloadOnce();
           }
         })
         .catch(function (err) {
@@ -473,36 +560,58 @@
         resultEl.innerHTML = '<div class="animate-pulse p-4 text-center text-sm" style="color:var(--color-text-muted);">Calculating costs...</div>';
       }
 
-      fetch(url, {
-        method: "POST",
-        headers: { "X-CSRFToken": getCSRFToken() }
+      runCalculateCosts(url, productId, resultTarget, btn, false);
+    });
+  }
+
+  function runCalculateCosts(url, productId, resultTarget, btn, confirmNoModel) {
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCSRFToken()
+      },
+      body: JSON.stringify({ confirm_no_model: !!confirmNoModel })
+    })
+      .then(function (r) {
+        return r.json().then(function (d) {
+          return { ok: r.ok, status: r.status, data: d };
+        });
       })
-        .then(function (r) {
-          if (!r.ok) {
-            return r.json().then(function (d) {
-              throw new Error(d.error || "Request failed");
-            });
-          }
-          return r.json();
-        })
-        .then(function (data) {
-          if (data.task_id) {
-            pollTask(data.task_id, function () {
-              fetchCostResult(productId, resultTarget, btn);
-            }, function () {
-              showFlash("Cost calculation timed out. The task may still be running.", "warning");
-              resetBtn(btn, "Calculate Cost");
-            });
+      .then(function (resp) {
+        var data = resp.data || {};
+        // Issue 16 — a 409 "no_model" means the model hasn't been analyzed.
+        // Ask the user to confirm estimating without a model before retrying.
+        if (resp.status === 409 && data.status === "no_model" && !confirmNoModel) {
+          if (window.confirm(data.error || "No model analysis is available. Estimate without a model?")) {
+            runCalculateCosts(url, productId, resultTarget, btn, true);
             return;
           }
-          showCostResult(data, resultTarget);
-          resetBtn(btn, "Re-Calculate");
-        })
-        .catch(function (err) {
-          showFlash(err.message || "Calculation request failed.", "danger");
+          showFlash("Cost calculation cancelled — no model analysis available.", "warning");
           resetBtn(btn, "Calculate Cost");
-        });
-    });
+          return;
+        }
+        if (!resp.ok || data.success === false) {
+          throw new Error(data.error || "Calculation request failed.");
+        }
+        // Issue 36 — the envelope carries data in `data.data`.
+        var payload = data.data || data;
+        if (payload && payload.task_id) {
+          pollTask(payload.task_id, function () {
+            fetchCostResult(productId, resultTarget, btn);
+          }, function () {
+            showFlash("Cost calculation timed out. The task may still be running.", "warning");
+            resetBtn(btn, "Calculate Cost");
+          });
+          return;
+        }
+        showCostResult(payload, resultTarget);
+        resetBtn(btn, "Re-Calculate");
+      })
+      .catch(function (err) {
+        showFlash(err.message || "Calculation request failed.", "danger");
+        resetBtn(btn, "Calculate Cost");
+      });
   }
 
   function fetchCostResult(productId, resultTarget, btn) {
@@ -523,13 +632,40 @@
   function showCostResult(data, targetId) {
     var el = document.getElementById(targetId);
     if (!el) return;
+    var confidence = (data && data.confidence) || "none";
+    var warning = (data && data.warning) || null;
+    var modelReady = data && data.model_ready !== undefined ? data.model_ready : true;
+    var banner = "";
+    if (warning || !modelReady || confidence === "none") {
+      banner =
+        '<div class="mb-3 rounded border p-3 text-sm" style="border-color:var(--color-warning, #d97706);color:var(--color-warning, #d97706);background:var(--color-warning-bg, rgba(217,119,6,0.08));">' +
+          "⚠️ " + (warning || "No model data — material and machine costs reflect estimates only.") +
+        '</div>';
+    }
     el.innerHTML =
+      banner +
+      '<div class="mb-3">' + confidenceBadge(confidence) + '</div>' +
       '<div class="grid gap-4 md:grid-cols-4">' +
         card("Material Cost", "$" + fmtDecimal(data.material_cost)) +
         card("Total Cost", "$" + fmtDecimal(data.total_cost)) +
         card("Margin", fmtDecimal(data.margin_percent) + "%") +
         card("Print Time", fmtDurationMinutes(data.print_minutes)) +
       '</div>';
+  }
+
+  function confidenceBadge(confidence) {
+    var map = {
+      high: { label: "High confidence", color: "#16a34a" },
+      medium: { label: "Medium confidence", color: "#ca8a04" },
+      low: { label: "Low confidence", color: "#ea580c" },
+      none: { label: "No confidence", color: "#dc2626" }
+    };
+    var info = map[confidence] || map.none;
+    return (
+      '<span class="inline-block rounded-full px-3 py-1 text-xs font-semibold" style="color:' + info.color + ';border:1px solid ' + info.color + ';">' +
+        info.label +
+      '</span>'
+    );
   }
 
   function card(label, value) {
@@ -685,23 +821,33 @@
     });
   }
 
-  function pollTask(taskId, onComplete, onTimeout, onProgress) {
+  // Issue 5/36/19 — polling reads the consistent task-status envelope
+  //   {success: bool, status: str, data: {...}|null, error: str}
+  // The envelope's `success` field is authoritative: a Celery SUCCESS whose
+  // analysis returned success:false must NOT be treated as "complete".
+  // `options.retryUrl` wires a Retry button on failure (reuses the existing
+  // reanalyze action); `options.reloadOnSuccess` triggers a one-shot reload.
+  function pollTask(taskId, onComplete, onTimeout, onProgress, options) {
+    options = options || {};
+    var retryUrl = options.retryUrl || null;
+    var reloadOnSuccess = !!options.reloadOnSuccess;
     var startTime = Date.now();
 
     function poll() {
       fetch("/products/studio/task-status/" + taskId)
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          if (data.state === "SUCCESS") {
-            if (onComplete) onComplete(data.result || data);
+          if (data.success === false) {
+            showAnalysisFailure(data.error || "Analysis failed.", retryUrl);
             return;
           }
-          if (data.state === "FAILURE") {
-            showFlash(data.error || "Background task failed.", "danger");
-            updateLiveProgress({step: "failed", percent: 100, message: data.error || "Background task failed"});
+          if (data.success === true && (data.status === "complete" || data.status === "success" || !data.status)) {
+            if (onComplete) onComplete(data.data || data);
+            if (reloadOnSuccess) reloadOnce();
             return;
           }
-          if (onProgress && data.info) onProgress(data.info);
+          // In-progress: queued/started/validating/slicing/storing_gcode/costing/converting
+          if (onProgress) onProgress(progressFromEnvelope(data));
           if (Date.now() - startTime > POLL_TIMEOUT_MS) {
             if (onTimeout) onTimeout();
             return;

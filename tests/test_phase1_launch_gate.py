@@ -139,7 +139,9 @@ def test_form_rejects_overlong_override_and_accepts_boundary(app, client, login_
 
     too_long = dict(base, launch_override_reason="x" * 3000)
     r = client.post("/products/studio", data=too_long, follow_redirects=False)
-    assert r.status_code == 200  # form re-renders with a validation error
+    # Issue 3 — a POST that fails form validation returns 400 (not 200) while
+    # still re-rendering the form so the field errors are visible.
+    assert r.status_code == 400
 
     boundary = dict(base, launch_override_reason="x" * 2000, slug="phase1-boundary")
     r = client.post("/products/studio", data=boundary, follow_redirects=False)

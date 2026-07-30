@@ -97,7 +97,28 @@ def _cost_settings() -> dict[str, Decimal]:
         "packaging_cost": _decimal_setting("cost_engine_packaging_cost", "0.50"),
         "failure_rate": _decimal_setting("cost_engine_failure_rate", "0.05"),
         "target_margin_percent": _decimal_setting("cost_engine_target_margin_percent", "55.00"),
+        "payment_fee_rate": _decimal_setting("cost_engine_payment_fee_rate", "0.029"),
+        "market_allocation": _decimal_setting("cost_engine_market_allocation", "0.00"),
         "machine_hour_rate": money(energy + depreciation + maintenance + ams_waste),
+    }
+
+
+def global_cost_defaults() -> dict[str, str]:
+    """Return the global cost-engine defaults as display strings (Issue 14).
+
+    The Product Studio Cost Inputs section shows each global default next to its
+    override field so the user knows what value is assumed when they leave the
+    override blank.
+    """
+    settings = _cost_settings()
+    return {
+        "labor_rate": str(settings["labor_rate"]),
+        "packaging_cost": str(settings["packaging_cost"]),
+        "target_margin_percent": str(settings["target_margin_percent"]),
+        "failure_rate": str(settings["failure_rate"]),
+        "machine_hour_rate": str(settings["machine_hour_rate"]),
+        "payment_fee_rate": str(settings["payment_fee_rate"]),
+        "market_allocation": str(settings["market_allocation"]),
     }
 
 
@@ -337,33 +358,48 @@ def calculate_product_cost(
     settings = _cost_settings()
     labor_minutes = Decimal(str(product.estimated_labor_minutes or 0))
     labor_rate = Decimal(str(labor_rate if labor_rate is not None else settings["labor_rate"]))
+    # Issue 14 — packaging_cost reads the product override when the caller does
+    # not supply one, mirroring the market/payment override pattern below.
+    if packaging_cost is None:
+        packaging_cost = getattr(product, "packaging_cost_override", None)
     packaging_cost = money(packaging_cost if packaging_cost is not None else settings["packaging_cost"])
     machine_hour_rate = Decimal(
         str(machine_hour_rate if machine_hour_rate is not None else settings["machine_hour_rate"])
     )
+    # Issue 14 — target_margin_percent reads the product override when the
+    # caller does not supply one, mirroring the market/payment override pattern.
+    if target_margin_percent is None:
+        target_margin_percent = getattr(product, "target_margin_percent_override", None)
     target_margin_percent = Decimal(
         str(target_margin_percent if target_margin_percent is not None else settings["target_margin_percent"])
     )
 
     # Issue 38 — product-level overrides. The caller may pass None to mean "use
-    # the product's configured override if one exists, else 0". The override
-    # columns are added by the integrator later; getattr keeps this working
-    # whether or not they exist yet.
+    # the product's configured override if one exists, else the global default
+    # from Settings". The override columns are added by the integrator later;
+    # getattr keeps this working whether or not they exist yet.
     if payment_fee_rate is None:
         payment_fee_rate = getattr(product, "payment_fee_rate_override", None)
-    payment_fee_rate = Decimal(str(payment_fee_rate or "0"))
+    if payment_fee_rate is None:
+        payment_fee_rate = settings["payment_fee_rate"]
+    payment_fee_rate = Decimal(str(payment_fee_rate))
     if market_allocation is None:
         market_allocation = getattr(product, "market_allocation_override", None)
-    market_allocation = Decimal(str(market_allocation or "0"))
+    if market_allocation is None:
+        market_allocation = settings["market_allocation"]
+    market_allocation = Decimal(str(market_allocation))
 
     # Issue 25 — resolve filament cost from the product's business + material.
+    # Issue 14 — prefer the product's configured spool override when present.
     material_type: str | None = None
     analysis_config = product.model_analysis_config or {}
     if isinstance(analysis_config, dict):
         material_type = analysis_config.get("material")
+    preferred_spool_id = getattr(product, "material_spool_override", None)
     resolver = resolve_material_cost(
         business_id=product.business_id,
         material_type=material_type,
+        spool_id=preferred_spool_id,
     )
     resolved_cost_per_gram = resolver.cost_per_gram
     selected_spool_id = resolver.spool_id
@@ -476,6 +512,7 @@ def persist_cost_snapshot(
     copies: int | None = None,
     cost_resolver_evidence: dict | None = None,
     actor_id: int | None = None,
+    before_snapshot_id: int | None = None,
     audit_client=None,
 ) -> CostSnapshot:
     """Persist one cost snapshot with full evidence (Issues 15, 26, 17).
@@ -550,6 +587,7 @@ def persist_cost_snapshot(
         breakdown=breakdown,
         analysis_run_id=analysis_run_id,
         actor_id=actor_id,
+        before_snapshot_id=before_snapshot_id,
         audit_client=audit_client,
     )
     return snapshot
@@ -561,6 +599,7 @@ def _record_snapshot_audit(
     breakdown: CostBreakdown,
     analysis_run_id: int | None,
     actor_id: int | None,
+    before_snapshot_id: int | None = None,
     audit_client=None,
 ) -> None:
     """Fire a ``cost_snapshot.created`` audit event, swallowing errors (Issue 17)."""
@@ -572,11 +611,32 @@ def _record_snapshot_audit(
             from app.services.audit_client import get_audit_client
 
             client = get_audit_client()
+
+        # Issue 17 — record what the previous current snapshot was so the audit
+        # trail shows the before→after transition, not just the after state.
+        before_state = None
+        if before_snapshot_id is not None:
+            prior = db.session.get(CostSnapshot, before_snapshot_id)
+            if prior is not None:
+                prior_outputs = {}
+                if prior.outputs_json:
+                    try:
+                        prior_outputs = json.loads(prior.outputs_json)
+                    except (ValueError, TypeError):
+                        prior_outputs = {}
+                before_state = {
+                    "snapshot_id": prior.id,
+                    "confidence": prior.confidence,
+                    "total_cost": prior_outputs.get("total_cost"),
+                    "suggested_price": prior_outputs.get("suggested_price"),
+                }
         client.record(
             action="cost_snapshot.created",
             entity_type="cost_snapshot",
             entity_id=str(snapshot.id),
             actor_id=str(actor_id) if actor_id is not None else None,
+            actor_type="user" if actor_id is not None else "system",
+            before_state=before_state,
             after_state={
                 "snapshot_id": snapshot.id,
                 "analysis_run_id": analysis_run_id,

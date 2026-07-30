@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import mimetypes
 import shutil
@@ -144,6 +145,55 @@ def upload_bytes_to_storage(
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(data)
     return str(destination.resolve())
+
+
+def upload_stream_to_storage(
+    stream,
+    *,
+    bucket: str,
+    key: str,
+    local_root: str | Path,
+    content_type: str | None = None,
+    chunk_size: int = 1024 * 1024,
+) -> tuple[str, str, int]:
+    """Stream ``stream`` to storage in chunks, never holding the whole file in
+    memory (Issue 21). Returns ``(storage_reference, sha256_hexdigest, size_bytes)``.
+
+    For S3 the stream is spilled to a temp file first (still chunked, not
+    held in memory) and uploaded with ``upload_file``.
+    """
+    digest = hashlib.sha256()
+    size = 0
+
+    def _drain(write_chunk):
+        nonlocal size
+        while True:
+            chunk = stream.read(chunk_size)
+            if not chunk:
+                break
+            write_chunk(chunk)
+            digest.update(chunk)
+            size += len(chunk)
+
+    if using_s3_storage():
+        ensure_bucket(bucket)
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            _drain(tmp.write)
+            tmp_path = tmp.name
+        extra_args = {}
+        if content_type:
+            extra_args["ContentType"] = content_type
+        try:
+            _s3_client().upload_file(tmp_path, bucket, key, ExtraArgs=extra_args or None)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+        return build_s3_reference(bucket, key), digest.hexdigest(), size
+
+    destination = Path(local_root) / key
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with destination.open("wb") as out:
+        _drain(out.write)
+    return str(destination.resolve()), digest.hexdigest(), size
 
 
 def download_storage_bytes(reference: str) -> bytes:

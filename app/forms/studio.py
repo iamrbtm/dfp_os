@@ -20,6 +20,7 @@ from app.forms.common import OptionalSelectField, enum_choices
 from app.models import (
     Category,
     Collection,
+    FilamentSpool,
     ModelSourceType,
     Product,
     ProductStatus,
@@ -46,6 +47,30 @@ class ProductStudioForm(FlaskForm):
     is_featured = BooleanField("Featured", default=False)
     base_price = DecimalField(
         "Base Price ($)", places=2, validators=[Optional(), NumberRange(min=0)]
+    )
+    # Issue 14/38 — Cost Inputs. These override the global cost-engine defaults
+    # for this product only; a blank field means "use the global default".
+    estimated_labor_minutes = IntegerField(
+        "Labor minutes per item", validators=[Optional(), NumberRange(min=0)]
+    )
+    packaging_cost_override = DecimalField(
+        "Packaging cost override ($)", places=2, validators=[Optional(), NumberRange(min=0)]
+    )
+    target_margin_percent_override = DecimalField(
+        "Target margin override (%)", places=2, validators=[Optional(), NumberRange(min=0, max=100)]
+    )
+    market_allocation_override = DecimalField(
+        "Market/booth allocation override ($)",
+        places=2,
+        validators=[Optional(), NumberRange(min=0)],
+    )
+    payment_fee_rate_override = DecimalField(
+        "Payment fee rate override (e.g. 0.029 = 2.9%)",
+        places=4,
+        validators=[Optional(), NumberRange(min=0, max=1)],
+    )
+    material_spool_override = OptionalSelectField(
+        "Preferred filament spool", coerce=int, validators=[Optional()]
     )
     tags = TextAreaField("Tags", validators=[Optional()])
     care_instructions = TextAreaField("Care Instructions", validators=[Optional()])
@@ -83,6 +108,21 @@ class ProductStudioForm(FlaskForm):
         ]
         self.collection_id.choices = [(0, "— No Collection —")] + [
             (item.id, f"{item.name}") for item in Collection.query.order_by(Collection.name)
+        ]
+        # Issue 14 — preferred filament spool choices. 0 means "no override,
+        # let the cost engine pick". Spools are filtered by the product's
+        # business when one is known (Issue 13 business isolation), otherwise
+        # all spools are listed.
+        spool_query = FilamentSpool.query
+        instance = kwargs.get("obj")
+        if instance is not None and getattr(instance, "business_id", None):
+            spool_query = spool_query.filter(
+                (FilamentSpool.business_id == instance.business_id)
+                | (FilamentSpool.business_id.is_(None))
+            )
+        self.material_spool_override.choices = [(0, "— No override —")] + [
+            (item.id, f"{item.brand} — {item.material_type} ({item.color_name})")
+            for item in spool_query.order_by(FilamentSpool.brand, FilamentSpool.color_name)
         ]
 
     def validate_slug(self, field):
@@ -123,6 +163,14 @@ class ProductStudioForm(FlaskForm):
         product.base_price = (
             self.base_price.data if self.base_price.data is not None else Decimal("0")
         )
+        # Issue 14/38 — persist per-product cost-input overrides. Blank = None,
+        # which the cost engine interprets as "use the global default".
+        product.estimated_labor_minutes = self.estimated_labor_minutes.data or 0
+        product.packaging_cost_override = self.packaging_cost_override.data
+        product.target_margin_percent_override = self.target_margin_percent_override.data
+        product.market_allocation_override = self.market_allocation_override.data
+        product.payment_fee_rate_override = self.payment_fee_rate_override.data
+        product.material_spool_override = self.material_spool_override.data or None
         product.tags = self.tags.data
         product.care_instructions = self.care_instructions.data
         product.safety_notes = self.safety_notes.data
@@ -158,6 +206,12 @@ class ProductStudioForm(FlaskForm):
         self.is_pos_visible.data = product.is_pos_visible
         self.is_featured.data = product.is_featured
         self.base_price.data = product.base_price
+        self.estimated_labor_minutes.data = product.estimated_labor_minutes or 0
+        self.packaging_cost_override.data = product.packaging_cost_override
+        self.target_margin_percent_override.data = product.target_margin_percent_override
+        self.market_allocation_override.data = product.market_allocation_override
+        self.payment_fee_rate_override.data = product.payment_fee_rate_override
+        self.material_spool_override.data = product.material_spool_override or 0
         self.tags.data = product.tags
         self.care_instructions.data = product.care_instructions
         self.safety_notes.data = product.safety_notes

@@ -24,8 +24,10 @@ from app.blueprints.products import bp
 from app.extensions import db
 from app.forms.studio import ProductModelUploadForm, ProductStudioForm
 from app.models import (
+    AssetKind,
     Category,
     Collection,
+    CostSnapshot,
     DeadStockRecommendation,
     Product,
     ProductImage,
@@ -44,9 +46,17 @@ from app.services.business import ensure_default_business
 from app.services.cost_engine import (
     build_pricing_scenarios,
     calculate_product_cost,
+    global_cost_defaults,
     persist_cost_snapshot,
 )
 from app.services.crud import get_by_id
+from app.services.product_analysis import (
+    create_model_asset,
+    is_analysis_in_progress,
+    reset_product_analysis,
+    sanitize_analysis_config,
+    start_analysis_run,
+)
 from app.services.product_ops import (
     accept_dead_stock_recommendation,
     calculate_product_readiness,
@@ -68,11 +78,12 @@ from app.services.storage import (
     image_storage_key,
     is_s3_reference,
     list_product_assets,
+    materialize_storage_reference,
     normalize_storage_filename,
     product_storage_key,
     send_storage_reference,
     storage_reference_name,
-    upload_bytes_to_storage,
+    upload_stream_to_storage,
 )
 from app.utils.auth import roles_required
 
@@ -96,6 +107,27 @@ def _audit_launch_override(product: Product, override: str, *, actor_id: int) ->
         tenant_id=str(product.business_id) if product.business_id else None,
         after_state={"launch_override_reason": override[:2000]},
         metadata={"override_length": len(override)},
+    )
+
+
+def _audit_image_action(image: ProductImage, action: str) -> None:
+    """Record a product image lifecycle event (upload/set-default/set-pos/delete)."""
+    product = image.product
+    get_audit_client().record(
+        action=action,
+        entity_type="product",
+        entity_id=str(product.id) if product else None,
+        actor_id=str(current_user.id),
+        actor_type="user",
+        actor_display_name=getattr(current_user, "display_name", None),
+        source_module="products.studio_routes",
+        tenant_id=str(product.business_id) if product and product.business_id else None,
+        after_state={
+            "image_id": image.id,
+            "file_path": image.file_path,
+            "is_default": image.is_default,
+            "is_pos": image.is_pos,
+        },
     )
 
 
@@ -165,6 +197,7 @@ def _render_studio(
             photo_shots=photo_shots,
             dead_stock_recommendations=dead_stock_recommendations,
             storage_reference_name=storage_reference_name,
+            cost_defaults=global_cost_defaults(),
         ),
         status_code,
     )
@@ -265,8 +298,17 @@ def studio(product_id: int | None = None):
             form.load_from_product(product)
         else:
             form.status.data = ProductStatus.DRAFT.value
+            # Issue 33 — a product cannot be created without a category to assign it to.
+            if not Category.query.first():
+                flash(
+                    "You need at least one category before you can create a product.",
+                    "warning",
+                )
+        return _render_studio(product, form, mode)
 
-    return _render_studio(product, form, mode)
+    # Issue 3 — a POST that failed form validation returns 400 (not 200) while
+    # still re-rendering the form so the field errors are visible.
+    return _render_studio(product, form, mode, 400)
 
 
 @bp.route("/studio/<int:product_id>/checklist/<int:item_id>", methods=["POST"])
@@ -409,18 +451,26 @@ def upload_model(product_id: int):
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
     key = product_storage_key(product.id, safe_filename)
     content_type = content_type_for_name(file.filename, "application/octet-stream")
-    source_bytes = file.read()
-    storage_ref = upload_bytes_to_storage(
-        source_bytes,
+
+    # Issue 21 — stream the upload straight to storage (chunked) and compute the
+    # SHA256/size while streaming, instead of loading the whole file into memory.
+    storage_ref, file_sha256, file_size = upload_stream_to_storage(
+        file.stream,
         bucket=bucket,
         key=key,
         local_root=local_root,
         content_type=content_type,
     )
 
+    # Issue 8 — split quotable (sliceable) from preview-only formats. GLB/GLTF
+    # can be stored for display but cannot be analyzed for filament/time.
+    from app.services.model_analysis import is_quotable_format
+
+    quotable = is_quotable_format(file.filename)
+
     product.model_file_path = storage_ref
     product.model_convert_to_glb = bool(upload_form.convert_to_glb.data)
-    product.model_analysis_config = {
+    config = {
         "original_filename": file.filename,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": current_user.id,
@@ -442,19 +492,80 @@ def upload_model(product_id: int):
         "multicolor": bool(upload_form.multicolor.data),
         "use_embedded_settings": bool(upload_form.use_embedded_settings.data),
         "retain_gcode": bool(upload_form.retain_gcode.data),
+        "convert_to_glb": bool(upload_form.convert_to_glb.data),
     }
-    product.analysis_status = "pending"
+    # Issue 40 — only scalar settings may live on the product row.
+    product.model_analysis_config = sanitize_analysis_config(config)
     product.analysis_error = None
-    product.analysis_requested_at = datetime.now(timezone.utc)
     product.analysis_completed_at = None
     product.convert_status = None
     product.conversion_error = None
     product.converted_model_path = None
     product.gcode_path = None
+
+    # Issue 6/7 — record the upload as a current source-model asset.
+    asset = create_model_asset(
+        product,
+        storage_reference=storage_ref,
+        original_filename=file.filename,
+        safe_filename=safe_filename,
+        content_type=content_type,
+        size_bytes=file_size,
+        sha256=file_sha256,
+        asset_kind=AssetKind.SOURCE_MODEL,
+    )
+
     from app.services.model_asset_metadata import write_model_metadata
 
-    write_model_metadata(product, source_bytes=source_bytes)
+    # Issue 21 — pass the already-computed hash/size so metadata needn't re-read.
+    write_model_metadata(product, sha256=file_sha256, size_bytes=file_size)
+
+    if not quotable:
+        # Preview-only format: stored for reference, but no analysis is attempted.
+        product.analysis_status = None
+        product.analysis_error = None
+        db.session.commit()
+        get_audit_client().record(
+            action="product_model.uploaded",
+            entity_type="product",
+            entity_id=str(product.id),
+            actor_id=str(current_user.id),
+            actor_type="user",
+            actor_display_name=getattr(current_user, "display_name", None),
+            source_module="products.studio_routes",
+            tenant_id=str(product.business_id) if product.business_id else None,
+            after_state={"model_file_path": storage_ref, "quotable": False},
+            metadata={"filename": file.filename, "preview_only": True},
+        )
+        return jsonify(
+            {
+                "success": True,
+                "product_id": product.id,
+                "task_id": None,
+                "file_location": storage_ref,
+                "preview_only": True,
+                "message": (
+                    "This format is stored for preview/reference only and cannot be "
+                    "analyzed for filament usage or print time."
+                ),
+            }
+        )
+
+    product.analysis_status = "pending"
+    product.analysis_requested_at = datetime.now(timezone.utc)
     db.session.commit()
+
+    # Issue 6 — start a race-proof analysis run before enqueueing. The Celery
+    # task looks up the current run via get_current_run(product), so we only
+    # need the side effect of creating/superseding runs here.
+    start_analysis_run(
+        product,
+        source_asset=asset,
+        requested_by_id=current_user.id,
+        settings=config,
+    )
+    db.session.commit()
+
     get_audit_client().record(
         action="product_model.uploaded",
         entity_type="product",
@@ -464,7 +575,7 @@ def upload_model(product_id: int):
         actor_display_name=getattr(current_user, "display_name", None),
         source_module="products.studio_routes",
         tenant_id=str(product.business_id) if product.business_id else None,
-        after_state={"model_file_path": storage_ref},
+        after_state={"model_file_path": storage_ref, "quotable": True},
         metadata={
             "filename": file.filename,
             "convert_to_glb": product.model_convert_to_glb,
@@ -483,13 +594,52 @@ def upload_model(product_id: int):
         metadata={"percent": 2, "message": "Model analysis queued"},
     )
 
+    # Issue 4 — a real broker health check; .delay() is never "silently fine".
     celery = _get_celery()
     task_id = None
+    enqueue_ok = False
     if celery is not None:
-        from app.tasks.model_analysis import analyze_product_model
+        try:
+            from app.services.runtime_checks import is_celery_healthy
 
-        task = analyze_product_model.delay(product.id)
-        task_id = task.id
+            if is_celery_healthy():
+                from app.tasks.model_analysis import analyze_product_model
+
+                task = analyze_product_model.delay(product.id)
+                task_id = task.id
+                enqueue_ok = True
+        except Exception as exc:  # broker down / import error / queue rejection
+            current_app.logger.warning("model analysis enqueue failed: %s", exc)
+            enqueue_ok = False
+
+    if not enqueue_ok:
+        product.analysis_status = "failed"
+        product.analysis_error = (
+            "Background worker is not running. Please contact an administrator "
+            "or try again later."
+        )
+        db.session.commit()
+        get_audit_client().record(
+            action="model_analysis.enqueue_failed",
+            entity_type="product",
+            entity_id=str(product.id),
+            actor_id=str(current_user.id),
+            actor_type="user",
+            actor_display_name=getattr(current_user, "display_name", None),
+            source_module="products.studio_routes",
+            tenant_id=str(product.business_id) if product.business_id else None,
+            metadata={"error": "worker unavailable", "file_location": storage_ref},
+        )
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Worker unavailable — the model was saved but analysis could not be queued.",
+                    "file_location": storage_ref,
+                }
+            ),
+            503,
+        )
 
     return jsonify(
         {
@@ -703,32 +853,94 @@ def delete_product_asset(product_id: int, filename: str):
 def calculate_product_costs(product_id: int):
     product = get_by_id(Product, product_id)
     if product is None:
-        return jsonify({"success": False, "error": "Product not found"}), 404
+        return (
+            jsonify({"success": False, "status": "failed", "data": None, "error": "Product not found"}),
+            404,
+        )
+
+    # Issue 16 — a "successful" cost with no model data still renders normal
+    # cost cards and misleads the user. Block automatic calculation until the
+    # model has been analyzed, unless the user explicitly confirms they want an
+    # estimate without a model.
+    model_ready = bool(
+        product.analysis_status == "complete"
+        and product.parsed_filament_grams is not None
+        and product.parsed_print_minutes is not None
+    )
+    confirm_no_model = request.form.get("confirm_no_model") or (
+        request.get_json(silent=True) or {}
+    ).get("confirm_no_model")
+    if not model_ready and not confirm_no_model:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "status": "no_model",
+                    "data": None,
+                    "error": (
+                        "No model analysis is available. Material and machine costs "
+                        "cannot be calculated without a model. Confirm to estimate anyway."
+                    ),
+                    "confidence": "none",
+                    "warning": "No model data — material and machine costs reflect estimates only.",
+                }
+            ),
+            409,
+        )
+
+    # Issue 17 — capture the prior current snapshot for the audit before_state
+    # before persist_cost_snapshot marks it stale.
+    prior_snapshot = (
+        db.session.query(CostSnapshot)
+        .filter(CostSnapshot.product_id == product.id, CostSnapshot.stale.is_(False))
+        .order_by(CostSnapshot.created_at.desc())
+        .first()
+    )
 
     celery = _get_celery()
-    if celery is not None:
+    if celery is not None and model_ready:
         from app.tasks.cost_calculation import calculate_product_cost_task
 
-        task = calculate_product_cost_task.delay(product_id)
-        return jsonify({"success": True, "task_id": task.id})
+        task = calculate_product_cost_task.delay(product_id, actor_id=current_user.id)
+        return jsonify(
+            {"success": True, "status": "queued", "data": {"task_id": task.id}, "error": ""}
+        )
 
     breakdown = calculate_product_cost(product=product)
     product.estimated_material_cost = breakdown.material_cost
     product.estimated_profit = breakdown.margin_dollars
     product.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
-    persist_cost_snapshot(product=product, breakdown=breakdown, snapshot_reason="studio.product")
+    persist_cost_snapshot(
+        product=product,
+        breakdown=breakdown,
+        snapshot_reason="studio.product",
+        actor_id=current_user.id,
+        before_snapshot_id=prior_snapshot.id if prior_snapshot else None,
+    )
     db.session.commit()
     return jsonify(
         {
             "success": True,
-            "total_cost": str(breakdown.total_cost),
-            "suggested_price": str(breakdown.suggested_price),
-            "margin_percent": str(breakdown.margin_percent),
-            "margin_dollars": str(breakdown.margin_dollars),
-            "material_cost": str(breakdown.material_cost),
-            "filament_grams": str(breakdown.filament_grams),
-            "print_minutes": str(breakdown.print_minutes),
-            "snapshot_id": breakdown.snapshot_id,
+            "status": "complete",
+            "data": {
+                "total_cost": str(breakdown.total_cost),
+                "suggested_price": str(breakdown.suggested_price),
+                "margin_percent": str(breakdown.margin_percent),
+                "margin_dollars": str(breakdown.margin_dollars),
+                "material_cost": str(breakdown.material_cost),
+                "filament_grams": str(breakdown.filament_grams),
+                "print_minutes": str(breakdown.print_minutes),
+                "confidence": breakdown.confidence,
+                "evidence_source": breakdown.evidence_source,
+                "snapshot_id": breakdown.snapshot_id,
+                "model_ready": model_ready,
+                "warning": (
+                    None
+                    if model_ready
+                    else "No model data — material and machine costs reflect estimates only."
+                ),
+            },
+            "error": "",
         }
     )
 
@@ -736,22 +948,58 @@ def calculate_product_costs(product_id: int):
 @bp.route("/studio/task-status/<task_id>")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def task_status(task_id: str):
+    # Issues 5/36/19 — every status response uses one envelope:
+    #   {"success": bool, "status": str, "data": {...}|null, "error": str}
+    # A Celery task that finished but returned {success: false} (e.g. a failed
+    # analysis that did not raise) must NOT read as "complete" — the envelope's
+    # `success` field is authoritative, not the Celery state.
     celery = _get_celery()
     if celery is None:
-        return jsonify({"state": "NO_CELERY", "result": None})
+        return jsonify({"success": True, "status": "complete", "data": None, "error": ""})
 
     result = celery.AsyncResult(task_id)
-    response = {"task_id": task_id, "state": result.state}
-    if result.state == "SUCCESS":
-        response["result"] = result.result
-    elif result.state == "FAILURE":
-        response["error"] = str(result.info) if result.info else "Unknown error"
-        response["traceback"] = str(result.traceback) if result.traceback else None
-    elif result.state == "PENDING":
-        response["info"] = "Task has not started yet."
-    elif result.state in {"PROGRESS", "STARTED"}:
-        response["info"] = result.info if result.info else "Processing..."
-    return jsonify(response)
+    state = result.state
+
+    if state == "SUCCESS":
+        payload = result.result
+        # Tasks return a task_envelope {success, data, error}; unwrap it so the
+        # browser never has to handle two shapes.
+        if isinstance(payload, dict) and "success" in payload:
+            success = bool(payload.get("success"))
+            return jsonify(
+                {
+                    "success": success,
+                    "status": "failed" if not success else "complete",
+                    "data": payload.get("data"),
+                    "error": payload.get("error") or "",
+                }
+            )
+        return jsonify({"success": True, "status": "complete", "data": payload, "error": ""})
+
+    if state == "FAILURE":
+        error = str(result.info) if result.info else "Task failed"
+        return jsonify({"success": False, "status": "failed", "data": None, "error": error})
+
+    info = result.info if isinstance(result.info, dict) else None
+    if state == "PENDING":
+        status = "queued"
+    elif state in ("STARTED", "RETRY"):
+        status = "started"
+    elif state == "PROGRESS":
+        # The task may report a sub-status (validating/slicing/storing_gcode/
+        # costing/converting) inside its progress info (Issue 19).
+        status = (info or {}).get("status", "started")
+    else:
+        status = state.lower()
+
+    return jsonify(
+        {
+            "success": True,
+            "status": status,
+            "data": info,
+            "error": "",
+        }
+    )
 
 
 @bp.route("/studio/<int:product_id>/download-model")
@@ -798,10 +1046,21 @@ def reanalyze_model(product_id: int):
     if product is None:
         return jsonify({"success": False, "error": "Product not found"}), 404
 
-    product.analysis_status = "pending"
-    product.analysis_error = None
-    product.analysis_completed_at = None
-    product.analysis_requested_at = datetime.now(timezone.utc)
+    # Issue 50 — don't queue a duplicate analysis while one is already running.
+    if is_analysis_in_progress(product):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "An analysis is already in progress for this product.",
+                }
+            ),
+            409,
+        )
+
+    # Issue 27 — clear stale cost/analysis fields so the UI can't show old numbers
+    # as if they were current while the new run is in flight.
+    reset_product_analysis(product)
     db.session.commit()
 
     celery = _get_celery()
@@ -892,26 +1151,70 @@ def upload_product_image(product_id: int):
     if not file:
         return jsonify({"success": False, "error": "No image file provided"}), 400
 
-    ext = Path(file.filename).suffix.lower()
-    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+    # Issue 22 — extension allow-list (no .gif).
+    from app.services.image_validation import (
+        ALLOWED_IMAGE_EXTENSIONS,
+        validate_image_file,
+    )
+
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
         return (
             jsonify(
-                {"success": False, "error": "Unsupported image type. Use JPG, PNG, WebP, or GIF."}
+                {"success": False, "error": "Unsupported image type. Use JPG, PNG, or WebP."}
             ),
             400,
         )
+
+    max_bytes = current_app.config.get("PRODUCT_IMAGE_MAX_BYTES", 5 * 1024 * 1024)
 
     safe_filename = _preferred_image_filename(product, file.filename or f"image{ext}")
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
     key = image_storage_key(product.id, safe_filename)
-    storage_ref = upload_bytes_to_storage(
-        file.read(),
+    content_type = content_type_for_name(file.filename, "image/jpeg")
+
+    # Issue 34 — stream the image to storage (chunked) instead of file.read()
+    # loading the whole file into memory; hash/size are computed while streaming.
+    storage_ref, file_sha256, file_size = upload_stream_to_storage(
+        file.stream,
         bucket=bucket,
         key=key,
         local_root=local_root,
-        content_type=content_type_for_name(file.filename, "image/jpeg"),
+        content_type=content_type,
     )
+
+    # Enforce the per-image size cap. If oversize, remove the stored object and
+    # reject before any DB row is created.
+    if file_size > max_bytes:
+        delete_storage_reference(storage_ref)
+        limit_mb = max_bytes // (1024 * 1024)
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"Image too large. The maximum product image size is {limit_mb} MB.",
+                }
+            ),
+            413,
+        )
+
+    # Issue 22 — validate the real content with Pillow (magic bytes), not just
+    # the filename. For S3 references, materialize to a temp file first.
+    if is_s3_reference(storage_ref):
+        tmp_path, cleanup = materialize_storage_reference(storage_ref, suffix=ext)
+        image_error, detected_mime = validate_image_file(tmp_path)
+        if cleanup:
+            Path(tmp_path).unlink(missing_ok=True)
+    else:
+        image_error, detected_mime = validate_image_file(storage_ref)
+
+    if image_error:
+        delete_storage_reference(storage_ref)
+        return jsonify({"success": False, "error": image_error}), 400
+
+    if detected_mime:
+        content_type = detected_mime
 
     img = ProductImage(
         product_id=product.id,
@@ -930,6 +1233,28 @@ def upload_product_image(product_id: int):
     if img.is_pos:
         product.pos_image_path = storage_ref
     db.session.commit()
+
+    # Issue 22 — audit the upload.
+    get_audit_client().record(
+        action="product_image.uploaded",
+        entity_type="product",
+        entity_id=str(product.id),
+        actor_id=str(current_user.id),
+        actor_type="user",
+        actor_display_name=getattr(current_user, "display_name", None),
+        source_module="products.studio_routes",
+        tenant_id=str(product.business_id) if product.business_id else None,
+        after_state={
+            "image_id": img.id,
+            "file_path": storage_ref,
+            "is_default": img.is_default,
+            "is_pos": img.is_pos,
+            "content_type": content_type,
+            "size_bytes": file_size,
+            "sha256": file_sha256,
+        },
+        metadata={"filename": file.filename, "alt_text": img.alt_text},
+    )
 
     return jsonify(
         {
@@ -955,6 +1280,7 @@ def set_default_image(image_id: int):
     if img.product:
         img.product.default_image_path = img.file_path
     db.session.commit()
+    _audit_image_action(img, "product_image.set_default")
     return jsonify({"success": True})
 
 
@@ -970,6 +1296,7 @@ def set_pos_image(image_id: int):
     if img.product:
         img.product.pos_image_path = img.file_path
     db.session.commit()
+    _audit_image_action(img, "product_image.set_pos")
     return jsonify({"success": True})
 
 
@@ -987,6 +1314,7 @@ def delete_product_image(image_id: int):
         if product.pos_image_path == img.file_path:
             product.pos_image_path = None
 
+    _audit_image_action(img, "product_image.deleted")
     db.session.delete(img)
     db.session.commit()
     return jsonify({"success": True})

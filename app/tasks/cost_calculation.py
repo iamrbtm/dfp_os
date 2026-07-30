@@ -8,7 +8,7 @@ from app.services.model_analysis import task_envelope
 
 
 @celery.task(bind=True, max_retries=2, default_retry_delay=30)
-def calculate_product_cost_task(self, product_id: int) -> dict:
+def calculate_product_cost_task(self, product_id: int, actor_id: int | None = None) -> dict:
     product = db.session.get(Product, product_id)
     if product is None:
         return task_envelope(False, error="Product not found")
@@ -18,7 +18,12 @@ def calculate_product_cost_task(self, product_id: int) -> dict:
         product.estimated_material_cost = breakdown.material_cost
         product.estimated_profit = breakdown.margin_dollars
         product.estimated_print_minutes = int(round(float(breakdown.print_minutes)))
-        persist_cost_snapshot(product=product, breakdown=breakdown, snapshot_reason="task.product")
+        persist_cost_snapshot(
+            product=product,
+            breakdown=breakdown,
+            snapshot_reason="task.product",
+            actor_id=actor_id,
+        )
         db.session.commit()
         return task_envelope(
             True,
