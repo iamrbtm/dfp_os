@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import os
 import json
 import re
-import subprocess
 import zipfile
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -297,104 +295,44 @@ def slice_with_prusaslicer(
     if output_path is None:
         output_path = model_path.with_suffix(".gcode")
 
-    prusa_bin = os.environ.get("PRUSA_SLICER_PATH", "prusa-slicer")
-
     try:
-        check = subprocess.run(
-            [prusa_bin, "--help-fff"],
-            capture_output=True,
-            timeout=10,
-        )
-        if check.returncode != 0:
-            result.error = "PrusaSlicer executable check failed."
+        from app.services.slicer_client import get_slicer_client
+
+        client = get_slicer_client()
+        if not client.is_configured():
+            result.error = "Slicer microservice is not configured."
             return result
-    except FileNotFoundError:
-        result.error = "PrusaSlicer is not installed. Install it or set PRUSA_SLICER_PATH."
-        return result
-    except Exception as exc:
-        result.error = f"PrusaSlicer check failed: {exc}"
-        return result
 
-    cmd = [
-        prusa_bin,
-        "--export-gcode",
-        "--load",
-        str(profile_path),
-        "--output",
-        str(output_path),
-    ]
-    options = slicer_options or {}
-    # Issue 29/31 — preserve_orientation skips --center so the model keeps its
-    # original placement. The retry path already passes center=None; threading
-    # preserve_orientation here ensures the FIRST slice also omits --center.
-    if center is not None and not preserve_orientation:
-        cmd.extend(["--center", center])
-    cli_values = {
-        "layer_height": "--layer-height",
-        "perimeters": "--perimeters",
-        "top_solid_layers": "--top-solid-layers",
-        "bottom_solid_layers": "--bottom-solid-layers",
-        "infill_pattern": "--fill-pattern",
-        "brim_width": "--brim-width",
-    }
-    for key, flag in cli_values.items():
-        if options.get(key) is not None:
-            cmd.extend([flag, str(options[key])])
-    if options.get("infill_percent") is not None:
-        cmd.extend(["--fill-density", f"{options['infill_percent']}%"])
-    if options.get("supports") in {"build_plate", "everywhere"}:
-        cmd.extend(["--support-material", "1"])
-        if options["supports"] == "build_plate":
-            cmd.extend(["--support-material-buildplate-only", "1"])
-    # Issue 29/31 — nozzle / filament options added conditionally.
-    if options.get("nozzle_diameter") is not None:
-        cmd.extend(["--nozzle-diameter", str(options["nozzle_diameter"])])
-    if options.get("filament_density") is not None:
-        cmd.extend(["--filament-density", str(options["filament_density"])])
-    filament_type = options.get("filament_type") or options.get("material")
-    if filament_type is not None:
-        cmd.extend(["--filament-type", str(filament_type)])
-    # multicolor: (metadata only — not supported by slicer integration). The
-    # wipe-tower flag is not exposed by PrusaSlicer's CLI, so this is a no-op.
-    cmd.append(str(model_path))
-
-    try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            timeout=600,
+        response = client.slice(
+            model_file_path=str(model_path),
+            profile_name=profile_name,
+            center=center,
+            slicer_options=slicer_options,
+            preserve_orientation=preserve_orientation,
         )
-    except subprocess.TimeoutExpired:
-        result.error = "PrusaSlicer timed out after 600s."
-        return result
-    except Exception as exc:
-        result.error = f"PrusaSlicer execution failed: {exc}"
-        return result
 
-    if proc.returncode != 0:
-        stderr = proc.stderr.decode("utf-8", errors="replace").strip()
-        result.error = (
-            f"PrusaSlicer exited with code {proc.returncode}. " f"stderr: {stderr[:1000]}"
-        )
-        return result
+        if not response.get("success"):
+            error = response.get("error", "Slicer microservice returned an error")
+            if isinstance(error, dict):
+                error = error.get("message", str(error))
+            result.error = str(error)
+            return result
 
-    if not Path(output_path).exists():
-        result.error = "PrusaSlicer did not produce an output file."
-        return result
-
-    stats = _parse_gcode_stats(
-        output_path, density=Decimal(str(options.get("filament_density", "1.24")))
-    )
-    if stats:
-        result.filament_grams = stats["filament_grams"]
-        result.print_minutes = stats["print_minutes"]
-        result.stats = stats
+        result.filament_grams = Decimal(str(response.get("filament_grams", "0")))
+        result.print_minutes = Decimal(str(response.get("print_minutes", "0")))
+        result.stats = response.get("stats", {})
+        if output_path is not None and response.get("gcode"):
+            Path(output_path).write_text(
+                str(response["gcode"]),
+                encoding="utf-8",
+                errors="replace",
+            )
         result.success = True
-    else:
-        result.error = "Could not parse filament/time from G-code output."
         return result
 
-    return result
+    except Exception as exc:
+        result.error = f"Slicer microservice call failed: {exc}"
+        return result
 
 
 PLA_DENSITY_G_PER_CM3 = Decimal("1.24")

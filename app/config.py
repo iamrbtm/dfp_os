@@ -149,6 +149,9 @@ class Config:
     INTELLIGENCE_ENABLED = _as_bool(os.getenv("INTELLIGENCE_ENABLED"), True)
     INTELLIGENCE_SERVICE_URL = os.getenv("INTELLIGENCE_SERVICE_URL", "http://localhost:8091")
     INTELLIGENCE_INTERNAL_API_TOKEN = os.getenv("INTELLIGENCE_INTERNAL_API_TOKEN", "")
+    SLICER_ENABLED = _as_bool(os.getenv("SLICER_ENABLED"), False)
+    SLICER_SERVICE_URL = os.getenv("SLICER_SERVICE_URL", "http://slicer:8092")
+    SLICER_INTERNAL_API_TOKEN = os.getenv("SLICER_INTERNAL_API_TOKEN", "")
     WEATHER_USER_AGENT = os.getenv(
         "WEATHER_USER_AGENT",
         f"{APP_NAME} ({ADMIN_EMAIL})",

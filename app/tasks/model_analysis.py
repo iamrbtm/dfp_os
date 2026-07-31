@@ -425,8 +425,6 @@ def analyze_product_model(self, product_id: int) -> dict:
             for source_key, raw_value in embedded_settings.items():
                 target_key = mapping.get(source_key, source_key)
                 value = raw_value[0] if isinstance(raw_value, list) and raw_value else raw_value
-                if target_key == "infill_percent":
-                    value = str(value).rstrip("%")
                 if target_key == "support_material":
                     target_key = "supports"
                     value = "everywhere" if str(value).lower() in {"1", "true"} else "none"

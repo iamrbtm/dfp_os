@@ -240,13 +240,11 @@ def test_ensure_slicer_profiles_dir_is_noop_when_present(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_runtime_health_shape_with_mocked_subprocess():
-    fake_proc = mock.Mock(returncode=0)
+def test_runtime_health_shape_with_mocked_slicer_service():
     with mock.patch.object(runtime_checks, "check_trimesh_available", return_value=True), \
-            mock.patch.object(runtime_checks.subprocess, "run", return_value=fake_proc) as run_mock:
+            mock.patch.object(runtime_checks, "check_slicer_service_available", return_value=True):
         health = runtime_checks.runtime_health()
     assert health == {"trimesh": True, "prusaslicer": True}
-    assert run_mock.call_args.args[0][1] == "--help-fff"
 
 
 def test_check_prusaslicer_available_returns_false_on_file_not_found():

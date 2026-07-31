@@ -39,11 +39,45 @@ def check_prusaslicer_available() -> bool:
     return proc.returncode == 0
 
 
+def check_slicer_service_available() -> bool:
+    """Return ``True`` if the slicer microservice health check passes.
+
+    Uses the SLICER_SERVICE_URL and SLICER_INTERNAL_API_TOKEN config values.
+    Falls back to checking the local PrusaSlicer binary if the service is not
+    configured (for local development without docker-compose).
+    """
+    from flask import current_app
+
+    config = current_app.config
+    service_url = config.get("SLICER_SERVICE_URL", "")
+    token = config.get("SLICER_INTERNAL_API_TOKEN", "")
+    enabled = config.get("SLICER_ENABLED", False)
+
+    if not enabled or not service_url or not token:
+        return check_prusaslicer_available()
+
+    try:
+        import httpx
+
+        with httpx.Client(
+            base_url=service_url,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10.0,
+        ) as client:
+            response = client.get("/health/ready")
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("status") == "ready"
+    except Exception:
+        return False
+    return False
+
+
 def runtime_health() -> dict[str, bool]:
     """Aggregate capability flags for the studio banner (Issue 32)."""
     return {
         "trimesh": check_trimesh_available(),
-        "prusaslicer": check_prusaslicer_available(),
+        "prusaslicer": check_slicer_service_available(),
     }
 
 
@@ -64,6 +98,7 @@ def is_celery_healthy() -> bool:
 __all__ = [
     "check_trimesh_available",
     "check_prusaslicer_available",
+    "check_slicer_service_available",
     "runtime_health",
     "is_celery_healthy",
 ]

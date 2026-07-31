@@ -14,7 +14,9 @@ RUN useradd --create-home --shell /usr/sbin/nologin appuser
 WORKDIR /app
 
 # System dependencies (cached unless this layer changes)
-RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    DEBIAN_FRONTEND=noninteractive apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         build-essential curl nodejs npm \
         tesseract-ocr tesseract-ocr-eng \
@@ -30,18 +32,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Node dependencies (cached unless package.json changes)
 COPY package.json package-lock.json postcss.config.js tailwind.config.js ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.cache/npm \
+    npm ci --no-audit --no-fund && npm cache clean --force
 
 # Application source + build assets
-COPY . .
+COPY --chown=appuser:appuser . .
 RUN mkdir -p app/static/dist \
     && npm run build \
     && mkdir -p uploads instance \
-    && chown -R appuser:appuser /app uploads instance
+    && chown -R appuser:appuser uploads instance
 
 USER appuser
 EXPOSE 5000
-CMD ["uv", "run", "gunicorn", "-b", "0.0.0.0:5000", "--timeout", "120", "app:create_app()"]
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "--timeout", "120", "app:create_app()"]
 
 FROM base AS dev
 USER root

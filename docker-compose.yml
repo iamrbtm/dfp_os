@@ -34,6 +34,9 @@ x-env-app: &env-app
   OLLAMA_FALLBACK_URL: ${OLLAMA_FALLBACK_URL:-http://localhost:11434}
   OLLAMA_RECEIPT_MODEL: ${OLLAMA_RECEIPT_MODEL:-llama3}
   RECEIPT_DUPLICATE_STRICTNESS: ${RECEIPT_DUPLICATE_STRICTNESS:-normal}
+  SLICER_ENABLED: ${SLICER_ENABLED:-true}
+  SLICER_SERVICE_URL: http://slicer:8092
+  SLICER_INTERNAL_API_TOKEN: ${SLICER_INTERNAL_API_TOKEN:?SLICER_INTERNAL_API_TOKEN must be set}
 
 x-depends-all: &depends-all
   db:
@@ -42,6 +45,14 @@ x-depends-all: &depends-all
     condition: service_healthy
   seaweedfs:
     condition: service_healthy
+
+x-build-app: &build-app
+  context: .
+  target: base
+
+x-build-app-dev: &build-app-dev
+  context: .
+  target: dev
 
 services:
   db:
@@ -95,7 +106,9 @@ services:
       retries: 5
 
   web:
-    build: .
+    build: *build-app
+    image: dfpos-app:${DFPOS_IMAGE_TAG:-local}
+    init: true
     mem_limit: 1024m
     environment:
       <<: *env-app
@@ -104,11 +117,8 @@ services:
     volumes:
       - receipt_uploads:/app/uploads/receipts
     depends_on:
-      db:
-        condition: service_healthy
-      seaweedfs:
-        condition: service_healthy
-      audit-redis:
+      <<: *depends-all
+      slicer:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
@@ -117,27 +127,35 @@ services:
       retries: 3
 
   worker:
-    build: .
+    image: dfpos-app:${DFPOS_IMAGE_TAG:-local}
+    init: true
     mem_limit: 1024m
     environment:
       <<: *env-app
     volumes:
       - receipt_uploads:/app/uploads/receipts
-    depends_on: *depends-all
-    command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "worker", "--loglevel=info"]
+    depends_on:
+      <<: *depends-all
+      slicer:
+        condition: service_healthy
+    command: ["celery", "-A", "app.celery_app.celery", "worker", "--loglevel=info"]
 
   beat:
-    build: .
+    image: dfpos-app:${DFPOS_IMAGE_TAG:-local}
+    init: true
     mem_limit: 1024m
     environment:
       <<: *env-app
     volumes:
       - receipt_uploads:/app/uploads/receipts
-    depends_on: *depends-all
-    command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "beat", "--loglevel=info"]
+    depends_on:
+      <<: *depends-all
+      slicer:
+        condition: service_healthy
+    command: ["celery", "-A", "app.celery_app.celery", "beat", "--loglevel=info", "--schedule", "/app/instance/celerybeat-schedule"]
 
   migrate:
-    build: .
+    image: dfpos-app:${DFPOS_IMAGE_TAG:-local}
     profiles:
       - release
     environment:
@@ -149,7 +167,7 @@ services:
         condition: service_healthy
     volumes:
       - ./migrations/versions:/app/migrations/versions
-    command: ["uv", "run", "flask", "--app", "app:create_app", "db", "upgrade"]
+    command: ["flask", "--app", "app:create_app", "db", "upgrade"]
 
   audit-postgres:
     image: postgres:17
@@ -169,6 +187,8 @@ services:
 
   audit-log:
     build: services/audit-log
+    image: dfpos-audit-log:${DFPOS_IMAGE_TAG:-local}
+    init: true
     environment:
       AUDIT_SERVICE_ENV: ${AUDIT_SERVICE_ENV:-production}
       AUDIT_SERVICE_NAME: ${AUDIT_SERVICE_NAME:-dfp-audit-log}
@@ -207,6 +227,8 @@ services:
 
   intelligence:
     build: services/intelligence
+    image: dfpos-intelligence:${DFPOS_IMAGE_TAG:-local}
+    init: true
     environment:
       INTELLIGENCE_SERVICE_ENV: ${INTELLIGENCE_SERVICE_ENV:-production}
       INTELLIGENCE_SERVICE_NAME: ${INTELLIGENCE_SERVICE_NAME:-dfp-intelligence}
@@ -225,10 +247,29 @@ services:
         condition: service_started
     command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8091"]
 
+  slicer:
+    build: services/slicer
+    image: dfpos-slicer:${DFPOS_IMAGE_TAG:-local}
+    init: true
+    mem_limit: 2048m
+    environment:
+      SLICER_SERVICE_ENV: ${SLICER_SERVICE_ENV:-production}
+      SLICER_SERVICE_NAME: ${SLICER_SERVICE_NAME:-dfp-slicer}
+      SLICER_API_HOST: 0.0.0.0
+      SLICER_API_PORT: 8092
+      SLICER_INTERNAL_API_TOKEN: ${SLICER_INTERNAL_API_TOKEN:?SLICER_INTERNAL_API_TOKEN must be set}
+      SLICER_PRUSA_SLICER_PATH: ${SLICER_PRUSA_SLICER_PATH:-prusa-slicer}
+    expose:
+      - "8092"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8092/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   test:
-    build:
-      context: .
-      target: dev
+    build: *build-app-dev
+    image: dfpos-app-dev:${DFPOS_IMAGE_TAG:-local}
     profiles:
       - test
     environment:
@@ -247,6 +288,7 @@ services:
     profiles:
       - docs
     build: services/dfpos-api-docs
+    image: dfpos-api-docs:${DFPOS_IMAGE_TAG:-local}
     environment:
       DFPOS_OPENAPI_URL: http://web:5000/api/openapi.json
       APP_NAME: Dude Fish OS API Reference
