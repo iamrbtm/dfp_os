@@ -8,20 +8,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
 RUN useradd --create-home --shell /usr/sbin/nologin appuser
 
 WORKDIR /app
 RUN mkdir -p /opt/venv && chown appuser:appuser /app /opt/venv
 
-# Install PrusaSlicer and its dependencies
+# Keep this expensive system layer independent of UV and application changes.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     DEBIAN_FRONTEND=noninteractive apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         prusa-slicer curl \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv@sha256:cf4eedcaa81655197f625739489effcbe71b61ceb1506f332c3facae5deceded /uv /usr/local/bin/uv
 
 # Python dependencies (cached unless pyproject.toml / uv.lock change)
 COPY --chown=appuser:appuser pyproject.toml uv.lock .python-version ./
