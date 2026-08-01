@@ -12,6 +12,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 
 ## Current Focus
 
+- `in-progress` Move the Product Studio model pipeline to Bambu-primary/Prusa-fallback slicing with native artifact storage.
 - `done` Added Product Studio slicer-settings upload flow, optional GLB/G-code generation,
   versioned JSON metadata sidecars, hardened G-code comment parsing, and a product-scoped
   S3 Assets modal.
