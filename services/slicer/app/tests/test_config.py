@@ -127,7 +127,15 @@ async def test_lifespan_validates_configuration_and_constructs_cached_runtime(mo
     import app.main as main_module
 
     calls: list[str] = []
-    runtime = object()
+
+    class Jobs:
+        async def shutdown(self):
+            calls.append("drained")
+
+    class Runtime:
+        jobs = Jobs()
+
+    runtime = Runtime()
     monkeypatch.setattr(
         type(main_module.settings),
         "validate_for_startup",
@@ -139,7 +147,7 @@ async def test_lifespan_validates_configuration_and_constructs_cached_runtime(mo
     async with app.router.lifespan_context(app):
         assert app.state.slicer_runtime is runtime
 
-    assert calls == ["validated", "built"]
+    assert calls == ["validated", "built", "drained"]
 
 
 async def test_lifespan_rejects_bad_configuration_before_runtime_construction(monkeypatch: pytest.MonkeyPatch):

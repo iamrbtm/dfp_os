@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
+import functools
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from time import monotonic
+from typing import Any, Callable, TypeVar
 
 from fastapi import Request
 
@@ -14,6 +17,8 @@ from app.services.engines.bambu_profiles import BambuProfileError, BambuProfileR
 from app.services.engines.base import EngineFailure, EngineProbe, SliceOptions, SlicerEngine
 from app.services.engines.orchestrator import SlicerOrchestrator
 from app.services.engines.prusa import PrusaEngine
+
+_ResultT = TypeVar("_ResultT")
 
 
 def split_engine_timeouts(total_seconds: int) -> tuple[int, int]:
@@ -72,6 +77,7 @@ class SlicerRuntime:
     engines: dict[str, SlicerEngine]
     orchestrator: SlicerOrchestrator
     admission: SliceAdmission
+    jobs: SliceJobManager
     readiness: ReadinessProbeCache
 
 
@@ -95,6 +101,103 @@ class SliceAdmission:
             if self._active < 1:
                 raise RuntimeError("Slice admission released without a matching acquisition.")
             self._active -= 1
+
+
+class SliceJobLease:
+    def __init__(self, manager: SliceJobManager) -> None:
+        self._manager = manager
+        self._worker: asyncio.Task[Any] | None = None
+        self._released = False
+
+    async def run(self, function: Callable[..., _ResultT], *args: object, **kwargs: object) -> _ResultT:
+        if self._released or self._worker is not None:
+            raise RuntimeError("Slice job lease cannot start another worker.")
+        worker = self._manager._submit(function, *args, **kwargs)
+        self._worker = worker
+        try:
+            return await self._manager._wait_for_worker(worker)
+        finally:
+            self._worker = None
+
+    async def release(self) -> None:
+        if self._released:
+            return
+        if self._worker is not None:
+            await self._manager._wait_for_worker(self._worker)
+        release_task = asyncio.create_task(self._manager.admission.release())
+        try:
+            await self._manager._wait_without_abandoning(release_task)
+        finally:
+            if release_task.done() and not release_task.cancelled() and release_task.exception() is None:
+                self._released = True
+
+
+class SliceJobManager:
+    """Own slice admission and retain worker tasks through request cancellation."""
+
+    def __init__(
+        self,
+        admission: SliceAdmission,
+        *,
+        executor: concurrent.futures.Executor | None = None,
+    ) -> None:
+        self.admission = admission
+        self._executor = executor
+        self._jobs: set[asyncio.Task[Any]] = set()
+
+    async def try_acquire(self) -> SliceJobLease | None:
+        if not await self.admission.try_acquire():
+            return None
+        return SliceJobLease(self)
+
+    def _submit(
+        self,
+        function: Callable[..., _ResultT],
+        *args: object,
+        **kwargs: object,
+    ) -> asyncio.Task[_ResultT]:
+        async def invoke() -> _ResultT:
+            if self._executor is None:
+                return await asyncio.to_thread(function, *args, **kwargs)
+            loop = asyncio.get_running_loop()
+            call = functools.partial(function, *args, **kwargs)
+            return await loop.run_in_executor(self._executor, call)
+
+        task = asyncio.create_task(invoke())
+        self._jobs.add(task)
+        task.add_done_callback(self._jobs.discard)
+        return task
+
+    async def _wait_for_worker(self, task: asyncio.Task[_ResultT]) -> _ResultT:
+        return await self._wait_without_abandoning(task)
+
+    async def _wait_without_abandoning(self, task: asyncio.Task[_ResultT]) -> _ResultT:
+        cancellation: asyncio.CancelledError | None = None
+        while not task.done():
+            try:
+                await asyncio.sleep(0.01)
+            except asyncio.CancelledError as exc:
+                cancellation = cancellation or exc
+        if cancellation is not None:
+            if not task.cancelled():
+                task.exception()
+            raise cancellation
+        return task.result()
+
+    async def shutdown(self) -> None:
+        cancellation: asyncio.CancelledError | None = None
+        while self._jobs:
+            workers = tuple(self._jobs)
+            for worker in workers:
+                try:
+                    await self._wait_without_abandoning(worker)
+                except asyncio.CancelledError as exc:
+                    cancellation = cancellation or exc
+                except Exception:
+                    pass
+            await asyncio.sleep(0)
+        if cancellation is not None:
+            raise cancellation
 
 
 class _UnavailableEngine:
@@ -142,10 +245,12 @@ def build_slicer_runtime() -> SlicerRuntime:
         probe_timeout=settings.readiness_timeout_seconds,
     )
     engines = {"bambu": bambu, "prusa": prusa}
+    admission = SliceAdmission(settings.max_concurrent_slices)
     return SlicerRuntime(
         engines=engines,
         orchestrator=SlicerOrchestrator(engines, settings.engine_order),
-        admission=SliceAdmission(settings.max_concurrent_slices),
+        admission=admission,
+        jobs=SliceJobManager(admission),
         readiness=ReadinessProbeCache(
             ttl_seconds=settings.readiness_cache_ttl_seconds,
             timeout_seconds=settings.readiness_timeout_seconds,

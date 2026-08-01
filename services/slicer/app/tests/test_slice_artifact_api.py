@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import asyncio
+import concurrent.futures
 import json
+import threading
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -25,6 +27,11 @@ class _Runtime:
     orchestrator: object
     engines: dict[str, object]
     admission: object = field(default_factory=lambda: _UnlimitedAdmission())
+    jobs: object | None = None
+
+    def __post_init__(self) -> None:
+        if self.jobs is None:
+            self.jobs = _ImmediateJobs(self.admission)
 
 
 class _UnlimitedAdmission:
@@ -33,6 +40,27 @@ class _UnlimitedAdmission:
 
     async def release(self) -> None:
         return None
+
+
+class _ImmediateLease:
+    def __init__(self, admission: object) -> None:
+        self._admission = admission
+
+    async def run(self, function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    async def release(self) -> None:
+        await self._admission.release()
+
+
+class _ImmediateJobs:
+    def __init__(self, admission: object) -> None:
+        self.admission = admission
+
+    async def try_acquire(self):
+        if not await self.admission.try_acquire():
+            return None
+        return _ImmediateLease(self.admission)
 
 
 class _FakeOrchestrator:
@@ -140,19 +168,7 @@ def local_file_response_io(monkeypatch: pytest.MonkeyPatch):
     async def open_file(path, *_args, **_kwargs):
         return LocalAsyncFile(path)
 
-    async def run_sync(function, *args, **_kwargs):
-        return function(*args)
-
     monkeypatch.setattr("starlette.responses.anyio.open_file", open_file)
-    monkeypatch.setattr("starlette.responses.anyio.to_thread.run_sync", run_sync)
-
-
-@pytest.fixture(autouse=True)
-def immediate_slice_thread_offload(monkeypatch: pytest.MonkeyPatch):
-    async def run_inline(function, *args, **kwargs):
-        return function(*args, **kwargs)
-
-    monkeypatch.setattr("app.api.routes.slice.asyncio.to_thread", run_inline)
 
 
 async def _post(client: httpx.AsyncClient, *, token: str | None = _TOKEN, content: bytes = b"solid cube"):
@@ -317,6 +333,104 @@ async def test_extra_multipart_files_cannot_exceed_total_request_budget(
     assert orchestrator.calls == []
 
 
+def _multipart_body(boundary: str, parts: list[tuple[str, str | None, bytes]]) -> bytes:
+    body = bytearray()
+    for name, filename, value in parts:
+        body.extend(f"--{boundary}\r\n".encode())
+        disposition = f'Content-Disposition: form-data; name="{name}"'
+        if filename is not None:
+            disposition += f'; filename="{filename}"'
+        body.extend(f"{disposition}\r\n\r\n".encode())
+        body.extend(value)
+        body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode())
+    return bytes(body)
+
+
+async def test_multipart_preparse_handles_split_quoted_boundary_and_headers():
+    from app.api.auth import preparse_slice_multipart
+
+    boundary = "quoted-boundary-123"
+    body = _multipart_body(
+        boundary,
+        [
+            ("model_file", "dragon.stl", b"solid"),
+            ("profile_name", None, b"bambu_a1"),
+        ],
+    )
+    messages = iter(
+        {"type": "http.request", "body": bytes([byte]), "more_body": index < len(body) - 1}
+        for index, byte in enumerate(body)
+    )
+
+    async def receive():
+        return next(messages)
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/slice-artifact",
+            "headers": [(b"content-type", f'multipart/form-data; boundary="{boundary}"'.encode())],
+        },
+        receive,
+    )
+
+    await preparse_slice_multipart(request)
+
+    form = await request.form()
+    assert form["model_file"].filename == "dragon.stl"
+    assert form["profile_name"] == "bambu_a1"
+
+
+@pytest.mark.parametrize(
+    "parts",
+    [
+        [
+            ("model_file", "one.stl", b"one"),
+            ("model_file", "two.stl", b"two"),
+        ],
+        [
+            ("model_file", "one.stl", b"one"),
+            ("support_file", "support.stl", b"support"),
+        ],
+    ],
+)
+async def test_multipart_preparse_rejects_duplicate_or_extra_file_before_route(
+    authorized_client, parts: list[tuple[str, str | None, bytes]]
+):
+    app, client = authorized_client
+    orchestrator = _FakeOrchestrator(AssertionError("engine must not run"))
+    _override_runtime(app, _Runtime(orchestrator, {}))
+
+    response = await client.post(
+        "/api/v1/slice-artifact",
+        headers={"Authorization": f"Bearer {_TOKEN}"},
+        files=[(name, (filename, value, "application/octet-stream")) for name, filename, value in parts],
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "malformed_request"
+    assert orchestrator.calls == []
+
+
+async def test_multipart_preparse_rejects_excess_fields_before_route(authorized_client):
+    app, client = authorized_client
+    orchestrator = _FakeOrchestrator(AssertionError("engine must not run"))
+    _override_runtime(app, _Runtime(orchestrator, {}))
+
+    response = await client.post(
+        "/api/v1/slice-artifact",
+        headers={"Authorization": f"Bearer {_TOKEN}"},
+        files={"model_file": ("dragon.stl", b"solid", "application/octet-stream")},
+        data={f"field_{index}": "value" for index in range(5)},
+    )
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "too_many_parts"
+    assert orchestrator.calls == []
+
+
 @pytest.mark.parametrize(
     "request_kwargs",
     [
@@ -463,6 +577,39 @@ async def test_cleanup_file_response_removes_workspace_when_stat_raises(
     assert not workspace.exists()
 
 
+def test_workspace_cleanup_logs_sanitized_failure_and_can_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    from app.api.routes.slice import _IdempotentWorkspaceCleanup
+
+    workspace = tmp_path / "private-customer-workspace"
+    workspace.mkdir()
+    (workspace / "artifact.bin").write_bytes(b"artifact")
+    original_rmtree = __import__("shutil").rmtree
+    attempts = 0
+
+    def fail_once(path):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError(f"cannot delete {path}")
+        original_rmtree(path)
+
+    monkeypatch.setattr("app.api.routes.slice.shutil.rmtree", fail_once)
+
+    cleanup = _IdempotentWorkspaceCleanup(workspace)
+    with caplog.at_level("WARNING"):
+        assert cleanup() is False
+        assert workspace.exists()
+        assert cleanup() is True
+        assert not workspace.exists()
+        assert cleanup() is True
+
+    assert attempts == 2
+    assert "cleanup will be retried" in caplog.text.lower()
+    assert str(workspace) not in caplog.text
+
+
 @pytest.mark.parametrize("close_error", [RuntimeError("close failed"), asyncio.CancelledError()])
 async def test_upload_close_failure_or_cancellation_still_removes_workspace(tmp_path: Path, close_error: BaseException):
     from app.api.routes.slice import slice_artifact_endpoint
@@ -518,56 +665,63 @@ async def test_metadata_over_configured_cap_fails_before_response_and_removes_wo
     assert not request_workspace.exists()
 
 
-async def test_live_endpoint_remains_responsive_while_slice_is_offloaded(
-    authorized_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
+async def test_live_endpoint_remains_responsive_while_slice_is_offloaded(authorized_client, tmp_path: Path):
+    from app.api.dependencies import SliceAdmission, SliceJobManager
+
     app, client = authorized_client
     orchestrator = _FakeOrchestrator(_success(tmp_path))
-    _override_runtime(app, _Runtime(orchestrator, {}))
-    entered = asyncio.Event()
-    release = asyncio.Event()
+    original_slice = orchestrator.slice
+    entered = threading.Event()
+    release = threading.Event()
 
-    async def blocked_offload(function, *args, **kwargs):
+    def blocked_slice(*args, **kwargs):
         entered.set()
-        await release.wait()
-        return function(*args, **kwargs)
+        assert release.wait(timeout=5)
+        return original_slice(*args, **kwargs)
 
-    monkeypatch.setattr("app.api.routes.slice.asyncio.to_thread", blocked_offload)
+    orchestrator.slice = blocked_slice
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    jobs = SliceJobManager(SliceAdmission(1), executor=pool)
+    runtime = _Runtime(orchestrator, {}, admission=jobs.admission, jobs=jobs)
+    _override_runtime(app, runtime)
 
     slice_request = asyncio.create_task(_post(client))
-    await asyncio.wait_for(entered.wait(), timeout=1)
+    await _wait_for_thread_event(entered)
     live = await asyncio.wait_for(client.get("/health/live"), timeout=1)
     release.set()
-    sliced = await asyncio.wait_for(slice_request, timeout=1)
+    sliced = await asyncio.wait_for(slice_request, timeout=2)
+    pool.shutdown(wait=True)
 
     assert live.status_code == 200
     assert live.json()["status"] == "alive"
     assert sliced.status_code == 200
 
 
-async def test_concurrent_slice_limit_returns_stable_busy_response(
-    authorized_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    from app.api.dependencies import SliceAdmission
+async def test_concurrent_slice_limit_returns_stable_busy_response(authorized_client, tmp_path: Path):
+    from app.api.dependencies import SliceAdmission, SliceJobManager
 
     app, client = authorized_client
     orchestrator = _FakeOrchestrator(_success(tmp_path))
-    _override_runtime(app, _Runtime(orchestrator, {}, admission=SliceAdmission(1)))
-    entered = asyncio.Event()
-    release = asyncio.Event()
+    original_slice = orchestrator.slice
+    entered = threading.Event()
+    release = threading.Event()
 
-    async def blocked_offload(function, *args, **kwargs):
+    def blocked_slice(*args, **kwargs):
         entered.set()
-        await release.wait()
-        return function(*args, **kwargs)
+        assert release.wait(timeout=5)
+        return original_slice(*args, **kwargs)
 
-    monkeypatch.setattr("app.api.routes.slice.asyncio.to_thread", blocked_offload)
+    orchestrator.slice = blocked_slice
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    jobs = SliceJobManager(SliceAdmission(1), executor=pool)
+    _override_runtime(app, _Runtime(orchestrator, {}, admission=jobs.admission, jobs=jobs))
 
     first_request = asyncio.create_task(_post(client))
-    await asyncio.wait_for(entered.wait(), timeout=1)
+    await _wait_for_thread_event(entered)
     busy = await asyncio.wait_for(_post(client), timeout=1)
     release.set()
-    first = await asyncio.wait_for(first_request, timeout=1)
+    first = await asyncio.wait_for(first_request, timeout=2)
+    pool.shutdown(wait=True)
 
     assert busy.status_code == 503
     assert busy.json() == {
@@ -576,6 +730,167 @@ async def test_concurrent_slice_limit_returns_stable_busy_response(
     }
     assert first.status_code == 200
     assert len(orchestrator.calls) == 1
+
+
+async def _wait_for_thread_event(event: threading.Event) -> None:
+    for _ in range(100):
+        if event.is_set():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("worker did not start")
+
+
+async def test_legacy_slice_is_offloaded_and_shares_artifact_admission_limit(
+    authorized_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    from app.api.dependencies import SliceAdmission, SliceJobManager
+
+    app, client = authorized_client
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocked_legacy(**_kwargs):
+        entered.set()
+        assert release.wait(timeout=2)
+        return {
+            "success": True,
+            "filament_grams": "1.5",
+            "print_minutes": "10",
+            "profile_used": "bambu_a1.ini",
+            "stats": {},
+            "gcode": "; gcode",
+        }
+
+    monkeypatch.setattr("app.api.routes.slice.slice_model", blocked_legacy)
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    jobs = SliceJobManager(SliceAdmission(1), executor=pool)
+    runtime = _Runtime(_FakeOrchestrator(_success(tmp_path)), {}, admission=jobs.admission)
+    runtime.jobs = jobs
+    _override_runtime(app, runtime)
+
+    first_request = asyncio.create_task(
+        client.post(
+            "/api/v1/slice",
+            headers={"Authorization": f"Bearer {_TOKEN}"},
+            files={"model_file": ("dragon.stl", b"solid", "application/octet-stream")},
+        )
+    )
+    await _wait_for_thread_event(entered)
+
+    live = await asyncio.wait_for(client.get("/health/live"), timeout=1)
+    artifact_busy = await asyncio.wait_for(_post(client), timeout=1)
+    legacy_busy = await asyncio.wait_for(
+        client.post(
+            "/api/v1/slice",
+            headers={"Authorization": f"Bearer {_TOKEN}"},
+            files={"model_file": ("dragon.stl", b"solid", "application/octet-stream")},
+        ),
+        timeout=1,
+    )
+    release.set()
+    first = await asyncio.wait_for(first_request, timeout=2)
+    pool.shutdown(wait=True)
+
+    assert live.status_code == 200
+    assert artifact_busy.status_code == 503
+    assert artifact_busy.json()["error"]["code"] == "slicer_busy"
+    assert legacy_busy.status_code == 503
+    assert legacy_busy.json()["success"] is False
+    assert isinstance(legacy_busy.json()["error"], str)
+    assert first.status_code == 200
+
+
+async def test_cancelled_request_retains_slot_and_workspace_until_real_worker_finishes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    from app.api.dependencies import SliceAdmission, SliceJobManager
+    from app.api.routes.slice import slice_artifact_endpoint
+
+    entered = threading.Event()
+    release = threading.Event()
+    workspace = tmp_path / "request-workspace"
+
+    class Upload:
+        filename = "dragon.stl"
+
+        def __init__(self) -> None:
+            self._chunks = iter([b"solid", b""])
+
+        async def read(self, _size: int) -> bytes:
+            return next(self._chunks)
+
+        async def close(self) -> None:
+            return None
+
+    class BlockingOrchestrator:
+        def slice(self, *_args):
+            entered.set()
+            assert release.wait(timeout=2)
+            return OrchestratedResult(None, False, None, ())
+
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    jobs = SliceJobManager(SliceAdmission(1), executor=pool)
+    runtime = _Runtime(BlockingOrchestrator(), {}, admission=jobs.admission)
+    runtime.jobs = jobs
+    monkeypatch.setattr("app.api.routes.slice.tempfile.mkdtemp", lambda **_kwargs: str(workspace))
+
+    request_task = asyncio.create_task(
+        slice_artifact_endpoint(
+            model_file=Upload(),
+            profile_name=None,
+            center="128,128",
+            preserve_orientation=None,
+            slicer_options=None,
+            runtime=runtime,
+        )
+    )
+    await _wait_for_thread_event(entered)
+    request_task.cancel()
+    await asyncio.sleep(0.02)
+    request_task.cancel()
+    await asyncio.sleep(0.02)
+
+    assert not request_task.done()
+    assert workspace.exists()
+    assert await jobs.try_acquire() is None
+
+    release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(request_task, timeout=2)
+
+    assert not workspace.exists()
+    next_lease = await jobs.try_acquire()
+    assert next_lease is not None
+    await next_lease.release()
+    pool.shutdown(wait=True)
+
+
+async def test_slice_job_shutdown_drains_running_workers():
+    from app.api.dependencies import SliceAdmission, SliceJobManager
+
+    entered = threading.Event()
+    release = threading.Event()
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    jobs = SliceJobManager(SliceAdmission(1), executor=pool)
+    lease = await jobs.try_acquire()
+    assert lease is not None
+
+    def blocked_worker():
+        entered.set()
+        assert release.wait(timeout=2)
+        return "done"
+
+    run_task = asyncio.create_task(lease.run(blocked_worker))
+    await _wait_for_thread_event(entered)
+    shutdown_task = asyncio.create_task(jobs.shutdown())
+    await asyncio.sleep(0.02)
+    assert not shutdown_task.done()
+
+    release.set()
+    assert await asyncio.wait_for(run_task, timeout=2) == "done"
+    await asyncio.wait_for(shutdown_task, timeout=2)
+    await lease.release()
+    pool.shutdown(wait=True)
 
 
 async def test_workspace_creation_failure_releases_admission_and_closes_upload(
@@ -717,7 +1032,8 @@ async def test_no_available_engine_returns_generic_503_without_diagnostics(autho
 
 
 async def test_legacy_slice_keeps_json_shape_and_requires_auth(authorized_client, monkeypatch: pytest.MonkeyPatch):
-    _app, client = authorized_client
+    app, client = authorized_client
+    _override_runtime(app, _Runtime(_FakeOrchestrator(AssertionError("artifact engine must not run")), {}))
 
     unauthorized = await client.post(
         "/api/v1/slice",

@@ -19,8 +19,12 @@ _SLICE_PATHS = frozenset({"/api/v1/slice", "/api/v1/slice-artifact"})
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.validate_for_startup()
-    app.state.slicer_runtime = build_slicer_runtime()
-    yield
+    runtime = build_slicer_runtime()
+    app.state.slicer_runtime = runtime
+    try:
+        yield
+    finally:
+        await runtime.jobs.shutdown()
 
 
 def create_app() -> FastAPI:

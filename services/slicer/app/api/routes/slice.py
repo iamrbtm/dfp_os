@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
 import logging
@@ -49,17 +48,23 @@ class _IdempotentWorkspaceCleanup:
         self.workspace = workspace
         self._complete = False
 
-    def __call__(self) -> None:
+    def __call__(self) -> bool:
         if not self._complete:
-            self._complete = True
-            _cleanup_workspace(self.workspace)
+            self._complete = _cleanup_workspace(self.workspace)
+        return self._complete
 
 
 class CleanupFileResponse(FileResponse):
     """FileResponse whose request workspace is removed on every ASGI exit path."""
 
-    def __init__(self, *args, workspace: Path, **kwargs) -> None:
-        self._workspace_cleanup = _IdempotentWorkspaceCleanup(workspace)
+    def __init__(
+        self,
+        *args,
+        workspace: Path,
+        workspace_cleanup: _IdempotentWorkspaceCleanup | None = None,
+        **kwargs,
+    ) -> None:
+        self._workspace_cleanup = workspace_cleanup or _IdempotentWorkspaceCleanup(workspace)
         kwargs["background"] = BackgroundTask(self._background_cleanup)
         super().__init__(*args, **kwargs)
 
@@ -82,7 +87,8 @@ async def slice_artifact_endpoint(
     slicer_options: str | None = Form(None),
     runtime: SlicerRuntime = Depends(get_slicer_runtime),
 ):
-    if not await runtime.admission.try_acquire():
+    lease = await runtime.jobs.try_acquire()
+    if lease is None:
         await model_file.close()
         return _error_response(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -91,9 +97,11 @@ async def slice_artifact_endpoint(
         )
 
     workspace: Path | None = None
+    workspace_cleanup: _IdempotentWorkspaceCleanup | None = None
     response_owns_workspace = False
     try:
         workspace = Path(tempfile.mkdtemp(prefix="dfpos-slicer-request-"))
+        workspace_cleanup = _IdempotentWorkspaceCleanup(workspace)
         uploaded_name = _safe_upload_filename(model_file.filename)
         model_path = workspace / uploaded_name
         await _copy_upload(model_file, model_path)
@@ -103,7 +111,7 @@ async def slice_artifact_endpoint(
             options_payload["center"] = center
         options = SliceOptions.from_request(profile_name, options_payload, preserve_orientation)
 
-        result = await asyncio.to_thread(runtime.orchestrator.slice, model_path, workspace, options)
+        result = await lease.run(runtime.orchestrator.slice, model_path, workspace, options)
         if not result.success or result.artifact is None:
             return _error_response(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -118,6 +126,7 @@ async def slice_artifact_endpoint(
         response = CleanupFileResponse(
             artifact_path,
             workspace=workspace,
+            workspace_cleanup=workspace_cleanup,
             stat_result=artifact_path.stat(),
             media_type=result.artifact.artifact_media_type,
             filename=artifact_filename,
@@ -159,10 +168,11 @@ async def slice_artifact_endpoint(
             upload_close_failed = False
         finally:
             try:
-                if workspace is not None and (not response_owns_workspace or upload_close_failed):
-                    _cleanup_workspace(workspace)
+                if workspace_cleanup is not None and (not response_owns_workspace or upload_close_failed):
+                    if not workspace_cleanup():
+                        workspace_cleanup()
             finally:
-                await runtime.admission.release()
+                await lease.release()
 
 
 @router.post("/slice", response_model=SliceResponse, responses=_STRUCTURED_ERROR_RESPONSES)
@@ -172,14 +182,30 @@ async def slice_endpoint(
     center: str | None = Form("128,128"),
     preserve_orientation: bool | None = Form(None),
     slicer_options: str | None = Form(None),
+    runtime: SlicerRuntime = Depends(get_slicer_runtime),
 ):
-    workspace = Path(tempfile.mkdtemp(prefix="dfpos-slicer-legacy-"))
+    lease = await runtime.jobs.try_acquire()
+    if lease is None:
+        await model_file.close()
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=SliceResponse(
+                success=False,
+                error="The slicer service is at its concurrent request limit.",
+            ).model_dump(mode="json"),
+        )
+
+    workspace: Path | None = None
+    workspace_cleanup: _IdempotentWorkspaceCleanup | None = None
     try:
+        workspace = Path(tempfile.mkdtemp(prefix="dfpos-slicer-legacy-"))
+        workspace_cleanup = _IdempotentWorkspaceCleanup(workspace)
         uploaded_name = _safe_upload_filename(model_file.filename)
         model_path = workspace / uploaded_name
         await _copy_upload(model_file, model_path)
         options = _parse_options(slicer_options)
-        return slice_model(
+        return await lease.run(
+            slice_model,
             model_path=str(model_path),
             profile_name=profile_name,
             center=center,
@@ -201,7 +227,11 @@ async def slice_endpoint(
         try:
             await model_file.close()
         finally:
-            _cleanup_workspace(workspace)
+            try:
+                if workspace_cleanup is not None and not workspace_cleanup():
+                    workspace_cleanup()
+            finally:
+                await lease.release()
 
 
 async def _copy_upload(model_file: UploadFile, destination: Path) -> None:
@@ -298,5 +328,12 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
     )
 
 
-def _cleanup_workspace(workspace: Path) -> None:
-    shutil.rmtree(workspace, ignore_errors=True)
+def _cleanup_workspace(workspace: Path) -> bool:
+    try:
+        shutil.rmtree(workspace)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        _LOGGER.warning("Slicer request workspace cleanup failed; cleanup will be retried.")
+        return False
+    return True
