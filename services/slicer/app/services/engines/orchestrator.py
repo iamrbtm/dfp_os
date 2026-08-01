@@ -125,6 +125,12 @@ class SlicerOrchestrator:
                 )
 
             failure = self._public_failure(engine_key, outcome)
+            _LOGGER.warning(
+                "Slicer adapter %s failed with code %s and diagnostics %r.",
+                engine_key,
+                outcome.code,
+                outcome.diagnostics,
+            )
             failures.append(failure)
             has_next_engine = position + 1 < len(self.engine_order)
             if not outcome.fallback_eligible or not has_next_engine:

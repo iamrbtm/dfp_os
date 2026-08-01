@@ -209,7 +209,7 @@ class BambuEngine:
             "1",
         ]
         if not options.preserve_orientation:
-            command.append("--orient")
+            command.extend(["--orient", "1"])
 
         for source_key, bambu_key in {
             "layer_height": "layer-height",

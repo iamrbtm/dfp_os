@@ -191,7 +191,7 @@ def test_slice_builds_safe_argument_array_and_returns_valid_native_artifact(tmp_
     assert Path(command[command.index("--load-filaments") + 1]).name == "filament.json"
     assert command[command.index("--arrange") + 1] == "1"
     assert command[command.index("--slice") + 1] == "0"
-    assert "--orient" in command
+    assert command[command.index("--orient") + 1] == "1"
     for expected in (
         "--layer-height=0.16",
         "--wall-loops=3",

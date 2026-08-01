@@ -80,11 +80,38 @@ class PrusaEngine:
             )
 
         if proc.returncode != 0:
+            version = self._version(getattr(proc, "stdout", None))
+            if version == "unknown":
+                try:
+                    proc = subprocess.run([self.executable, "--help"], capture_output=True, timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    return EngineProbe(
+                        engine_key=self.engine_key,
+                        engine_name=self.engine_name,
+                        available=False,
+                        diagnostics={"code": "probe_timeout"},
+                    )
+                except Exception as exc:
+                    return EngineProbe(
+                        engine_key=self.engine_key,
+                        engine_name=self.engine_name,
+                        available=False,
+                        diagnostics={"code": "probe_failed", "error": str(exc)},
+                    )
+                version = self._version(getattr(proc, "stdout", None))
+            if version == "unknown":
+                return EngineProbe(
+                    engine_key=self.engine_key,
+                    engine_name=self.engine_name,
+                    available=False,
+                    diagnostics={"code": "probe_failed", "stderr": self._stderr(proc)},
+                )
+            self._engine_version = version
             return EngineProbe(
                 engine_key=self.engine_key,
                 engine_name=self.engine_name,
-                available=False,
-                diagnostics={"code": "probe_failed", "stderr": self._stderr(proc)},
+                available=True,
+                engine_version=self._engine_version,
             )
         self._engine_version = self._version(getattr(proc, "stdout", None))
         if self._engine_version == "unknown":

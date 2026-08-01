@@ -100,6 +100,10 @@ async def slice_artifact_endpoint(
 
         result = await lease.run(runtime.orchestrator.slice, model_path, workspace, options)
         if not result.success or result.artifact is None:
+            _LOGGER.warning(
+                "No slicer engine produced an artifact: %s",
+                [failure.__dict__ for failure in result.failures],
+            )
             return _error_response(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
                 "no_available_engine",

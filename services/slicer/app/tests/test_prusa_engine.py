@@ -63,6 +63,28 @@ def test_probe_reads_a_stable_prusaslicer_version(monkeypatch):
     assert probe.engine_version == "2.8.1"
 
 
+def test_probe_falls_back_to_help_when_debian_prusa_rejects_version(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        calls.append(command)
+        if command == ["prusa-slicer", "--version"]:
+            return _Proc(
+                returncode=1,
+                stderr=b"Unknown option --version\nPrusaSlicer-2.9.2+UNKNOWN based on Slic3r\n",
+            )
+        assert command == ["prusa-slicer", "--help"]
+        return _Proc(stdout=b"PrusaSlicer-2.9.2+UNKNOWN based on Slic3r\nUsage: prusa-slicer")
+
+    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", fake_run)
+
+    probe = _engine().probe()
+
+    assert calls == [["prusa-slicer", "--version"], ["prusa-slicer", "--help"]]
+    assert probe.available is True
+    assert probe.engine_version == "2.9.2"
+
+
 def test_probe_requires_all_supported_printer_profiles(tmp_path, monkeypatch):
     profiles = tmp_path / "profiles"
     profiles.mkdir()
