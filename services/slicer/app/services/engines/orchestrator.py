@@ -1,14 +1,49 @@
 from __future__ import annotations
 
+import logging
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from app.services.engines.base import EngineArtifact, EngineFailure, SliceOptions, SlicerEngine
+from app.services.engines.base import (
+    EngineArtifact,
+    EngineFailure,
+    RequestValidationError,
+    SliceOptions,
+    SlicerEngine,
+)
 
 
 DEFAULT_ENGINE_ORDER = ("bambu", "prusa")
 MAX_PUBLIC_FAILURE_MESSAGE_CHARS = 512
+_ENGINE_NAMES = {"bambu": "Bambu Studio", "prusa": "PrusaSlicer"}
+_PUBLIC_FAILURE_SUFFIXES = {
+    "archive_limit_exceeded": "output exceeded a safety limit.",
+    "duplicate_profile": "profile configuration is invalid.",
+    "engine_exception": "failed unexpectedly.",
+    "engine_failure": "failed.",
+    "executable_missing": "is unavailable.",
+    "execution_failed": "execution failed.",
+    "invalid_output": "produced an invalid output artifact.",
+    "invalid_package": "produced an invalid output package.",
+    "invalid_profile": "profile configuration is invalid.",
+    "missing_gcode": "output did not contain plate G-code.",
+    "missing_output": "did not produce an output artifact.",
+    "missing_stats": "output did not contain required estimates.",
+    "probe_failed": "failed its runtime availability check.",
+    "probe_timeout": "runtime availability check timed out.",
+    "profile_cycle": "profile configuration is invalid.",
+    "profile_missing": "required profile is unavailable.",
+    "profile_root_missing": "profile configuration is unavailable.",
+    "profile_write_failed": "could not prepare resolved profiles.",
+    "timeout": "timed out.",
+    "version_mismatch": "runtime version is unsupported.",
+    "version_unrecognized": "runtime version could not be verified.",
+    "workspace_error": "could not prepare its workspace.",
+    "workspace_unavailable": "could not prepare its profile workspace.",
+}
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -57,7 +92,19 @@ class SlicerOrchestrator:
         failures: list[OrchestratedFailure] = []
 
         for position, engine_key in enumerate(self.engine_order):
-            outcome = self._engines[engine_key].slice(model_path, workspace, options)
+            adapter_options = replace(options, slicer_options=deepcopy(options.slicer_options))
+            try:
+                outcome = self._engines[engine_key].slice(model_path, workspace, adapter_options)
+            except RequestValidationError:
+                raise
+            except Exception:
+                _LOGGER.exception("Slicer adapter %s raised an unexpected exception.", engine_key)
+                outcome = EngineFailure(
+                    engine_key=engine_key,
+                    code="engine_exception",
+                    message="",
+                    fallback_eligible=True,
+                )
             fallback_used = position > 0
 
             if isinstance(outcome, EngineArtifact):
@@ -70,9 +117,14 @@ class SlicerOrchestrator:
                 )
 
             if not isinstance(outcome, EngineFailure):
-                raise TypeError(f"Slicer adapter {engine_key!r} returned an invalid result.")
+                outcome = EngineFailure(
+                    engine_key=engine_key,
+                    code="engine_failure",
+                    message="",
+                    fallback_eligible=True,
+                )
 
-            failure = self._public_failure(outcome)
+            failure = self._public_failure(engine_key, outcome)
             failures.append(failure)
             has_next_engine = position + 1 < len(self.engine_order)
             if not outcome.fallback_eligible or not has_next_engine:
@@ -93,24 +145,20 @@ class SlicerOrchestrator:
             values = list(engine_order)
 
         normalized = tuple(str(value).strip().lower() for value in values)
-        if not normalized or any(not value for value in normalized):
-            raise ValueError("Invalid engine order: at least one engine key is required.")
-        if len(normalized) != len(set(normalized)):
-            raise ValueError("Invalid engine order: duplicate engine keys are not allowed.")
-
-        unknown = [engine_key for engine_key in normalized if engine_key not in DEFAULT_ENGINE_ORDER]
-        if unknown:
-            raise ValueError(f"Invalid engine order: unknown engine key {unknown[0]!r}.")
-        if normalized[0] != "bambu":
-            raise ValueError("Invalid engine order: Bambu Studio must be the primary engine.")
+        if normalized != DEFAULT_ENGINE_ORDER:
+            raise ValueError("Invalid engine order: expected exactly 'bambu,prusa'.")
         return normalized
 
     @staticmethod
-    def _public_failure(failure: EngineFailure) -> OrchestratedFailure:
-        message = str(failure.message).replace("\x00", "").strip()
+    def _public_failure(engine_key: str, failure: EngineFailure) -> OrchestratedFailure:
+        code = failure.code if isinstance(failure.code, str) else "engine_failure"
+        if code not in _PUBLIC_FAILURE_SUFFIXES:
+            code = "engine_failure"
+        engine_name = _ENGINE_NAMES[engine_key]
+        message = f"{engine_name} {_PUBLIC_FAILURE_SUFFIXES[code]}"
         return OrchestratedFailure(
-            engine_key=failure.engine_key,
-            code=failure.code,
+            engine_key=engine_key,
+            code=code,
             message=message[:MAX_PUBLIC_FAILURE_MESSAGE_CHARS],
         )
 

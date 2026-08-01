@@ -15,6 +15,16 @@ from app.services.engines.base import (
 from app.services.engines.orchestrator import DEFAULT_ENGINE_ORDER, SlicerOrchestrator
 
 
+_EXPECTED_BAMBU_MESSAGES = {
+    "executable_missing": "Bambu Studio is unavailable.",
+    "timeout": "Bambu Studio timed out.",
+    "execution_failed": "Bambu Studio execution failed.",
+    "missing_output": "Bambu Studio did not produce an output artifact.",
+    "invalid_output": "Bambu Studio produced an invalid output artifact.",
+    "missing_stats": "Bambu Studio output did not contain required estimates.",
+}
+
+
 @dataclass
 class _FakeEngine:
     engine_key: str
@@ -126,7 +136,7 @@ def test_fallback_eligible_bambu_failures_call_prusa_once(tmp_path: Path, code: 
     assert result.primary_failure is not None
     assert result.primary_failure.engine_key == "bambu"
     assert result.primary_failure.code == code
-    assert result.primary_failure.message == bambu_failure.message
+    assert result.primary_failure.message == _EXPECTED_BAMBU_MESSAGES[code]
     assert len(prusa.calls) == 1
 
 
@@ -137,9 +147,69 @@ def test_primary_failure_metadata_is_bounded_and_excludes_engine_diagnostics(tmp
     result = _orchestrator(bambu, prusa).slice(tmp_path / "model.stl", tmp_path, _options())
 
     assert result.primary_failure is not None
-    assert len(result.primary_failure.message) == 512
+    assert len(result.primary_failure.message) <= 512
+    assert result.primary_failure.message == "Bambu Studio execution failed."
     assert not hasattr(result.primary_failure, "diagnostics")
     assert "private engine output" not in repr(result.primary_failure)
+
+
+@pytest.mark.parametrize(
+    ("adapter_code", "expected_code"),
+    [
+        ("timeout", "timeout"),
+        ("../../private/workspace/" + "x" * 2_000, "engine_failure"),
+    ],
+)
+def test_primary_failure_metadata_uses_configured_provenance_and_safe_public_values(
+    tmp_path: Path,
+    adapter_code: str,
+    expected_code: str,
+):
+    malicious_failure = EngineFailure(
+        engine_key="prusa",
+        code=adapter_code,
+        message=f"secret failed at {tmp_path}/private/workspace\x00" + "y" * 2_000,
+        fallback_eligible=True,
+        diagnostics={"stderr": f"token and path: {tmp_path}/private/workspace"},
+    )
+    bambu = _FakeEngine("bambu", malicious_failure)
+    prusa = _FakeEngine("prusa", _artifact(tmp_path, "prusa"))
+
+    result = _orchestrator(bambu, prusa).slice(tmp_path / "model.stl", tmp_path, _options())
+
+    assert result.primary_failure is not None
+    assert result.primary_failure.engine_key == "bambu"
+    assert result.primary_failure.code == expected_code
+    assert result.primary_failure.message in {
+        "Bambu Studio timed out.",
+        "Bambu Studio failed.",
+    }
+    public_result = repr(result.primary_failure)
+    assert str(tmp_path) not in public_result
+    assert "private/workspace" not in public_result
+    assert "token" not in public_result
+    assert "secret" not in public_result
+
+
+def test_secondary_failure_metadata_uses_prusa_provenance_not_adapter_claim(tmp_path: Path):
+    bambu = _FakeEngine("bambu", _failure("timeout"))
+    malicious_prusa = EngineFailure(
+        engine_key="bambu",
+        code="unknown/../../code",
+        message=f"Prusa leaked {tmp_path}/private/output.gcode",
+        fallback_eligible=True,
+        diagnostics={"stderr": "private diagnostics"},
+    )
+    prusa = _FakeEngine("prusa", malicious_prusa)
+
+    result = _orchestrator(bambu, prusa).slice(tmp_path / "model.stl", tmp_path, _options())
+
+    assert result.success is False
+    assert result.failures[1].engine_key == "prusa"
+    assert result.failures[1].code == "engine_failure"
+    assert result.failures[1].message == "PrusaSlicer failed."
+    assert str(tmp_path) not in repr(result)
+    assert "private diagnostics" not in repr(result)
 
 
 @pytest.mark.parametrize(
@@ -166,6 +236,49 @@ def test_terminal_request_validation_never_calls_prusa(tmp_path: Path, code: str
     assert prusa.calls == []
 
 
+def test_unexpected_bambu_exception_becomes_fallback_eligible_public_failure(tmp_path: Path):
+    bambu = _FakeEngine("bambu", RuntimeError(f"crash in {tmp_path}/private/workspace"))
+    prusa = _FakeEngine("prusa", _artifact(tmp_path, "prusa"))
+
+    result = _orchestrator(bambu, prusa).slice(tmp_path / "model.stl", tmp_path, _options())
+
+    assert result.success is True
+    assert result.fallback_used is True
+    assert result.primary_failure is not None
+    assert result.primary_failure.engine_key == "bambu"
+    assert result.primary_failure.code == "engine_exception"
+    assert result.primary_failure.message == "Bambu Studio failed unexpectedly."
+    assert str(tmp_path) not in repr(result.primary_failure)
+    assert len(prusa.calls) == 1
+
+
+def test_unexpected_prusa_exception_returns_both_stable_failure_codes(tmp_path: Path):
+    bambu = _FakeEngine("bambu", _failure("timeout"))
+    prusa = _FakeEngine("prusa", RuntimeError(f"crash in {tmp_path}/private/workspace"))
+
+    result = _orchestrator(bambu, prusa).slice(tmp_path / "model.stl", tmp_path, _options())
+
+    assert result.success is False
+    assert [(failure.engine_key, failure.code) for failure in result.failures] == [
+        ("bambu", "timeout"),
+        ("prusa", "engine_exception"),
+    ]
+    assert result.failures[1].message == "PrusaSlicer failed unexpectedly."
+    assert str(tmp_path) not in repr(result)
+
+
+def test_base_exceptions_are_not_caught_or_converted(tmp_path: Path):
+    shutdown = SystemExit(17)
+    bambu = _FakeEngine("bambu", shutdown)
+    prusa = _FakeEngine("prusa", _artifact(tmp_path, "prusa"))
+
+    with pytest.raises(SystemExit) as error:
+        _orchestrator(bambu, prusa).slice(tmp_path / "model.stl", tmp_path, _options())
+
+    assert error.value is shutdown
+    assert prusa.calls == []
+
+
 def test_non_fallback_engine_failure_is_terminal_and_never_calls_prusa(tmp_path: Path):
     terminal_failure = _failure("invalid_request", fallback_eligible=False)
     bambu = _FakeEngine("bambu", terminal_failure)
@@ -175,7 +288,7 @@ def test_non_fallback_engine_failure_is_terminal_and_never_calls_prusa(tmp_path:
 
     assert result.success is False
     assert result.artifact is None
-    assert [failure.code for failure in result.failures] == ["invalid_request"]
+    assert [failure.code for failure in result.failures] == ["engine_failure"]
     assert result.fallback_used is False
     assert prusa.calls == []
 
@@ -210,6 +323,31 @@ def test_fallback_artifact_is_forced_estimate_only_even_when_adapter_lies(tmp_pa
     assert result.artifact.direct_print_eligible is False
 
 
+def test_each_adapter_receives_an_isolated_copy_of_mutable_slicer_options(tmp_path: Path):
+    class _MutatingBambu(_FakeEngine):
+        def slice(self, model_path, workspace, options):
+            self.calls.append((model_path, workspace, options))
+            options.slicer_options["new_key"] = "mutated"
+            options.slicer_options["nested"]["value"] = "mutated"
+            return self.result
+
+    options = _options()
+    options.slicer_options["nested"] = {"value": "original"}
+    bambu = _MutatingBambu("bambu", _failure("timeout"))
+    prusa = _FakeEngine("prusa", _artifact(tmp_path, "prusa"))
+
+    result = _orchestrator(bambu, prusa).slice(tmp_path / "model.stl", tmp_path, options)
+
+    assert result.success is True
+    assert bambu.calls[0][2] is not options
+    assert prusa.calls[0][2] is not options
+    assert bambu.calls[0][2] is not prusa.calls[0][2]
+    assert prusa.calls[0][2].slicer_options["nested"] == {"value": "original"}
+    assert "new_key" not in prusa.calls[0][2].slicer_options
+    assert options.slicer_options["nested"] == {"value": "original"}
+    assert "new_key" not in options.slicer_options
+
+
 def test_default_engine_order_is_exactly_bambu_then_prusa(tmp_path: Path):
     bambu = _FakeEngine("bambu", _artifact(tmp_path, "bambu"))
     prusa = _FakeEngine("prusa", _artifact(tmp_path, "prusa"))
@@ -222,7 +360,16 @@ def test_default_engine_order_is_exactly_bambu_then_prusa(tmp_path: Path):
 
 @pytest.mark.parametrize(
     "engine_order",
-    ["bambu,orca", ("unknown",), "", "bambu,bambu", "prusa,bambu"],
+    [
+        "bambu,orca",
+        ("unknown",),
+        "",
+        "bambu",
+        ("bambu",),
+        "bambu,bambu",
+        "prusa,bambu",
+        "bambu,prusa,bambu",
+    ],
 )
 def test_unknown_or_invalid_engine_configuration_is_rejected_at_construction(
     tmp_path: Path,
@@ -233,3 +380,10 @@ def test_unknown_or_invalid_engine_configuration_is_rejected_at_construction(
 
     with pytest.raises(ValueError, match="engine order"):
         _orchestrator(bambu, prusa, engine_order=engine_order)
+
+
+def test_missing_required_adapter_is_rejected_at_construction(tmp_path: Path):
+    bambu = _FakeEngine("bambu", _artifact(tmp_path, "bambu"))
+
+    with pytest.raises(ValueError, match="engine order"):
+        SlicerOrchestrator({"bambu": bambu})
