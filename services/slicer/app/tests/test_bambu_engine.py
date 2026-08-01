@@ -12,11 +12,13 @@ import pytest
 from app.services.engines.bambu import BambuEngine
 from app.services.engines.bambu_profiles import ResolvedBambuProfiles
 from app.services.engines.base import EngineFailure, RequestValidationError, SliceOptions
+from app.services.engines.stats import _parse_gcode_stats
 
 
-VALID_GCODE = (
-    "; total filament used [g] = 6.25\n; estimated printing time (normal mode) = 1h 2m\n; total layers count: 123\n"
-)
+FIXTURES = Path(__file__).parent / "fixtures"
+PACKAGE_FIXTURE = FIXTURES / "minimal_gcode_3mf"
+PINNED_HELP = b"BambuStudio-02.07.01.62\n"
+VALID_GCODE = (PACKAGE_FIXTURE / "Metadata/plate_1.gcode").read_text(encoding="utf-8")
 
 
 class _Proc:
@@ -65,7 +67,7 @@ def _options(filename: str = "rainbow dragon.stl", **overrides: object) -> Slice
 
 def _model(tmp_path: Path, filename: str = "rainbow dragon.stl") -> Path:
     path = tmp_path / filename
-    path.write_bytes((Path(__file__).parent / "fixtures/cube.stl").read_bytes())
+    path.write_bytes((FIXTURES / "cube.stl").read_bytes())
     return path
 
 
@@ -73,11 +75,33 @@ def _artifact_path(command: list[str]) -> Path:
     return Path(command[command.index("--export-3mf") + 1])
 
 
-def _write_artifact(command: list[str], gcode: str = VALID_GCODE, member: str = "Metadata/plate_1.gcode") -> Path:
+def _write_artifact(
+    command: list[str],
+    *,
+    plates: dict[str, str] | None = None,
+    include_structure: bool = True,
+    compression: int = zipfile.ZIP_DEFLATED,
+    structure_overrides: dict[str, bytes] | None = None,
+) -> Path:
     output = _artifact_path(command)
-    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(member, gcode)
+    with zipfile.ZipFile(output, "w", compression=compression) as archive:
+        if include_structure:
+            for path in sorted(PACKAGE_FIXTURE.rglob("*")):
+                relative = path.relative_to(PACKAGE_FIXTURE).as_posix()
+                if path.is_file() and not relative.startswith("Metadata/plate_"):
+                    archive.writestr(relative, (structure_overrides or {}).get(relative, path.read_bytes()))
+        for member, gcode in (plates if plates is not None else {"Metadata/plate_1.gcode": VALID_GCODE}).items():
+            archive.writestr(member, gcode)
     return output
+
+
+def _versioned_runner(slice_runner):
+    def run(command, **kwargs):
+        if "--help" in command:
+            return _Proc(stdout=PINNED_HELP)
+        return slice_runner(command, **kwargs)
+
+    return run
 
 
 def test_probe_uses_apprun_help_without_a_shell_and_normalizes_the_pinned_version(monkeypatch):
@@ -103,6 +127,8 @@ def test_slice_builds_safe_argument_array_and_returns_valid_native_artifact(tmp_
 
     def fake_run(command, **kwargs):
         calls.append((command, kwargs))
+        if "--help" in command:
+            return _Proc(stdout=PINNED_HELP)
         _write_artifact(command)
         return _Proc()
 
@@ -113,7 +139,8 @@ def test_slice_builds_safe_argument_array_and_returns_valid_native_artifact(tmp_
     artifact = BambuEngine("/opt/bambu-studio/AppRun", resolver).slice(model_path, workspace, _options())
 
     assert not isinstance(artifact, EngineFailure)
-    command, kwargs = calls[0]
+    assert calls[0][0] == ["/opt/bambu-studio/AppRun", "--help"]
+    command, kwargs = calls[1]
     assert isinstance(command, list)
     assert kwargs["shell"] is False
     assert command[0] == "/opt/bambu-studio/AppRun"
@@ -145,6 +172,7 @@ def test_slice_builds_safe_argument_array_and_returns_valid_native_artifact(tmp_
     assert artifact.profile_ids == {"machine": "A1", "process": "Standard", "filament": "Generic PLA"}
     assert artifact.direct_print_eligible is True
     assert artifact.estimate_only is False
+    assert artifact.engine_version == "2.7.1.62"
     assert resolver.calls == [("bambu_a1", "PLA", workspace)]
 
 
@@ -154,7 +182,7 @@ def test_slice_preserves_uploaded_orientation_when_requested(tmp_path, monkeypat
         assert "--orient" not in command
         return _Proc()
 
-    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", fake_run)
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
     options = replace(_options(), preserve_orientation=True)
 
     artifact = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", options)
@@ -178,7 +206,7 @@ def test_slice_maps_each_support_mode(tmp_path, monkeypatch, supports, expected,
         _write_artifact(command)
         return _Proc()
 
-    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", fake_run)
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
 
     artifact = BambuEngine("AppRun", _Resolver()).slice(
         _model(tmp_path), tmp_path / "workspace", _options(supports=supports)
@@ -207,7 +235,7 @@ def test_slice_maps_each_support_mode(tmp_path, monkeypatch, supports, expected,
 def test_slice_classifies_runtime_failures_with_bounded_path_free_diagnostics(
     tmp_path, monkeypatch, runner, expected_code
 ):
-    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", runner)
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(runner))
 
     failure = BambuEngine("AppRun", _Resolver(), timeout=37).slice(
         _model(tmp_path), tmp_path / "private-workspace", _options()
@@ -227,8 +255,14 @@ def test_slice_classifies_runtime_failures_with_bounded_path_free_diagnostics(
     [
         (lambda _command: None, "missing_output"),
         (lambda command: _artifact_path(command).write_bytes(b"not a zip"), "invalid_output"),
-        (lambda command: _write_artifact(command, member="Metadata/readme.txt"), "missing_gcode"),
-        (lambda command: _write_artifact(command, gcode="; total filament used [g] = 6.25\n"), "missing_stats"),
+        (lambda command: _write_artifact(command, plates={}), "missing_gcode"),
+        (
+            lambda command: _write_artifact(
+                command,
+                plates={"Metadata/plate_1.gcode": "; total filament weight [g] : 6.25\n"},
+            ),
+            "missing_stats",
+        ),
     ],
 )
 def test_slice_rejects_missing_or_invalid_native_artifacts(tmp_path, monkeypatch, writer, expected_code):
@@ -236,7 +270,7 @@ def test_slice_rejects_missing_or_invalid_native_artifacts(tmp_path, monkeypatch
         writer(command)
         return _Proc()
 
-    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", fake_run)
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
 
     failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
 
@@ -250,7 +284,10 @@ def test_slice_removes_a_stale_artifact_before_running(tmp_path, monkeypatch):
     workspace.mkdir()
     stale = workspace / "rainbow-dragon.gcode.3mf"
     _write_artifact(["--export-3mf", str(stale)])
-    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", lambda _command, **_kwargs: _Proc())
+    monkeypatch.setattr(
+        "app.services.engines.bambu.subprocess.run",
+        _versioned_runner(lambda _command, **_kwargs: _Proc()),
+    )
 
     failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), workspace, _options())
 
@@ -321,10 +358,234 @@ def test_slice_allows_multicolor_only_for_3mf_with_embedded_settings_without_col
         _write_artifact(command)
         return _Proc()
 
-    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", fake_run)
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
     options = _options("model.3mf", multicolor=True, use_embedded_settings=True)
 
     artifact = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path, "model.3mf"), tmp_path / "workspace", options)
 
     assert not isinstance(artifact, EngineFailure)
     assert not any(argument.startswith("--") and "color" in argument.lower() for argument in commands[0])
+
+
+@pytest.mark.parametrize(
+    "gcode",
+    [
+        ("; total filament weight [g] : 8.40\n; total estimated time: 42m 15s\n; total layer number: 87\n"),
+        ("; total filament weight [g] = 8.40\n; total estimated time = 42m 15s\n; total layer number = 87\n"),
+    ],
+)
+def test_shared_stats_parser_accepts_native_bambu_comment_variants_without_breaking_prusa(tmp_path, gcode):
+    path = tmp_path / "native.gcode"
+    path.write_text(gcode, encoding="utf-8")
+
+    stats = _parse_gcode_stats(path)
+
+    assert stats is not None
+    assert stats["filament_grams"] == Decimal("8.40")
+    assert stats["print_minutes"] == Decimal("42.25")
+    assert stats["layer_count"] == 87
+
+
+def test_slice_aggregates_every_plate_in_deterministic_numeric_order(tmp_path, monkeypatch):
+    def fake_run(command, **_kwargs):
+        _write_artifact(
+            command,
+            plates={
+                "Metadata/plate_10.gcode": (
+                    "; total filament weight [g] : 1.25\n; total estimated time: 10m\n; total layer number: 10\n"
+                ),
+                "Metadata/plate_2.gcode": (
+                    "; total filament weight [g] : 2.50\n; total estimated time: 20m 30s\n; total layer number: 20\n"
+                ),
+                "Metadata/plate_1.gcode": VALID_GCODE,
+            },
+        )
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    artifact = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert not isinstance(artifact, EngineFailure)
+    assert artifact.filament_grams == Decimal("10.00")
+    assert artifact.print_minutes == Decimal("92.5")
+    assert artifact.layer_count == 153
+    assert artifact.diagnostics["stats"]["plate_members"] == [
+        "Metadata/plate_1.gcode",
+        "Metadata/plate_2.gcode",
+        "Metadata/plate_10.gcode",
+    ]
+
+
+def test_slice_requires_a_minimal_opc_3mf_package_before_direct_print_eligibility(tmp_path, monkeypatch):
+    def fake_run(command, **_kwargs):
+        _write_artifact(command, include_structure=False)
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "invalid_package"
+    assert failure.fallback_eligible is True
+
+
+def test_slice_rejects_invalid_required_package_xml(tmp_path, monkeypatch):
+    def fake_run(command, **_kwargs):
+        _write_artifact(command, structure_overrides={"3D/3dmodel.model": b"not xml"})
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "invalid_package"
+
+
+@pytest.mark.parametrize(
+    ("limit_name", "limit"),
+    [
+        ("MAX_ARCHIVE_BYTES", 16),
+        ("MAX_ARCHIVE_MEMBERS", 3),
+        ("MAX_MEMBER_UNCOMPRESSED_BYTES", 32),
+        ("MAX_TOTAL_UNCOMPRESSED_BYTES", 64),
+    ],
+)
+def test_slice_enforces_archive_and_member_resource_limits(tmp_path, monkeypatch, limit_name, limit):
+    monkeypatch.setattr(f"app.services.engines.bambu.{limit_name}", limit, raising=False)
+
+    def fake_run(command, **_kwargs):
+        _write_artifact(command)
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "archive_limit_exceeded"
+
+
+def test_slice_rejects_an_excessive_archive_compression_ratio(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.engines.bambu.MAX_COMPRESSION_RATIO", 2, raising=False)
+    repeated = (
+        "; total filament weight [g] : 6.25\n"
+        "; total estimated time: 1h 2m\n"
+        "; total layer number: 123\n" + "; repeated gcode\n" * 500
+    )
+
+    def fake_run(command, **_kwargs):
+        _write_artifact(command, plates={"Metadata/plate_1.gcode": repeated})
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "archive_limit_exceeded"
+
+
+def test_slice_validates_crc_before_accepting_the_native_artifact(tmp_path, monkeypatch):
+    def fake_run(command, **_kwargs):
+        output = _write_artifact(command, compression=zipfile.ZIP_STORED)
+        payload = output.read_bytes()
+        original = VALID_GCODE.encode("utf-8")
+        assert original in payload
+        output.write_bytes(payload.replace(original, b"X" + original[1:], 1))
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "invalid_output"
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("layer_height", "NaN"),
+        ("perimeters", "Infinity"),
+        ("top_solid_layers", []),
+        ("bottom_solid_layers", -1),
+        ("infill_percent", "not-a-percent"),
+        ("infill_pattern", {"pattern": "gyroid"}),
+        ("brim_width", "-Infinity"),
+        ("supports", "tree-auto"),
+        ("multicolor", {"truthy": True}),
+        ("use_embedded_settings", object()),
+    ],
+)
+def test_slice_rejects_malformed_engine_neutral_options_before_probe(tmp_path, monkeypatch, option, value):
+    monkeypatch.setattr(
+        "app.services.engines.bambu.subprocess.run",
+        lambda *_args, **_kwargs: pytest.fail("malformed options must not probe or run Bambu Studio"),
+    )
+
+    with pytest.raises(RequestValidationError) as error:
+        BambuEngine("AppRun", _Resolver()).slice(
+            _model(tmp_path),
+            tmp_path / "workspace",
+            _options(**{option: value}),
+        )
+
+    assert error.value.code == "invalid_slicer_option"
+    assert error.value.fallback_eligible is False
+
+
+@pytest.mark.parametrize("nozzle", [Decimal("NaN"), Decimal("Infinity")])
+def test_slice_rejects_non_finite_nozzle_as_invalid_terminal_input(tmp_path, monkeypatch, nozzle):
+    monkeypatch.setattr(
+        "app.services.engines.bambu.subprocess.run",
+        lambda *_args, **_kwargs: pytest.fail("invalid nozzle must not probe or run Bambu Studio"),
+    )
+
+    with pytest.raises(RequestValidationError) as error:
+        BambuEngine("AppRun", _Resolver()).slice(
+            _model(tmp_path),
+            tmp_path / "workspace",
+            replace(_options(), nozzle_diameter=nozzle),
+        )
+
+    assert error.value.code == "invalid_nozzle"
+
+
+@pytest.mark.parametrize("outcome", ["timeout", "nonzero"])
+def test_slice_discards_partial_artifacts_after_failed_execution(tmp_path, monkeypatch, outcome):
+    workspace = tmp_path / "workspace"
+
+    def fake_run(command, **_kwargs):
+        _write_artifact(command)
+        if outcome == "timeout":
+            raise subprocess.TimeoutExpired("AppRun", 600)
+        return _Proc(returncode=2)
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), workspace, _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert not (workspace / "rainbow-dragon.gcode.3mf").exists()
+
+
+def test_slice_redacts_actual_unix_and_windows_paths_from_stderr(tmp_path, monkeypatch):
+    workspace = tmp_path / "secret-workspace"
+
+    def fake_run(_command, **_kwargs):
+        return _Proc(
+            returncode=3,
+            stderr=f"failed at {workspace}/plate.gcode and C:\\private\\request\\model.stl".encode(),
+        )
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), workspace, _options())
+
+    assert isinstance(failure, EngineFailure)
+    diagnostic = str(failure.diagnostics)
+    assert str(workspace) not in diagnostic
+    assert "C:\\private\\request" not in diagnostic

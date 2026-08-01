@@ -33,7 +33,7 @@ def _normalize_fill_density(value: object) -> str | None:
     raw_number = raw[:-1].strip() if has_percent else raw
     try:
         percent = Decimal(raw_number)
-    except (InvalidOperation, ValueError):
+    except InvalidOperation, ValueError:
         return None
 
     if not has_percent and Decimal("0") <= percent <= Decimal("1"):
@@ -89,8 +89,15 @@ def _parse_gcode_stats(gcode_path: str | Path, *, density: Decimal = PLA_DENSITY
     cost_source_pattern: str | None = None
 
     grams_patterns = [
-        ("total_filament_used_g", re.compile(r";\s*total filament used\s*\[g\]\s*=\s*([\d.]+)", re.IGNORECASE)),
-        ("filament_used_g", re.compile(r";\s*filament used\s*\[g\]\s*=\s*([\d.]+)", re.IGNORECASE)),
+        (
+            "total_filament_used_g",
+            re.compile(r";\s*total filament used\s*\[g\]\s*[:=]\s*([\d.]+)", re.IGNORECASE),
+        ),
+        (
+            "total_filament_weight_g",
+            re.compile(r";\s*total filament weight\s*\[g\]\s*[:=]\s*([\d.]+)", re.IGNORECASE),
+        ),
+        ("filament_used_g", re.compile(r";\s*filament used\s*\[g\]\s*[:=]\s*([\d.]+)", re.IGNORECASE)),
     ]
     volume_pattern = re.compile(r";\s*filament used\s*\[cm3\]\s*=\s*([\d.]+)", re.IGNORECASE)
     cost_pattern = re.compile(r";\s*total filament cost\s*=\s*([\d.]+)", re.IGNORECASE)
@@ -100,10 +107,13 @@ def _parse_gcode_stats(gcode_path: str | Path, *, density: Decimal = PLA_DENSITY
             re.compile(r";\s*estimated printing time\s*\(normal mode\)\s*=\s*(.+)", re.IGNORECASE),
         ),
         ("estimated_printing_time", re.compile(r";\s*estimated (?:printing|print) time\s*=\s*(.+)", re.IGNORECASE)),
-        ("total_estimated_time", re.compile(r";\s*total estimated time\s*=\s*(.+)", re.IGNORECASE)),
+        ("total_estimated_time", re.compile(r";\s*total estimated time\s*[:=]\s*(.+)", re.IGNORECASE)),
         ("estimated_time", re.compile(r";\s*estimated time\s*=\s*(.+)", re.IGNORECASE)),
     ]
-    layer_pattern = re.compile(r";\s*(?:total layers count|layer_count)\s*[:=]\s*(\d+)", re.IGNORECASE)
+    layer_pattern = re.compile(
+        r";\s*(?:total layers count|total layer number|layer_count)\s*[:=]\s*(\d+)",
+        re.IGNORECASE,
+    )
     layer_count = None
 
     with lines:
@@ -168,6 +178,6 @@ def filament_density_from_options(options: dict[str, object]) -> Decimal:
         return PLA_DENSITY_G_PER_CM3
     try:
         density = Decimal(str(value))
-    except (InvalidOperation, ValueError):
+    except InvalidOperation, ValueError:
         return PLA_DENSITY_G_PER_CM3
     return density if density.is_finite() and density > 0 else PLA_DENSITY_G_PER_CM3
