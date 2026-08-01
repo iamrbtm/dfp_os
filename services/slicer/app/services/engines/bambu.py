@@ -7,7 +7,6 @@ import tempfile
 import zipfile
 from decimal import Decimal, InvalidOperation
 from pathlib import Path, PurePosixPath
-from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 from app.services.engines.bambu_profiles import BambuProfileError, BambuProfileResolver, ResolvedBambuProfiles
@@ -363,14 +362,7 @@ class BambuEngine:
 
     @staticmethod
     def _valid_model_target(value: str) -> bool:
-        target = value.strip()
-        if not target or "\\" in target or "\x00" in target or "%" in target or target.startswith("//"):
-            return False
-        parsed = urlsplit(target)
-        if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
-            return False
-        normalized_path = parsed.path[1:] if parsed.path.startswith("/") else parsed.path
-        return normalized_path == _THREE_MF_MODEL_PART
+        return value in {_THREE_MF_MODEL_PART, f"/{_THREE_MF_MODEL_PART}"}
 
     @staticmethod
     def _safe_member_name(name: str) -> bool:

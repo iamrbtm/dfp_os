@@ -492,6 +492,10 @@ def test_slice_rejects_well_formed_but_semantically_invalid_required_package_xml
         ("///3D/3dmodel.model", ""),
         ("3D%2F3dmodel.model", ""),
         ("3D%2F..%2F3D%2F3dmodel.model", ""),
+        ("3D/3dmodel.model?", ""),
+        ("3D/3dmodel.model#", ""),
+        (" 3D/3dmodel.model", ""),
+        ("3D/3dmodel.model ", ""),
         ("3D/3dmodel.model", ' TargetMode="External"'),
     ],
 )
