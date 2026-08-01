@@ -1,7 +1,7 @@
 ARG DFPOS_IMAGE_TAG
 FROM dfpos-slicer-base:${DFPOS_IMAGE_TAG:-local} AS base
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv@sha256:cf4eedcaa81655197f625739489effcbe71b61ceb1506f332c3facae5deceded /uv /usr/local/bin/uv
 
 WORKDIR /app
 

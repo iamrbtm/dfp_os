@@ -27,6 +27,7 @@ from app.services.model_analysis import (
     convert_to_glb,
     extract_3mf_slicer_settings,
     is_quotable_format,
+    normalize_scale_percent,
     slice_with_prusaslicer,
     task_envelope,
     validate_model_file,
@@ -226,7 +227,7 @@ def _apply_initial_cost_snapshot(
         material=material,
         density=density,
         density_source=density_source,
-        scale_percent=scale_percent,
+        scale_percent=normalize_scale_percent(scale_percent),
         copies=copies,
         cost_resolver_evidence=cost_resolver_evidence,
     )
@@ -381,9 +382,11 @@ def analyze_product_model(self, product_id: int) -> dict:
 
         # Issue 9/30 — apply scale_percent BEFORE slicing/validation so the
         # stored bounding box and slicer estimates reflect the scaled size.
-        scale_percent = analysis_config.get("scale_percent")
+        # The studio stores a stringified Decimal ("100.00"); normalize to int
+        # here so products already written with that shape still work.
+        scale_percent = normalize_scale_percent(analysis_config.get("scale_percent"))
         analysis_path = model_path
-        if scale_percent is not None and str(scale_percent) not in {"", "100", "100.0"}:
+        if scale_percent is not None and scale_percent != 100:
             try:
                 scaled_mesh = apply_scale(model_path, scale_percent)
                 if scaled_mesh is not None:
@@ -475,7 +478,7 @@ def analyze_product_model(self, product_id: int) -> dict:
                 product,
                 run_id=run.id,
                 material=analysis_config.get("material"),
-                scale_percent=int(scale_percent) if scale_percent is not None else None,
+                scale_percent=scale_percent,
                 copies=int(analysis_config.get("copies") or 1),
             )
             write_model_metadata(product)
@@ -642,7 +645,7 @@ def analyze_product_model(self, product_id: int) -> dict:
             material=material,
             density=density,
             density_source=density_source,
-            scale_percent=int(scale_percent) if scale_percent is not None else None,
+            scale_percent=scale_percent,
             copies=copies,
             cost_resolver_evidence=cost_evidence or None,
         )

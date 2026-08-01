@@ -25,6 +25,7 @@ from app.services.model_analysis import (
     _parse_time_string,
     ensure_slicer_profiles_dir,
     is_quotable_format,
+    normalize_scale_percent,
     slicer_profile_path,
     task_envelope,
 )
@@ -312,6 +313,73 @@ def test_apply_scale_doubles_a_cube(tmp_path):
     # 2x scale on a 10mm cube -> 20mm side -> 8000 mm^3 volume.
     assert scaled is not None
     assert abs(float(scaled.volume) - 8000.0) < 1.0
+
+
+# ---------------------------------------------------------------------------
+# Regression — scale_percent is stored as a stringified Decimal ("100.00")
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_scale_percent_coerces_decimal_string():
+    assert normalize_scale_percent("100.00") == 100
+    assert normalize_scale_percent("100.0") == 100
+    assert normalize_scale_percent("100") == 100
+    assert normalize_scale_percent(Decimal("100.00")) == 100
+    assert normalize_scale_percent(100) == 100
+    assert normalize_scale_percent(104.5) == 104
+
+
+def test_normalize_scale_percent_none_and_empty_are_none():
+    assert normalize_scale_percent(None) is None
+    assert normalize_scale_percent("") is None
+    assert normalize_scale_percent("  ") is None
+
+
+def test_normalize_scale_percent_bad_value_returns_none():
+    assert normalize_scale_percent("abc") is None
+    assert normalize_scale_percent("NaN") is None
+
+
+def test_cost_snapshot_accepts_decimal_string_scale_percent(app):
+    """The cost snapshot int column must not reject '100.00' (regression)."""
+    from app.extensions import db
+    from app.models import Category, CostSnapshot, Product, ProductStatus, ProductType
+    from app.tasks.model_analysis import _apply_initial_cost_snapshot
+
+    with app.app_context():
+        category = Category(name="Snap", slug="snap", is_public=True, is_pos_visible=True)
+        product = Product(
+            name="Snap Product",
+            slug="snap-product",
+            sku_base="SNAP-1",
+            category=category,
+            product_type=ProductType.FINISHED_GOOD,
+            status=ProductStatus.ACTIVE,
+            base_price=20,
+        )
+        product.analysis_status = "complete"
+        product.parsed_filament_grams = Decimal("42.00")
+        product.parsed_print_minutes = Decimal("84.00")
+        product.parsed_volume_mm3 = Decimal("1000.00")
+        product.model_file_path = "/tmp/snapshot.stl"
+        db.session.add(category)
+        db.session.add(product)
+        db.session.flush()
+
+        _apply_initial_cost_snapshot(
+            product,
+            run_id=None,
+            material="PLA",
+            scale_percent="100.00",
+            copies=1,
+            cost_resolver_evidence=None,
+        )
+        db.session.commit()
+
+        snapshot = CostSnapshot.query.filter_by(product_id=product.id, stale=False).first()
+        assert snapshot is not None
+        assert snapshot.scale_percent == 100
+        assert snapshot.copies == 1
 
 
 def test_coerce_to_mesh_merges_scene():

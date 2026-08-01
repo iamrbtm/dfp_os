@@ -521,7 +521,7 @@ def upload_model(product_id: int):
 
     # Issue 8 — split quotable (sliceable) from preview-only formats. GLB/GLTF
     # can be stored for display but cannot be analyzed for filament/time.
-    from app.services.model_analysis import is_quotable_format
+    from app.services.model_analysis import is_quotable_format, normalize_scale_percent
 
     quotable = is_quotable_format(file.filename)
 
@@ -544,7 +544,7 @@ def upload_model(product_id: int):
         "supports": upload_form.supports.data,
         "brim_width": str(upload_form.brim_width.data),
         "copies": upload_form.copies.data,
-        "scale_percent": str(upload_form.scale_percent.data),
+        "scale_percent": normalize_scale_percent(upload_form.scale_percent.data),
         "preserve_orientation": bool(upload_form.preserve_orientation.data),
         "multicolor": bool(upload_form.multicolor.data),
         "use_embedded_settings": bool(upload_form.use_embedded_settings.data),
