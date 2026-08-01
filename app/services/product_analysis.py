@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
-
 from app.extensions import db
 from app.models.catalog import (
     AnalysisRunStatus,
@@ -107,14 +105,15 @@ def create_model_asset(
 ) -> ProductModelAsset:
     """Record one uploaded/generated file for a product.
 
-    When a new ``source_model`` is marked current, all prior source models for
-    the product flip to ``is_current=False`` (Issue 7) so the asset list can
-    distinguish the current model from stale versions.
+    When a new source model or generated G-code is marked current, prior
+    current assets of the same kind flip to ``is_current=False`` (Issue 7).
+    Other asset kinds are not affected, so generating G-code never marks its
+    source model stale.
     """
-    if is_current and asset_kind == AssetKind.SOURCE_MODEL:
+    if is_current and asset_kind in {AssetKind.SOURCE_MODEL, AssetKind.GCODE}:
         db.session.query(ProductModelAsset).filter(
             ProductModelAsset.product_id == product.id,
-            ProductModelAsset.asset_kind == AssetKind.SOURCE_MODEL,
+            ProductModelAsset.asset_kind == asset_kind,
             ProductModelAsset.is_current.is_(True),
         ).update({ProductModelAsset.is_current: False}, synchronize_session=False)
 
@@ -199,8 +198,17 @@ def start_analysis_run(
     return run
 
 
-def is_current_run(run_id: int) -> bool:
-    run = db.session.get(ProductAnalysisRun, run_id)
+def is_current_run(run_id: int, *, for_update: bool = False) -> bool:
+    if for_update:
+        run = (
+            db.session.query(ProductAnalysisRun)
+            .filter(ProductAnalysisRun.id == run_id)
+            .populate_existing()
+            .with_for_update()
+            .one_or_none()
+        )
+    else:
+        run = db.session.get(ProductAnalysisRun, run_id)
     return bool(run and run.is_current)
 
 
@@ -218,7 +226,11 @@ def get_current_run(product: Product) -> ProductAnalysisRun | None:
 
 def set_run_status(run: ProductAnalysisRun, status: AnalysisRunStatus) -> None:
     run.status = status
-    if status in (AnalysisRunStatus.COMPLETE, AnalysisRunStatus.FAILED, AnalysisRunStatus.SUPERSEDED):
+    if status in (
+        AnalysisRunStatus.COMPLETE,
+        AnalysisRunStatus.FAILED,
+        AnalysisRunStatus.SUPERSEDED,
+    ):
         if run.completed_at is None:
             run.completed_at = datetime.now(timezone.utc)
     db.session.add(run)

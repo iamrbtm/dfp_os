@@ -295,7 +295,10 @@ def converted_storage_key(product_id: int, filename: str) -> str:
 
 
 def gcode_storage_key(product_id: int, filename: str) -> str:
-    return product_asset_key(product_id, filename)
+    return product_asset_key(
+        product_id,
+        normalize_storage_filename(filename, fallback_stem="artifact.gcode"),
+    )
 
 
 def image_storage_key(product_id: int, filename: str) -> str:

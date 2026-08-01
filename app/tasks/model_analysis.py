@@ -28,7 +28,7 @@ from app.services.model_analysis import (
     extract_3mf_slicer_settings,
     is_quotable_format,
     normalize_scale_percent,
-    slice_with_prusaslicer,
+    slice_with_slicer,
     task_envelope,
     validate_model_file,
 )
@@ -56,7 +56,9 @@ from app.services.storage import (
 )
 
 
-def _record_pmp_step(task, product: Product, actor_id: int | None, *, step: str, percent: int, message: str) -> None:
+def _record_pmp_step(
+    task, product: Product, actor_id: int | None, *, step: str, percent: int, message: str
+) -> None:
     task.update_state(state="PROGRESS", meta={"step": step, "percent": percent, "message": message})
     get_audit_client().record(
         action=f"product_model.pmp.{step}",
@@ -85,9 +87,18 @@ def pack_product_model(
         return task_envelope(False, error="Product not found")
     out_path: Path | None = None
     try:
-        _record_pmp_step(self, product, actor_id, step="started", percent=5, message="PMP packing started")
+        _record_pmp_step(
+            self, product, actor_id, step="started", percent=5, message="PMP packing started"
+        )
         source_bytes = download_storage_bytes(source_reference)
-        _record_pmp_step(self, product, actor_id, step="downloaded", percent=20, message="Source model downloaded")
+        _record_pmp_step(
+            self,
+            product,
+            actor_id,
+            step="downloaded",
+            percent=20,
+            message="Source model downloaded",
+        )
 
         from pmp import pack_model_bytes
 
@@ -119,7 +130,14 @@ def pack_product_model(
             printer=profile_stem,
         )
         out_path = Path(result["out_path"])
-        _record_pmp_step(self, product, actor_id, step="packed", percent=75, message=f"PMP placed {result['placed']} copies")
+        _record_pmp_step(
+            self,
+            product,
+            actor_id,
+            step="packed",
+            percent=75,
+            message=f"PMP placed {result['placed']} copies",
+        )
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
         stem = normalize_storage_filename(Path(source_name).stem).rsplit(".", 1)[0]
@@ -139,17 +157,36 @@ def pack_product_model(
             "schema_version": "1.0",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "product": {"id": product.id, "name": product.name, "sku": product.sku_base},
-            "source": {"filename": source_name, "reference": source_reference, "size_bytes": len(source_bytes), "sha256": hashlib.sha256(source_bytes).hexdigest(), "format": result["source_format"]},
+            "source": {
+                "filename": source_name,
+                "reference": source_reference,
+                "size_bytes": len(source_bytes),
+                "sha256": hashlib.sha256(source_bytes).hexdigest(),
+                "format": result["source_format"],
+            },
             "pmp": {
-                "bed_width_mm": bed_w, "bed_depth_mm": bed_d, "spacing_mm": 2.0,
-                "margin_mm": 3.5, "angle_step_degrees": 15.0, "mode": "auto",
-                "tower": "auto", "printer_profile": profile_stem, "scale": result["scale"],
-                "placed": result["placed"], "method": result["method"],
+                "bed_width_mm": bed_w,
+                "bed_depth_mm": bed_d,
+                "spacing_mm": 2.0,
+                "margin_mm": 3.5,
+                "angle_step_degrees": 15.0,
+                "mode": "auto",
+                "tower": "auto",
+                "printer_profile": profile_stem,
+                "scale": result["scale"],
+                "placed": result["placed"],
+                "method": result["method"],
                 "bed_utilization": result["utilization"],
                 "usable_utilization": result["usable_utilization"],
-                "warnings": result["warnings"], "reserved_area": result["reserve"],
+                "warnings": result["warnings"],
+                "reserved_area": result["reserve"],
             },
-            "output": {"filename": output_name, "reference": output_ref, "size_bytes": len(output_bytes), "sha256": hashlib.sha256(output_bytes).hexdigest()},
+            "output": {
+                "filename": output_name,
+                "reference": output_ref,
+                "size_bytes": len(output_bytes),
+                "sha256": hashlib.sha256(output_bytes).hexdigest(),
+            },
             "generated_by": actor_id,
         }
         metadata_name = f"{Path(output_name).stem}.metadata.json"
@@ -160,11 +197,22 @@ def pack_product_model(
             local_root=local_root,
             content_type="application/json",
         )
-        _record_pmp_step(self, product, actor_id, step="stored", percent=95, message="Packed plate and metadata saved")
+        _record_pmp_step(
+            self,
+            product,
+            actor_id,
+            step="stored",
+            percent=95,
+            message="Packed plate and metadata saved",
+        )
         get_audit_client().record(
-            action="product_model.pmp.completed", entity_type="product", entity_id=str(product.id),
-            actor_id=str(actor_id) if actor_id else None, actor_type="user" if actor_id else "system",
-            source_module="app.tasks.model_analysis", tenant_id=str(product.business_id) if product.business_id else None,
+            action="product_model.pmp.completed",
+            entity_type="product",
+            entity_id=str(product.id),
+            actor_id=str(actor_id) if actor_id else None,
+            actor_type="user" if actor_id else "system",
+            source_module="app.tasks.model_analysis",
+            tenant_id=str(product.business_id) if product.business_id else None,
             after_state={"packed_model": output_ref, "metadata": metadata_ref},
             metadata={"percent": 100, "placed": result["placed"], "method": result["method"]},
         )
@@ -180,9 +228,13 @@ def pack_product_model(
         )
     except Exception as exc:
         get_audit_client().record(
-            action="product_model.pmp.failed", entity_type="product", entity_id=str(product.id),
-            actor_id=str(actor_id) if actor_id else None, actor_type="user" if actor_id else "system",
-            source_module="app.tasks.model_analysis", tenant_id=str(product.business_id) if product.business_id else None,
+            action="product_model.pmp.failed",
+            entity_type="product",
+            entity_id=str(product.id),
+            actor_id=str(actor_id) if actor_id else None,
+            actor_type="user" if actor_id else "system",
+            source_module="app.tasks.model_analysis",
+            tenant_id=str(product.business_id) if product.business_id else None,
             metadata={"error": str(exc)},
         )
         raise
@@ -191,9 +243,10 @@ def pack_product_model(
             shutil.rmtree(out_path.parent, ignore_errors=True)
 
 
-def _preferred_gcode_filename(product: Product) -> str:
+def _preferred_gcode_filename(product: Product, engine_key: str) -> str:
     label = product.slug or product.name or f"product-{product.id or 0}"
-    return f"{storage_slug(label, fallback=f'product-{product.id or 0}')}.gcode"
+    suffix = ".gcode.3mf" if engine_key == "bambu" else ".gcode"
+    return f"{storage_slug(label, fallback=f'product-{product.id or 0}')}{suffix}"
 
 
 def _preferred_converted_filename(product: Product) -> str:
@@ -299,7 +352,9 @@ def _ensure_run_for_product(product: Product) -> tuple[Product, "object"]:
     return product, run
 
 
-def _resolve_material_cost(product: Product, material: str | None, spool_id: int | None) -> tuple[Decimal, int | None, dict]:
+def _resolve_material_cost(
+    product: Product, material: str | None, spool_id: int | None
+) -> tuple[Decimal, int | None, dict]:
     """Resolve a cost-per-gram, falling back to the legacy weighted average."""
     try:
         from app.services.cost_engine import resolve_material_cost
@@ -506,31 +561,17 @@ def analyze_product_model(self, product_id: int) -> dict:
         # Issue 9/30 — copies: slice ONE copy; per-unit cost = plate_cost / copies.
         copies = max(1, int(analysis_config.get("copies") or 1))
 
-        gcode_out = tmp_dir / "quote.gcode"
-        slicer_errors: list[str] = []
-        slicer_result = slice_with_prusaslicer(
+        slicer_result = slice_with_slicer(
             analysis_path,
+            workspace=tmp_dir,
             profile_name=analysis_config.get("printer_profile"),
-            output_path=gcode_out,
             slicer_options=analysis_config,
             preserve_orientation=analysis_config.get("preserve_orientation"),
         )
 
         if not slicer_result.success:
-            slicer_errors.append(f"centered: {slicer_result.error}")
-            slicer_result = slice_with_prusaslicer(
-                analysis_path,
-                profile_name=None,
-                output_path=gcode_out,
-                center=None,
-                slicer_options=analysis_config,
-            )
-
-        if not slicer_result.success:
-            slicer_errors.append(f"uncentered: {slicer_result.error}")
-            error_msg = "Could not slice this model with PrusaSlicer.\n" + "\n".join(
-                slicer_errors
-            )
+            slicer_errors = [str(slicer_result.error or "Slicer service returned no result")]
+            error_msg = "Could not slice this model.\n" + slicer_errors[0]
             if is_current_run(run.id):
                 publish_run_results(run, product, geometry=geometry, error=error_msg)
                 db.session.commit()
@@ -578,35 +619,67 @@ def analyze_product_model(self, product_id: int) -> dict:
         _record_analysis_step(
             self, product, step="sliced", percent=70, message="Slicer estimates complete"
         )
-        gcode_path = gcode_out
+        gcode_path = slicer_result.artifact_path
+        if gcode_path is None or not gcode_path.is_file():
+            raise ValueError("Slicer service did not return a readable artifact")
 
         set_run_status(run, AnalysisRunStatus.STORING_GCODE)
         db.session.commit()
 
-        if gcode_path and gcode_path.exists() and analysis_config.get("retain_gcode", True):
-            try:
-                gcode_key = gcode_storage_key(product.id, _preferred_gcode_filename(product))
-                gcode_ref = upload_bytes_to_storage(
-                    gcode_path.read_bytes(),
-                    bucket=current_app.config.get("PRODUCT_ASSETS_BUCKET", "products"),
-                    key=gcode_key,
-                    local_root=current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products"),
-                    content_type="text/plain",
-                )
-                product.gcode_path = gcode_ref
-                _record_analysis_step(
-                    self, product, step="gcode_stored", percent=80, message="G-code stored"
-                )
-            except Exception as exc:
-                import logging
+        # Lock and refresh the current run before creating a current generated
+        # asset. The lock is held through publish + commit so a newer upload
+        # cannot interleave and leave this superseded run's G-code current.
+        if not is_current_run(run.id, for_update=True):
+            set_run_status(run, AnalysisRunStatus.SUPERSEDED)
+            db.session.commit()
+            return task_envelope(False, error="superseded by a newer upload")
 
-                logging.getLogger(__name__).warning(
-                    "Failed to upload G-code for product %s: %s", product.id, exc
-                )
+        gcode_asset = None
+        if analysis_config.get("retain_gcode", True):
+            safe_filename = normalize_storage_filename(
+                slicer_result.artifact_filename,
+                fallback_stem=_preferred_gcode_filename(product, slicer_result.engine_key),
+            )
+            gcode_key = gcode_storage_key(product.id, safe_filename)
+            gcode_ref = upload_file_to_storage(
+                gcode_path,
+                bucket=current_app.config.get("PRODUCT_ASSETS_BUCKET", "products"),
+                key=gcode_key,
+                local_root=current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products"),
+                content_type=slicer_result.artifact_media_type,
+            )
+            gcode_asset = create_model_asset(
+                product,
+                storage_reference=gcode_ref,
+                original_filename=slicer_result.artifact_filename,
+                safe_filename=safe_filename,
+                content_type=slicer_result.artifact_media_type,
+                size_bytes=slicer_result.artifact_size,
+                sha256=slicer_result.artifact_sha256,
+                asset_kind=AssetKind.GCODE,
+            )
+            product.gcode_path = gcode_ref
+            _record_analysis_step(
+                self, product, step="gcode_stored", percent=80, message="G-code stored"
+            )
 
         slicer_stats = {
+            "success": True,
+            "engine_key": slicer_result.engine_key,
+            "engine_name": slicer_result.engine_name,
+            "engine_version": slicer_result.engine_version,
+            "fallback_used": slicer_result.fallback_used,
+            "primary_failure": slicer_result.stats.get("primary_failure"),
             "filament_grams": str(unit_grams),
             "print_minutes": str(unit_minutes),
+            "layer_count": slicer_result.stats.get("layer_count"),
+            "profile_ids": slicer_result.stats.get("profile_ids", {}),
+            "artifact_filename": slicer_result.artifact_filename,
+            "artifact_media_type": slicer_result.artifact_media_type,
+            "artifact_size": slicer_result.artifact_size,
+            "artifact_sha256": slicer_result.artifact_sha256,
+            "direct_print_eligible": slicer_result.direct_print_eligible,
+            "estimate_only": slicer_result.estimate_only,
             "profile_used": slicer_result.profile_used,
             "copies": copies,
             "plate_grams": str(plate_grams),
@@ -620,13 +693,9 @@ def analyze_product_model(self, product_id: int) -> dict:
             "scale_percent": scale_percent,
             "material_default_temp": material_default_temp(material),
         }
-        for key, value in slicer_result.stats.items():
-            slicer_stats[key] = str(value) if isinstance(value, Decimal) else value
-
         # (c) publish results to the run + product summary fields. publish_run_results
         # sets run.status=COMPLETE, so the COSTING progress flag is set just before.
         set_run_status(run, AnalysisRunStatus.COSTING)
-        db.session.commit()
         published = publish_run_results(
             run,
             product,
@@ -638,6 +707,7 @@ def analyze_product_model(self, product_id: int) -> dict:
             parsed_filament_grams=unit_grams,
             parsed_print_minutes=unit_minutes,
             parsed_material_cost=per_unit_cost,
+            gcode_asset_id=gcode_asset.id if gcode_asset is not None else None,
         )
         if not published:
             db.session.commit()
@@ -675,6 +745,10 @@ def analyze_product_model(self, product_id: int) -> dict:
                 "percent": 100,
                 "conversion_queued": bool(convert_task),
                 "outcome": "success",
+                "engine_key": slicer_result.engine_key,
+                "fallback_used": slicer_result.fallback_used,
+                "estimate_only": slicer_result.estimate_only,
+                "artifact_sha256": slicer_result.artifact_sha256,
             },
         )
         return task_envelope(

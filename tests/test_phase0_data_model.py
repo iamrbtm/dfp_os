@@ -12,13 +12,16 @@ from app.models import (
     CostSnapshot,
     CostSnapshotConfidence,
     Product,
-    ProductAnalysisRun,
     ProductModelAsset,
     ProductStatus,
     ProductType,
 )
 from app.models.catalog import LicenseStatus
-from app.services.cost_engine import COST_FORMULA_VERSION, calculate_product_cost, persist_cost_snapshot
+from app.services.cost_engine import (
+    COST_FORMULA_VERSION,
+    calculate_product_cost,
+    persist_cost_snapshot,
+)
 from app.services.product_analysis import (
     ANALYSIS_SUMMARY_FIELDS,
     create_model_asset,
@@ -152,6 +155,72 @@ def test_new_source_model_marks_prior_source_stale(app):
         db.session.refresh(first)
         assert first.is_current is False
         assert second.is_current is True
+
+
+def test_new_gcode_marks_only_prior_gcode_stale(app):
+    with app.app_context():
+        product = _make_product()
+        source = _source_asset(product)
+        first = create_model_asset(
+            product,
+            storage_reference="/uploads/products/first.gcode",
+            original_filename="first.gcode",
+            safe_filename="first.gcode",
+            content_type="text/x.gcode",
+            size_bytes=12,
+            sha256="b" * 64,
+            asset_kind=AssetKind.GCODE,
+        )
+        second = create_model_asset(
+            product,
+            storage_reference="/uploads/products/second.gcode.3mf",
+            original_filename="second.gcode.3mf",
+            safe_filename="second.gcode.3mf",
+            content_type="application/vnd.bambulab.gcode-3mf",
+            size_bytes=34,
+            sha256="c" * 64,
+            asset_kind=AssetKind.GCODE,
+        )
+
+        db.session.flush()
+        db.session.refresh(source)
+        db.session.refresh(first)
+
+        assert source.is_current is True
+        assert first.is_current is False
+        assert second.is_current is True
+
+
+def test_completed_run_points_to_generated_gcode_asset(app):
+    with app.app_context():
+        product = _make_product()
+        source = _source_asset(product)
+        run = start_analysis_run(product, source_asset=source)
+        artifact = create_model_asset(
+            product,
+            storage_reference="/uploads/products/dragon.gcode.3mf",
+            original_filename="dragon.gcode.3mf",
+            safe_filename="dragon.gcode.3mf",
+            content_type="application/vnd.bambulab.gcode-3mf",
+            size_bytes=9876,
+            sha256="d" * 64,
+            asset_kind=AssetKind.GCODE,
+        )
+
+        published = publish_run_results(
+            run,
+            product,
+            slicer_stats={"engine_key": "bambu"},
+            gcode_asset_id=artifact.id,
+        )
+        db.session.commit()
+
+        assert published is True
+        assert run.status == AnalysisRunStatus.COMPLETE
+        assert run.gcode_asset_id == artifact.id
+        assert run.gcode_asset.content_type == "application/vnd.bambulab.gcode-3mf"
+        assert run.gcode_asset.size_bytes == 9876
+        assert run.gcode_asset.sha256 == "d" * 64
 
 
 def test_reset_product_analysis_clears_stale_cost_fields(app):
@@ -308,11 +377,17 @@ def test_concurrent_cost_snapshots_leave_single_current(app):
     assert all(r is not None for r in results), f"workers did not finish: {results}"
 
     with app.app_context():
-        current = db.session.query(CostSnapshot).filter(
-            CostSnapshot.product_id == product_id,
-            CostSnapshot.stale.is_(False),
-        ).all()
-        assert len(current) == 1, "concurrent cost calculations produced more than one current snapshot"
+        current = (
+            db.session.query(CostSnapshot)
+            .filter(
+                CostSnapshot.product_id == product_id,
+                CostSnapshot.stale.is_(False),
+            )
+            .all()
+        )
+        assert len(current) == 1, (
+            "concurrent cost calculations produced more than one current snapshot"
+        )
 
 
 # ---------------------------------------------------------------------------
