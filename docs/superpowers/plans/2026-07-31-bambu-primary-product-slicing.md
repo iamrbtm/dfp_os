@@ -906,7 +906,163 @@ docker compose --env-file .env.example build slicer
 
 Expected: both builds use `dfpos-slicer-base:local`; neither normal build contains an apt/Prusa/Bambu installation step. The second build should reuse application layers when inputs are unchanged.
 
-**Step 8: Final evidence review**
+**Step 8: Run the required native artifact HTTP smoke**
+
+Run this after the normal slicer image has been built. This is the required Docker-level coverage for native Starlette `FileResponse` I/O and disk-spooled multipart uploads; it is not optional when Task 12 is executed.
+
+The smoke starts one uniquely named temporary container from `dfpos-slicer:local`, publishes only a random loopback port, and mounts no volumes. It does not start Compose, MariaDB, PostgreSQL, or any project container. Its cleanup trap removes only the named smoke container and its `mktemp` directory.
+
+```bash
+set -euo pipefail
+cd /mnt/storage/docker/dfpos
+SMOKE_CONTAINER="dfpos-slicer-artifact-smoke-$$"
+SMOKE_DIR="$(mktemp -d /tmp/dfpos-slicer-artifact-smoke.XXXXXX)"
+SMOKE_TOKEN="task12-native-smoke-token-0123456789abcdef"
+export SMOKE_CONTAINER SMOKE_DIR SMOKE_TOKEN
+cleanup_slicer_smoke() {
+  smoke_status=$?
+  if [ "$smoke_status" -ne 0 ]; then
+    timeout 20s docker logs "$SMOKE_CONTAINER" >&2 || true
+    timeout 20s docker exec "$SMOKE_CONTAINER" sh -ec \
+      'find /tmp -maxdepth 2 -type d -name "dfpos-slicer-request-*" -print' >&2 || true
+  fi
+  timeout 30s docker rm --force "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
+  if [ -n "$SMOKE_DIR" ] && [ -d "$SMOKE_DIR" ]; then
+    rm -rf -- "$SMOKE_DIR"
+  fi
+}
+trap cleanup_slicer_smoke EXIT INT TERM
+
+timeout 30s env UV_CACHE_DIR=/tmp/dfpos-uv-cache uv run python - <<'PY'
+import os
+from pathlib import Path
+
+source = Path("services/slicer/app/tests/fixtures/cube.stl").read_bytes()
+target = Path(os.environ["SMOKE_DIR"]) / "cube-over-spool-threshold.stl"
+minimum_size = 1024 * 1024 + 4096
+target.write_bytes(source + b"\n" + b" " * (minimum_size - len(source) - 1))
+assert target.stat().st_size == minimum_size
+PY
+
+timeout 60s docker run --detach \
+  --name "$SMOKE_CONTAINER" \
+  --publish 127.0.0.1::8092 \
+  --env "SLICER_INTERNAL_API_TOKEN=$SMOKE_TOKEN" \
+  dfpos-slicer:local
+SMOKE_PORT="$(timeout 10s docker port "$SMOKE_CONTAINER" 8092/tcp | sed -E 's/.*:([0-9]+)$/\1/')"
+SMOKE_BASE_URL="http://127.0.0.1:$SMOKE_PORT"
+export SMOKE_BASE_URL
+
+timeout 180s bash -c '
+  until curl --silent --show-error --fail --max-time 10 \
+    "$SMOKE_BASE_URL/health/ready" >"$SMOKE_DIR/ready.json"; do
+    sleep 2
+  done
+'
+timeout 30s env UV_CACHE_DIR=/tmp/dfpos-uv-cache uv run python - <<'PY'
+import json
+import os
+from pathlib import Path
+
+ready = json.loads((Path(os.environ["SMOKE_DIR"]) / "ready.json").read_text())
+assert ready["status"] == "ready", ready
+assert ready["mode"] == "primary", ready
+assert ready["engines"]["bambu"]["available"] is True, ready
+PY
+
+SLICE_STATUS="$(curl --silent --show-error --max-time 900 \
+  --request POST \
+  --header "Authorization: Bearer $SMOKE_TOKEN" \
+  --dump-header "$SMOKE_DIR/artifact.headers" \
+  --output "$SMOKE_DIR/artifact.gcode.3mf" \
+  --write-out '%{http_code}' \
+  --form "model_file=@$SMOKE_DIR/cube-over-spool-threshold.stl;type=model/stl" \
+  --form 'profile_name=bambu_a1' \
+  --form 'slicer_options={"material":"PLA","nozzle_diameter":"0.4"}' \
+  "$SMOKE_BASE_URL/api/v1/slice-artifact")"
+test "$SLICE_STATUS" = "200"
+
+timeout 30s env UV_CACHE_DIR=/tmp/dfpos-uv-cache uv run python - <<'PY'
+import base64
+import hashlib
+import json
+import os
+import zipfile
+from pathlib import Path
+
+root = Path(os.environ["SMOKE_DIR"])
+artifact = root / "artifact.gcode.3mf"
+headers = {}
+for line in (root / "artifact.headers").read_text(encoding="latin-1").splitlines():
+    if ":" in line:
+        key, value = line.split(":", 1)
+        headers[key.strip().lower()] = value.strip()
+encoded = headers["x-dfpos-slicer-metadata"]
+metadata = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+payload = artifact.read_bytes()
+assert metadata["success"] is True, metadata
+assert metadata["engine_key"] == "bambu", metadata
+assert metadata["direct_print_eligible"] is True, metadata
+assert metadata["estimate_only"] is False, metadata
+assert metadata["artifact_size"] == len(payload), metadata
+assert metadata["artifact_sha256"] == hashlib.sha256(payload).hexdigest(), metadata
+assert headers["content-type"].startswith("application/vnd.bambulab.gcode-3mf"), headers
+with zipfile.ZipFile(artifact) as archive:
+    assert any(name.startswith("Metadata/plate_") and name.endswith(".gcode") for name in archive.namelist())
+PY
+
+RANGE_STATUS="$(curl --silent --show-error --max-time 900 \
+  --request POST \
+  --header "Authorization: Bearer $SMOKE_TOKEN" \
+  --header 'Range: bytes=0-63' \
+  --dump-header "$SMOKE_DIR/range.headers" \
+  --output "$SMOKE_DIR/range.bin" \
+  --write-out '%{http_code}' \
+  --form "model_file=@$SMOKE_DIR/cube-over-spool-threshold.stl;type=model/stl" \
+  --form 'profile_name=bambu_a1' \
+  --form 'slicer_options={"material":"PLA","nozzle_diameter":"0.4"}' \
+  "$SMOKE_BASE_URL/api/v1/slice-artifact")"
+test "$RANGE_STATUS" = "206"
+timeout 30s env UV_CACHE_DIR=/tmp/dfpos-uv-cache uv run python - <<'PY'
+import os
+from pathlib import Path
+
+root = Path(os.environ["SMOKE_DIR"])
+assert (root / "range.bin").read_bytes() == (root / "artifact.gcode.3mf").read_bytes()[:64]
+headers = (root / "range.headers").read_text(encoding="latin-1").lower()
+assert "content-range: bytes 0-63/" in headers, headers
+assert "x-dfpos-slicer-metadata:" in headers, headers
+PY
+
+UNSATISFIABLE_STATUS="$(curl --silent --show-error --max-time 900 \
+  --request POST \
+  --header "Authorization: Bearer $SMOKE_TOKEN" \
+  --header 'Range: bytes=999999999999-' \
+  --output "$SMOKE_DIR/unsatisfiable.body" \
+  --write-out '%{http_code}' \
+  --form "model_file=@$SMOKE_DIR/cube-over-spool-threshold.stl;type=model/stl" \
+  --form 'profile_name=bambu_a1' \
+  --form 'slicer_options={"material":"PLA","nozzle_diameter":"0.4"}' \
+  "$SMOKE_BASE_URL/api/v1/slice-artifact")"
+test "$UNSATISFIABLE_STATUS" = "416"
+
+timeout 30s bash -c '
+  until docker exec "$SMOKE_CONTAINER" sh -ec \
+    '\''test -z "$(find /tmp -maxdepth 1 -type d -name "dfpos-slicer-request-*" -print -quit)"'\''; do
+    sleep 1
+  done
+'
+timeout 30s docker stop "$SMOKE_CONTAINER"
+timeout 30s docker rm "$SMOKE_CONTAINER"
+trap - EXIT INT TERM
+rm -rf -- "$SMOKE_DIR"
+```
+
+Expected: readiness reports Bambu primary; the upload is larger than Starlette's 1 MiB spool threshold; the normal response is a valid metadata-matched `.gcode.3mf`; the range response is HTTP 206 with the exact first 64 bytes; the unsatisfiable range is HTTP 416; no `dfpos-slicer-request-*` directory remains; and only the temporary smoke container/directory are removed. No Docker volume command or project database command is permitted.
+
+If readiness, slicing, range handling, metadata validation, or workspace cleanup times out/fails, the cleanup trap prints bounded container logs and any remaining request-workspace names before it removes the temporary container.
+
+**Step 9: Final evidence review**
 
 ```bash
 git log --oneline --decorate -15

@@ -176,3 +176,32 @@ async def test_lifespan_rejects_bad_configuration_before_runtime_construction(mo
             pass
 
     assert built is False
+
+
+async def test_lifespan_cleanup_shutdown_runs_when_job_shutdown_raises(monkeypatch: pytest.MonkeyPatch):
+    import app.main as main_module
+
+    calls: list[str] = []
+
+    class Jobs:
+        async def shutdown(self):
+            calls.append("jobs_failed")
+            raise RuntimeError("job shutdown failed")
+
+    class Cleanup:
+        async def shutdown(self):
+            calls.append("cleanup_drained")
+
+    class Runtime:
+        jobs = Jobs()
+        cleanup = Cleanup()
+
+    monkeypatch.setattr(type(main_module.settings), "validate_for_startup", lambda _self: None)
+    monkeypatch.setattr(main_module, "build_slicer_runtime", Runtime)
+    app = main_module.create_app()
+
+    with pytest.raises(RuntimeError, match="job shutdown failed"):
+        async with app.router.lifespan_context(app):
+            pass
+
+    assert calls == ["jobs_failed", "cleanup_drained"]

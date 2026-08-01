@@ -24,8 +24,10 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await runtime.jobs.shutdown()
-        await runtime.cleanup.shutdown()
+        try:
+            await runtime.jobs.shutdown()
+        finally:
+            await runtime.cleanup.shutdown()
 
 
 def create_app() -> FastAPI:
