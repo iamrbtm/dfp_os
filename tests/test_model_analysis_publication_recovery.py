@@ -5,11 +5,21 @@ import inspect
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from app.models import AnalysisRunStatus, AssetKind, Product, ProductAnalysisRun
+import pytest
+
+from app.models import (
+    AnalysisRunStatus,
+    AssetKind,
+    Product,
+    ProductAnalysisRun,
+    ProductModelAsset,
+)
 from app.services.product_analysis import (
+    ACTIVE_ANALYSIS_STATES,
     claim_analysis_run,
     lock_current_analysis_run_for_publish,
     requeue_analysis_run,
+    retire_current_gcode_assets,
 )
 from app.tasks import model_analysis as analysis_task
 from app.tasks.model_analysis import (
@@ -158,10 +168,11 @@ def test_claim_rejects_noncurrent_queued_run():
     assert session.events[-1] == "rollback"
 
 
-def test_claim_reclaims_only_a_stale_started_lease():
+@pytest.mark.parametrize("status", sorted(ACTIVE_ANALYSIS_STATES, key=lambda item: item.value))
+def test_claim_reclaims_each_stale_active_lease(status):
     now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
     stale = _run(
-        status=AnalysisRunStatus.STARTED,
+        status=status,
         updated_at=now - timedelta(minutes=16),
     )
     product = SimpleNamespace(id=7, analysis_status="analyzing")
@@ -172,10 +183,15 @@ def test_claim_reclaims_only_a_stale_started_lease():
     assert stale.updated_at == now
     assert session.events[-1] == "commit"
 
+
+@pytest.mark.parametrize("status", sorted(ACTIVE_ANALYSIS_STATES, key=lambda item: item.value))
+def test_claim_rejects_each_fresh_active_lease(status):
+    now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
     active = _run(
-        status=AnalysisRunStatus.STARTED,
+        status=status,
         updated_at=now - timedelta(minutes=14),
     )
+    product = SimpleNamespace(id=7, analysis_status="analyzing")
     active_session = _ClaimSession(active, product)
     assert claim_analysis_run(7, 19, session=active_session, now=now) is None
     assert active_session.events[-1] == "rollback"
@@ -183,22 +199,60 @@ def test_claim_reclaims_only_a_stale_started_lease():
 
 def test_requeue_exact_run_before_retry_but_never_reopens_terminal_runs():
     product = SimpleNamespace(id=7, analysis_status="failed", analysis_error="boom")
-    failed = _run(status=AnalysisRunStatus.FAILED)
-    session = _ClaimSession(failed, product)
+    slicing = _run(status=AnalysisRunStatus.SLICING)
+    session = _ClaimSession(slicing, product)
 
     assert requeue_analysis_run(7, 19, session=session) is True
-    assert failed.status == AnalysisRunStatus.QUEUED
-    assert failed.error is None
-    assert failed.completed_at is None
+    assert slicing.status == AnalysisRunStatus.QUEUED
+    assert slicing.error is None
+    assert slicing.completed_at is None
     assert product.analysis_status == "pending"
     assert session.events[-1] == "commit"
 
-    for status in (AnalysisRunStatus.COMPLETE, AnalysisRunStatus.SUPERSEDED):
+    for status in (
+        AnalysisRunStatus.COMPLETE,
+        AnalysisRunStatus.SUPERSEDED,
+        AnalysisRunStatus.FAILED,
+    ):
         terminal = _run(status=status)
         terminal_session = _ClaimSession(terminal, product)
         assert requeue_analysis_run(7, 19, session=terminal_session) is False
         assert terminal.status == status
         assert terminal_session.events[-1] == "rollback"
+
+
+class _RetireQuery:
+    def __init__(self) -> None:
+        self.updated = None
+
+    def filter(self, *criteria):
+        return self
+
+    def update(self, values, synchronize_session=False):
+        self.updated = values
+        return 1
+
+
+class _RetireSession:
+    def __init__(self) -> None:
+        self.query_value = _RetireQuery()
+        self.added = []
+
+    def query(self, model):
+        return self.query_value
+
+    def add(self, value):
+        self.added.append(value)
+
+
+def test_retain_gcode_false_clears_legacy_pointer_and_stales_only_gcode_query():
+    product = SimpleNamespace(id=7, gcode_path="old.gcode")
+    session = _RetireSession()
+
+    assert retire_current_gcode_assets(product, session=session) == 1
+    assert product.gcode_path is None
+    assert session.query_value.updated == {ProductModelAsset.is_current: False}
+    assert session.added == [product]
 
 
 class _PublishQuery:

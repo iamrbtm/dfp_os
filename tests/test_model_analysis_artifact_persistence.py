@@ -231,6 +231,19 @@ def test_analysis_retains_fallback_metadata_without_artifact_when_disabled(
 ):
     with app.app_context():
         product_id, run_id = _product_with_run(tmp_path, retain_gcode=False)
+        product = db.session.get(Product, product_id)
+        previous_gcode = create_model_asset(
+            product,
+            storage_reference=str(tmp_path / "previous.gcode.3mf"),
+            original_filename="previous.gcode.3mf",
+            safe_filename="previous.gcode.3mf",
+            content_type="application/vnd.bambulab.gcode-3mf",
+            size_bytes=8,
+            sha256="e" * 64,
+            asset_kind=AssetKind.GCODE,
+        )
+        product.gcode_path = previous_gcode.storage_reference
+        db.session.commit()
         result, _, slicer_call, snapshot = _run_analysis(
             monkeypatch, product_id, run_id, _prusa_fallback_result
         )
@@ -243,11 +256,19 @@ def test_analysis_retains_fallback_metadata_without_artifact_when_disabled(
         assert snapshot.call_count == 1
         assert run.gcode_asset_id is None
         assert product.gcode_path is None
+        db.session.refresh(previous_gcode)
+        source = ProductModelAsset.query.filter_by(
+            product_id=product_id,
+            asset_kind=AssetKind.SOURCE_MODEL,
+        ).one()
+        assert previous_gcode.is_current is False
+        assert source.is_current is True
         assert (
             ProductModelAsset.query.filter_by(
-                product_id=product_id, asset_kind=AssetKind.GCODE
+                product_id=product_id,
+                asset_kind=AssetKind.GCODE,
             ).count()
-            == 0
+            == 1
         )
         assert run.slicer_stats_json["engine_key"] == "prusa"
         assert run.slicer_stats_json["fallback_used"] is True

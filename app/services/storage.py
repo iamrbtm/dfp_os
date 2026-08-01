@@ -6,7 +6,7 @@ import mimetypes
 import shutil
 import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
 import boto3
@@ -293,6 +293,35 @@ def product_asset_key(product_id: int, filename: str) -> str:
 
 def product_storage_key(product_id: int, filename: str) -> str:
     return product_asset_key(product_id, filename)
+
+
+def normalize_product_asset_name(product_id: int, filename: str) -> str | None:
+    """Validate an authorized product-relative asset name.
+
+    Root assets remain supported alongside the two generated historical
+    namespaces. Anything else must not be translated into a storage reference.
+    """
+    if product_id <= 0 or not filename or "\\" in filename or "\x00" in filename:
+        return None
+    path = PurePosixPath(filename)
+    if path.is_absolute() or path.as_posix() != filename:
+        return None
+    parts = path.parts
+    if any(part in {"", ".", ".."} or secure_filename(part) != part for part in parts):
+        return None
+    if len(parts) == 1:
+        return filename
+    if len(parts) == 2 and parts[0] == "legacy-migration":
+        return filename
+    if (
+        len(parts) == 3
+        and parts[0] == "analysis-runs"
+        and parts[1].isdigit()
+        and int(parts[1]) > 0
+        and str(int(parts[1])) == parts[1]
+    ):
+        return filename
+    return None
 
 
 def converted_storage_key(product_id: int, filename: str) -> str:

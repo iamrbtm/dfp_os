@@ -42,6 +42,7 @@ from app.services.product_analysis import (
     lock_current_analysis_run_for_publish,
     publish_run_results,
     requeue_analysis_run,
+    retire_current_gcode_assets,
     sanitize_analysis_config,
     set_run_status,
 )
@@ -844,6 +845,8 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
             _record_analysis_step(
                 self, product, step="gcode_stored", percent=80, message="G-code stored"
             )
+        else:
+            retire_current_gcode_assets(product)
 
         slicer_stats = {
             "success": True,

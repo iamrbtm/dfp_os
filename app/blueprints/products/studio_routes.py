@@ -4,7 +4,7 @@ import io
 import json
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from flask import (
     abort,
@@ -73,7 +73,6 @@ from app.services.product_ops import (
     update_story_card,
 )
 from app.services.storage import (
-    build_s3_reference,
     content_type_for_name,
     delete_storage_reference,
     download_storage_bytes,
@@ -82,6 +81,7 @@ from app.services.storage import (
     list_product_assets,
     materialize_storage_reference,
     normalize_storage_filename,
+    normalize_product_asset_name,
     product_storage_key,
     send_storage_reference,
     storage_reference_name,
@@ -805,6 +805,8 @@ def _asset_kind(filename: str) -> str:
     name = filename.lower()
     if name.endswith(".metadata.json"):
         return "metadata"
+    if name.endswith(".gcode.3mf"):
+        return "gcode"
     extension = Path(name).suffix
     if extension in {".stl", ".3mf", ".obj", ".gltf"}:
         return "model"
@@ -821,39 +823,45 @@ def _asset_kind(filename: str) -> str:
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def download_product_asset(product_id: int, filename: str):
     product = get_by_id(Product, product_id)
-    if product is None or Path(filename).name != filename:
+    safe_name = normalize_product_asset_name(product_id, filename)
+    if product is None or safe_name is None:
         abort(404)
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
-    reference = (
-        build_s3_reference(bucket, product_storage_key(product.id, filename))
-        if current_app.config.get("FILE_STORAGE_BACKEND", "local").lower() == "s3"
-        else str((Path(local_root) / product_storage_key(product.id, filename)).resolve())
+    assets = list_product_assets(product.id, bucket=bucket, local_root=local_root)
+    asset = next((item for item in assets if item["name"] == safe_name), None)
+    if asset is None:
+        abort(404)
+    return send_storage_reference(
+        asset["reference"],
+        download_name=safe_name,
+        as_attachment=True,
     )
-    return send_storage_reference(reference, download_name=filename, as_attachment=True)
 
 
 @bp.route("/studio/<int:product_id>/assets/<path:filename>", methods=["DELETE"])
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def delete_product_asset(product_id: int, filename: str):
     product = get_by_id(Product, product_id)
-    if product is None or Path(filename).name != filename:
+    safe_name = normalize_product_asset_name(product_id, filename)
+    if product is None or safe_name is None:
         abort(404)
 
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
     assets = list_product_assets(product.id, bucket=bucket, local_root=local_root)
-    asset = next((item for item in assets if item["name"] == filename), None)
+    asset = next((item for item in assets if item["name"] == safe_name), None)
     if asset is None:
         return jsonify({"success": False, "error": "Asset not found"}), 404
 
     reference = asset["reference"]
-    kind = _asset_kind(filename)
+    kind = _asset_kind(safe_name)
     deleted_references = [reference]
     delete_storage_reference(reference)
 
     metadata_deleted = kind == "metadata"
-    sidecar_name = f"{Path(filename).stem}.metadata.json"
+    asset_path = PurePosixPath(safe_name)
+    sidecar_name = (asset_path.parent / f"{asset_path.stem}.metadata.json").as_posix()
     sidecar = next((item for item in assets if item["name"] == sidecar_name), None)
     if kind in {"model", "preview", "gcode"} and sidecar and sidecar["reference"] != reference:
         delete_storage_reference(sidecar["reference"])
@@ -907,9 +915,9 @@ def delete_product_asset(product_id: int, filename: str):
         tenant_id=str(product.business_id) if product.business_id else None,
         before_state={"references": deleted_references},
         after_state={},
-        metadata={"filename": filename, "kind": kind, "metadata_deleted": metadata_deleted},
+        metadata={"filename": safe_name, "kind": kind, "metadata_deleted": metadata_deleted},
     )
-    return jsonify({"success": True, "deleted": filename, "metadata_deleted": metadata_deleted})
+    return jsonify({"success": True, "deleted": safe_name, "metadata_deleted": metadata_deleted})
 
 
 @bp.route("/studio/<int:product_id>/calculate-costs", methods=["POST"])

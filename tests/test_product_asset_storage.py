@@ -11,6 +11,7 @@ from app.services.storage import (
     list_product_assets,
     metadata_storage_key,
     normalize_storage_filename,
+    normalize_product_asset_name,
     product_storage_key,
     planned_storage_reference,
     storage_slug,
@@ -101,6 +102,36 @@ def test_local_product_asset_listing_recurses_nested_run_keys_without_symlink_es
 
     assert [asset["name"] for asset in assets] == ["analysis-runs/101/dragon.gcode.3mf"]
     assert assets[0]["reference"] == str((nested / "dragon.gcode.3mf").resolve())
+
+
+def test_product_asset_name_allows_root_legacy_and_numeric_analysis_run_paths():
+    assert normalize_product_asset_name(14, "dragon.stl") == "dragon.stl"
+    assert (
+        normalize_product_asset_name(14, "analysis-runs/101/dragon.gcode.3mf")
+        == "analysis-runs/101/dragon.gcode.3mf"
+    )
+    assert (
+        normalize_product_asset_name(14, "legacy-migration/dragon.gcode")
+        == "legacy-migration/dragon.gcode"
+    )
+
+
+def test_product_asset_name_rejects_traversal_absolute_and_foreign_product_paths():
+    rejected = (
+        "../dragon.stl",
+        "/etc/passwd",
+        "analysis-runs/101/../../dragon.stl",
+        "analysis-runs/not-a-run/dragon.gcode",
+        "analysis-runs/101/nested/dragon.gcode",
+        "analysis-runs/0101/dragon.gcode",
+        "legacy-migration/nested/dragon.gcode",
+        "products/15/dragon.stl",
+        "products/14/dragon.stl",
+        r"analysis-runs\101\dragon.gcode",
+    )
+
+    for name in rejected:
+        assert normalize_product_asset_name(14, name) is None
 
 
 def test_analysis_output_filenames_follow_product_convention():

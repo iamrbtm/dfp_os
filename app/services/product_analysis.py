@@ -76,6 +76,15 @@ def sanitize_analysis_config(config: dict | None) -> dict:
 STALE_ASSET_RETENTION_DAYS = 30
 STALE_ASSET_POLICY = "archive_after_retention"
 ANALYSIS_LEASE_TIMEOUT = timedelta(minutes=15)
+ACTIVE_ANALYSIS_STATES: frozenset[AnalysisRunStatus] = frozenset(
+    {
+        AnalysisRunStatus.STARTED,
+        AnalysisRunStatus.VALIDATING,
+        AnalysisRunStatus.SLICING,
+        AnalysisRunStatus.STORING_GCODE,
+        AnalysisRunStatus.COSTING,
+    }
+)
 
 
 def stale_asset_age_days(asset: ProductModelAsset) -> int | None:
@@ -260,16 +269,16 @@ def claim_analysis_run(
     updated_at = run.updated_at if run is not None else None
     if updated_at is not None and updated_at.tzinfo is None:
         updated_at = updated_at.replace(tzinfo=timezone.utc)
-    stale_started = bool(
+    stale_active = bool(
         run
-        and run.status == AnalysisRunStatus.STARTED
+        and run.status in ACTIVE_ANALYSIS_STATES
         and updated_at is not None
         and updated_at <= now - lease_timeout
     )
     if (
         run is None
         or run.product_id != product_id
-        or (run.status != AnalysisRunStatus.QUEUED and not stale_started)
+        or (run.status != AnalysisRunStatus.QUEUED and not stale_active)
         or not run.is_current
     ):
         session.rollback()
@@ -310,7 +319,7 @@ def requeue_analysis_run(
     if (
         run is None
         or not run.is_current
-        or run.status in {AnalysisRunStatus.COMPLETE, AnalysisRunStatus.SUPERSEDED}
+        or (run.status != AnalysisRunStatus.QUEUED and run.status not in ACTIVE_ANALYSIS_STATES)
     ):
         session.rollback()
         return False
@@ -324,6 +333,30 @@ def requeue_analysis_run(
     session.flush()
     session.commit()
     return True
+
+
+def retire_current_gcode_assets(
+    product: Product,
+    *,
+    session: Any | None = None,
+) -> int:
+    """Clear backward G-code state when a successful run retains no artifact."""
+    session = session or db.session
+    updated = (
+        session.query(ProductModelAsset)
+        .filter(
+            ProductModelAsset.product_id == product.id,
+            ProductModelAsset.asset_kind == AssetKind.GCODE,
+            ProductModelAsset.is_current.is_(True),
+        )
+        .update(
+            {ProductModelAsset.is_current: False},
+            synchronize_session=False,
+        )
+    )
+    product.gcode_path = None
+    session.add(product)
+    return updated
 
 
 def lock_current_analysis_run_for_publish(
@@ -525,6 +558,7 @@ def is_analysis_in_progress(product: Product) -> bool:
 
 __all__ = [
     "MODEL_ANALYSIS_CONFIG_SCHEMA",
+    "ACTIVE_ANALYSIS_STATES",
     "STALE_ASSET_RETENTION_DAYS",
     "STALE_ASSET_POLICY",
     "ANALYSIS_SUMMARY_FIELDS",
@@ -537,6 +571,7 @@ __all__ = [
     "lock_product_for_analysis",
     "claim_analysis_run",
     "requeue_analysis_run",
+    "retire_current_gcode_assets",
     "lock_current_analysis_run_for_publish",
     "is_current_run",
     "get_current_run",
