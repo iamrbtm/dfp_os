@@ -56,10 +56,20 @@ def test_nested_analysis_asset_download_uses_authorized_listed_reference(tmp_pat
     assert result == (reference, name)
 
 
-def test_nested_analysis_asset_delete_uses_authorized_listed_reference(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "name",
+    (
+        "analysis-runs/101/dragon.gcode.3mf",
+        "analysis-runs/101/dragon.gcode.metadata.json",
+    ),
+)
+def test_nested_analysis_asset_delete_is_blocked_to_preserve_run_history(
+    tmp_path,
+    monkeypatch,
+    name,
+):
     app = _app(tmp_path)
     product = _product()
-    name = "analysis-runs/101/dragon.gcode.3mf"
     reference = str((tmp_path / "products/14" / name).resolve())
     deleted: list[str] = []
     audits: list[dict] = []
@@ -79,15 +89,15 @@ def test_nested_analysis_asset_delete_uses_authorized_listed_reference(tmp_path,
     )
 
     with app.test_request_context(f"/studio/14/assets/{name}"):
-        response = studio_routes.delete_product_asset.__wrapped__(14, name)
+        response, status = studio_routes.delete_product_asset.__wrapped__(14, name)
 
     assert response.get_json() == {
-        "success": True,
-        "deleted": name,
-        "metadata_deleted": False,
+        "success": False,
+        "error": "Analysis-run artifacts are retained with their run history and cannot be deleted.",
     }
-    assert deleted == [reference]
-    assert audits[0]["metadata"]["kind"] == "gcode"
+    assert status == 409
+    assert deleted == []
+    assert audits == []
 
 
 @pytest.mark.parametrize(

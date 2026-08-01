@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import inspect
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -18,6 +19,7 @@ from app.services.product_analysis import (
     ACTIVE_ANALYSIS_STATES,
     claim_analysis_run,
     lock_current_analysis_run_for_publish,
+    publish_run_results,
     requeue_analysis_run,
     retire_current_gcode_assets,
 )
@@ -100,6 +102,70 @@ def _run(
         completed_at=None,
         error=None,
     )
+
+
+def test_active_analysis_states_include_conversion_dispatch_phase():
+    assert AnalysisRunStatus.CONVERTING in ACTIVE_ANALYSIS_STATES
+
+
+def test_claim_reclaims_stale_converting_run():
+    now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+    stale = _run(
+        status=AnalysisRunStatus.CONVERTING,
+        updated_at=now - timedelta(minutes=16),
+    )
+    product = SimpleNamespace(id=7, analysis_status="analyzing")
+    session = _ClaimSession(stale, product)
+
+    assert claim_analysis_run(7, 19, session=session, now=now) is stale
+    assert stale.status == AnalysisRunStatus.STARTED
+    assert stale.updated_at == now
+    assert session.events[-1] == "commit"
+
+
+def test_claim_rejects_fresh_converting_run():
+    now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+    active = _run(
+        status=AnalysisRunStatus.CONVERTING,
+        updated_at=now - timedelta(minutes=14),
+    )
+    product = SimpleNamespace(id=7, analysis_status="analyzing")
+    session = _ClaimSession(active, product)
+    assert claim_analysis_run(7, 19, session=session, now=now) is None
+    assert session.events[-1] == "rollback"
+
+
+def test_publish_lock_refuses_to_reopen_terminal_completed_run():
+    product = SimpleNamespace(id=7)
+    run = _run(status=AnalysisRunStatus.COMPLETE)
+    session = _PublishSession(product, run, [run])
+
+    assert lock_current_analysis_run_for_publish(7, 19, session=session) is None
+
+
+def test_publish_lock_refuses_to_reopen_terminal_failed_run():
+    product = SimpleNamespace(id=7)
+    run = _run(status=AnalysisRunStatus.FAILED)
+    session = _PublishSession(product, run, [run])
+
+    assert lock_current_analysis_run_for_publish(7, 19, session=session) is None
+
+
+def test_publish_refuses_to_overwrite_current_completed_run():
+    product = SimpleNamespace(id=7, analysis_status="complete")
+    run = _run(status=AnalysisRunStatus.COMPLETE, is_current=True)
+
+    published = publish_run_results(
+        run,
+        product,
+        parsed_filament_grams=Decimal("999.00"),
+        parsed_print_minutes=Decimal("999.00"),
+        already_locked=True,
+    )
+
+    assert published is False
+    assert run.status == AnalysisRunStatus.COMPLETE
+    assert product.analysis_status == "complete"
 
 
 def test_claim_locks_exact_queued_run_and_transitions_once():

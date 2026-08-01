@@ -818,17 +818,19 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
         if gcode_path is None or not gcode_path.is_file():
             raise ValueError("Slicer service did not return a readable artifact")
 
-        set_run_status(run, AnalysisRunStatus.STORING_GCODE)
-        db.session.commit()
-
-        # Lock and refresh the current run before creating a current generated
-        # asset. The lock is held through publish + commit so a newer upload
-        # cannot interleave and leave this superseded run's G-code current.
+        # Lock and refresh the current run before writing post-slice status
+        # or creating a current generated asset. The lock is held through
+        # publish + commit so a newer upload cannot interleave, and a run
+        # another worker has already driven to a terminal state cannot be
+        # reopened by the stale worker that lost its lease.
         locked_publication = lock_current_analysis_run_for_publish(product_id, run_id)
         if locked_publication is None:
             db.session.rollback()
             return task_envelope(False, error="superseded by a newer upload")
         product, run = locked_publication
+
+        set_run_status(run, AnalysisRunStatus.STORING_GCODE)
+        db.session.commit()
 
         gcode_asset = None
         product.model_analysis_config = sanitize_analysis_config(analysis_config)

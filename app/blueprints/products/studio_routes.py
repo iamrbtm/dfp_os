@@ -77,6 +77,7 @@ from app.services.storage import (
     delete_storage_reference,
     download_storage_bytes,
     image_storage_key,
+    is_analysis_run_asset_name,
     is_s3_reference,
     list_product_assets,
     materialize_storage_reference,
@@ -846,6 +847,17 @@ def delete_product_asset(product_id: int, filename: str):
     safe_name = normalize_product_asset_name(product_id, filename)
     if product is None or safe_name is None:
         abort(404)
+
+    if is_analysis_run_asset_name(safe_name):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Analysis-run artifacts are retained with their run history and cannot be deleted.",
+                }
+            ),
+            409,
+        )
 
     bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
     local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")

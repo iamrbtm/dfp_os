@@ -287,6 +287,23 @@ def storage_slug(value: str | None, *, fallback: str = "file") -> str:
     return slug or fallback
 
 
+def is_analysis_run_asset_name(filename: str) -> bool:
+    """True for a valid run-scoped generated asset like analysis-runs/<id>/file."""
+    if not filename or "\\" in filename or "\x00" in filename:
+        return False
+    path = PurePosixPath(filename)
+    if path.is_absolute() or path.as_posix() != filename:
+        return False
+    parts = path.parts
+    return (
+        len(parts) == 3
+        and parts[0] == "analysis-runs"
+        and parts[1].isdigit()
+        and int(parts[1]) > 0
+        and str(int(parts[1])) == parts[1]
+    )
+
+
 def product_asset_key(product_id: int, filename: str) -> str:
     return f"products/{product_id}/{filename}"
 

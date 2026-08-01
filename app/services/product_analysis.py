@@ -83,6 +83,14 @@ ACTIVE_ANALYSIS_STATES: frozenset[AnalysisRunStatus] = frozenset(
         AnalysisRunStatus.SLICING,
         AnalysisRunStatus.STORING_GCODE,
         AnalysisRunStatus.COSTING,
+        AnalysisRunStatus.CONVERTING,
+    }
+)
+TERMINAL_ANALYSIS_STATES: frozenset[AnalysisRunStatus] = frozenset(
+    {
+        AnalysisRunStatus.COMPLETE,
+        AnalysisRunStatus.FAILED,
+        AnalysisRunStatus.SUPERSEDED,
     }
 )
 
@@ -392,6 +400,8 @@ def lock_current_analysis_run_for_publish(
     )
     if run is None or not run.is_current or len(current_runs) != 1 or current_runs[0].id != run_id:
         return None
+    if run.status in TERMINAL_ANALYSIS_STATES:
+        return None
     return product, run
 
 
@@ -477,6 +487,9 @@ def publish_run_results(
         session.add(run)
         return False
 
+    if run.status in TERMINAL_ANALYSIS_STATES:
+        return False
+
     if geometry is not None:
         run.geometry_json = geometry
     if slicer_stats is not None:
@@ -559,6 +572,7 @@ def is_analysis_in_progress(product: Product) -> bool:
 __all__ = [
     "MODEL_ANALYSIS_CONFIG_SCHEMA",
     "ACTIVE_ANALYSIS_STATES",
+    "TERMINAL_ANALYSIS_STATES",
     "STALE_ASSET_RETENTION_DAYS",
     "STALE_ASSET_POLICY",
     "ANALYSIS_SUMMARY_FIELDS",
