@@ -189,6 +189,25 @@ def apply_scale(mesh_or_path: object, scale_percent: float | int | str | None) -
     return loaded
 
 
+def normalize_scale_percent(value: object) -> int | None:
+    """Coerce a scale-percent value to a whole int for the cost snapshot schema.
+
+    The studio stores ``scale_percent`` as a stringified Decimal (e.g.
+    ``"100.00"``); ``CostSnapshot.scale_percent`` is an int column, and
+    ``int("100.00")`` raises ``ValueError``. Coerce through ``Decimal`` so any
+    numeric spelling works. ``None``/empty/unparsable values return ``None``.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    if text in {"", "None", "NaN", "nan", "inf", "-inf"}:
+        return None
+    try:
+        return int(Decimal(text))
+    except (ArithmeticError, ValueError, TypeError):
+        return None
+
+
 def validate_model_file(file_path: str | Path) -> ValidationResult:
     result = ValidationResult()
 
