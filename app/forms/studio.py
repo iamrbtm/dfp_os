@@ -14,7 +14,14 @@ from wtforms import (
     SubmitField,
     TextAreaField,
 )
-from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional
+from wtforms.validators import (
+    DataRequired,
+    InputRequired,
+    Length,
+    NumberRange,
+    Optional,
+    ValidationError,
+)
 
 from app.forms.common import OptionalSelectField, enum_choices
 from app.models import (
@@ -229,6 +236,8 @@ class ProductStudioForm(FlaskForm):
 
 
 class ProductModelUploadForm(FlaskForm):
+    FIXED_NOZZLE_DIAMETER = "0.4"
+
     model_file = FileField(
         "3D Model File",
         validators=[
@@ -243,9 +252,9 @@ class ProductModelUploadForm(FlaskForm):
     printer_profile = SelectField(
         "Printer profile",
         choices=[
-            ("bambu_a1.ini", "Bambu A1"),
-            ("bambu_x1c.ini", "Bambu X1 Carbon"),
-            ("bambu_p1p.ini", "Bambu P1P"),
+            ("bambu_a1", "Bambu A1"),
+            ("bambu_x1c", "Bambu X1 Carbon"),
+            ("bambu_p1p", "Bambu P1P"),
         ],
         validators=[DataRequired()],
     )
@@ -259,11 +268,17 @@ class ProductModelUploadForm(FlaskForm):
         default=Decimal("1.24"),
         validators=[InputRequired(), NumberRange(min=0.5, max=3)],
     )
-    nozzle_diameter = DecimalField(
+    nozzle_diameter = SelectField(
         "Nozzle diameter (mm)",
-        default=Decimal("0.4"),
-        validators=[InputRequired(), NumberRange(min=0.1, max=2)],
+        choices=[("0.4", "0.4 mm")],
+        default="0.4",
+        validators=[DataRequired()],
     )
+
+    def validate_nozzle_diameter(self, field):
+        if field.data != self.FIXED_NOZZLE_DIAMETER:
+            raise ValidationError("Nozzle diameter must be 0.4 mm for this slicing profile matrix.")
+
     layer_height = DecimalField(
         "Layer height (mm)",
         default=Decimal("0.2"),

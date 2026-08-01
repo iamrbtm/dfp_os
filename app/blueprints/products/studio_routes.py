@@ -30,6 +30,7 @@ from app.models import (
     CostSnapshot,
     DeadStockRecommendation,
     Product,
+    ProductAnalysisRun,
     ProductImage,
     ProductLaunchChecklistItem,
     ProductPhotoShot,
@@ -172,6 +173,7 @@ def _render_studio(
     launch_items = []
     photo_shots = []
     dead_stock_recommendations = []
+    current_analysis_run = None
     if product:
         ensure_product_ops_defaults(product)
         launch_items = sync_launch_checklist(product)
@@ -182,6 +184,13 @@ def _render_studio(
             .order_by(DeadStockRecommendation.created_at.desc())
             .limit(5)
             .all()
+        )
+        current_analysis_run = (
+            next(
+                (run for run in product.analysis_runs if run.is_current),
+                None,
+            )
+            or ProductAnalysisRun.query.filter_by(product_id=product.id, is_current=True).first()
         )
         db.session.commit()
     return (
@@ -199,6 +208,7 @@ def _render_studio(
             launch_items=launch_items,
             photo_shots=photo_shots,
             dead_stock_recommendations=dead_stock_recommendations,
+            current_analysis_run=current_analysis_run,
             storage_reference_name=storage_reference_name,
             cost_defaults=global_cost_defaults(),
             ai_story_card_enabled=bool(
@@ -497,8 +507,10 @@ def upload_model(product_id: int):
     if not upload_form.validate_on_submit():
         errors = []
         for field, field_errors in upload_form.errors.items():
+            field_obj = getattr(upload_form, field, None)
+            field_label = field_obj.label.text if field_obj is not None else field
             for err in field_errors:
-                errors.append(f"{field}: {err}")
+                errors.append(f"{field_label}: {err}")
         return jsonify({"success": False, "error": "; ".join(errors)}), 400
 
     file = upload_form.model_file.data

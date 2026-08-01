@@ -8,8 +8,71 @@ from PIL import Image
 
 from app.blueprints.products import studio_routes
 from app.extensions import db
-from app.models import CostSnapshot, ProductImage
+from app.models import (
+    AnalysisRunStatus,
+    CostSnapshot,
+    LicenseStatus,
+    ModelSourceType,
+    Product,
+    ProductAnalysisRun,
+    ProductImage,
+    ProductStatus,
+    ProductType,
+)
 from app.services.image_validation import validate_image_file
+
+
+def test_product_studio_renders_current_analysis_engine_metadata(
+    app, client, login_admin, monkeypatch
+):
+    product = Product(
+        id=123,
+        name="Metadata Dragon",
+        slug="metadata-dragon",
+        sku_base="META-DRAGON",
+        product_type=ProductType.FINISHED_GOOD,
+        status=ProductStatus.ACTIVE,
+        license_status=LicenseStatus.UNKNOWN,
+        model_source_type=ModelSourceType.UNKNOWN,
+        model_file_path="local://products/part.stl",
+    )
+    product.analysis_runs.append(
+        ProductAnalysisRun(
+            product_id=123,
+            source_asset_id=1,
+            status=AnalysisRunStatus.COMPLETE,
+            is_current=True,
+            slicer_stats_json={
+                "engine_name": "Bambu Studio",
+                "engine_version": "2.7.1.62",
+                "profile_ids": {
+                    "machine": "Bambu Lab A1 0.4 nozzle",
+                    "process": "0.20mm Standard @BBL A1",
+                    "filament": "Generic PLA @BBL A1",
+                },
+                "artifact_media_type": "application/vnd.ms-package.3dmanufacturing-3dmodel+xml",
+                "direct_print_eligible": True,
+                "fallback_used": False,
+                "primary_failure": None,
+            },
+        )
+    )
+    monkeypatch.setattr(studio_routes, "ensure_product_ops_defaults", lambda product: None)
+    monkeypatch.setattr(studio_routes, "sync_launch_checklist", lambda product: [])
+    monkeypatch.setattr(studio_routes, "calculate_product_readiness", lambda product: {})
+    monkeypatch.setattr(studio_routes, "_load_products", lambda: [product])
+    monkeypatch.setattr(studio_routes, "get_by_id", lambda model, resource_id: product)
+
+    response = client.get("/products/studio/123")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Bambu Studio" in html
+    assert "2.7.1.62" in html
+    assert "Bambu Lab A1 0.4 nozzle" in html
+    assert "0.20mm Standard @BBL A1" in html
+    assert "Generic PLA @BBL A1" in html
+    assert "Native .gcode.3mf" in html
+    assert "Direct print eligible" in html
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +145,9 @@ class _FakeCelery:
 def test_task_status_failed_analysis_envelope(app, client, login_admin, monkeypatch):
     # A task that finished (Celery SUCCESS) but returned success:false must be
     # reported as a failure, not "complete".
-    fake = _FakeCelery(_FakeResult("SUCCESS", result={"success": False, "data": None, "error": "boom"}))
+    fake = _FakeCelery(
+        _FakeResult("SUCCESS", result={"success": False, "data": None, "error": "boom"})
+    )
     monkeypatch.setattr(studio_routes, "_get_celery", lambda: fake)
 
     r = client.get("/products/studio/task-status/abc")
@@ -94,7 +159,9 @@ def test_task_status_failed_analysis_envelope(app, client, login_admin, monkeypa
 
 
 def test_task_status_success_envelope(app, client, login_admin, monkeypatch):
-    fake = _FakeCelery(_FakeResult("SUCCESS", result={"success": True, "data": {"x": 1}, "error": ""}))
+    fake = _FakeCelery(
+        _FakeResult("SUCCESS", result={"success": True, "data": {"x": 1}, "error": ""})
+    )
     monkeypatch.setattr(studio_routes, "_get_celery", lambda: fake)
 
     r = client.get("/products/studio/task-status/abc")

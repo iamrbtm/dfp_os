@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 from app.extensions import db
@@ -64,7 +65,10 @@ def sanitize_analysis_config(config: dict | None) -> dict:
     """Return only the allowed scalar keys (Issue 40)."""
     if not config:
         return {}
-    return {key: value for key, value in config.items() if key in MODEL_ANALYSIS_CONFIG_SCHEMA}
+    sanitized = {key: value for key, value in config.items() if key in MODEL_ANALYSIS_CONFIG_SCHEMA}
+    if sanitized.get("printer_profile"):
+        sanitized["printer_profile"] = Path(str(sanitized["printer_profile"])).stem
+    return sanitized
 
 
 # ---------------------------------------------------------------------------

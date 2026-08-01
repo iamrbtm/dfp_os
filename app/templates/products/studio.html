@@ -532,6 +532,56 @@
               {% if product.analysis_error %}
               <p class="text-xs" style="color: var(--color-danger);">{{ product.analysis_error }}</p>
               {% endif %}
+
+              {% set analysis_stats = current_analysis_run.slicer_stats_json if current_analysis_run and current_analysis_run.slicer_stats_json else none %}
+              {% if analysis_stats %}
+              {% set profile_ids = analysis_stats.get('profile_ids') or {} %}
+              {% set media_type = analysis_stats.get('artifact_media_type') or '' %}
+              {% set artifact_label = 'Native .gcode.3mf' if '3dmanufacturing' in media_type else 'Estimate-only .gcode' if 'gcode' in media_type else (analysis_stats.get('artifact_filename') or 'Slicer artifact') %}
+              <div class="mt-4 rounded-2xl border p-4" style="border-color: var(--color-border); background: var(--color-bg-surface-soft);">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-semibold" style="color: var(--color-text);">Current slicing result</p>
+                    <p class="mt-1 text-xs" style="color: var(--color-text-muted);">
+                      {{ analysis_stats.get('engine_name') or 'Unknown engine' }}{% if analysis_stats.get('engine_version') %} {{ analysis_stats.get('engine_version') }}{% endif %}
+                    </p>
+                  </div>
+                  <span class="rounded-full border px-3 py-1 text-xs font-semibold" style="border-color: var(--color-border); color: var(--color-text);">
+                    {{ 'Direct print eligible' if analysis_stats.get('direct_print_eligible') else 'Estimate only' }}
+                  </span>
+                </div>
+
+                <dl class="mt-4 grid gap-3 text-xs sm:grid-cols-2" style="color: var(--color-text-muted);">
+                  <div>
+                    <dt class="font-semibold" style="color: var(--color-text);">Machine profile</dt>
+                    <dd>{{ profile_ids.get('machine') or profile_ids.get('printer') or 'Not reported' }}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-semibold" style="color: var(--color-text);">Process profile</dt>
+                    <dd>{{ profile_ids.get('process') or 'Not reported' }}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-semibold" style="color: var(--color-text);">Filament profile</dt>
+                    <dd>{{ profile_ids.get('filament') or 'Not reported' }}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-semibold" style="color: var(--color-text);">Artifact type</dt>
+                    <dd>{{ artifact_label }}</dd>
+                  </div>
+                </dl>
+
+                {% if analysis_stats.get('fallback_used') %}
+                <p class="mt-3 rounded-xl border px-3 py-2 text-xs" style="border-color: var(--color-warning); color: var(--color-warning);">
+                  Bambu Studio could not complete this analysis, so PrusaSlicer was used for an estimate-only fallback.
+                </p>
+                {% endif %}
+                {% if analysis_stats.get('primary_failure') %}
+                <p class="mt-2 text-xs" style="color: var(--color-text-muted);">
+                  Primary failure: {{ analysis_stats.get('primary_failure')|string|truncate(180, true) }}
+                </p>
+                {% endif %}
+              </div>
+              {% endif %}
             </div>
             {% endif %}
           </div>
