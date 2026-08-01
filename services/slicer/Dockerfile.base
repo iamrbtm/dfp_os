@@ -15,5 +15,21 @@ RUN mkdir -p /opt/venv && chown appuser:appuser /app /opt/venv
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        prusa-slicer curl \
-    && rm -rf /var/lib/apt/lists/*
+        prusa-slicer \
+        curl \
+        libwebkit2gtk-4.1-0 \
+        libgl1 \
+        ca-certificates \
+    && curl -fsSL \
+        -o /tmp/BambuStudio.AppImage \
+        https://github.com/bambulab/BambuStudio/releases/download/v02.07.01.62/BambuStudio_ubuntu22.04-v02.07.01.62-20260616195227.AppImage \
+    && echo "2749917af560f3b9a2681429da9c43d00c65d096e1a1c479cc49466634174549  /tmp/BambuStudio.AppImage" | sha256sum -c - \
+    && chmod +x /tmp/BambuStudio.AppImage \
+    && cd /tmp \
+    && /tmp/BambuStudio.AppImage --appimage-extract \
+    && mkdir -p /opt/bambu-studio \
+    && mv /tmp/squashfs-root/* /opt/bambu-studio/ \
+    && rm -rf /tmp/BambuStudio.AppImage /tmp/squashfs-root /var/lib/apt/lists/* \
+    && chown -R appuser:appuser /opt/bambu-studio \
+    && chmod -R a+rX /opt/bambu-studio \
+    && /opt/bambu-studio/AppRun --help >/dev/null
