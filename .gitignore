@@ -15,7 +15,6 @@ __pycache__/
 .opencode/
 .codex/
 .worktrees/
-.github/
 htmlcov/
 instance/
 uploads/*

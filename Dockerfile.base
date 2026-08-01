@@ -1,0 +1,28 @@
+# Pre-built Debian/Python runtime with the slow system packages baked in.
+#
+# Build this once (`docker compose build base`) — it installs all the heavy
+# apt packages (OCR, image processing, PDF utils, build toolchain) that make
+# app image rebuilds slow. The app Dockerfile starts FROM this image, so
+# rebuilding the app skips the apt-get step entirely.
+#
+# Node is intentionally NOT installed here. The frontend (Tailwind) build runs
+# in a prebuilt `node:22-slim` stage in Dockerfile, so the runtime image stays
+# lean and apt installs finish much faster.
+FROM python:3.14-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+RUN useradd --create-home --shell /usr/sbin/nologin appuser
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    DEBIAN_FRONTEND=noninteractive apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        build-essential curl \
+        tesseract-ocr tesseract-ocr-eng \
+        imagemagick poppler-utils \
+        libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*

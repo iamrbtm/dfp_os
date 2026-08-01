@@ -1,28 +1,26 @@
-FROM python:3.14-slim AS base
+# Frontend assets: prebuilt Node image so nodejs/npm never touch the runtime
+# image or the apt step. Only builds Tailwind CSS + copies GSAP into dist.
+FROM node:22-slim AS assets
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    UV_LINK_MODE=copy \
+WORKDIR /assets
+
+COPY package.json package-lock.json postcss.config.js tailwind.config.js ./
+RUN --mount=type=cache,target=/root/.cache/npm \
+    npm ci --no-audit --no-fund
+
+COPY app/static ./app/static
+RUN npm run build
+
+# Base runtime: pre-built image (Dockerfile.base) with system packages already
+# installed, so app rebuilds skip the slow apt-get step.
+FROM ${BASE_IMAGE:-dfpos-base:local} AS base
+
+ENV UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_COMPILE_BYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-RUN useradd --create-home --shell /usr/sbin/nologin appuser
-
 WORKDIR /app
-
-# System dependencies (cached unless this layer changes)
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    DEBIAN_FRONTEND=noninteractive apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        build-essential curl nodejs npm \
-        tesseract-ocr tesseract-ocr-eng \
-        imagemagick poppler-utils \
-        libgl1 libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies (cached unless pyproject.toml / uv.lock change)
 COPY pyproject.toml uv.lock .python-version ./
@@ -30,16 +28,10 @@ RUN mkdir -p /opt/venv && chown appuser:appuser /opt/venv
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# Node dependencies (cached unless package.json changes)
-COPY package.json package-lock.json postcss.config.js tailwind.config.js ./
-RUN --mount=type=cache,target=/root/.cache/npm \
-    npm ci --no-audit --no-fund && npm cache clean --force
-
-# Application source + build assets
+# Application source + assets built in the node stage
 COPY --chown=appuser:appuser . .
-RUN mkdir -p app/static/dist \
-    && npm run build \
-    && mkdir -p uploads instance \
+COPY --from=assets /assets/app/static/dist ./app/static/dist
+RUN mkdir -p uploads instance \
     && chown -R appuser:appuser uploads instance
 
 USER appuser

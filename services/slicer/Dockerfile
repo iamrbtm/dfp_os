@@ -1,27 +1,9 @@
-FROM python:3.14-slim AS base
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    UV_LINK_MODE=copy \
-    UV_COMPILE_BYTECODE=1 \
-    UV_CACHE_DIR=/tmp/uv-cache \
-    UV_PROJECT_ENVIRONMENT=/opt/venv \
-    PATH="/opt/venv/bin:$PATH"
+ARG DFPOS_IMAGE_TAG
+FROM dfpos-slicer-base:${DFPOS_IMAGE_TAG:-local} AS base
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-RUN useradd --create-home --shell /usr/sbin/nologin appuser
-
 WORKDIR /app
-RUN mkdir -p /opt/venv && chown appuser:appuser /app /opt/venv
-
-# Install PrusaSlicer and its dependencies
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    DEBIAN_FRONTEND=noninteractive apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        prusa-slicer curl \
-    && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies (cached unless pyproject.toml / uv.lock change)
 COPY --chown=appuser:appuser pyproject.toml uv.lock .python-version ./

@@ -105,6 +105,13 @@ services:
       timeout: 5s
       retries: 5
 
+  base:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+    image: dfpos-base:${DFPOS_IMAGE_TAG:-local}
+    command: ["true"]
+
   web:
     build: *build-app
     image: dfpos-app:${DFPOS_IMAGE_TAG:-local}
@@ -118,6 +125,8 @@ services:
       - receipt_uploads:/app/uploads/receipts
     depends_on:
       <<: *depends-all
+      base:
+        condition: service_completed_successfully
       slicer:
         condition: service_healthy
     healthcheck:
@@ -247,8 +256,20 @@ services:
         condition: service_started
     command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8091"]
 
+  slicer-base:
+    profiles:
+      - build
+    build:
+      context: services/slicer
+      dockerfile: Dockerfile.base
+    image: dfpos-slicer-base:${DFPOS_IMAGE_TAG:-local}
+    command: ["true"]
+
   slicer:
-    build: services/slicer
+    build:
+      context: services/slicer
+      args:
+        DFPOS_IMAGE_TAG: ${DFPOS_IMAGE_TAG:-local}
     image: dfpos-slicer:${DFPOS_IMAGE_TAG:-local}
     init: true
     mem_limit: 2048m
@@ -282,6 +303,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      base:
+        condition: service_completed_successfully
     command: ["uv", "run", "pytest", "-v", "--tb=long"]
 
   api-docs:
