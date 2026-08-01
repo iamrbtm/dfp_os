@@ -294,11 +294,9 @@ def converted_storage_key(product_id: int, filename: str) -> str:
     return product_asset_key(product_id, filename)
 
 
-def gcode_storage_key(product_id: int, filename: str) -> str:
-    return product_asset_key(
-        product_id,
-        normalize_storage_filename(filename, fallback_stem="artifact.gcode"),
-    )
+def gcode_storage_key(product_id: int, filename: str, *, run_id: int) -> str:
+    safe_filename = normalize_storage_filename(filename, fallback_stem="artifact.gcode")
+    return f"products/{product_id}/analysis-runs/{int(run_id)}/{safe_filename}"
 
 
 def image_storage_key(product_id: int, filename: str) -> str:

@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any
+
 from app.extensions import db
 from app.models.catalog import (
     AnalysisRunStatus,
@@ -198,6 +200,52 @@ def start_analysis_run(
     return run
 
 
+def claim_analysis_run(
+    product_id: int,
+    run_id: int,
+    *,
+    session: Any | None = None,
+) -> ProductAnalysisRun | None:
+    """Atomically claim one exact queued/current analysis run.
+
+    A Celery redelivery or stale task returns ``None`` without changing either
+    the run or product. A successful claim commits the STARTED transition
+    before external work begins.
+    """
+    session = session or db.session
+    run = (
+        session.query(ProductAnalysisRun)
+        .filter(
+            ProductAnalysisRun.id == run_id,
+            ProductAnalysisRun.product_id == product_id,
+        )
+        .populate_existing()
+        .with_for_update()
+        .one_or_none()
+    )
+    if (
+        run is None
+        or run.product_id != product_id
+        or run.status != AnalysisRunStatus.QUEUED
+        or not run.is_current
+    ):
+        session.rollback()
+        return None
+
+    product = session.get(Product, product_id)
+    if product is None:
+        session.rollback()
+        return None
+
+    run.status = AnalysisRunStatus.STARTED
+    product.analysis_status = "analyzing"
+    session.add(run)
+    session.add(product)
+    session.flush()
+    session.commit()
+    return run
+
+
 def is_current_run(run_id: int, *, for_update: bool = False) -> bool:
     if for_update:
         run = (
@@ -357,6 +405,7 @@ __all__ = [
     "mark_asset_stale",
     "current_asset",
     "start_analysis_run",
+    "claim_analysis_run",
     "is_current_run",
     "get_current_run",
     "set_run_status",

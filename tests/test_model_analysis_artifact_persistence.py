@@ -62,7 +62,11 @@ def _product_with_run(tmp_path: Path, *, retain_gcode: bool = True) -> tuple[int
         sha256=hashlib.sha256(source_path.read_bytes()).hexdigest(),
         asset_kind=AssetKind.SOURCE_MODEL,
     )
-    run = start_analysis_run(product, source_asset=source)
+    run = start_analysis_run(
+        product,
+        source_asset=source,
+        settings=dict(product.model_analysis_config or {}),
+    )
     db.session.commit()
     return product.id, run.id
 
@@ -129,7 +133,7 @@ def _prusa_fallback_result(workspace: str | Path) -> SlicerResult:
     )
 
 
-def _run_analysis(monkeypatch, product_id: int, result_factory):
+def _run_analysis(monkeypatch, product_id: int, run_id: int, result_factory):
     recorder = _AuditRecorder()
     slicer_call = Mock(side_effect=lambda *args, **kwargs: result_factory(kwargs["workspace"]))
     snapshot = Mock()
@@ -157,7 +161,7 @@ def _run_analysis(monkeypatch, product_id: int, result_factory):
     monkeypatch.setattr(analysis_task, "write_model_metadata", lambda product: None)
     monkeypatch.setattr(analysis_task, "_record_analysis_step", lambda *args, **kwargs: None)
 
-    result = analysis_task.analyze_product_model.run(product_id)
+    result = analysis_task.analyze_product_model.run(product_id, run_id)
     return result, recorder, slicer_call, snapshot
 
 
@@ -167,7 +171,7 @@ def test_analysis_persists_native_bambu_artifact_before_workspace_cleanup(
     with app.app_context():
         product_id, run_id = _product_with_run(tmp_path)
         result, recorder, slicer_call, snapshot = _run_analysis(
-            monkeypatch, product_id, _bambu_result
+            monkeypatch, product_id, run_id, _bambu_result
         )
 
         run = db.session.get(ProductAnalysisRun, run_id)
@@ -223,7 +227,7 @@ def test_analysis_retains_fallback_metadata_without_artifact_when_disabled(
     with app.app_context():
         product_id, run_id = _product_with_run(tmp_path, retain_gcode=False)
         result, _, slicer_call, snapshot = _run_analysis(
-            monkeypatch, product_id, _prusa_fallback_result
+            monkeypatch, product_id, run_id, _prusa_fallback_result
         )
 
         run = db.session.get(ProductAnalysisRun, run_id)
@@ -255,3 +259,136 @@ def test_analysis_retains_fallback_metadata_without_artifact_when_disabled(
             run.slicer_stats_json["artifact_sha256"]
             == hashlib.sha256(b"; native prusa gcode").hexdigest()
         )
+
+
+def test_worker_uses_exact_run_source_and_settings_snapshot(app, tmp_path, monkeypatch):
+    with app.app_context():
+        product_id, run_id = _product_with_run(tmp_path)
+        product = db.session.get(Product, product_id)
+        newer_path = tmp_path / "newer-product-pointer.stl"
+        newer_path.write_bytes(b"not the claimed run source")
+        product.model_file_path = str(newer_path)
+        product.model_analysis_config = {"material": "ABS", "copies": 9}
+        db.session.commit()
+
+        result, _, slicer_call, _ = _run_analysis(monkeypatch, product_id, run_id, _bambu_result)
+
+        assert result["success"] is True
+        assert slicer_call.call_args.args[0] == tmp_path / "dragon.stl"
+        assert slicer_call.call_args.kwargs["slicer_options"]["material"] == "PLA"
+        assert slicer_call.call_args.kwargs["slicer_options"]["copies"] == 2
+
+
+def test_duplicate_delivery_does_not_slice_publish_or_create_another_asset(
+    app, tmp_path, monkeypatch
+):
+    with app.app_context():
+        product_id, run_id = _product_with_run(tmp_path)
+        first, _, first_slice, first_snapshot = _run_analysis(
+            monkeypatch, product_id, run_id, _bambu_result
+        )
+        asset = ProductModelAsset.query.filter_by(
+            product_id=product_id, asset_kind=AssetKind.GCODE
+        ).one()
+        first_reference = asset.storage_reference
+
+        second, second_audit, second_slice, second_snapshot = _run_analysis(
+            monkeypatch, product_id, run_id, _bambu_result
+        )
+
+        assert first["success"] is True
+        assert first_slice.call_count == 1
+        assert first_snapshot.call_count == 1
+        assert second == {
+            "success": False,
+            "data": {"product_id": product_id, "run_id": run_id, "idempotent": True},
+            "error": "analysis run is not claimable",
+        }
+        assert second_slice.call_count == 0
+        assert second_snapshot.call_count == 0
+        assert second_audit.calls == []
+        assert (
+            ProductModelAsset.query.filter_by(
+                product_id=product_id, asset_kind=AssetKind.GCODE
+            ).count()
+            == 1
+        )
+        assert Path(first_reference).read_bytes() == b"native-bambu-package"
+
+
+def test_two_uploads_queued_before_workers_do_not_redirect_old_task_to_new_run(
+    app, tmp_path, monkeypatch
+):
+    with app.app_context():
+        product_id, first_run_id = _product_with_run(tmp_path)
+        product = db.session.get(Product, product_id)
+        source = ProductModelAsset.query.filter_by(
+            product_id=product_id, asset_kind=AssetKind.SOURCE_MODEL, is_current=True
+        ).one()
+        second_run = start_analysis_run(
+            product,
+            source_asset=source,
+            settings={"printer_profile": "bambu_p1p", "material": "PETG", "copies": 1},
+        )
+        db.session.commit()
+
+        stale_result, stale_audit, stale_slice, stale_snapshot = _run_analysis(
+            monkeypatch, product_id, first_run_id, _bambu_result
+        )
+
+        assert stale_result["data"]["idempotent"] is True
+        assert stale_slice.call_count == 0
+        assert stale_snapshot.call_count == 0
+        assert stale_audit.calls == []
+        assert db.session.get(ProductAnalysisRun, first_run_id).status == (
+            AnalysisRunStatus.SUPERSEDED
+        )
+        assert db.session.get(ProductAnalysisRun, second_run.id).status == AnalysisRunStatus.QUEUED
+
+
+def test_two_runs_with_same_native_filename_keep_distinct_references_and_bytes(
+    app, tmp_path, monkeypatch
+):
+    with app.app_context():
+        product_id, first_run_id = _product_with_run(tmp_path)
+        first, _, _, _ = _run_analysis(monkeypatch, product_id, first_run_id, _bambu_result)
+        assert first["success"] is True
+        first_asset = ProductModelAsset.query.filter_by(
+            product_id=product_id, asset_kind=AssetKind.GCODE, is_current=True
+        ).one()
+        first_reference = first_asset.storage_reference
+
+        product = db.session.get(Product, product_id)
+        source = ProductModelAsset.query.filter_by(
+            product_id=product_id, asset_kind=AssetKind.SOURCE_MODEL, is_current=True
+        ).one()
+        second_run = start_analysis_run(
+            product,
+            source_asset=source,
+            settings={"printer_profile": "bambu_a1", "material": "PLA", "copies": 2},
+        )
+        db.session.commit()
+
+        def changed_bambu_result(workspace):
+            result = _bambu_result(workspace)
+            payload = b"new-native-bambu-package"
+            result.artifact_path.write_bytes(payload)
+            result.artifact_size = len(payload)
+            result.artifact_sha256 = hashlib.sha256(payload).hexdigest()
+            return result
+
+        second, _, _, _ = _run_analysis(
+            monkeypatch, product_id, second_run.id, changed_bambu_result
+        )
+
+        db.session.refresh(first_asset)
+        second_asset = ProductModelAsset.query.filter_by(
+            product_id=product_id, asset_kind=AssetKind.GCODE, is_current=True
+        ).one()
+        assert second["success"] is True
+        assert first_asset.is_current is False
+        assert first_reference != second_asset.storage_reference
+        assert f"/analysis-runs/{first_run_id}/" in first_reference
+        assert f"/analysis-runs/{second_run.id}/" in second_asset.storage_reference
+        assert Path(first_reference).read_bytes() == b"native-bambu-package"
+        assert Path(second_asset.storage_reference).read_bytes() == b"new-native-bambu-package"

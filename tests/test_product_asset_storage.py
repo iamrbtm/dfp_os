@@ -20,9 +20,11 @@ from app.tasks.model_analysis import (
 def test_product_storage_keys_use_one_product_directory():
     assert product_storage_key(14, "56eb2eba.stl") == "products/14/56eb2eba.stl"
     assert converted_storage_key(14, "56eb2eba.glb") == "products/14/56eb2eba.glb"
-    assert gcode_storage_key(14, "rainbow-dragon.gcode") == "products/14/rainbow-dragon.gcode"
-    assert gcode_storage_key(14, "rainbow-dragon.gcode.3mf") == (
-        "products/14/rainbow-dragon.gcode.3mf"
+    assert gcode_storage_key(14, "rainbow-dragon.gcode", run_id=41) == (
+        "products/14/analysis-runs/41/rainbow-dragon.gcode"
+    )
+    assert gcode_storage_key(14, "rainbow-dragon.gcode.3mf", run_id=42) == (
+        "products/14/analysis-runs/42/rainbow-dragon.gcode.3mf"
     )
     assert image_storage_key(14, "IMG_0204.jpeg") == "products/14/IMG_0204.jpeg"
     assert metadata_storage_key(14, "model.metadata.json") == "products/14/model.metadata.json"
@@ -47,6 +49,15 @@ def test_storage_filename_helpers_normalize_expected_values():
     assert normalize_storage_filename("IMG 0204.JPEG") == "IMG_0204.jpeg"
     assert normalize_storage_filename("Rainbow Dragon.gcode.3MF") == ("Rainbow_Dragon.gcode.3mf")
     assert storage_slug("Rainbow Dragon XL") == "rainbow_dragon_xl"
+
+
+def test_gcode_storage_keys_are_immutable_per_run_and_safely_normalized():
+    first = gcode_storage_key(14, "../Rainbow Dragon.gcode.3MF", run_id=101)
+    second = gcode_storage_key(14, "../Rainbow Dragon.gcode.3MF", run_id=102)
+
+    assert first == "products/14/analysis-runs/101/Rainbow_Dragon.gcode.3mf"
+    assert second == "products/14/analysis-runs/102/Rainbow_Dragon.gcode.3mf"
+    assert first != second
 
 
 def test_analysis_output_filenames_follow_product_convention():

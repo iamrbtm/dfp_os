@@ -4,7 +4,9 @@ import shutil
 import tempfile
 import hashlib
 import json
+import logging
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -17,6 +19,8 @@ from app.models.catalog import (
     AnalysisRunStatus,
     AssetKind,
     Product,
+    ProductAnalysisRun,
+    ProductModelAsset,
 )
 from app.services.cost_engine import calculate_product_cost, persist_cost_snapshot
 from app.services.audit_client import get_audit_client
@@ -33,17 +37,17 @@ from app.services.model_analysis import (
     validate_model_file,
 )
 from app.services.product_analysis import (
+    claim_analysis_run,
     create_model_asset,
-    get_current_run,
     is_current_run,
     publish_run_results,
     sanitize_analysis_config,
     set_run_status,
-    start_analysis_run,
 )
 from app.services.materials import material_default_temp, resolve_density
 from app.services.storage import (
     converted_storage_key,
+    delete_storage_reference,
     download_storage_bytes,
     gcode_storage_key,
     is_s3_reference,
@@ -54,6 +58,138 @@ from app.services.storage import (
     upload_bytes_to_storage,
     upload_file_to_storage,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ArtifactPublicationState:
+    storage_reference: str | None = None
+    commit_attempted: bool = False
+    committed: bool = False
+
+
+def _artifact_reference_committed(*, storage_reference: str, run_id: int) -> bool:
+    """Check a possibly ambiguous commit using the caller's fresh session."""
+    artifact = (
+        db.session.query(ProductModelAsset)
+        .filter(
+            ProductModelAsset.storage_reference == storage_reference,
+            ProductModelAsset.asset_kind == AssetKind.GCODE,
+        )
+        .one_or_none()
+    )
+    run = db.session.get(ProductAnalysisRun, run_id)
+    return bool(
+        artifact
+        and run
+        and run.status == AnalysisRunStatus.COMPLETE
+        and run.gcode_asset_id == artifact.id
+    )
+
+
+def _mark_run_failed_fresh(*, product_id: int, run_id: int, error: str) -> None:
+    """Mark the exact claimed run failed in a clean transaction when safe."""
+    run = db.session.get(ProductAnalysisRun, run_id)
+    if (
+        run is None
+        or run.product_id != product_id
+        or run.status
+        in {
+            AnalysisRunStatus.COMPLETE,
+            AnalysisRunStatus.FAILED,
+            AnalysisRunStatus.SUPERSEDED,
+        }
+    ):
+        return
+
+    run.status = AnalysisRunStatus.FAILED
+    run.error = error
+    run.completed_at = datetime.now(timezone.utc)
+    db.session.add(run)
+    if run.is_current:
+        product = db.session.get(Product, product_id)
+        if product is not None:
+            product.analysis_status = "failed"
+            product.analysis_error = error
+            db.session.add(product)
+    db.session.commit()
+
+
+def _recover_failed_publication(
+    state: _ArtifactPublicationState,
+    *,
+    product_id: int,
+    run_id: int,
+    original_error: Exception,
+    session=None,
+    delete_reference=None,
+    committed_check=None,
+    mark_failed=None,
+) -> None:
+    """Rollback failed publication and compensate its unique uploaded object.
+
+    A failed commit has an ambiguous outcome, so the exact asset/run link is
+    checked through a fresh scoped session before deletion. Recovery failures
+    are logged and never replace ``original_error``.
+    """
+    session = session or db.session
+    delete_reference = delete_reference or delete_storage_reference
+    committed_check = committed_check or _artifact_reference_committed
+    mark_failed = mark_failed or _mark_run_failed_fresh
+    original_exc_info = (type(original_error), original_error, original_error.__traceback__)
+
+    try:
+        session.rollback()
+    except Exception:
+        logger.error("analysis publication rollback failed", exc_info=original_exc_info)
+
+    if state.committed:
+        return
+
+    committed = False
+    if state.storage_reference and state.commit_attempted:
+        try:
+            session.remove()
+            committed = bool(
+                committed_check(
+                    storage_reference=state.storage_reference,
+                    run_id=run_id,
+                )
+            )
+        except Exception:
+            logger.error(
+                "analysis publication commit outcome could not be verified",
+                exc_info=original_exc_info,
+            )
+            # An unknown outcome must fail closed against object deletion.
+            committed = True
+
+    if committed:
+        return
+
+    if state.storage_reference:
+        try:
+            delete_reference(state.storage_reference)
+        except Exception:
+            logger.error(
+                "uncommitted slicer artifact cleanup failed",
+                exc_info=original_exc_info,
+            )
+
+    try:
+        session.remove()
+        mark_failed(
+            product_id=product_id,
+            run_id=run_id,
+            error=str(original_error),
+        )
+    except Exception:
+        logger.error(
+            "fresh analysis failure publication failed",
+            exc_info=original_exc_info,
+        )
 
 
 def _record_pmp_step(
@@ -255,6 +391,48 @@ def _preferred_converted_filename(product: Product) -> str:
     return normalize_storage_filename(f"{source_stem}.glb")
 
 
+def _persist_slicer_artifact(
+    product: Product,
+    run: ProductAnalysisRun,
+    slicer_result,
+    publication: _ArtifactPublicationState,
+    *,
+    bucket: str,
+    local_root: str | Path,
+    upload=None,
+    create_asset=None,
+) -> tuple[ProductModelAsset, str]:
+    """Upload one run-unique native artifact, then create its database row."""
+    upload = upload or upload_file_to_storage
+    create_asset = create_asset or create_model_asset
+    safe_filename = normalize_storage_filename(
+        slicer_result.artifact_filename,
+        fallback_stem=_preferred_gcode_filename(product, slicer_result.engine_key),
+    )
+    key = gcode_storage_key(product.id, safe_filename, run_id=run.id)
+    storage_reference = upload(
+        slicer_result.artifact_path,
+        bucket=bucket,
+        key=key,
+        local_root=local_root,
+        content_type=slicer_result.artifact_media_type,
+    )
+    # Track immediately: create_model_asset flushes, so any following exception
+    # must compensate this exact run-unique object after rolling back.
+    publication.storage_reference = storage_reference
+    asset = create_asset(
+        product,
+        storage_reference=storage_reference,
+        original_filename=slicer_result.artifact_filename,
+        safe_filename=safe_filename,
+        content_type=slicer_result.artifact_media_type,
+        size_bytes=slicer_result.artifact_size,
+        sha256=slicer_result.artifact_sha256,
+        asset_kind=AssetKind.GCODE,
+    )
+    return asset, storage_reference
+
+
 def _apply_initial_cost_snapshot(
     product: Product,
     *,
@@ -314,44 +492,6 @@ def _record_analysis_step(task, product: Product, *, step: str, percent: int, me
     )
 
 
-def _ensure_run_for_product(product: Product) -> tuple[Product, "object"]:
-    """Defensive fallback: if no current run exists, build a source asset and run.
-
-    The upload route normally creates the run before enqueueing. If it did not
-    (older caller, manual test), synthesize one from ``product.model_file_path``
-    so the race-proof machinery still has a run to publish through.
-    """
-    file_location = product.model_file_path
-    if not file_location:
-        raise ValueError("No file location set on product")
-    source_name = storage_reference_name(file_location) or Path(file_location).name or "model"
-    try:
-        if is_s3_reference(file_location):
-            data = download_storage_bytes(file_location)
-        else:
-            data = Path(file_location).read_bytes()
-    except Exception:
-        data = b""
-    sha = hashlib.sha256(data).hexdigest() if data else "0" * 64
-    asset = create_model_asset(
-        product,
-        storage_reference=file_location,
-        original_filename=source_name,
-        safe_filename=normalize_storage_filename(source_name),
-        content_type="model/stl",
-        size_bytes=len(data),
-        sha256=sha,
-        asset_kind=AssetKind.SOURCE_MODEL,
-    )
-    run = start_analysis_run(
-        product,
-        source_asset=asset,
-        settings=sanitize_analysis_config(product.model_analysis_config),
-    )
-    db.session.flush()
-    return product, run
-
-
 def _resolve_material_cost(
     product: Product, material: str | None, spool_id: int | None
 ) -> tuple[Decimal, int | None, dict]:
@@ -373,46 +513,38 @@ def _resolve_material_cost(
 
 
 @celery.task(bind=True, max_retries=2, default_retry_delay=30)
-def analyze_product_model(self, product_id: int) -> dict:
+def analyze_product_model(self, product_id: int, run_id: int) -> dict:
     """Analyze one product model and publish results through a race-proof run.
 
-    The route creates a ``ProductAnalysisRun`` before enqueueing. This task only
-    writes to the ``Product`` summary fields while its run remains current
-    (Issue 6). If a newer upload superseded this run, the task marks itself
-    superseded and leaves the product alone.
+    The route passes the exact ``ProductAnalysisRun`` identity. Only its queued
+    current run can be claimed; stale or duplicate deliveries exit before any
+    analysis side effect.
     """
-    product = db.session.get(Product, product_id)
-    if product is None:
-        return task_envelope(False, error="Product not found")
-
     work_dir: Path | None = None
     gcode_path: Path | None = None
+    publication = _ArtifactPublicationState()
     run = None
 
     try:
+        run = claim_analysis_run(product_id, run_id)
+        if run is None:
+            return task_envelope(
+                False,
+                data={"product_id": product_id, "run_id": run_id, "idempotent": True},
+                error="analysis run is not claimable",
+            )
+
+        product = db.session.get(Product, product_id)
+        if product is None:  # Defensive; the run FK should make this impossible.
+            raise RuntimeError("Product not found for claimed analysis run")
+
         _record_analysis_step(
             self, product, step="started", percent=5, message="Preparing model analysis"
         )
 
-        # (a) locate the current run, or create one defensively.
-        run = get_current_run(product)
-        if run is None:
-            product, run = _ensure_run_for_product(product)
-            db.session.commit()
-
-        # (b) race guard: if a newer upload superseded this run, bail out.
-        if not is_current_run(run.id):
-            set_run_status(run, AnalysisRunStatus.SUPERSEDED)
-            db.session.commit()
-            return task_envelope(False, error="superseded by a newer upload")
-
-        set_run_status(run, AnalysisRunStatus.STARTED)
-        product.analysis_status = "analyzing"
-        db.session.commit()
-
-        file_location = product.model_file_path
+        file_location = run.source_asset.storage_reference if run.source_asset else None
         if not file_location:
-            raise ValueError("No file location set on product")
+            raise ValueError("No source asset set on analysis run")
 
         # mkdtemp creates the exclusive 0700 workspace required by SlicerClient.
         # This task retains it unchanged for the complete analysis attempt and
@@ -423,7 +555,7 @@ def analyze_product_model(self, product_id: int) -> dict:
 
         if is_s3_reference(file_location):
             data = download_storage_bytes(file_location)
-            ext = Path(file_location).suffix or ".stl"
+            ext = Path(storage_reference_name(file_location)).suffix or ".stl"
             model_path = tmp_dir / f"model{ext}"
             model_path.write_bytes(data)
         else:
@@ -436,7 +568,7 @@ def analyze_product_model(self, product_id: int) -> dict:
             self, product, step="downloaded", percent=15, message="Model file ready"
         )
 
-        analysis_config = dict(product.model_analysis_config or {})
+        analysis_config = dict(run.settings_json or {})
         embedded_settings = extract_3mf_slicer_settings(model_path)
 
         # Issue 9/30 — apply scale_percent BEFORE slicing/validation so the
@@ -464,7 +596,7 @@ def analyze_product_model(self, product_id: int) -> dict:
 
         validation = validate_model_file(analysis_path)
         if not validation.success:
-            if is_current_run(run.id):
+            if is_current_run(run.id, for_update=True):
                 publish_run_results(run, product, error=validation.error)
                 db.session.commit()
             get_audit_client().record(
@@ -505,15 +637,16 @@ def analyze_product_model(self, product_id: int) -> dict:
             "scale_warning": validation.scale_warning,
             "format_detected": validation.format_detected,
         }
-        # (d) only scalar settings may live on the Product row (Issue 40).
-        product.model_analysis_config = sanitize_analysis_config(analysis_config)
+        # Keep effective scalar settings on the exact run. The Product summary
+        # is updated only during the row-locked final publication.
+        run.settings_json = sanitize_analysis_config(analysis_config)
         run.embedded_settings_json = embedded_settings
         db.session.commit()
         _record_analysis_step(
             self, product, step="validated", percent=35, message="Geometry validation complete"
         )
 
-        if not is_current_run(run.id):
+        if not is_current_run(run.id, for_update=True):
             set_run_status(run, AnalysisRunStatus.SUPERSEDED)
             db.session.commit()
             return task_envelope(False, error="superseded by a newer upload")
@@ -572,7 +705,7 @@ def analyze_product_model(self, product_id: int) -> dict:
         if not slicer_result.success:
             slicer_errors = [str(slicer_result.error or "Slicer service returned no result")]
             error_msg = "Could not slice this model.\n" + slicer_errors[0]
-            if is_current_run(run.id):
+            if is_current_run(run.id, for_update=True):
                 publish_run_results(run, product, geometry=geometry, error=error_msg)
                 db.session.commit()
             get_audit_client().record(
@@ -594,7 +727,7 @@ def analyze_product_model(self, product_id: int) -> dict:
             )
 
         # Race guard before publishing.
-        if not is_current_run(run.id):
+        if not is_current_run(run.id, for_update=True):
             set_run_status(run, AnalysisRunStatus.SUPERSEDED)
             db.session.commit()
             return task_envelope(False, error="superseded by a newer upload")
@@ -635,28 +768,15 @@ def analyze_product_model(self, product_id: int) -> dict:
             return task_envelope(False, error="superseded by a newer upload")
 
         gcode_asset = None
+        product.model_analysis_config = sanitize_analysis_config(analysis_config)
         if analysis_config.get("retain_gcode", True):
-            safe_filename = normalize_storage_filename(
-                slicer_result.artifact_filename,
-                fallback_stem=_preferred_gcode_filename(product, slicer_result.engine_key),
-            )
-            gcode_key = gcode_storage_key(product.id, safe_filename)
-            gcode_ref = upload_file_to_storage(
-                gcode_path,
-                bucket=current_app.config.get("PRODUCT_ASSETS_BUCKET", "products"),
-                key=gcode_key,
-                local_root=current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products"),
-                content_type=slicer_result.artifact_media_type,
-            )
-            gcode_asset = create_model_asset(
+            gcode_asset, gcode_ref = _persist_slicer_artifact(
                 product,
-                storage_reference=gcode_ref,
-                original_filename=slicer_result.artifact_filename,
-                safe_filename=safe_filename,
-                content_type=slicer_result.artifact_media_type,
-                size_bytes=slicer_result.artifact_size,
-                sha256=slicer_result.artifact_sha256,
-                asset_kind=AssetKind.GCODE,
+                run,
+                slicer_result,
+                publication,
+                bucket=current_app.config.get("PRODUCT_ASSETS_BUCKET", "products"),
+                local_root=current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products"),
             )
             product.gcode_path = gcode_ref
             _record_analysis_step(
@@ -727,7 +847,9 @@ def analyze_product_model(self, product_id: int) -> dict:
             self, product, step="costed", percent=90, message="Cost estimate complete"
         )
         write_model_metadata(product)
+        publication.commit_attempted = True
         db.session.commit()
+        publication.committed = True
 
         convert_task = (
             convert_product_model_for_viewer.delay(product_id)
@@ -766,22 +888,24 @@ def analyze_product_model(self, product_id: int) -> dict:
             },
         )
     except Exception as exc:
-        # (e) on failure, publish the error only if this run is still current.
-        if run is not None and is_current_run(run.id):
-            publish_run_results(run, product, error=str(exc))
-            db.session.commit()
-        else:
-            product.analysis_status = "failed"
-            product.analysis_error = str(exc)
-            db.session.commit()
-        get_audit_client().record(
-            action="model_analysis.failed",
-            entity_type="product",
-            entity_id=str(product.id),
-            actor_type="system",
-            source_module="app.tasks.model_analysis",
-            metadata={"error": str(exc), "outcome": "failure"},
+        logger.exception("model analysis failed for run %s", run_id)
+        _recover_failed_publication(
+            publication,
+            product_id=product_id,
+            run_id=run_id,
+            original_error=exc,
         )
+        try:
+            get_audit_client().record(
+                action="model_analysis.failed",
+                entity_type="product",
+                entity_id=str(product_id),
+                actor_type="system",
+                source_module="app.tasks.model_analysis",
+                metadata={"run_id": run_id, "error": str(exc), "outcome": "failure"},
+            )
+        except Exception:
+            logger.exception("model analysis failure audit dispatch failed")
         raise analyze_product_model.retry(exc=exc)
     finally:
         if work_dir and work_dir.exists():

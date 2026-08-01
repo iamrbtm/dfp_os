@@ -52,6 +52,7 @@ from app.services.cost_engine import (
 from app.services.crud import get_by_id
 from app.services.product_analysis import (
     create_model_asset,
+    current_asset,
     is_analysis_in_progress,
     reset_product_analysis,
     sanitize_analysis_config,
@@ -612,10 +613,9 @@ def upload_model(product_id: int):
     product.analysis_requested_at = datetime.now(timezone.utc)
     db.session.commit()
 
-    # Issue 6 — start a race-proof analysis run before enqueueing. The Celery
-    # task looks up the current run via get_current_run(product), so we only
-    # need the side effect of creating/superseding runs here.
-    start_analysis_run(
+    # Issue 6 — create the exact race-proof run before enqueueing. Its identity
+    # and immutable source/settings snapshot travel with the Celery message.
+    run = start_analysis_run(
         product,
         source_asset=asset,
         requested_by_id=current_user.id,
@@ -662,7 +662,7 @@ def upload_model(product_id: int):
             if is_celery_healthy():
                 from app.tasks.model_analysis import analyze_product_model
 
-                task = analyze_product_model.delay(product.id)
+                task = analyze_product_model.delay(product.id, run.id)
                 task_id = task.id
                 enqueue_ok = True
         except Exception as exc:  # broker down / import error / queue rejection
@@ -1119,6 +1119,16 @@ def reanalyze_model(product_id: int):
     # Issue 27 — clear stale cost/analysis fields so the UI can't show old numbers
     # as if they were current while the new run is in flight.
     reset_product_analysis(product)
+    source_asset = current_asset(product, AssetKind.SOURCE_MODEL)
+    if source_asset is None:
+        db.session.rollback()
+        return jsonify({"success": False, "error": "No source model is available."}), 409
+    run = start_analysis_run(
+        product,
+        source_asset=source_asset,
+        requested_by_id=current_user.id,
+        settings=dict(product.model_analysis_config or {}),
+    )
     db.session.commit()
 
     celery = _get_celery()
@@ -1126,7 +1136,7 @@ def reanalyze_model(product_id: int):
     if celery is not None:
         from app.tasks.model_analysis import analyze_product_model
 
-        task = analyze_product_model.delay(product.id)
+        task = analyze_product_model.delay(product.id, run.id)
         task_id = task.id
 
     return jsonify({"success": True, "task_id": task_id, "product_id": product.id})
