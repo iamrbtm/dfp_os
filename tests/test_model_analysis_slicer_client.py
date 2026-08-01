@@ -3,12 +3,14 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 from decimal import Decimal
 from pathlib import Path
 
 import httpx
 import pytest
 
+from app import config as app_config
 from app.services import model_analysis
 from app.services.model_analysis import slice_with_prusaslicer, slice_with_slicer
 from app.services import slicer_client
@@ -37,6 +39,27 @@ def _metadata(payload: bytes, **overrides):
         "direct_print_eligible": True,
         "estimate_only": False,
     }
+    metadata.update(overrides)
+    return metadata
+
+
+def _prusa_metadata(payload: bytes, **overrides):
+    metadata = _metadata(
+        payload,
+        engine_key="prusa",
+        engine_name="PrusaSlicer",
+        engine_version="2.9.2",
+        fallback_used=True,
+        primary_failure={
+            "engine_key": "bambu",
+            "code": "timeout",
+            "message": "Bambu Studio timed out.",
+        },
+        artifact_filename="dragon.gcode",
+        artifact_media_type="text/x.gcode",
+        direct_print_eligible=False,
+        estimate_only=True,
+    )
     metadata.update(overrides)
     return metadata
 
@@ -91,10 +114,24 @@ def test_slice_artifact_streams_authenticated_multipart_to_workspace(tmp_path):
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        request_body = request.read()
         assert request.url.path == "/api/v1/slice-artifact"
         assert request.headers["Authorization"] == "Bearer secret-token"
         assert request.headers["Content-Type"].startswith("multipart/form-data; boundary=")
+        request_prefix = bytearray()
+        required = (
+            b'name="model_file"',
+            b'name="profile_name"',
+            b"bambu_a1",
+            b'name="slicer_options"',
+            b'"material": "PLA"',
+        )
+        for chunk in request.stream:
+            remaining = 8192 - len(request_prefix)
+            request_prefix.extend(chunk[:remaining])
+            if all(value in request_prefix for value in required):
+                break
+            assert remaining > 0, "multipart settings were not present in the bounded prefix"
+        request_body = bytes(request_prefix)
         assert b'name="model_file"' in request_body
         assert b'name="profile_name"' in request_body
         assert b"bambu_a1" in request_body
@@ -167,6 +204,83 @@ def test_slice_artifact_rejects_wrong_metadata_schema_types(tmp_path, overrides)
     assert list(workspace.iterdir()) == []
 
 
+def test_slice_artifact_accepts_semantically_consistent_prusa_fallback(tmp_path):
+    payload = b"; PrusaSlicer native G-code\nG1 X1 Y1\n"
+
+    result, workspace = _call_artifact_client(tmp_path, _prusa_metadata(payload), payload)
+
+    assert result["success"] is True
+    assert result["engine_key"] == "prusa"
+    assert result["fallback_used"] is True
+    assert result["estimate_only"] is True
+    assert result["direct_print_eligible"] is False
+    assert Path(result["artifact_path"]) == workspace / "dragon.gcode"
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        lambda payload: _metadata(payload, engine_key="orca", engine_name="OrcaSlicer"),
+        lambda payload: _metadata(payload, engine_name="BambuStudio"),
+        lambda payload: _metadata(payload, engine_version="unknown"),
+        lambda payload: _metadata(payload, artifact_filename="dragon.gcode"),
+        lambda payload: _metadata(payload, artifact_media_type="text/x.gcode"),
+        lambda payload: _metadata(payload, direct_print_eligible=False),
+        lambda payload: _metadata(payload, estimate_only=True),
+        lambda payload: _metadata(payload, fallback_used=True),
+        lambda payload: _metadata(
+            payload,
+            primary_failure={
+                "engine_key": "bambu",
+                "code": "timeout",
+                "message": "Bambu Studio timed out.",
+            },
+        ),
+        lambda payload: _prusa_metadata(payload, fallback_used=False),
+        lambda payload: _prusa_metadata(payload, primary_failure=None),
+        lambda payload: _prusa_metadata(payload, artifact_filename="dragon.gcode.3mf"),
+        lambda payload: _prusa_metadata(
+            payload,
+            artifact_media_type="application/vnd.bambulab.gcode-3mf",
+        ),
+        lambda payload: _prusa_metadata(payload, direct_print_eligible=True),
+        lambda payload: _prusa_metadata(payload, estimate_only=False),
+        lambda payload: _prusa_metadata(
+            payload,
+            primary_failure={
+                "engine_key": "prusa",
+                "code": "timeout",
+                "message": "PrusaSlicer timed out.",
+            },
+        ),
+        lambda payload: _prusa_metadata(
+            payload,
+            primary_failure={
+                "engine_key": "bambu",
+                "code": "arbitrary_internal_code",
+                "message": "private failure",
+            },
+        ),
+        lambda payload: _prusa_metadata(
+            payload,
+            primary_failure={
+                "engine_key": "bambu",
+                "code": "timeout",
+                "message": "Bambu Studio execution failed.",
+            },
+        ),
+    ],
+)
+def test_slice_artifact_rejects_impossible_engine_artifact_semantics(tmp_path, metadata):
+    payload = b"native artifact"
+
+    result, workspace = _call_artifact_client(tmp_path, metadata(payload), payload)
+
+    assert result["success"] is False
+    assert "metadata" in result["error"].lower()
+    assert list(workspace.iterdir()) == []
+
+
 def test_slice_artifact_returns_bounded_sanitized_json_service_error(tmp_path):
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "workspace"
@@ -227,6 +341,125 @@ def test_slice_artifact_does_not_delete_preexisting_workspace_file(tmp_path):
     assert len(result["error"]) <= 768
 
 
+def test_slice_artifact_rejects_symlink_workspace_without_touching_target(tmp_path):
+    model_path = tmp_path / "source.stl"
+    target = tmp_path / "real-workspace"
+    workspace_link = tmp_path / "workspace-link"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    target.mkdir()
+    workspace_link.symlink_to(target, target_is_directory=True)
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        transport=httpx.MockTransport(
+            lambda _request: pytest.fail("workspace validation must precede the HTTP request")
+        ),
+    )
+
+    result = client.slice_artifact(model_path, workspace_link)
+
+    assert result["success"] is False
+    assert "workspace" in result["error"].lower()
+    assert list(target.iterdir()) == []
+
+
+def test_slice_artifact_directory_swap_cleans_only_original_fd_relative_file(tmp_path, monkeypatch):
+    payload = b"native artifact"
+    metadata = _metadata(payload)
+    model_path = tmp_path / "source.stl"
+    workspace = tmp_path / "workspace"
+    original_after_swap = tmp_path / "original-workspace"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    workspace.mkdir()
+    unlink_calls = []
+    real_unlink = os.unlink
+
+    def tracking_unlink(path, *, dir_fd=None):
+        unlink_calls.append((path, dir_fd))
+        if dir_fd is None:
+            return real_unlink(path)
+        return real_unlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(slicer_client.os, "unlink", tracking_unlink)
+
+    def handler(_request):
+        workspace.rename(original_after_swap)
+        workspace.mkdir()
+        (workspace / "replacement-marker").write_bytes(b"do not touch")
+        return httpx.Response(
+            200,
+            headers={
+                "Content-Length": str(len(payload)),
+                "Content-Type": metadata["artifact_media_type"],
+                "X-DFPOS-Slicer-Metadata": _metadata_header(metadata),
+            },
+            content=payload,
+        )
+
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = client.slice_artifact(model_path, workspace)
+
+    assert result["success"] is False
+    assert (workspace / "replacement-marker").exists()
+    assert (workspace / "replacement-marker").read_bytes() == b"do not touch"
+    assert not (workspace / "dragon.gcode.3mf").exists()
+    assert not (original_after_swap / "dragon.gcode.3mf").exists()
+    assert any(path == "dragon.gcode.3mf" and dir_fd is not None for path, dir_fd in unlink_calls)
+
+
+def test_slice_artifact_closes_created_descriptor_when_fdopen_fails(tmp_path, monkeypatch):
+    payload = b"native artifact"
+    metadata = _metadata(payload)
+    model_path = tmp_path / "source.stl"
+    workspace = tmp_path / "workspace"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    workspace.mkdir()
+    artifact_descriptors = []
+    real_open = os.open
+
+    def tracking_open(path, flags, mode=0o777, *, dir_fd=None):
+        if dir_fd is None:
+            return real_open(path, flags, mode)
+        descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+        artifact_descriptors.append(descriptor)
+        return descriptor
+
+    monkeypatch.setattr(slicer_client.os, "open", tracking_open)
+    monkeypatch.setattr(
+        slicer_client.os,
+        "fdopen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("fdopen failed")),
+    )
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                headers={
+                    "Content-Length": str(len(payload)),
+                    "Content-Type": metadata["artifact_media_type"],
+                    "X-DFPOS-Slicer-Metadata": _metadata_header(metadata),
+                },
+                content=payload,
+            )
+        ),
+    )
+
+    result = client.slice_artifact(model_path, workspace)
+
+    assert result["success"] is False
+    assert len(artifact_descriptors) == 1
+    with pytest.raises(OSError):
+        os.fstat(artifact_descriptors[0])
+    assert list(workspace.iterdir()) == []
+
+
 def test_slice_artifact_rejects_response_media_type_that_disagrees_with_metadata(tmp_path):
     payload = b"native artifact"
     metadata = _metadata(payload)
@@ -268,6 +501,29 @@ def test_slice_artifact_rejects_noncanonical_base64url_padding(tmp_path):
         metadata,
         payload,
         encoded_metadata=malformed,
+    )
+
+    assert result["success"] is False
+    assert list(workspace.iterdir()) == []
+
+
+def test_slice_artifact_rejects_noncanonical_base64url_pad_bits(tmp_path):
+    payload = b"native artifact"
+    metadata = _metadata(payload, layer_count=21)
+    canonical = _metadata_header(metadata)
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    assert len(canonical) % 4 in {2, 3}
+    last_index = alphabet.index(canonical[-1])
+    noncanonical = canonical[:-1] + alphabet[last_index + 1]
+    assert base64.urlsafe_b64decode(
+        noncanonical + "=" * (-len(noncanonical) % 4)
+    ) == base64.urlsafe_b64decode(canonical + "=" * (-len(canonical) % 4))
+
+    result, workspace = _call_artifact_client(
+        tmp_path,
+        metadata,
+        payload,
+        encoded_metadata=noncanonical,
     )
 
     assert result["success"] is False
@@ -340,6 +596,72 @@ class _CountingArtifactStream(httpx.SyncByteStream):
         self.closed = True
 
 
+class _SuccessfulMultiChunkStream(httpx.SyncByteStream):
+    def __init__(self, chunks):
+        self.chunks = chunks
+        self.chunks_yielded = 0
+        self.closed = False
+
+    def __iter__(self):
+        for chunk in self.chunks:
+            self.chunks_yielded += 1
+            yield chunk
+
+    def close(self):
+        self.closed = True
+
+
+def test_slice_artifact_writes_successful_response_incrementally(tmp_path, monkeypatch):
+    chunks = [b"a" * (1024 * 1024), b"b" * (1024 * 1024), b"c" * (1024 * 1024)]
+    payload = b"".join(chunks)
+    metadata = _metadata(payload)
+    stream = _SuccessfulMultiChunkStream(chunks)
+    write_observations = []
+    real_fdopen = os.fdopen
+
+    class ObservedFile:
+        def __init__(self, descriptor, mode):
+            self.file = real_fdopen(descriptor, mode)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return self.file.__exit__(*args)
+
+        def write(self, data):
+            write_observations.append(stream.chunks_yielded)
+            return self.file.write(data)
+
+    monkeypatch.setattr(slicer_client.os, "fdopen", ObservedFile)
+    model_path = tmp_path / "source.stl"
+    workspace = tmp_path / "workspace"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    workspace.mkdir()
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                headers={
+                    "Content-Length": str(len(payload)),
+                    "Content-Type": metadata["artifact_media_type"],
+                    "X-DFPOS-Slicer-Metadata": _metadata_header(metadata),
+                },
+                stream=stream,
+            )
+        ),
+    )
+
+    result = client.slice_artifact(model_path, workspace)
+
+    assert result["success"] is True
+    assert write_observations == [1, 2, 3]
+    assert stream.closed is True
+    assert Path(result["artifact_path"]).read_bytes() == payload
+
+
 def test_slice_artifact_rejects_declared_size_disagreement_before_reading_body(tmp_path):
     payload = b"native artifact"
     metadata = _metadata(payload)
@@ -367,6 +689,51 @@ def test_slice_artifact_rejects_declared_size_disagreement_before_reading_body(t
     result = client.slice_artifact(model_path, workspace)
 
     assert result["success"] is False
+    assert stream.chunks_read == 0
+    assert stream.closed is True
+    assert list(workspace.iterdir()) == []
+
+
+def test_slicer_artifact_size_config_defaults_to_512_mib_and_requires_positive_integer():
+    assert getattr(app_config.Config, "SLICER_ARTIFACT_MAX_BYTES", None) == 512 * 1024 * 1024
+    positive_int = getattr(app_config, "_positive_int", None)
+    assert positive_int is not None
+    assert positive_int("1", "TEST_LIMIT") == 1
+    with pytest.raises(ValueError, match="TEST_LIMIT must be a positive integer"):
+        positive_int("0", "TEST_LIMIT")
+    with pytest.raises(ValueError, match="TEST_LIMIT must be a positive integer"):
+        positive_int("not-an-integer", "TEST_LIMIT")
+
+
+def test_slice_artifact_rejects_consistent_oversized_response_before_reading_body(tmp_path):
+    payload = b"native artifact"
+    metadata = _metadata(payload)
+    stream = _CountingArtifactStream(payload)
+    model_path = tmp_path / "source.stl"
+    workspace = tmp_path / "workspace"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    workspace.mkdir()
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        max_artifact_bytes=len(payload) - 1,
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                headers={
+                    "Content-Length": str(len(payload)),
+                    "Content-Type": metadata["artifact_media_type"],
+                    "X-DFPOS-Slicer-Metadata": _metadata_header(metadata),
+                },
+                stream=stream,
+            )
+        ),
+    )
+
+    result = client.slice_artifact(model_path, workspace)
+
+    assert result["success"] is False
+    assert "configured size limit" in result["error"].lower()
     assert stream.chunks_read == 0
     assert stream.closed is True
     assert list(workspace.iterdir()) == []

@@ -17,6 +17,16 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _positive_int(value: str, name: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a positive integer") from exc
+    if parsed <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return parsed
+
+
 class Config:
     APP_NAME = os.getenv("APP_NAME", "Dude Fish OS")
     APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:5000")
@@ -154,6 +164,10 @@ class Config:
     SLICER_ENABLED = _as_bool(os.getenv("SLICER_ENABLED"), False)
     SLICER_SERVICE_URL = os.getenv("SLICER_SERVICE_URL", "http://slicer:8092")
     SLICER_INTERNAL_API_TOKEN = os.getenv("SLICER_INTERNAL_API_TOKEN", "")
+    SLICER_ARTIFACT_MAX_BYTES = _positive_int(
+        os.getenv("SLICER_ARTIFACT_MAX_BYTES", str(512 * 1024 * 1024)),
+        "SLICER_ARTIFACT_MAX_BYTES",
+    )
     WEATHER_USER_AGENT = os.getenv(
         "WEATHER_USER_AGENT",
         f"{APP_NAME} ({ADMIN_EMAIL})",

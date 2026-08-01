@@ -5,6 +5,8 @@ import hashlib
 import json
 import os
 import re
+import secrets
+import stat
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,37 @@ _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _ERROR_BODY_MAX_BYTES = 4096
 _ERROR_TEXT_MAX_CHARACTERS = 600
 _ARTIFACT_CHUNK_BYTES = 1024 * 1024
+_DEFAULT_ARTIFACT_MAX_BYTES = 512 * 1024 * 1024
+_PUBLIC_BAMBU_FAILURE_MESSAGES = {
+    "archive_limit_exceeded": "Bambu Studio output exceeded a safety limit.",
+    "duplicate_profile": "Bambu Studio profile configuration is invalid.",
+    "engine_exception": "Bambu Studio failed unexpectedly.",
+    "engine_failure": "Bambu Studio failed.",
+    "executable_missing": "Bambu Studio is unavailable.",
+    "execution_failed": "Bambu Studio execution failed.",
+    "invalid_output": "Bambu Studio produced an invalid output artifact.",
+    "invalid_package": "Bambu Studio produced an invalid output package.",
+    "invalid_profile": "Bambu Studio profile configuration is invalid.",
+    "missing_gcode": "Bambu Studio output did not contain plate G-code.",
+    "missing_output": "Bambu Studio did not produce an output artifact.",
+    "missing_stats": "Bambu Studio output did not contain required estimates.",
+    "probe_failed": "Bambu Studio failed its runtime availability check.",
+    "probe_timeout": "Bambu Studio runtime availability check timed out.",
+    "profile_cycle": "Bambu Studio profile configuration is invalid.",
+    "profile_missing": "Bambu Studio required profile is unavailable.",
+    "profile_root_missing": "Bambu Studio profile configuration is unavailable.",
+    "profile_write_failed": "Bambu Studio could not prepare resolved profiles.",
+    "timeout": "Bambu Studio timed out.",
+    "version_mismatch": "Bambu Studio runtime version is unsupported.",
+    "version_unrecognized": "Bambu Studio runtime version could not be verified.",
+    "workspace_error": "Bambu Studio could not prepare its workspace.",
+    "workspace_unavailable": "Bambu Studio could not prepare its profile workspace.",
+}
+_SECURE_DIR_FD_SUPPORTED = (
+    hasattr(os, "O_DIRECTORY")
+    and hasattr(os, "O_NOFOLLOW")
+    and all(function in os.supports_dir_fd for function in (os.open, os.stat, os.unlink))
+)
 
 
 class SlicerClient:
@@ -48,11 +81,15 @@ class SlicerClient:
         base_url: str | None = None,
         token: str | None = None,
         enabled: bool = True,
+        max_artifact_bytes: int = _DEFAULT_ARTIFACT_MAX_BYTES,
         transport: httpx.BaseTransport | None = None,
     ):
+        if type(max_artifact_bytes) is not int or max_artifact_bytes <= 0:
+            raise ValueError("max_artifact_bytes must be a positive integer")
         self.base_url = (base_url or "").rstrip("/")
         self.token = token or ""
         self.enabled = enabled
+        self.max_artifact_bytes = max_artifact_bytes
         self.transport = transport
 
     def is_configured(self) -> bool:
@@ -120,12 +157,13 @@ class SlicerClient:
         if not self.is_configured():
             return {"success": False, "error": "DFPos Slicer service is not configured."}
 
-        destination: Path | None = None
-        destination_created = False
+        workspace_path = Path(workspace)
+        workspace_fd: int | None = None
+        workspace_identity: tuple[int, int] | None = None
+        artifact_filename: str | None = None
+        artifact_identity: tuple[int, int] | None = None
         try:
-            workspace_root = Path(workspace).resolve(strict=True)
-            if not workspace_root.is_dir():
-                raise ValueError("The slicer workspace is not a directory.")
+            workspace_fd, workspace_identity = _open_workspace_fd(workspace_path)
 
             data: dict[str, str] = {}
             if profile_name:
@@ -170,18 +208,30 @@ class SlicerClient:
                         content_length = int(content_length_header)
                         if content_length != expected_size:
                             raise ValueError("The slicer artifact size did not match its metadata.")
-                        destination = workspace_root / str(metadata["artifact_filename"])
-                        if destination.parent.resolve() != workspace_root:
-                            raise ValueError("The slicer artifact filename is unsafe.")
+                        if expected_size > self.max_artifact_bytes:
+                            raise ValueError(
+                                "The slicer artifact exceeds the configured size limit."
+                            )
+                        artifact_filename = metadata["artifact_filename"]
+                        destination = workspace_path / artifact_filename
 
                         digest = hashlib.sha256()
                         actual_size = 0
-                        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-                        if hasattr(os, "O_NOFOLLOW"):
-                            flags |= os.O_NOFOLLOW
-                        descriptor = os.open(destination, flags, 0o600)
-                        destination_created = True
-                        with os.fdopen(descriptor, "wb") as artifact_file:
+                        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+                        descriptor = os.open(
+                            artifact_filename,
+                            flags,
+                            0o600,
+                            dir_fd=workspace_fd,
+                        )
+                        created_stat = os.fstat(descriptor)
+                        artifact_identity = (created_stat.st_dev, created_stat.st_ino)
+                        try:
+                            artifact_stream = os.fdopen(descriptor, "wb")
+                        except BaseException:
+                            os.close(descriptor)
+                            raise
+                        with artifact_stream as artifact_file:
                             for chunk in response.iter_bytes(chunk_size=_ARTIFACT_CHUNK_BYTES):
                                 if actual_size + len(chunk) > expected_size:
                                     raise ValueError(
@@ -197,13 +247,82 @@ class SlicerClient:
                             raise ValueError(
                                 "The slicer artifact checksum did not match its metadata."
                             )
+                        final_stat = os.stat(
+                            artifact_filename,
+                            dir_fd=workspace_fd,
+                            follow_symlinks=False,
+                        )
+                        if (
+                            not stat.S_ISREG(final_stat.st_mode)
+                            or (final_stat.st_dev, final_stat.st_ino) != artifact_identity
+                            or final_stat.st_size != actual_size
+                        ):
+                            raise ValueError("The slicer artifact file identity changed.")
+                        _verify_workspace_path_identity(workspace_path, workspace_identity)
 
                         return {**metadata, "artifact_path": destination}
         except (OSError, ValueError, KeyError, httpx.HTTPError) as exc:
-            if destination is not None and destination_created:
-                destination.unlink(missing_ok=True)
+            if workspace_fd is not None and artifact_filename and artifact_identity:
+                _unlink_matching_artifact(workspace_fd, artifact_filename, artifact_identity)
             _log_warning("slicer artifact request failed: %s", exc)
             return {"success": False, "error": _safe_client_error(exc)}
+        finally:
+            if workspace_fd is not None:
+                os.close(workspace_fd)
+
+
+def _open_workspace_fd(workspace: Path) -> tuple[int, tuple[int, int]]:
+    if not _SECURE_DIR_FD_SUPPORTED:
+        raise ValueError("Secure slicer workspace operations are unavailable on this platform.")
+    try:
+        before = os.lstat(workspace)
+    except OSError as exc:
+        raise ValueError("The slicer workspace is not an accessible real directory.") from exc
+    if not stat.S_ISDIR(before.st_mode) or stat.S_ISLNK(before.st_mode):
+        raise ValueError("The slicer workspace must be a real directory, not a symlink.")
+
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    try:
+        workspace_fd = os.open(workspace, flags)
+    except OSError as exc:
+        raise ValueError("The slicer workspace could not be opened safely.") from exc
+
+    opened = os.fstat(workspace_fd)
+    identity = (opened.st_dev, opened.st_ino)
+    if not stat.S_ISDIR(opened.st_mode) or identity != (before.st_dev, before.st_ino):
+        os.close(workspace_fd)
+        raise ValueError("The slicer workspace changed while it was being opened.")
+    return workspace_fd, identity
+
+
+def _verify_workspace_path_identity(workspace: Path, identity: tuple[int, int]) -> None:
+    try:
+        current = os.lstat(workspace)
+    except OSError as exc:
+        raise ValueError("The slicer workspace changed during artifact transfer.") from exc
+    if not stat.S_ISDIR(current.st_mode) or (current.st_dev, current.st_ino) != identity:
+        raise ValueError("The slicer workspace changed during artifact transfer.")
+
+
+def _unlink_matching_artifact(
+    workspace_fd: int,
+    artifact_filename: str,
+    artifact_identity: tuple[int, int],
+) -> None:
+    try:
+        current = os.stat(
+            artifact_filename,
+            dir_fd=workspace_fd,
+            follow_symlinks=False,
+        )
+        if (current.st_dev, current.st_ino) == artifact_identity:
+            os.unlink(artifact_filename, dir_fd=workspace_fd)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        _log_warning("slicer artifact cleanup failed: %s", exc)
 
 
 def _decode_metadata(encoded: str) -> dict[str, Any]:
@@ -230,10 +349,14 @@ def _decode_metadata(encoded: str) -> dict[str, Any]:
     )
     if len(payload) > (_METADATA_HEADER_MAX_BYTES * 3) // 4:
         raise ValueError("The slicer metadata header is invalid.")
+    canonical = base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+    if not secrets.compare_digest(canonical, unpadded):
+        raise ValueError("The slicer metadata header is invalid.")
     metadata = json.loads(payload.decode("utf-8"))
     if not isinstance(metadata, dict) or set(metadata) != _METADATA_FIELDS:
         raise ValueError("The slicer metadata header is invalid.")
     _validate_metadata(metadata)
+    _validate_engine_semantics(metadata)
     return metadata
 
 
@@ -299,6 +422,42 @@ def _require_text(value: Any, *, maximum: int) -> None:
         raise ValueError("The slicer metadata header is invalid.")
 
 
+def _validate_engine_semantics(metadata: dict[str, Any]) -> None:
+    engine_key = metadata["engine_key"]
+    primary_failure = metadata["primary_failure"]
+    if engine_key == "bambu":
+        valid = (
+            metadata["engine_name"] == "Bambu Studio"
+            and metadata["engine_version"] == "2.7.1.62"
+            and metadata["artifact_filename"].endswith(".gcode.3mf")
+            and metadata["artifact_media_type"] == "application/vnd.bambulab.gcode-3mf"
+            and metadata["direct_print_eligible"] is True
+            and metadata["estimate_only"] is False
+            and metadata["fallback_used"] is False
+            and primary_failure is None
+        )
+    elif engine_key == "prusa":
+        valid = (
+            metadata["engine_name"] == "PrusaSlicer"
+            and re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}", metadata["engine_version"]) is not None
+            and metadata["artifact_filename"].endswith(".gcode")
+            and not metadata["artifact_filename"].endswith(".gcode.3mf")
+            and metadata["artifact_media_type"] == "text/x.gcode"
+            and metadata["direct_print_eligible"] is False
+            and metadata["estimate_only"] is True
+            and metadata["fallback_used"] is True
+            and isinstance(primary_failure, dict)
+            and primary_failure["engine_key"] == "bambu"
+            and primary_failure["code"] in _PUBLIC_BAMBU_FAILURE_MESSAGES
+            and primary_failure["message"]
+            == _PUBLIC_BAMBU_FAILURE_MESSAGES.get(primary_failure["code"])
+        )
+    else:
+        valid = False
+    if not valid:
+        raise ValueError("The slicer metadata engine/artifact contract is invalid.")
+
+
 def _service_error(response: httpx.Response) -> dict[str, Any]:
     generic = {
         "success": False,
@@ -358,4 +517,5 @@ def get_slicer_client() -> SlicerClient:
         base_url=config.get("SLICER_SERVICE_URL", ""),
         token=config.get("SLICER_INTERNAL_API_TOKEN", ""),
         enabled=config.get("SLICER_ENABLED", False),
+        max_artifact_bytes=config.get("SLICER_ARTIFACT_MAX_BYTES", _DEFAULT_ARTIFACT_MAX_BYTES),
     )
