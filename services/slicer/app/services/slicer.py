@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from pathlib import Path
 
 from app.schemas.slice import SlicerStats
-from app.services.engines.base import EngineArtifact, SliceOptions
+from app.services.engines.base import EngineArtifact, RequestValidationError, SliceOptions
 from app.services.engines.prusa import PrusaEngine
 from app.services.engines.stats import (
     PLA_DENSITY_G_PER_CM3,
@@ -43,19 +42,28 @@ def slice_model(
     from app.config import settings
 
     source_path = Path(model_path)
-    profile_path = _slicer_profile_path(profile_name)
     options = dict(slicer_options or {})
     options["center"] = center
-    options.setdefault("model_filename", source_path.name)
-    printer = profile_path.stem
-    adapter_options = SliceOptions(
-        printer=printer,
-        nozzle_diameter=_legacy_nozzle(options),
-        material=str(options.get("filament_type") or options.get("material") or "PLA"),
-        model_suffix=source_path.suffix.lower(),
-        slicer_options=options,
-        preserve_orientation=bool(preserve_orientation),
-    )
+    options["model_filename"] = source_path.name
+    profile_used = _requested_profile_name(profile_name)
+    if profile_name is not None and not profile_name.strip():
+        return SlicerStats(
+            success=False,
+            error="The requested printer profile is unsupported.",
+            profile_used=profile_used,
+        )
+    if any(key in options and not str(options[key]).strip() for key in ("material", "filament_type")):
+        return SlicerStats(
+            success=False,
+            error="The requested material is unsupported.",
+            profile_used=profile_used,
+        )
+    try:
+        adapter_options = SliceOptions.from_request(profile_name, options, preserve_orientation)
+    except RequestValidationError as exc:
+        return SlicerStats(success=False, error=exc.message, profile_used=profile_used)
+
+    profile_path = SLICER_PROFILES_DIR / f"{adapter_options.printer}.ini"
     engine = PrusaEngine(settings.prusa_slicer_path, SLICER_PROFILES_DIR)
     probe = engine.probe()
     if not probe.available:
@@ -86,11 +94,10 @@ def slice_model(
     )
 
 
-def _legacy_nozzle(options: dict[object, object]) -> Decimal:
-    try:
-        return Decimal(str(options.get("nozzle_diameter", "0.4")))
-    except Exception:
-        return Decimal("0.4")
+def _requested_profile_name(profile_name: str | None) -> str:
+    if profile_name is None:
+        return DEFAULT_SLICER_PROFILE
+    return profile_name if profile_name.lower().endswith(".ini") else f"{profile_name}.ini"
 
 
 def _probe_error(code: object) -> str:

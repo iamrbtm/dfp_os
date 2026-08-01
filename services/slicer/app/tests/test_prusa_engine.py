@@ -183,5 +183,47 @@ def test_slice_classifies_missing_output_and_required_estimates_as_fallback_elig
     missing_estimates = _engine().slice(model_path, tmp_path / "workspace", _options())
 
     assert isinstance(missing_estimates, EngineFailure)
-    assert missing_estimates.code == "missing_estimates"
+    assert missing_estimates.code == "missing_stats"
     assert missing_estimates.fallback_eligible is True
+
+
+def test_slice_classifies_malformed_numeric_gcode_stats_as_invalid_output(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.stl"
+    model_path.write_text("solid model\nendsolid model\n", encoding="utf-8")
+
+    def writes_malformed_gcode(command, **_kwargs):
+        output = Path(command[command.index("--output") + 1])
+        output.write_text(
+            "; total filament used [g] = 5..00\n"
+            "; estimated printing time (normal mode) = 10m\n",
+            encoding="utf-8",
+        )
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", writes_malformed_gcode)
+
+    failure = _engine().slice(model_path, tmp_path / "workspace", _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "invalid_output"
+    assert failure.fallback_eligible is True
+
+
+def test_slice_removes_stale_workspace_artifact_before_subprocess_runs(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.stl"
+    model_path.write_text("solid model\nendsolid model\n", encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    stale_artifact = workspace / "model.gcode"
+    stale_artifact.write_text(
+        "; total filament used [g] = 99.00\n; estimated printing time (normal mode) = 9h\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", lambda _command, **_kwargs: _Proc())
+
+    failure = _engine().slice(model_path, workspace, _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "missing_output"
+    assert not stale_artifact.exists()

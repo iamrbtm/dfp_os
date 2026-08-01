@@ -12,7 +12,12 @@ from app.services.engines.base import (
     safe_artifact_filename,
     sha256_file,
 )
-from app.services.engines.stats import _normalize_fill_density, _parse_gcode_stats, filament_density_from_options
+from app.services.engines.stats import (
+    InvalidGcodeStatsError,
+    _normalize_fill_density,
+    _parse_gcode_stats,
+    filament_density_from_options,
+)
 
 PRUSA_PROFILE_NAMES = {
     "bambu_a1": "bambu_a1.ini",
@@ -84,6 +89,10 @@ class PrusaEngine:
         workspace.mkdir(parents=True, exist_ok=True)
         artifact_filename = f"{Path(safe_artifact_filename(model_path.name)).stem}.gcode"
         artifact_path = workspace / artifact_filename
+        try:
+            artifact_path.unlink(missing_ok=True)
+        except OSError as exc:
+            return self._failure("workspace_error", f"Could not prepare the G-code output path: {exc}")
         command = self._command(model_path, artifact_path, profile_path, options)
         try:
             proc = subprocess.run(command, capture_output=True, timeout=600)
@@ -105,9 +114,12 @@ class PrusaEngine:
         if not artifact_path.exists():
             return self._failure("missing_output", "PrusaSlicer did not produce an output file.")
 
-        stats = _parse_gcode_stats(artifact_path, density=filament_density_from_options(options.slicer_options))
+        try:
+            stats = _parse_gcode_stats(artifact_path, density=filament_density_from_options(options.slicer_options))
+        except InvalidGcodeStatsError:
+            return self._failure("invalid_output", "G-code output contains malformed statistics.")
         if stats is None:
-            return self._failure("missing_estimates", "Could not parse filament/time from G-code output.")
+            return self._failure("missing_stats", "Could not parse filament/time from G-code output.")
 
         return EngineArtifact(
             engine_key=self.engine_key,

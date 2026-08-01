@@ -7,6 +7,20 @@ from pathlib import Path
 PLA_DENSITY_G_PER_CM3 = Decimal("1.24")
 
 
+class InvalidGcodeStatsError(ValueError):
+    """Raised when a G-code statistics comment has an invalid numeric value."""
+
+
+def _parse_decimal_comment(value: str) -> Decimal:
+    try:
+        parsed = Decimal(value)
+    except (InvalidOperation, ValueError) as exc:
+        raise InvalidGcodeStatsError("G-code statistics contain an invalid numeric value.") from exc
+    if not parsed.is_finite():
+        raise InvalidGcodeStatsError("G-code statistics contain an invalid numeric value.")
+    return parsed
+
+
 def _normalize_fill_density(value: object) -> str | None:
     """Return a PrusaSlicer-safe fill density percent, or ``None`` if unusable."""
     if value is None:
@@ -98,7 +112,7 @@ def _parse_gcode_stats(gcode_path: str | Path, *, density: Decimal = PLA_DENSITY
                 for source_name, pattern in grams_patterns:
                     match = pattern.search(line)
                     if match:
-                        value = Decimal(match.group(1))
+                        value = _parse_decimal_comment(match.group(1))
                         if value > 0:
                             filament_grams = value
                             filament_source_pattern = source_name
@@ -107,7 +121,7 @@ def _parse_gcode_stats(gcode_path: str | Path, *, density: Decimal = PLA_DENSITY
                 if not found_filament:
                     match = volume_pattern.search(line)
                     if match:
-                        value = Decimal(match.group(1))
+                        value = _parse_decimal_comment(match.group(1))
                         if value > 0:
                             filament_grams = (value * density).quantize(Decimal("0.01"))
                             filament_source_pattern = "filament_used_cm3"
@@ -116,7 +130,7 @@ def _parse_gcode_stats(gcode_path: str | Path, *, density: Decimal = PLA_DENSITY
             if cost_source_pattern is None:
                 match = cost_pattern.search(line)
                 if match:
-                    filament_cost = Decimal(match.group(1))
+                    filament_cost = _parse_decimal_comment(match.group(1))
                     cost_source_pattern = "total_filament_cost"
 
             if not found_time:
@@ -153,6 +167,7 @@ def filament_density_from_options(options: dict[str, object]) -> Decimal:
     if value is None or value == "":
         return PLA_DENSITY_G_PER_CM3
     try:
-        return Decimal(str(value))
+        density = Decimal(str(value))
     except (InvalidOperation, ValueError):
         return PLA_DENSITY_G_PER_CM3
+    return density if density.is_finite() and density > 0 else PLA_DENSITY_G_PER_CM3

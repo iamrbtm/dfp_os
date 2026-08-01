@@ -3,6 +3,8 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from app.services import slicer
 from app.services.engines.stats import _normalize_fill_density
 
@@ -73,3 +75,30 @@ def test_slice_model_preserves_prusa_error_text_with_a_bounded_stderr_diagnostic
 
     assert result.success is False
     assert result.error == f"PrusaSlicer exited with code 2. stderr: {'x' * 512}"
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "slicer_options", "error"),
+    [
+        ("unknown-printer", {}, "The requested printer profile is unsupported."),
+        ("", {}, "The requested printer profile is unsupported."),
+        ("bambu_a1", {"nozzle_diameter": "0.6"}, "Only a 0.4 mm nozzle is supported."),
+        ("bambu_a1", {"material": "NYLON"}, "The requested material is unsupported."),
+        ("bambu_a1", {"material": ""}, "The requested material is unsupported."),
+    ],
+)
+def test_slice_model_rejects_explicit_invalid_engine_options_before_probe(
+    tmp_path, monkeypatch, profile_name, slicer_options, error
+):
+    model_path = tmp_path / "model.stl"
+    model_path.write_text("solid model\nendsolid model\n", encoding="utf-8")
+
+    def should_not_run(*_args, **_kwargs):
+        raise AssertionError("invalid requests must not probe or execute PrusaSlicer")
+
+    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", should_not_run)
+
+    result = slicer.slice_model(str(model_path), profile_name=profile_name, slicer_options=slicer_options)
+
+    assert result.success is False
+    assert result.error == error
