@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -37,7 +38,14 @@ def _write_profile(profile_root: Path, relative_path: str, **profile: object) ->
 @pytest.fixture
 def profile_root(tmp_path: Path) -> Path:
     root = tmp_path / "BBL"
-    _write_profile(root, "ancestors/root.json", name="machine-root", oldest="root", precedence="root")
+    _write_profile(
+        root,
+        "ancestors/root.json",
+        name="machine-root",
+        oldest="root",
+        precedence="root",
+        nested={"level": {"value": "original"}},
+    )
     _write_profile(
         root,
         "ancestors/parent-with-an-unrelated-filename.json",
@@ -136,6 +144,36 @@ def test_resolve_writes_fresh_flattened_files_in_each_request_workspace(profile_
     assert first.machine_path.read_bytes() == second.machine_path.read_bytes()
 
 
+def test_cached_source_and_flattened_profiles_cannot_be_mutated_across_requests(profile_root: Path, tmp_path: Path):
+    resolver = BambuProfileResolver(profile_root)
+
+    with pytest.raises(TypeError):
+        resolver._profiles["machine-root"]["oldest"] = "corrupted"
+
+    first = resolver._flatten("Bambu Lab A1 0.4 nozzle")
+    first["nested"]["level"]["value"] = "corrupted"
+    second = resolver._flatten("Bambu Lab A1 0.4 nozzle")
+    resolved = resolver.resolve("bambu_a1", "PLA", tmp_path / "workspace")
+
+    assert second["nested"]["level"]["value"] == "original"
+    assert _read(resolved.machine_path)["nested"]["level"]["value"] == "original"
+
+
+def test_concurrent_resolves_use_isolated_request_files(profile_root: Path, tmp_path: Path):
+    resolver = BambuProfileResolver(profile_root)
+
+    def resolve(index: int) -> tuple[Path, bytes]:
+        result = resolver.resolve("bambu_a1", "PLA", tmp_path / f"request-{index}")
+        return result.machine_path, result.machine_path.read_bytes()
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(resolve, range(24)))
+
+    assert len({path.parent for path, _content in results}) == 24
+    assert len({content for _path, content in results}) == 1
+    assert _read(results[0][0])["nested"]["level"]["value"] == "original"
+
+
 @pytest.mark.parametrize(
     ("printer", "material", "expected_code"),
     [
@@ -173,12 +211,32 @@ def test_resolve_reports_stable_errors_for_missing_parent_or_cycle(
     assert error.value.code == expected_code
 
 
-def test_resolver_rejects_duplicate_profile_names_instead_of_choosing_by_scan_order(
-    profile_root: Path, tmp_path: Path
-):
+def test_resolver_rejects_duplicate_profile_names_instead_of_choosing_by_scan_order(profile_root: Path, tmp_path: Path):
     _write_profile(profile_root, "duplicates/duplicate.json", name="Generic PLA @BBL A1")
 
     with pytest.raises(BambuProfileError) as error:
         BambuProfileResolver(profile_root).resolve("bambu_a1", "PLA", tmp_path / "workspace")
 
     assert error.value.code == "duplicate_profile"
+
+
+def test_resolve_wraps_an_unusable_workspace_with_a_stable_error(profile_root: Path, tmp_path: Path):
+    workspace = tmp_path / "not-a-directory"
+    workspace.write_text("occupied", encoding="utf-8")
+
+    with pytest.raises(BambuProfileError) as error:
+        BambuProfileResolver(profile_root).resolve("bambu_a1", "PLA", workspace)
+
+    assert error.value.code == "workspace_unavailable"
+
+
+def test_resolve_wraps_profile_write_failures_with_a_stable_error(profile_root: Path, tmp_path: Path, monkeypatch):
+    def fail_write(*_args, **_kwargs):
+        raise OSError("synthetic write failure")
+
+    monkeypatch.setattr(Path, "write_text", fail_write)
+
+    with pytest.raises(BambuProfileError) as error:
+        BambuProfileResolver(profile_root).resolve("bambu_a1", "PLA", tmp_path / "workspace")
+
+    assert error.value.code == "profile_write_failed"

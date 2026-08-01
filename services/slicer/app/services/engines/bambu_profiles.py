@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from threading import RLock
+from types import MappingProxyType
 
 from app.services.engines.base import SUPPORTED_MATERIALS
 
@@ -49,7 +52,8 @@ class BambuProfileResolver:
     def __init__(self, profile_root: Path) -> None:
         self.profile_root = Path(profile_root)
         self._profiles = self._build_index()
-        self._flattened: dict[str, dict[str, object]] = {}
+        self._flattened: Mapping[str, bytes] = MappingProxyType({})
+        self._cache_lock = RLock()
 
     def resolve(self, printer_key: str, material: str, workspace: Path) -> ResolvedBambuProfiles:
         printer = str(printer_key).strip().lower()
@@ -68,7 +72,10 @@ class BambuProfileResolver:
         }
 
         request_workspace = Path(workspace)
-        request_workspace.mkdir(parents=True, exist_ok=True)
+        try:
+            request_workspace.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise BambuProfileError("workspace_unavailable", "Could not prepare the Bambu profile workspace.") from exc
         paths = {
             "machine": request_workspace / "machine.json",
             "process": request_workspace / "process.json",
@@ -76,7 +83,13 @@ class BambuProfileResolver:
         }
         for profile_type, path in paths.items():
             flattened = self._flatten(profile_ids[profile_type])
-            path.write_text(json.dumps(flattened, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+            try:
+                path.write_text(
+                    json.dumps(flattened, ensure_ascii=False, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+            except OSError as exc:
+                raise BambuProfileError("profile_write_failed", "Could not write a resolved Bambu profile.") from exc
 
         return ResolvedBambuProfiles(
             machine_path=paths["machine"],
@@ -85,11 +98,11 @@ class BambuProfileResolver:
             profile_ids=profile_ids,
         )
 
-    def _build_index(self) -> dict[str, dict[str, object]]:
+    def _build_index(self) -> Mapping[str, bytes]:
         if not self.profile_root.is_dir():
             raise BambuProfileError("profile_root_missing", "The configured Bambu profile root is unavailable.")
 
-        profiles: dict[str, dict[str, object]] = {}
+        profiles: dict[str, bytes] = {}
         for path in sorted(self.profile_root.rglob("*.json")):
             try:
                 value = json.loads(path.read_text(encoding="utf-8"))
@@ -102,34 +115,41 @@ class BambuProfileResolver:
                 continue
             if name in profiles:
                 raise BambuProfileError("duplicate_profile", f"Bambu profile name is duplicated: {name}.")
-            profiles[name] = value
-        return profiles
+            profiles[name] = self._serialize(value)
+        return MappingProxyType(profiles)
 
     def _flatten(self, name: str, active: tuple[str, ...] = ()) -> dict[str, object]:
-        cached = self._flattened.get(name)
-        if cached is not None:
-            return cached
-        if name in active:
-            raise BambuProfileError("profile_cycle", f"Bambu profile inheritance contains a cycle at: {name}.")
+        with self._cache_lock:
+            cached = self._flattened.get(name)
+            if cached is not None:
+                return json.loads(cached)
+            if name in active:
+                raise BambuProfileError("profile_cycle", f"Bambu profile inheritance contains a cycle at: {name}.")
 
-        profile = self._profiles.get(name)
-        if profile is None:
-            raise BambuProfileError("profile_missing", f"Required Bambu profile is unavailable: {name}.")
+            serialized_profile = self._profiles.get(name)
+            if serialized_profile is None:
+                raise BambuProfileError("profile_missing", f"Required Bambu profile is unavailable: {name}.")
+            profile = json.loads(serialized_profile)
 
-        next_active = (*active, name)
-        flattened: dict[str, object] = {}
-        parent = profile.get("inherits")
-        if parent:
-            if not isinstance(parent, str):
-                raise BambuProfileError("invalid_profile", f"Bambu profile has an invalid parent: {name}.")
-            flattened.update(self._flatten(parent, next_active))
+            next_active = (*active, name)
+            flattened: dict[str, object] = {}
+            parent = profile.get("inherits")
+            if parent:
+                if not isinstance(parent, str):
+                    raise BambuProfileError("invalid_profile", f"Bambu profile has an invalid parent: {name}.")
+                flattened.update(self._flatten(parent, next_active))
 
-        includes = profile.get("include", [])
-        if not isinstance(includes, list) or any(not isinstance(value, str) for value in includes):
-            raise BambuProfileError("invalid_profile", f"Bambu profile has invalid includes: {name}.")
-        for included_name in includes:
-            flattened.update(self._flatten(included_name, next_active))
+            includes = profile.get("include", [])
+            if not isinstance(includes, list) or any(not isinstance(value, str) for value in includes):
+                raise BambuProfileError("invalid_profile", f"Bambu profile has invalid includes: {name}.")
+            for included_name in includes:
+                flattened.update(self._flatten(included_name, next_active))
 
-        flattened.update({key: value for key, value in profile.items() if key not in {"inherits", "include"}})
-        self._flattened[name] = flattened
-        return flattened
+            flattened.update({key: value for key, value in profile.items() if key not in {"inherits", "include"}})
+            serialized_flattened = self._serialize(flattened)
+            self._flattened = MappingProxyType({**self._flattened, name: serialized_flattened})
+            return json.loads(serialized_flattened)
+
+    @staticmethod
+    def _serialize(value: dict[str, object]) -> bytes:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
