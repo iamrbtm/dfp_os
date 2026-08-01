@@ -308,15 +308,26 @@
       <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <form method="post" action="{{ url_for('products.update_product_story_card', product_id=product.id) }}" class="app-card p-5 space-y-4">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <h3 class="text-base font-semibold" style="color: var(--color-text);">Product Story Card</h3>
-          <div class="grid gap-4 md:grid-cols-2">
-            <textarea name="story_what_it_is" class="app-input" rows="3" placeholder="What it is">{{ product.story_what_it_is or '' }}</textarea>
-            <textarea name="story_who_it_is_for" class="app-input" rows="3" placeholder="Who it is for">{{ product.story_who_it_is_for or '' }}</textarea>
-            <textarea name="story_materials" class="app-input" rows="3" placeholder="Materials">{{ product.story_materials or '' }}</textarea>
-            <textarea name="story_customization_options" class="app-input" rows="3" placeholder="Customization options">{{ product.story_customization_options or '' }}</textarea>
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Product Story Card</h3>
+            {% if ai_story_card_enabled %}
+            <button type="button" class="app-btn app-btn-secondary text-xs px-3 py-2"
+                    data-story-generate
+                    data-url="{{ url_for('products.generate_product_story_card', product_id=product.id) }}"
+                    aria-label="Generate a story card draft with AI">Generate with AI</button>
+            {% endif %}
           </div>
-          <textarea name="story_internal_compliance_notes" class="app-input" rows="3" placeholder="Internal compliance notes">{{ product.story_internal_compliance_notes or '' }}</textarea>
-          <button type="submit" class="app-btn app-btn-primary">Save Story Card</button>
+          <div class="grid gap-4 md:grid-cols-2">
+            <textarea name="story_what_it_is" id="story_what_it_is" class="app-input" rows="3" placeholder="What it is">{{ product.story_what_it_is or '' }}</textarea>
+            <textarea name="story_who_it_is_for" id="story_who_it_is_for" class="app-input" rows="3" placeholder="Who it is for">{{ product.story_who_it_is_for or '' }}</textarea>
+            <textarea name="story_materials" id="story_materials" class="app-input" rows="3" placeholder="Materials">{{ product.story_materials or '' }}</textarea>
+            <textarea name="story_customization_options" id="story_customization_options" class="app-input" rows="3" placeholder="Customization options">{{ product.story_customization_options or '' }}</textarea>
+          </div>
+          <textarea name="story_internal_compliance_notes" id="story_internal_compliance_notes" class="app-input" rows="3" placeholder="Internal compliance notes">{{ product.story_internal_compliance_notes or '' }}</textarea>
+          <div class="flex flex-wrap items-center gap-3">
+            <button type="submit" class="app-btn app-btn-primary">Save Story Card</button>
+            <p class="text-xs" style="color: var(--color-text-muted);">AI drafts are suggestions — review before saving.</p>
+          </div>
         </form>
 
         <div class="space-y-4">

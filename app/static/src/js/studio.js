@@ -90,6 +90,7 @@
     initImageManagement();
     initUploadSettingsModal();
     initAssetsModal();
+    initStoryCardAI();
   });
 
   function initModelUpload() {
@@ -538,6 +539,58 @@
           showFlash(err.message || "Re-analysis failed.", "danger");
           btn.disabled = false;
           btn.textContent = "Re-analyze";
+        });
+    });
+  }
+
+  function initStoryCardAI() {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-story-generate]");
+      if (!btn) return;
+
+      var url = btn.getAttribute("data-url");
+      if (!url) return;
+
+      var original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Generating...";
+
+      fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "X-CSRFToken": getCSRFToken()
+        }
+      })
+        .then(function (r) {
+          return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; });
+        })
+        .then(function (resp) {
+          var data = resp.data || {};
+          if (!resp.ok || data.success === false) {
+            throw new Error(data.error || "AI generation failed.");
+          }
+          var fields = data.data || {};
+          var mapping = {
+            story_what_it_is: "story_what_it_is",
+            story_who_it_is_for: "story_who_it_is_for",
+            story_materials: "story_materials",
+            story_customization_options: "story_customization_options",
+            story_internal_compliance_notes: "story_internal_compliance_notes"
+          };
+          Object.keys(mapping).forEach(function (key) {
+            var el = document.getElementById(mapping[key]);
+            if (el && fields[key] != null) el.value = fields[key];
+          });
+          showFlash(data.message || "Draft generated. Review the boxes, then save to apply.", "success");
+        })
+        .catch(function (err) {
+          showFlash(err.message || "AI generation failed.", "danger");
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = original;
         });
     });
   }

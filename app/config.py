@@ -116,8 +116,10 @@ class Config:
         "OPENAI_MODEL_TREND_SCOUT",
         os.getenv("OPENAI_MODEL_ANALYTICS", OPENAI_MODEL),
     )
+    OPENAI_MODEL_PRODUCT_STORY = os.getenv("OPENAI_MODEL_PRODUCT_STORY", OPENAI_MODEL)
     AI_RECEIPT_PARSING_ENABLED = _as_bool(os.getenv("AI_RECEIPT_PARSING_ENABLED"), False)
     AI_ANALYTICS_INSIGHTS_ENABLED = _as_bool(os.getenv("AI_ANALYTICS_INSIGHTS_ENABLED"), False)
+    AI_PRODUCT_STORY_ENABLED = _as_bool(os.getenv("AI_PRODUCT_STORY_ENABLED"), False)
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_FALLBACK_URL = os.getenv("OLLAMA_FALLBACK_URL", "http://localhost:11434")
     OLLAMA_RECEIPT_MODEL = os.getenv("OLLAMA_RECEIPT_MODEL", "llama3")

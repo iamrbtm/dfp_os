@@ -198,6 +198,10 @@ def _render_studio(
             dead_stock_recommendations=dead_stock_recommendations,
             storage_reference_name=storage_reference_name,
             cost_defaults=global_cost_defaults(),
+            ai_story_card_enabled=bool(
+                current_app.config.get("AI_PRODUCT_STORY_ENABLED", False)
+                and current_app.config.get("OPENAI_API_KEY", "")
+            ),
         ),
         status_code,
     )
@@ -372,6 +376,59 @@ def update_product_story_card(product_id: int):
     )
     flash("Product story card updated.", "success")
     return redirect(url_for("products.studio", product_id=product.id))
+
+
+@bp.route("/studio/<int:product_id>/story-card/generate", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def generate_product_story_card(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return jsonify({"success": False, "error": "Product not found"}), 404
+
+    if not current_app.config.get("AI_PRODUCT_STORY_ENABLED", False):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": (
+                        "AI story card generation is disabled. Set AI_PRODUCT_STORY_ENABLED=true "
+                        "and OPENAI_API_KEY in the environment, or write the boxes by hand."
+                    ),
+                }
+            ),
+            400,
+        )
+
+    from app.services.product_story_ai import generate_story_card_draft
+
+    draft = generate_story_card_draft(product, actor_id=current_user.id)
+    if draft is None:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": (
+                        "AI generation failed. Check the OpenAI API key and try again, "
+                        "or write the story card by hand."
+                    ),
+                }
+            ),
+            502,
+        )
+
+    return jsonify(
+        {
+            "success": True,
+            "message": "Draft generated. Review the boxes, then save to apply.",
+            "data": {
+                "story_what_it_is": draft.what_it_is,
+                "story_who_it_is_for": draft.who_it_is_for,
+                "story_materials": draft.materials,
+                "story_customization_options": draft.customization_options,
+                "story_internal_compliance_notes": draft.internal_compliance_notes,
+            },
+        }
+    )
 
 
 @bp.route("/studio/<int:product_id>/dead-stock/generate", methods=["POST"])
@@ -615,8 +672,7 @@ def upload_model(product_id: int):
     if not enqueue_ok:
         product.analysis_status = "failed"
         product.analysis_error = (
-            "Background worker is not running. Please contact an administrator "
-            "or try again later."
+            "Background worker is not running. Please contact an administrator or try again later."
         )
         db.session.commit()
         get_audit_client().record(
@@ -854,7 +910,9 @@ def calculate_product_costs(product_id: int):
     product = get_by_id(Product, product_id)
     if product is None:
         return (
-            jsonify({"success": False, "status": "failed", "data": None, "error": "Product not found"}),
+            jsonify(
+                {"success": False, "status": "failed", "data": None, "error": "Product not found"}
+            ),
             404,
         )
 
@@ -1160,9 +1218,7 @@ def upload_product_image(product_id: int):
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
         return (
-            jsonify(
-                {"success": False, "error": "Unsupported image type. Use JPG, PNG, or WebP."}
-            ),
+            jsonify({"success": False, "error": "Unsupported image type. Use JPG, PNG, or WebP."}),
             400,
         )
 
