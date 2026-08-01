@@ -32,3 +32,13 @@ class SliceResponse(BaseModel):
     profile_used: str = ""
     stats: dict[str, Any] = Field(default_factory=dict)
     gcode: str | None = None
+
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+
+
+class ErrorResponse(BaseModel):
+    success: bool = False
+    error: ErrorDetail
