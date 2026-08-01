@@ -41,6 +41,15 @@ def _engine() -> PrusaEngine:
     return PrusaEngine("prusa-slicer", profiles)
 
 
+def _versioned_runner(slice_runner):
+    def run(command, **kwargs):
+        if "--version" in command:
+            return _Proc(stdout=b"PrusaSlicer 2.8.1+linux-x64\n")
+        return slice_runner(command, **kwargs)
+
+    return run
+
+
 def test_probe_reads_a_stable_prusaslicer_version(monkeypatch):
     def fake_run(command, **_kwargs):
         assert command == ["prusa-slicer", "--version"]
@@ -52,6 +61,53 @@ def test_probe_reads_a_stable_prusaslicer_version(monkeypatch):
 
     assert probe.available is True
     assert probe.engine_version == "2.8.1"
+
+
+def test_probe_requires_all_supported_printer_profiles(tmp_path, monkeypatch):
+    profiles = tmp_path / "profiles"
+    profiles.mkdir()
+    (profiles / "bambu_a1.ini").write_text("profile", encoding="utf-8")
+    (profiles / "bambu_p1p.ini").write_text("profile", encoding="utf-8")
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        "app.services.engines.prusa.subprocess.run",
+        lambda command, **_kwargs: calls.append(command) or _Proc(stdout=b"PrusaSlicer 2.8.1"),
+    )
+
+    probe = PrusaEngine("prusa-slicer", profiles).probe()
+
+    assert probe.available is False
+    assert probe.diagnostics == {"code": "profile_missing"}
+    assert calls == []
+    assert str(tmp_path) not in str(probe.diagnostics)
+
+
+def test_first_slice_probes_version_and_shares_configured_engine_budget(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.stl"
+    model_path.write_text("solid model\nendsolid model\n", encoding="utf-8")
+    timeouts: list[float] = []
+
+    def fake_run(command, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        if "--version" in command:
+            return _Proc(stdout=b"PrusaSlicer 2.8.1+linux-x64\n")
+        output = Path(command[command.index("--output") + 1])
+        output.write_text(
+            "; total filament used [g] = 5.00\n; estimated printing time (normal mode) = 10m\n",
+            encoding="utf-8",
+        )
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", fake_run)
+
+    artifact = PrusaEngine("prusa-slicer", _engine().profiles_dir, timeout=10, probe_timeout=3).slice(
+        model_path, tmp_path / "workspace", _options()
+    )
+
+    assert not isinstance(artifact, EngineFailure)
+    assert artifact.engine_version == "2.8.1"
+    assert timeouts == [3, 7]
+    assert sum(timeouts) == 10
 
 
 @pytest.mark.parametrize(
@@ -152,7 +208,7 @@ def test_slice_normalizes_fill_density_and_returns_gcode_artifact(tmp_path, monk
 def test_slice_classifies_runtime_failures_as_fallback_eligible(tmp_path, monkeypatch, fake_run, expected_code):
     model_path = tmp_path / "model.stl"
     model_path.write_text("solid model\nendsolid model\n", encoding="utf-8")
-    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", fake_run)
+    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", _versioned_runner(fake_run))
 
     failure = _engine().slice(model_path, tmp_path / "workspace", _options())
 
@@ -166,7 +222,10 @@ def test_slice_classifies_missing_output_and_required_estimates_as_fallback_elig
     model_path = tmp_path / "model.stl"
     model_path.write_text("solid model\nendsolid model\n", encoding="utf-8")
 
-    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", lambda _command, **_kwargs: _Proc())
+    monkeypatch.setattr(
+        "app.services.engines.prusa.subprocess.run",
+        _versioned_runner(lambda _command, **_kwargs: _Proc()),
+    )
     missing_output = _engine().slice(model_path, tmp_path / "workspace", _options())
 
     assert isinstance(missing_output, EngineFailure)
@@ -179,7 +238,7 @@ def test_slice_classifies_missing_output_and_required_estimates_as_fallback_elig
         output.write_text("; total filament used [g] = 5.00\n", encoding="utf-8")
         return _Proc()
 
-    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", writes_incomplete_gcode)
+    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", _versioned_runner(writes_incomplete_gcode))
     missing_estimates = _engine().slice(model_path, tmp_path / "workspace", _options())
 
     assert isinstance(missing_estimates, EngineFailure)
@@ -194,13 +253,12 @@ def test_slice_classifies_malformed_numeric_gcode_stats_as_invalid_output(tmp_pa
     def writes_malformed_gcode(command, **_kwargs):
         output = Path(command[command.index("--output") + 1])
         output.write_text(
-            "; total filament used [g] = 5..00\n"
-            "; estimated printing time (normal mode) = 10m\n",
+            "; total filament used [g] = 5..00\n; estimated printing time (normal mode) = 10m\n",
             encoding="utf-8",
         )
         return _Proc()
 
-    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", writes_malformed_gcode)
+    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", _versioned_runner(writes_malformed_gcode))
 
     failure = _engine().slice(model_path, tmp_path / "workspace", _options())
 
@@ -220,7 +278,10 @@ def test_slice_removes_stale_workspace_artifact_before_subprocess_runs(tmp_path,
         encoding="utf-8",
     )
 
-    monkeypatch.setattr("app.services.engines.prusa.subprocess.run", lambda _command, **_kwargs: _Proc())
+    monkeypatch.setattr(
+        "app.services.engines.prusa.subprocess.run",
+        _versioned_runner(lambda _command, **_kwargs: _Proc()),
+    )
 
     failure = _engine().slice(model_path, workspace, _options())
 

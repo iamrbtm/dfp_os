@@ -98,6 +98,14 @@ class BambuProfileResolver:
             profile_ids=profile_ids,
         )
 
+    def validate_required_matrix(self) -> None:
+        """Flatten every pinned profile required by the supported printer/material matrix."""
+        for selected in BAMBU_PROFILE_MATRIX.values():
+            self._flatten(selected["machine"])
+            self._flatten(selected["process"])
+            for material in sorted(SUPPORTED_MATERIALS):
+                self._flatten(selected["filament"].format(material=material))
+
     def _build_index(self) -> Mapping[str, bytes]:
         if not self.profile_root.is_dir():
             raise BambuProfileError("profile_root_missing", "The configured Bambu profile root is unavailable.")

@@ -46,6 +46,9 @@ class _Resolver:
             profile_ids={"machine": "A1", "process": "Standard", "filament": "Generic PLA"},
         )
 
+    def validate_required_matrix(self) -> None:
+        return None
+
 
 def _options(filename: str = "rainbow dragon.stl", **overrides: object) -> SliceOptions:
     values: dict[str, object] = {
@@ -119,6 +122,45 @@ def test_probe_uses_apprun_help_without_a_shell_and_normalizes_the_pinned_versio
     assert probe.engine_version == "2.7.1.62"
     assert calls[0][0] == ["/opt/bambu-studio/AppRun", "--help"]
     assert calls[0][1]["shell"] is False
+
+
+def test_probe_reports_required_profile_matrix_failure_with_stable_code(monkeypatch):
+    from app.services.engines.bambu_profiles import BambuProfileError
+
+    class BrokenResolver(_Resolver):
+        def validate_required_matrix(self) -> None:
+            raise BambuProfileError("profile_missing", "private /profile/root")
+
+    monkeypatch.setattr(
+        "app.services.engines.bambu.subprocess.run",
+        lambda _command, **_kwargs: _Proc(stdout=PINNED_HELP),
+    )
+
+    probe = BambuEngine("/opt/bambu-studio/AppRun", BrokenResolver()).probe()
+
+    assert probe.available is False
+    assert probe.diagnostics == {"code": "profile_missing"}
+    assert "private" not in str(probe.diagnostics)
+
+
+def test_cached_bambu_probe_does_not_reduce_later_slice_budget(tmp_path, monkeypatch):
+    timeouts: list[float] = []
+
+    def fake_run(command, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        if "--help" in command:
+            return _Proc(stdout=PINNED_HELP)
+        _write_artifact(command)
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", fake_run)
+    engine = BambuEngine("AppRun", _Resolver(), timeout=10, probe_timeout=3)
+
+    assert engine.probe().available is True
+    artifact = engine.slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert not isinstance(artifact, EngineFailure)
+    assert timeouts == [3, 10]
 
 
 def test_slice_builds_safe_argument_array_and_returns_valid_native_artifact(tmp_path, monkeypatch):

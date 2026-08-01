@@ -129,6 +129,31 @@ def test_resolve_uses_the_exact_allowlisted_official_matrix(
     assert _read(resolved.filament_path)["name"] == filament_pattern.format(material=material)
 
 
+def test_validate_required_matrix_flattens_every_allowlisted_profile(profile_root: Path):
+    resolver = BambuProfileResolver(profile_root)
+
+    resolver.validate_required_matrix()
+
+    expected_names = {
+        name.format(material=material)
+        for machine, process, filament in MATRIX.values()
+        for name in (machine, process, filament)
+        for material in MATERIALS
+    }
+    assert expected_names <= set(resolver._flattened)
+
+
+def test_validate_required_matrix_reports_a_stable_missing_profile(profile_root: Path):
+    (profile_root / "filaments/bambu_x1c/asa.json").unlink()
+    resolver = BambuProfileResolver(profile_root)
+
+    with pytest.raises(BambuProfileError) as error:
+        resolver.validate_required_matrix()
+
+    assert error.value.code == "profile_missing"
+    assert str(profile_root) not in error.value.message
+
+
 def test_resolve_writes_fresh_flattened_files_in_each_request_workspace(profile_root: Path, tmp_path: Path):
     resolver = BambuProfileResolver(profile_root)
     first = resolver.resolve("bambu_a1", "PLA", tmp_path / "one")

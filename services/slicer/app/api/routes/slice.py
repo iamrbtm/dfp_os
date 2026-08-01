@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -14,7 +15,7 @@ from starlette.background import BackgroundTask
 from app.api.auth import AuthenticatedAPIRoute
 from app.api.dependencies import SlicerRuntime, get_slicer_runtime
 from app.config import settings
-from app.schemas.slice import SliceResponse
+from app.schemas.slice import ErrorResponse, SliceResponse
 from app.services.engines.base import RequestValidationError, SliceOptions, safe_artifact_filename
 from app.services.engines.orchestrator import OrchestratedResult
 from app.services.slicer import slice_model
@@ -24,6 +25,11 @@ router = APIRouter(tags=["slicing"], route_class=AuthenticatedAPIRoute)
 _CHUNK_BYTES = 1024 * 1024
 _METADATA_HEADER = "X-DFPOS-Slicer-Metadata"
 _LOGGER = logging.getLogger(__name__)
+_STRUCTURED_ERROR_RESPONSES = {
+    status.HTTP_413_CONTENT_TOO_LARGE: {"model": ErrorResponse},
+    status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse},
+    status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
+}
 
 
 class _ModelTooLarge(Exception):
@@ -34,7 +40,40 @@ class _MetadataTooLarge(Exception):
     pass
 
 
-@router.post("/slice-artifact")
+class _MalformedOptions(Exception):
+    pass
+
+
+class _IdempotentWorkspaceCleanup:
+    def __init__(self, workspace: Path) -> None:
+        self.workspace = workspace
+        self._complete = False
+
+    def __call__(self) -> None:
+        if not self._complete:
+            self._complete = True
+            _cleanup_workspace(self.workspace)
+
+
+class CleanupFileResponse(FileResponse):
+    """FileResponse whose request workspace is removed on every ASGI exit path."""
+
+    def __init__(self, *args, workspace: Path, **kwargs) -> None:
+        self._workspace_cleanup = _IdempotentWorkspaceCleanup(workspace)
+        kwargs["background"] = BackgroundTask(self._background_cleanup)
+        super().__init__(*args, **kwargs)
+
+    async def _background_cleanup(self) -> None:
+        self._workspace_cleanup()
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._workspace_cleanup()
+
+
+@router.post("/slice-artifact", response_class=FileResponse, responses=_STRUCTURED_ERROR_RESPONSES)
 async def slice_artifact_endpoint(
     model_file: UploadFile = File(...),
     profile_name: str | None = Form(None),
@@ -43,9 +82,18 @@ async def slice_artifact_endpoint(
     slicer_options: str | None = Form(None),
     runtime: SlicerRuntime = Depends(get_slicer_runtime),
 ):
-    workspace = Path(tempfile.mkdtemp(prefix="dfpos-slicer-request-"))
+    if not await runtime.admission.try_acquire():
+        await model_file.close()
+        return _error_response(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "slicer_busy",
+            "The slicer service is at its concurrent request limit.",
+        )
+
+    workspace: Path | None = None
     response_owns_workspace = False
     try:
+        workspace = Path(tempfile.mkdtemp(prefix="dfpos-slicer-request-"))
         uploaded_name = _safe_upload_filename(model_file.filename)
         model_path = workspace / uploaded_name
         await _copy_upload(model_file, model_path)
@@ -55,7 +103,7 @@ async def slice_artifact_endpoint(
             options_payload["center"] = center
         options = SliceOptions.from_request(profile_name, options_payload, preserve_orientation)
 
-        result = runtime.orchestrator.slice(model_path, workspace, options)
+        result = await asyncio.to_thread(runtime.orchestrator.slice, model_path, workspace, options)
         if not result.success or result.artifact is None:
             return _error_response(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -67,12 +115,13 @@ async def slice_artifact_endpoint(
         artifact_filename = safe_artifact_filename(result.artifact.artifact_filename)
         metadata = _public_metadata(result, artifact_filename)
         encoded_metadata = _encode_metadata(metadata)
-        response = FileResponse(
+        response = CleanupFileResponse(
             artifact_path,
+            workspace=workspace,
+            stat_result=artifact_path.stat(),
             media_type=result.artifact.artifact_media_type,
             filename=artifact_filename,
             headers={_METADATA_HEADER: encoded_metadata},
-            background=BackgroundTask(_cleanup_workspace, workspace),
         )
         response_owns_workspace = True
         return response
@@ -80,7 +129,7 @@ async def slice_artifact_endpoint(
         return _error_response(
             status.HTTP_413_CONTENT_TOO_LARGE,
             "model_too_large",
-            "The uploaded model exceeds the 256 MiB limit.",
+            _model_limit_message(),
         )
     except _MetadataTooLarge:
         return _error_response(
@@ -90,7 +139,7 @@ async def slice_artifact_endpoint(
         )
     except RequestValidationError as exc:
         return _error_response(status.HTTP_422_UNPROCESSABLE_CONTENT, exc.code, exc.message)
-    except json.JSONDecodeError, TypeError, ValueError:
+    except _MalformedOptions:
         return _error_response(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "malformed_request",
@@ -104,12 +153,19 @@ async def slice_artifact_endpoint(
             "The slicer service could not produce an artifact.",
         )
     finally:
-        await model_file.close()
-        if not response_owns_workspace:
-            _cleanup_workspace(workspace)
+        upload_close_failed = True
+        try:
+            await model_file.close()
+            upload_close_failed = False
+        finally:
+            try:
+                if workspace is not None and (not response_owns_workspace or upload_close_failed):
+                    _cleanup_workspace(workspace)
+            finally:
+                await runtime.admission.release()
 
 
-@router.post("/slice", response_model=SliceResponse)
+@router.post("/slice", response_model=SliceResponse, responses=_STRUCTURED_ERROR_RESPONSES)
 async def slice_endpoint(
     model_file: UploadFile = File(...),
     profile_name: str | None = Form(None),
@@ -134,16 +190,18 @@ async def slice_endpoint(
         return _error_response(
             status.HTTP_413_CONTENT_TOO_LARGE,
             "model_too_large",
-            "The uploaded model exceeds the 256 MiB limit.",
+            _model_limit_message(),
         )
-    except json.JSONDecodeError, TypeError, ValueError:
+    except _MalformedOptions:
         return SliceResponse(success=False, error="The slicer options must be a JSON object.")
     except Exception:
         _LOGGER.exception("Legacy slice request failed.")
         return SliceResponse(success=False, error="Slicing failed.")
     finally:
-        await model_file.close()
-        _cleanup_workspace(workspace)
+        try:
+            await model_file.close()
+        finally:
+            _cleanup_workspace(workspace)
 
 
 async def _copy_upload(model_file: UploadFile, destination: Path) -> None:
@@ -166,10 +224,21 @@ def _safe_upload_filename(value: str | None) -> str:
 def _parse_options(value: str | None) -> dict[str, object]:
     if value is None or not value.strip():
         return {}
-    parsed = json.loads(value)
+    try:
+        parsed = json.loads(value)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise _MalformedOptions from exc
     if not isinstance(parsed, dict):
-        raise TypeError("slicer_options must be an object")
+        raise _MalformedOptions
     return parsed
+
+
+def _model_limit_message() -> str:
+    if settings.max_model_bytes % (1024 * 1024) == 0:
+        limit = f"{settings.max_model_bytes // (1024 * 1024)} MiB"
+    else:
+        limit = f"{settings.max_model_bytes} bytes"
+    return f"The uploaded model exceeds the {limit} limit."
 
 
 def _safe_workspace_artifact(result: OrchestratedResult, workspace: Path) -> Path:

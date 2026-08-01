@@ -55,18 +55,23 @@ class BambuEngine:
         executable: str,
         profile_resolver: BambuProfileResolver,
         timeout: int = 600,
+        probe_timeout: float = 4,
     ) -> None:
         self.executable = executable
         self.profile_resolver = profile_resolver
         self.timeout = timeout
+        self.probe_timeout = probe_timeout
         self._engine_version: str | None = None
 
     def probe(self) -> EngineProbe:
+        return self._probe(self.probe_timeout)
+
+    def _probe(self, timeout: float) -> EngineProbe:
         try:
             proc = subprocess.run(
                 [self.executable, "--help"],
                 capture_output=True,
-                timeout=10,
+                timeout=timeout,
                 shell=False,
             )
         except FileNotFoundError:
@@ -84,6 +89,10 @@ class BambuEngine:
             return self._probe_failure("version_unrecognized")
         if engine_version != PINNED_ENGINE_VERSION:
             return self._probe_failure("version_mismatch", engine_version=engine_version)
+        try:
+            self.profile_resolver.validate_required_matrix()
+        except BambuProfileError as exc:
+            return self._probe_failure(exc.code)
         self._engine_version = engine_version
         return EngineProbe(
             engine_key=self.engine_key,
@@ -116,16 +125,20 @@ class BambuEngine:
         except OSError:
             return self._failure("workspace_error", "Could not prepare the Bambu Studio output path.")
 
-        version_failure = self._ensure_version()
+        slice_timeout = float(self.timeout)
+        version_budget = min(float(self.probe_timeout), slice_timeout / 2) if self._engine_version is None else 0
+        version_failure = self._ensure_version(version_budget)
         if version_failure is not None:
             return version_failure
+        if version_budget:
+            slice_timeout -= version_budget
 
         command = self._command(model_path, artifact_path, profiles, options, cli_options)
         try:
             proc = subprocess.run(
                 command,
                 capture_output=True,
-                timeout=self.timeout,
+                timeout=slice_timeout,
                 shell=False,
             )
         except FileNotFoundError:
@@ -133,7 +146,7 @@ class BambuEngine:
             return self._failure("executable_missing", "Bambu Studio is unavailable.")
         except subprocess.TimeoutExpired:
             self._discard_artifact(artifact_path)
-            return self._failure("timeout", f"Bambu Studio timed out after {self.timeout}s.")
+            return self._failure("timeout", f"Bambu Studio exceeded its {self.timeout}s engine budget.")
         except Exception:
             self._discard_artifact(artifact_path)
             return self._failure("execution_failed", "Bambu Studio execution failed.")
@@ -562,10 +575,10 @@ class BambuEngine:
         safe_source = safe_artifact_filename(model_path.name)
         return safe_artifact_filename(f"{Path(safe_source).stem}.gcode.3mf")
 
-    def _ensure_version(self) -> EngineFailure | None:
+    def _ensure_version(self, timeout: float) -> EngineFailure | None:
         if self._engine_version is not None:
             return None
-        probe = self.probe()
+        probe = self._probe(timeout)
         if probe.available:
             return None
         code = str(probe.diagnostics.get("code") or "engine_unavailable")

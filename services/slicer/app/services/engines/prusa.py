@@ -30,14 +30,33 @@ class PrusaEngine:
     engine_key = "prusa"
     engine_name = "PrusaSlicer"
 
-    def __init__(self, executable: str, profiles_dir: Path) -> None:
+    def __init__(
+        self,
+        executable: str,
+        profiles_dir: Path,
+        *,
+        timeout: int = 600,
+        probe_timeout: float = 4,
+    ) -> None:
         self.executable = executable
         self.profiles_dir = Path(profiles_dir)
+        self.timeout = timeout
+        self.probe_timeout = probe_timeout
         self._engine_version = "unknown"
 
     def probe(self) -> EngineProbe:
+        return self._probe(self.probe_timeout)
+
+    def _probe(self, timeout: float) -> EngineProbe:
+        if not all((self.profiles_dir / profile_name).is_file() for profile_name in PRUSA_PROFILE_NAMES.values()):
+            return EngineProbe(
+                engine_key=self.engine_key,
+                engine_name=self.engine_name,
+                available=False,
+                diagnostics={"code": "profile_missing"},
+            )
         try:
-            proc = subprocess.run([self.executable, "--version"], capture_output=True, timeout=10)
+            proc = subprocess.run([self.executable, "--version"], capture_output=True, timeout=timeout)
         except FileNotFoundError:
             return EngineProbe(
                 engine_key=self.engine_key,
@@ -68,6 +87,13 @@ class PrusaEngine:
                 diagnostics={"code": "probe_failed", "stderr": self._stderr(proc)},
             )
         self._engine_version = self._version(getattr(proc, "stdout", None))
+        if self._engine_version == "unknown":
+            return EngineProbe(
+                engine_key=self.engine_key,
+                engine_name=self.engine_name,
+                available=False,
+                diagnostics={"code": "version_unrecognized"},
+            )
         return EngineProbe(
             engine_key=self.engine_key,
             engine_name=self.engine_name,
@@ -93,15 +119,26 @@ class PrusaEngine:
             artifact_path.unlink(missing_ok=True)
         except OSError as exc:
             return self._failure("workspace_error", f"Could not prepare the G-code output path: {exc}")
+        slice_timeout = float(self.timeout)
+        if self._engine_version == "unknown":
+            version_budget = min(float(self.probe_timeout), slice_timeout / 2)
+            probe = self._probe(version_budget)
+            if not probe.available:
+                return self._failure(
+                    str(probe.diagnostics.get("code") or "probe_failed"),
+                    "PrusaSlicer failed its runtime version check.",
+                )
+            slice_timeout -= version_budget
+
         command = self._command(model_path, artifact_path, profile_path, options)
         try:
-            proc = subprocess.run(command, capture_output=True, timeout=600)
+            proc = subprocess.run(command, capture_output=True, timeout=slice_timeout)
         except FileNotFoundError:
             return self._failure(
                 "executable_missing", "PrusaSlicer is not installed. Install it or set PRUSA_SLICER_PATH."
             )
         except subprocess.TimeoutExpired:
-            return self._failure("timeout", "PrusaSlicer timed out after 600s.")
+            return self._failure("timeout", f"PrusaSlicer exceeded its {self.timeout}s engine budget.")
         except Exception as exc:
             return self._failure("execution_failed", f"PrusaSlicer execution failed: {exc}")
 
@@ -139,9 +176,7 @@ class PrusaEngine:
             diagnostics={"stats": stats},
         )
 
-    def _command(
-        self, model_path: Path, artifact_path: Path, profile_path: Path, options: SliceOptions
-    ) -> list[str]:
+    def _command(self, model_path: Path, artifact_path: Path, profile_path: Path, options: SliceOptions) -> list[str]:
         values = options.slicer_options
         command = [
             self.executable,

@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import logging
-
 from fastapi import APIRouter, Depends, Response, status
 
 from app.api.dependencies import SlicerRuntime, get_slicer_runtime
 from app.config import settings
 from app.schemas.health import EngineHealth, HealthLiveResponse, HealthReadyResponse
-from app.services.engines.base import EngineProbe
 
 router = APIRouter(tags=["health"])
-_LOGGER = logging.getLogger(__name__)
 
 
 @router.get("/live", response_model=HealthLiveResponse)
@@ -20,7 +16,7 @@ async def health_live():
 
 @router.get("/ready", response_model=HealthReadyResponse)
 async def health_ready(response: Response, runtime: SlicerRuntime = Depends(get_slicer_runtime)):
-    probes = {engine_key: _probe_engine(engine_key, engine) for engine_key, engine in runtime.engines.items()}
+    probes = await runtime.readiness.probe(runtime.engines)
     bambu_available = probes["bambu"].available
     prusa_available = probes["prusa"].available
     if bambu_available:
@@ -51,6 +47,8 @@ def _stable_probe_code(value: object) -> str:
         "duplicate_profile",
         "executable_missing",
         "invalid_profile",
+        "profile_cycle",
+        "profile_missing",
         "probe_failed",
         "probe_timeout",
         "profile_root_missing",
@@ -59,16 +57,3 @@ def _stable_probe_code(value: object) -> str:
     }:
         return value
     return "probe_failed"
-
-
-def _probe_engine(engine_key: str, engine: object) -> EngineProbe:
-    try:
-        return engine.probe()
-    except Exception:
-        _LOGGER.exception("Slicer readiness probe failed for %s.", engine_key)
-        return EngineProbe(
-            engine_key=engine_key,
-            engine_name="Bambu Studio" if engine_key == "bambu" else "PrusaSlicer",
-            available=False,
-            diagnostics={"code": "probe_failed"},
-        )

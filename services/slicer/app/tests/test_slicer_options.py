@@ -30,6 +30,7 @@ def test_slice_model_passes_percent_fill_density_to_prusaslicer(tmp_path, monkey
     class Proc:
         returncode = 0
         stderr = b""
+        stdout = b"PrusaSlicer 2.8.1"
 
     def fake_run(cmd, **kwargs):
         commands.append(cmd)
