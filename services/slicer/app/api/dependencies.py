@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import functools
+import logging
+import shutil
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -19,6 +21,95 @@ from app.services.engines.orchestrator import SlicerOrchestrator
 from app.services.engines.prusa import PrusaEngine
 
 _ResultT = TypeVar("_ResultT")
+_LOGGER = logging.getLogger(__name__)
+
+
+class WorkspaceCleanupManager:
+    """Retain failed workspace deletions and retry them until success or bounded shutdown."""
+
+    def __init__(
+        self,
+        *,
+        remove: Callable[[Path], None] | None = None,
+        initial_delay_seconds: float = 0.05,
+        max_delay_seconds: float = 1.0,
+        shutdown_timeout_seconds: float = 2.0,
+    ) -> None:
+        self._remove = remove or self._remove_tree
+        self._initial_delay_seconds = initial_delay_seconds
+        self._max_delay_seconds = max_delay_seconds
+        self._shutdown_timeout_seconds = shutdown_timeout_seconds
+        self._pending: dict[Path, asyncio.Task[None]] = {}
+        self._shutting_down = False
+
+    @property
+    def pending_count(self) -> int:
+        return len(self._pending)
+
+    async def cleanup(self, workspace: Path) -> None:
+        workspace = workspace.absolute()
+        if workspace in self._pending:
+            return
+        if self._attempt(workspace):
+            return
+        if self._shutting_down:
+            _LOGGER.warning("A slicer workspace cleanup could not finish during shutdown.")
+            return
+        task = asyncio.create_task(self._retry(workspace))
+        self._pending[workspace] = task
+        task.add_done_callback(lambda completed, path=workspace: self._forget(path, completed))
+
+    async def _retry(self, workspace: Path) -> None:
+        delay = self._initial_delay_seconds
+        while True:
+            await asyncio.sleep(delay)
+            if self._attempt(workspace):
+                return
+            delay = min(delay * 2, self._max_delay_seconds)
+
+    def _attempt(self, workspace: Path) -> bool:
+        try:
+            self._remove(workspace)
+        except FileNotFoundError:
+            return True
+        except OSError:
+            _LOGGER.warning("Slicer workspace cleanup failed; a retry remains scheduled.")
+            return False
+        return True
+
+    def _forget(self, workspace: Path, task: asyncio.Task[None]) -> None:
+        if self._pending.get(workspace) is task:
+            self._pending.pop(workspace, None)
+
+    async def shutdown(self) -> None:
+        self._shutting_down = True
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._shutdown_timeout_seconds
+        canceled_tasks: list[asyncio.Task[None]] = []
+        while self._pending and loop.time() < deadline:
+            for workspace, task in tuple(self._pending.items()):
+                if self._attempt(workspace):
+                    self._pending.pop(workspace, None)
+                    task.cancel()
+                    canceled_tasks.append(task)
+            if self._pending:
+                await asyncio.sleep(min(0.01, max(0.0, deadline - loop.time())))
+
+        if self._pending:
+            _LOGGER.warning(
+                "Slicer workspace cleanup could not finish during shutdown; %d retries were abandoned.",
+                len(self._pending),
+            )
+        tasks = (*canceled_tasks, *self._pending.values())
+        self._pending.clear()
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    @staticmethod
+    def _remove_tree(workspace: Path) -> None:
+        shutil.rmtree(workspace)
 
 
 def split_engine_timeouts(total_seconds: int) -> tuple[int, int]:
@@ -78,6 +169,7 @@ class SlicerRuntime:
     orchestrator: SlicerOrchestrator
     admission: SliceAdmission
     jobs: SliceJobManager
+    cleanup: WorkspaceCleanupManager
     readiness: ReadinessProbeCache
 
 
@@ -251,6 +343,7 @@ def build_slicer_runtime() -> SlicerRuntime:
         orchestrator=SlicerOrchestrator(engines, settings.engine_order),
         admission=admission,
         jobs=SliceJobManager(admission),
+        cleanup=WorkspaceCleanupManager(),
         readiness=ReadinessProbeCache(
             ttl_seconds=settings.readiness_cache_ttl_seconds,
             timeout_seconds=settings.readiness_timeout_seconds,

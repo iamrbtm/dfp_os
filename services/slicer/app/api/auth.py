@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import secrets
 from collections.abc import Awaitable, Callable
 
 from fastapi import HTTPException, Request, status
 from fastapi.routing import APIRoute
+from python_multipart.exceptions import MultipartParseError
 from python_multipart.multipart import parse_options_header
 from starlette.datastructures import FormData, UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
@@ -16,6 +19,10 @@ from app.config import is_valid_internal_api_token, settings
 MULTIPART_OVERHEAD_BYTES = 64 * 1024
 MAX_MULTIPART_FIELDS = 4
 MAX_MULTIPART_FIELD_BYTES = 16 * 1024
+MAX_MULTIPART_HEADER_BYTES = 4 * 1024
+MAX_MULTIPART_TOTAL_HEADER_BYTES = 16 * 1024
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class RequestBodyTooLarge(Exception):
@@ -27,6 +34,10 @@ class TooManyMultipartParts(Exception):
 
 
 class MalformedMultipart(Exception):
+    pass
+
+
+class MultipartHeadersTooLarge(Exception):
     pass
 
 
@@ -42,8 +53,34 @@ class _OversizedField(MultiPartException):
     pass
 
 
+class _OversizedHeaders(MultiPartException):
+    pass
+
+
 class _SliceMultipartParser(MultiPartParser):
     """Streaming parser that rejects unapproved file parts before creating their spool."""
+
+    def on_part_begin(self) -> None:
+        self._current_header_bytes = 0
+        super().on_part_begin()
+
+    def _track_header_bytes(self, start: int, end: int) -> None:
+        chunk_bytes = end - start
+        self._current_header_bytes += chunk_bytes
+        self._total_header_bytes = getattr(self, "_total_header_bytes", 0) + chunk_bytes
+        if (
+            self._current_header_bytes > MAX_MULTIPART_HEADER_BYTES
+            or self._total_header_bytes > MAX_MULTIPART_TOTAL_HEADER_BYTES
+        ):
+            raise _OversizedHeaders("Multipart part headers exceed the configured limit.")
+
+    def on_header_field(self, data: bytes, start: int, end: int) -> None:
+        self._track_header_bytes(start, end)
+        super().on_header_field(data, start, end)
+
+    def on_header_value(self, data: bytes, start: int, end: int) -> None:
+        self._track_header_bytes(start, end)
+        super().on_header_value(data, start, end)
 
     def on_headers_finished(self) -> None:
         _disposition, options = parse_options_header(self._current_part.content_disposition)
@@ -67,6 +104,20 @@ class _SliceMultipartParser(MultiPartParser):
             raise _OversizedField("Multipart field data exceeds the configured limit.")
         super().on_part_data(data, start, end)
 
+    async def parse(self) -> FormData:
+        try:
+            return await super().parse()
+        except BaseException:
+            self.close_owned_files()
+            raise
+
+    def close_owned_files(self) -> None:
+        for spool in self._files_to_close_on_error:
+            try:
+                spool.close()
+            except OSError:
+                _LOGGER.warning("A multipart temporary file could not be closed.")
+
 
 async def preparse_slice_multipart(request: Request) -> FormData:
     """Parse a bounded slice form once so FastAPI reuses the validated result."""
@@ -81,23 +132,33 @@ async def preparse_slice_multipart(request: Request) -> FormData:
         form = await parser.parse()
     except (_TooManyFields, _OversizedField) as exc:
         raise TooManyMultipartParts from exc
+    except _OversizedHeaders as exc:
+        raise MultipartHeadersTooLarge from exc
     except _InvalidFilePart as exc:
         raise MalformedMultipart from exc
-    except MultiPartException as exc:
+    except (MultiPartException, MultipartParseError) as exc:
         raise MalformedMultipart from exc
 
     file_parts = [(name, value) for name, value in form.multi_items() if isinstance(value, UploadFile)]
     if len(file_parts) != 1 or file_parts[0][0] != "model_file":
-        await _close_form_files(form)
+        parser.close_owned_files()
         raise MalformedMultipart
     request._form = form
     return form
 
 
 async def _close_form_files(form: FormData) -> None:
+    cancellation: asyncio.CancelledError | None = None
     for _name, value in form.multi_items():
         if isinstance(value, UploadFile):
-            await value.close()
+            try:
+                await value.close()
+            except asyncio.CancelledError as exc:
+                cancellation = cancellation or exc
+            except Exception:
+                _LOGGER.warning("A cached multipart upload could not be closed.")
+    if cancellation is not None:
+        raise cancellation
 
 
 def bounded_receive(receive: Receive, *, limit: int) -> Receive:
@@ -142,12 +203,38 @@ def _too_many_parts_response() -> JSONResponse:
     )
 
 
+def _multipart_headers_too_large_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+        content={
+            "success": False,
+            "error": {
+                "code": "multipart_headers_too_large",
+                "message": "A multipart part contains too much header data.",
+            },
+        },
+    )
+
+
 def _malformed_request_response() -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
             "success": False,
             "error": {"code": "malformed_request", "message": "The slicer request is malformed."},
+        },
+    )
+
+
+def _parse_failed_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "success": False,
+            "error": {
+                "code": "request_parse_failed",
+                "message": "The slicer request could not be processed.",
+            },
         },
     )
 
@@ -200,13 +287,25 @@ class AuthenticatedAPIRoute(APIRoute):
 
             request._receive = bounded_receive(request.receive, limit=request_limit)
             try:
-                await preparse_slice_multipart(request)
+                try:
+                    await preparse_slice_multipart(request)
+                except RequestBodyTooLarge:
+                    return _request_too_large_response()
+                except TooManyMultipartParts:
+                    return _too_many_parts_response()
+                except MultipartHeadersTooLarge:
+                    return _multipart_headers_too_large_response()
+                except MalformedMultipart:
+                    return _malformed_request_response()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    _LOGGER.exception("Multipart request parsing failed.")
+                    return _parse_failed_response()
                 return await route_handler(request)
-            except RequestBodyTooLarge:
-                return _request_too_large_response()
-            except TooManyMultipartParts:
-                return _too_many_parts_response()
-            except MalformedMultipart:
-                return _malformed_request_response()
+            finally:
+                cached_form = getattr(request, "_form", None)
+                if isinstance(cached_form, FormData):
+                    await _close_form_files(cached_form)
 
         return authenticated_handler

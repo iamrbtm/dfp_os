@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import shutil
 import tempfile
 from pathlib import Path, PurePath, PureWindowsPath
 
@@ -12,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
 from app.api.auth import AuthenticatedAPIRoute
-from app.api.dependencies import SlicerRuntime, get_slicer_runtime
+from app.api.dependencies import SlicerRuntime, WorkspaceCleanupManager, get_slicer_runtime
 from app.config import settings
 from app.schemas.slice import ErrorResponse, SliceResponse
 from app.services.engines.base import RequestValidationError, SliceOptions, safe_artifact_filename
@@ -43,17 +42,6 @@ class _MalformedOptions(Exception):
     pass
 
 
-class _IdempotentWorkspaceCleanup:
-    def __init__(self, workspace: Path) -> None:
-        self.workspace = workspace
-        self._complete = False
-
-    def __call__(self) -> bool:
-        if not self._complete:
-            self._complete = _cleanup_workspace(self.workspace)
-        return self._complete
-
-
 class CleanupFileResponse(FileResponse):
     """FileResponse whose request workspace is removed on every ASGI exit path."""
 
@@ -61,21 +49,22 @@ class CleanupFileResponse(FileResponse):
         self,
         *args,
         workspace: Path,
-        workspace_cleanup: _IdempotentWorkspaceCleanup | None = None,
+        cleanup_manager: WorkspaceCleanupManager,
         **kwargs,
     ) -> None:
-        self._workspace_cleanup = workspace_cleanup or _IdempotentWorkspaceCleanup(workspace)
+        self._workspace = workspace
+        self._cleanup_manager = cleanup_manager
         kwargs["background"] = BackgroundTask(self._background_cleanup)
         super().__init__(*args, **kwargs)
 
     async def _background_cleanup(self) -> None:
-        self._workspace_cleanup()
+        await self._cleanup_manager.cleanup(self._workspace)
 
     async def __call__(self, scope, receive, send) -> None:
         try:
             await super().__call__(scope, receive, send)
         finally:
-            self._workspace_cleanup()
+            await self._cleanup_manager.cleanup(self._workspace)
 
 
 @router.post("/slice-artifact", response_class=FileResponse, responses=_STRUCTURED_ERROR_RESPONSES)
@@ -97,11 +86,9 @@ async def slice_artifact_endpoint(
         )
 
     workspace: Path | None = None
-    workspace_cleanup: _IdempotentWorkspaceCleanup | None = None
     response_owns_workspace = False
     try:
         workspace = Path(tempfile.mkdtemp(prefix="dfpos-slicer-request-"))
-        workspace_cleanup = _IdempotentWorkspaceCleanup(workspace)
         uploaded_name = _safe_upload_filename(model_file.filename)
         model_path = workspace / uploaded_name
         await _copy_upload(model_file, model_path)
@@ -126,7 +113,7 @@ async def slice_artifact_endpoint(
         response = CleanupFileResponse(
             artifact_path,
             workspace=workspace,
-            workspace_cleanup=workspace_cleanup,
+            cleanup_manager=runtime.cleanup,
             stat_result=artifact_path.stat(),
             media_type=result.artifact.artifact_media_type,
             filename=artifact_filename,
@@ -168,9 +155,8 @@ async def slice_artifact_endpoint(
             upload_close_failed = False
         finally:
             try:
-                if workspace_cleanup is not None and (not response_owns_workspace or upload_close_failed):
-                    if not workspace_cleanup():
-                        workspace_cleanup()
+                if workspace is not None and (not response_owns_workspace or upload_close_failed):
+                    await runtime.cleanup.cleanup(workspace)
             finally:
                 await lease.release()
 
@@ -196,10 +182,8 @@ async def slice_endpoint(
         )
 
     workspace: Path | None = None
-    workspace_cleanup: _IdempotentWorkspaceCleanup | None = None
     try:
         workspace = Path(tempfile.mkdtemp(prefix="dfpos-slicer-legacy-"))
-        workspace_cleanup = _IdempotentWorkspaceCleanup(workspace)
         uploaded_name = _safe_upload_filename(model_file.filename)
         model_path = workspace / uploaded_name
         await _copy_upload(model_file, model_path)
@@ -228,8 +212,8 @@ async def slice_endpoint(
             await model_file.close()
         finally:
             try:
-                if workspace_cleanup is not None and not workspace_cleanup():
-                    workspace_cleanup()
+                if workspace is not None:
+                    await runtime.cleanup.cleanup(workspace)
             finally:
                 await lease.release()
 
@@ -326,14 +310,3 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
         status_code=status_code,
         content={"success": False, "error": {"code": code, "message": message}},
     )
-
-
-def _cleanup_workspace(workspace: Path) -> bool:
-    try:
-        shutil.rmtree(workspace)
-    except FileNotFoundError:
-        return True
-    except OSError:
-        _LOGGER.warning("Slicer request workspace cleanup failed; cleanup will be retried.")
-        return False
-    return True

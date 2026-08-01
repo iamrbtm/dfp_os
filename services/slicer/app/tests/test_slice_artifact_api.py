@@ -4,6 +4,8 @@ import base64
 import asyncio
 import concurrent.futures
 import json
+import shutil
+import tempfile
 import threading
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -28,6 +30,7 @@ class _Runtime:
     engines: dict[str, object]
     admission: object = field(default_factory=lambda: _UnlimitedAdmission())
     jobs: object | None = None
+    cleanup: object = field(default_factory=lambda: _ImmediateCleanupManager())
 
     def __post_init__(self) -> None:
         if self.jobs is None:
@@ -39,6 +42,17 @@ class _UnlimitedAdmission:
         return True
 
     async def release(self) -> None:
+        return None
+
+
+class _ImmediateCleanupManager:
+    async def cleanup(self, workspace: Path) -> None:
+        try:
+            shutil.rmtree(workspace)
+        except FileNotFoundError:
+            pass
+
+    async def shutdown(self) -> None:
         return None
 
 
@@ -145,9 +159,23 @@ async def authorized_client(monkeypatch: pytest.MonkeyPatch):
         yield app, client
 
 
+_NATIVE_FILE_RESPONSE_SANDBOX_TESTS = frozenset(
+    {
+        "test_auth_uses_constant_time_token_comparison",
+        "test_slice_artifact_streams_native_bytes_and_compact_public_metadata",
+        "test_live_endpoint_remains_responsive_while_slice_is_offloaded",
+        "test_concurrent_slice_limit_returns_stable_busy_response",
+        "test_slice_artifact_reads_only_bounded_one_mib_chunks",
+    }
+)
+
+
 @pytest.fixture(autouse=True)
-def local_file_response_io(monkeypatch: pytest.MonkeyPatch):
+def local_file_response_io(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch):
     """Patch only AnyIO's broken worker-thread file boundary in this Python 3.14 sandbox."""
+
+    if request.node.name not in _NATIVE_FILE_RESPONSE_SANDBOX_TESTS:
+        return
 
     class LocalAsyncFile:
         def __init__(self, path: str | Path) -> None:
@@ -347,6 +375,40 @@ def _multipart_body(boundary: str, parts: list[tuple[str, str | None, bytes]]) -
     return bytes(body)
 
 
+@pytest.fixture
+def tracked_spooled_files(monkeypatch: pytest.MonkeyPatch):
+    created = []
+    original = tempfile.SpooledTemporaryFile
+
+    def tracked(*args, **kwargs):
+        spool = original(*args, **kwargs)
+        created.append(spool)
+        return spool
+
+    monkeypatch.setattr("starlette.formparsers.SpooledTemporaryFile", tracked)
+    return created
+
+
+def _streaming_request(boundary: str, chunks: list[bytes]) -> Request:
+    messages = iter(
+        {"type": "http.request", "body": chunk, "more_body": index < len(chunks) - 1}
+        for index, chunk in enumerate(chunks)
+    )
+
+    async def receive():
+        return next(messages)
+
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/slice-artifact",
+            "headers": [(b"content-type", f'multipart/form-data; boundary="{boundary}"'.encode())],
+        },
+        receive,
+    )
+
+
 async def test_multipart_preparse_handles_split_quoted_boundary_and_headers():
     from app.api.auth import preparse_slice_multipart
 
@@ -381,6 +443,102 @@ async def test_multipart_preparse_handles_split_quoted_boundary_and_headers():
     form = await request.form()
     assert form["model_file"].filename == "dragon.stl"
     assert form["profile_name"] == "bambu_a1"
+
+
+async def test_multipart_malformed_after_file_creation_closes_parser_owned_spool(tracked_spooled_files):
+    from app.api.auth import MalformedMultipart, preparse_slice_multipart
+
+    boundary = "malformed-after-file"
+    valid_file = _multipart_body(boundary, [("model_file", "dragon.stl", b"solid")])
+    malformed = valid_file.removesuffix(f"--{boundary}--\r\n".encode()) + (
+        f"--{boundary}\r\nMalformed Header\r\n\r\nvalue\r\n--{boundary}--\r\n".encode()
+    )
+    request = _streaming_request(boundary, [malformed])
+
+    with pytest.raises(MalformedMultipart):
+        await preparse_slice_multipart(request)
+
+    assert tracked_spooled_files
+    assert all(spool.closed for spool in tracked_spooled_files)
+
+
+async def test_multipart_later_body_limit_closes_parser_owned_spool(tracked_spooled_files):
+    from app.api.auth import RequestBodyTooLarge, bounded_receive, preparse_slice_multipart
+
+    boundary = "later-over-limit"
+    first = (
+        f'--{boundary}\r\nContent-Disposition: form-data; name="model_file"; filename="dragon.stl"\r\n\r\n'.encode()
+        + b"small"
+    )
+    request = _streaming_request(boundary, [first, b"x" * 64])
+    request._receive = bounded_receive(request.receive, limit=len(first) + 1)
+
+    with pytest.raises(RequestBodyTooLarge):
+        await preparse_slice_multipart(request)
+
+    assert tracked_spooled_files
+    assert all(spool.closed for spool in tracked_spooled_files)
+
+
+async def test_unexpected_parser_failure_closes_owned_spool(monkeypatch: pytest.MonkeyPatch, tracked_spooled_files):
+    from app.api.auth import _SliceMultipartParser, preparse_slice_multipart
+
+    boundary = "unexpected-parser-error"
+    body = _multipart_body(boundary, [("model_file", "dragon.stl", b"solid")])
+    original = _SliceMultipartParser.on_part_data
+
+    def fail_after_data(self, data, start, end):
+        original(self, data, start, end)
+        raise RuntimeError("parser internals failed")
+
+    monkeypatch.setattr(_SliceMultipartParser, "on_part_data", fail_after_data)
+
+    with pytest.raises(RuntimeError, match="parser internals failed"):
+        await preparse_slice_multipart(_streaming_request(boundary, [body]))
+
+    assert tracked_spooled_files
+    assert all(spool.closed for spool in tracked_spooled_files)
+
+
+async def test_parser_cancellation_closes_owned_spool(tracked_spooled_files):
+    from app.api.auth import preparse_slice_multipart
+
+    boundary = "cancel-parser"
+    first = (
+        f'--{boundary}\r\nContent-Disposition: form-data; name="model_file"; filename="dragon.stl"\r\n\r\n'.encode()
+        + b"partial"
+    )
+    continue_reading = asyncio.Event()
+    delivered = False
+
+    async def receive():
+        nonlocal delivered
+        if not delivered:
+            delivered = True
+            return {"type": "http.request", "body": first, "more_body": True}
+        await continue_reading.wait()
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/slice-artifact",
+            "headers": [(b"content-type", f"multipart/form-data; boundary={boundary}".encode())],
+        },
+        receive,
+    )
+    parse_task = asyncio.create_task(preparse_slice_multipart(request))
+    for _ in range(100):
+        if tracked_spooled_files:
+            break
+        await asyncio.sleep(0.01)
+    parse_task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await parse_task
+    assert tracked_spooled_files
+    assert all(spool.closed for spool in tracked_spooled_files)
 
 
 @pytest.mark.parametrize(
@@ -429,6 +587,97 @@ async def test_multipart_preparse_rejects_excess_fields_before_route(authorized_
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "too_many_parts"
     assert orchestrator.calls == []
+
+
+async def test_split_oversized_multipart_header_returns_413_and_closes_prior_file(
+    authorized_client, tracked_spooled_files
+):
+    from app.api.auth import MAX_MULTIPART_HEADER_BYTES
+
+    app, client = authorized_client
+    orchestrator = _FakeOrchestrator(AssertionError("engine must not run"))
+    _override_runtime(app, _Runtime(orchestrator, {}))
+    boundary = "oversized-quoted-header"
+    body = (
+        _multipart_body(boundary, [("model_file", "dragon.stl", b"solid")]).removesuffix(f"--{boundary}--\r\n".encode())
+        + f'--{boundary}\r\nX-Custom: "'.encode()
+        + b"a" * (MAX_MULTIPART_HEADER_BYTES + 1)
+        + f'"\r\nContent-Disposition: form-data; name="profile_name"\r\n\r\nbambu_a1\r\n--{boundary}--\r\n'.encode()
+    )
+
+    async def split_content():
+        for offset in range(0, len(body), 7):
+            yield body[offset : offset + 7]
+
+    response = await client.post(
+        "/api/v1/slice-artifact",
+        headers={
+            "Authorization": f"Bearer {_TOKEN}",
+            "Content-Type": f'multipart/form-data; boundary="{boundary}"',
+        },
+        content=split_content(),
+    )
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "multipart_headers_too_large"
+    assert tracked_spooled_files
+    assert all(spool.closed for spool in tracked_spooled_files)
+    assert orchestrator.calls == []
+
+
+async def test_unexpected_preparser_error_returns_sanitized_503_and_closes_files(
+    authorized_client, monkeypatch: pytest.MonkeyPatch, tracked_spooled_files
+):
+    from app.api.auth import _SliceMultipartParser
+
+    app, client = authorized_client
+    orchestrator = _FakeOrchestrator(AssertionError("engine must not run"))
+    _override_runtime(app, _Runtime(orchestrator, {}))
+    original = _SliceMultipartParser.on_part_data
+
+    def fail_after_data(self, data, start, end):
+        original(self, data, start, end)
+        if self._current_part.file is not None:
+            raise RuntimeError("private parser failure /tmp/customer-model")
+
+    monkeypatch.setattr(_SliceMultipartParser, "on_part_data", fail_after_data)
+    boundary = "unexpected-integration"
+    response = await client.post(
+        "/api/v1/slice-artifact",
+        headers={
+            "Authorization": f"Bearer {_TOKEN}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        content=_multipart_body(boundary, [("model_file", "dragon.stl", b"solid")]),
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "success": False,
+        "error": {
+            "code": "request_parse_failed",
+            "message": "The slicer request could not be processed.",
+        },
+    }
+    assert "/tmp/customer-model" not in response.text
+    assert tracked_spooled_files
+    assert all(spool.closed for spool in tracked_spooled_files)
+    assert orchestrator.calls == []
+
+
+async def test_fastapi_validation_failure_closes_cached_form_upload(authorized_client, tracked_spooled_files):
+    _app, client = authorized_client
+
+    response = await client.post(
+        "/api/v1/slice-artifact",
+        headers={"Authorization": f"Bearer {_TOKEN}"},
+        files={"model_file": ("dragon.stl", b"solid", "application/octet-stream")},
+        data={"preserve_orientation": "not-a-boolean"},
+    )
+
+    assert response.status_code == 422
+    assert tracked_spooled_files
+    assert all(spool.closed for spool in tracked_spooled_files)
 
 
 @pytest.mark.parametrize(
@@ -527,7 +776,12 @@ async def test_cleanup_file_response_removes_workspace_when_send_raises(tmp_path
     workspace.mkdir()
     artifact = workspace / "artifact.bin"
     artifact.write_bytes(b"artifact")
-    response = CleanupFileResponse(artifact, workspace=workspace, stat_result=artifact.stat())
+    response = CleanupFileResponse(
+        artifact,
+        workspace=workspace,
+        cleanup_manager=_ImmediateCleanupManager(),
+        stat_result=artifact.stat(),
+    )
 
     async def receive():
         return {"type": "http.disconnect"}
@@ -554,7 +808,7 @@ async def test_cleanup_file_response_removes_workspace_when_stat_raises(
     workspace.mkdir()
     artifact = workspace / "artifact.bin"
     artifact.write_bytes(b"artifact")
-    response = CleanupFileResponse(artifact, workspace=workspace)
+    response = CleanupFileResponse(artifact, workspace=workspace, cleanup_manager=_ImmediateCleanupManager())
 
     async def fail_stat(*_args, **_kwargs):
         raise FileNotFoundError
@@ -575,39 +829,6 @@ async def test_cleanup_file_response_removes_workspace_when_stat_raises(
         )
 
     assert not workspace.exists()
-
-
-def test_workspace_cleanup_logs_sanitized_failure_and_can_retry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-):
-    from app.api.routes.slice import _IdempotentWorkspaceCleanup
-
-    workspace = tmp_path / "private-customer-workspace"
-    workspace.mkdir()
-    (workspace / "artifact.bin").write_bytes(b"artifact")
-    original_rmtree = __import__("shutil").rmtree
-    attempts = 0
-
-    def fail_once(path):
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            raise OSError(f"cannot delete {path}")
-        original_rmtree(path)
-
-    monkeypatch.setattr("app.api.routes.slice.shutil.rmtree", fail_once)
-
-    cleanup = _IdempotentWorkspaceCleanup(workspace)
-    with caplog.at_level("WARNING"):
-        assert cleanup() is False
-        assert workspace.exists()
-        assert cleanup() is True
-        assert not workspace.exists()
-        assert cleanup() is True
-
-    assert attempts == 2
-    assert "cleanup will be retried" in caplog.text.lower()
-    assert str(workspace) not in caplog.text
 
 
 @pytest.mark.parametrize("close_error", [RuntimeError("close failed"), asyncio.CancelledError()])
