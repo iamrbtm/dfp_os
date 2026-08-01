@@ -7,6 +7,7 @@ import tempfile
 import zipfile
 from decimal import Decimal, InvalidOperation
 from pathlib import Path, PurePosixPath
+from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 from app.services.engines.bambu_profiles import BambuProfileError, BambuProfileResolver, ResolvedBambuProfiles
@@ -33,10 +34,17 @@ MAX_ARCHIVE_MEMBERS = 512
 MAX_MEMBER_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
 MAX_TOTAL_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024
 MAX_COMPRESSION_RATIO = 250
+MAX_REQUIRED_XML_BYTES = 1024 * 1024
 _REQUIRED_PACKAGE_PARTS = frozenset({"[Content_Types].xml", "_rels/.rels", "3D/3dmodel.model"})
 _ALLOWED_COMPRESSION = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 _INFILL_PATTERNS = frozenset({"cubic", "grid", "gyroid", "honeycomb"})
 _SUPPORT_MODES = frozenset({"none", "build_plate", "everywhere"})
+_CONTENT_TYPES_NAMESPACE = "http://schemas.openxmlformats.org/package/2006/content-types"
+_RELATIONSHIPS_NAMESPACE = "http://schemas.openxmlformats.org/package/2006/relationships"
+_THREE_MF_CORE_NAMESPACE = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+_THREE_MF_MODEL_CONTENT_TYPE = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml"
+_THREE_MF_MODEL_RELATIONSHIP_TYPE = "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"
+_THREE_MF_MODEL_PART = "3D/3dmodel.model"
 
 
 class BambuEngine:
@@ -288,12 +296,81 @@ class BambuEngine:
         if archive.testzip() is not None:
             return self._failure("invalid_output", "Bambu Studio output failed its archive integrity check.")
 
+        required_members = {name: archive.getinfo(name) for name in _REQUIRED_PACKAGE_PARTS}
+        if any(member.file_size > MAX_REQUIRED_XML_BYTES for member in required_members.values()):
+            return self._failure("archive_limit_exceeded", "A required 3MF XML part exceeds the size limit.")
+
         try:
-            for required_part in _REQUIRED_PACKAGE_PARTS:
-                ElementTree.fromstring(archive.read(required_part))
+            xml_payloads = {name: archive.read(name) for name in _REQUIRED_PACKAGE_PARTS}
+            if any(self._contains_dtd(payload) for payload in xml_payloads.values()):
+                return self._failure("invalid_package", "Bambu Studio output contains a disallowed XML declaration.")
+            roots = {name: ElementTree.fromstring(payload) for name, payload in xml_payloads.items()}
         except ElementTree.ParseError, KeyError, UnicodeError, ValueError:
             return self._failure("invalid_package", "Bambu Studio output contains an invalid 3MF package part.")
+
+        if not self._valid_content_types(roots["[Content_Types].xml"]):
+            return self._failure("invalid_package", "Bambu Studio output has an invalid 3MF content-type binding.")
+        if not self._valid_relationships(roots["_rels/.rels"]):
+            return self._failure("invalid_package", "Bambu Studio output has an invalid 3MF model relationship.")
+        if roots["3D/3dmodel.model"].tag != self._qualified(_THREE_MF_CORE_NAMESPACE, "model"):
+            return self._failure("invalid_package", "Bambu Studio output has an invalid 3MF model root.")
         return None
+
+    @staticmethod
+    def _contains_dtd(payload: bytes) -> bool:
+        lowered = payload.lower()
+        return b"<!doctype" in lowered or b"<!entity" in lowered
+
+    @staticmethod
+    def _qualified(namespace: str, name: str) -> str:
+        return f"{{{namespace}}}{name}"
+
+    @classmethod
+    def _valid_content_types(cls, root: ElementTree.Element) -> bool:
+        if root.tag != cls._qualified(_CONTENT_TYPES_NAMESPACE, "Types"):
+            return False
+        default_tag = cls._qualified(_CONTENT_TYPES_NAMESPACE, "Default")
+        override_tag = cls._qualified(_CONTENT_TYPES_NAMESPACE, "Override")
+        for child in root:
+            content_type = str(child.attrib.get("ContentType") or "").strip().lower()
+            if content_type != _THREE_MF_MODEL_CONTENT_TYPE:
+                continue
+            if child.tag == default_tag and str(child.attrib.get("Extension") or "").strip().lower() == "model":
+                return True
+            if (
+                child.tag == override_tag
+                and str(child.attrib.get("PartName") or "").strip() == f"/{_THREE_MF_MODEL_PART}"
+            ):
+                return True
+        return False
+
+    @classmethod
+    def _valid_relationships(cls, root: ElementTree.Element) -> bool:
+        if root.tag != cls._qualified(_RELATIONSHIPS_NAMESPACE, "Relationships"):
+            return False
+        relationship_tag = cls._qualified(_RELATIONSHIPS_NAMESPACE, "Relationship")
+        for relationship in root:
+            if relationship.tag != relationship_tag:
+                continue
+            if str(relationship.attrib.get("Type") or "").strip() != _THREE_MF_MODEL_RELATIONSHIP_TYPE:
+                continue
+            target_mode = str(relationship.attrib.get("TargetMode") or "Internal").strip().lower()
+            if target_mode != "internal":
+                continue
+            if cls._valid_model_target(str(relationship.attrib.get("Target") or "")):
+                return True
+        return False
+
+    @staticmethod
+    def _valid_model_target(value: str) -> bool:
+        target = value.strip()
+        if not target or "\\" in target or "\x00" in target or "%" in target or target.startswith("//"):
+            return False
+        parsed = urlsplit(target)
+        if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
+            return False
+        normalized_path = parsed.path[1:] if parsed.path.startswith("/") else parsed.path
+        return normalized_path == _THREE_MF_MODEL_PART
 
     @staticmethod
     def _safe_member_name(name: str) -> bool:

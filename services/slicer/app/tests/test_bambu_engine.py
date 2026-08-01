@@ -445,6 +445,127 @@ def test_slice_rejects_invalid_required_package_xml(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
+    ("part", "payload"),
+    [
+        ("[Content_Types].xml", b"<junk/>"),
+        ("_rels/.rels", b"<junk/>"),
+        ("3D/3dmodel.model", b"<junk/>"),
+        (
+            "[Content_Types].xml",
+            b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            b'<Default Extension="model" ContentType="text/plain"/>'
+            b"</Types>",
+        ),
+        (
+            "_rels/.rels",
+            b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            b'<Relationship Id="rel0" Target="/3D/3dmodel.model" Type="https://example.invalid/wrong"/>'
+            b"</Relationships>",
+        ),
+        (
+            "3D/3dmodel.model",
+            b'<model xmlns="https://example.invalid/not-3mf"><resources/><build/></model>',
+        ),
+    ],
+)
+def test_slice_rejects_well_formed_but_semantically_invalid_required_package_xml(tmp_path, monkeypatch, part, payload):
+    def fake_run(command, **_kwargs):
+        _write_artifact(command, structure_overrides={part: payload})
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "invalid_package"
+    assert failure.fallback_eligible is True
+
+
+@pytest.mark.parametrize(
+    ("target", "extra_attribute"),
+    [
+        ("../3D/3dmodel.model", ""),
+        ("/../3D/3dmodel.model", ""),
+        ("https://example.invalid/3D/3dmodel.model", ""),
+        ("//example.invalid/3D/3dmodel.model", ""),
+        ("///3D/3dmodel.model", ""),
+        ("3D%2F3dmodel.model", ""),
+        ("3D%2F..%2F3D%2F3dmodel.model", ""),
+        ("3D/3dmodel.model", ' TargetMode="External"'),
+    ],
+)
+def test_slice_rejects_external_or_escaping_3mf_model_relationship_targets(
+    tmp_path, monkeypatch, target, extra_attribute
+):
+    relationships = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        f'<Relationship Id="rel0" Target="{target}"{extra_attribute} '
+        'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+        "</Relationships>"
+    ).encode()
+
+    def fake_run(command, **_kwargs):
+        _write_artifact(command, structure_overrides={"_rels/.rels": relationships})
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "invalid_package"
+
+
+def test_slice_accepts_override_content_binding_and_relative_internal_model_target(tmp_path, monkeypatch):
+    content_types = (
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Override PartName="/3D/3dmodel.model" '
+        'ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>'
+        "</Types>"
+    ).encode()
+    relationships = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rel0" Target="3D/3dmodel.model" '
+        'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+        "</Relationships>"
+    ).encode()
+
+    def fake_run(command, **_kwargs):
+        _write_artifact(
+            command,
+            structure_overrides={
+                "[Content_Types].xml": content_types,
+                "_rels/.rels": relationships,
+            },
+        )
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    artifact = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert not isinstance(artifact, EngineFailure)
+    assert artifact.direct_print_eligible is True
+
+
+def test_slice_bounds_required_xml_before_parsing(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.engines.bambu.MAX_REQUIRED_XML_BYTES", 32, raising=False)
+
+    def fake_run(command, **_kwargs):
+        _write_artifact(command)
+        return _Proc()
+
+    monkeypatch.setattr("app.services.engines.bambu.subprocess.run", _versioned_runner(fake_run))
+
+    failure = BambuEngine("AppRun", _Resolver()).slice(_model(tmp_path), tmp_path / "workspace", _options())
+
+    assert isinstance(failure, EngineFailure)
+    assert failure.code == "archive_limit_exceeded"
+
+
+@pytest.mark.parametrize(
     ("limit_name", "limit"),
     [
         ("MAX_ARCHIVE_BYTES", 16),
