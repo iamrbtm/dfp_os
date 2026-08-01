@@ -16,10 +16,11 @@ Keep business goals, feature requirements, and acceptance criteria in `AGENTS.md
 
 ## System Shape
 
-The project is a Flask-first monolith with one supporting microservice:
+The project is a Flask-first monolith with two supporting microservices:
 
 - Main app: public website, admin dashboard, POS, REST API, analytics, auth, and operational workflows
 - Audit log service: isolated service under `services/audit-log/` for durable audit event ingestion and retrieval
+- Slicer service: isolated FastAPI service under `services/slicer/` for Product Studio model slicing and native artifact generation
 
 The main app should remain the source of truth for business operations. Add microservices only when there is a clear operational reason such as isolation, scale boundaries, or independent deployment needs.
 
@@ -39,6 +40,7 @@ app/
   utils/
 services/
   audit-log/
+  slicer/
 migrations/
 tests/
 uploads/
@@ -186,7 +188,7 @@ Key cross-module interactions:
 
 ## Microservice Interaction
 
-The audit log service is the current supporting service. Treat it as infrastructure for compliance and change history, not as a home for unrelated business logic.
+The audit log service is infrastructure for compliance and change history, not as a home for unrelated business logic.
 
 Guidelines:
 
@@ -195,6 +197,18 @@ Guidelines:
 - Write application code so business operations still behave safely if audit delivery is degraded.
 - Keep the audit event schema explicit and versionable.
 - Avoid spreading core business logic across the main app and the audit service.
+
+The slicer service is infrastructure for Product Studio model analysis. The Flask app owns product records, upload storage, analysis-run state, cost snapshots, and generated `ProductModelAsset` linkage. The slicer service owns engine discovery, profile resolution, command construction, artifact validation, temporary workspace cleanup, and a compact metadata contract.
+
+Slicer rules:
+
+- Bambu Studio is the primary engine. PrusaSlicer is the secondary fallback only for eligible Bambu engine failures.
+- Bambu success returns a native `.gcode.3mf` artifact and may be direct-print eligible in future printer-gateway work.
+- Prusa fallback returns `.gcode`, is always `estimate_only=true`, and is never direct-print eligible.
+- Product Studio supports `bambu_a1`, `bambu_p1p`, and `bambu_x1c` with a fixed `0.4` mm nozzle in this phase.
+- The Flask app never accepts slicer engine names, executable paths, or filesystem profile paths from browser form input.
+- The Product Studio page renders run metadata from `ProductAnalysisRun.slicer_stats_json`: engine name/version, profile IDs, artifact type, direct-print eligibility, fallback warning, and bounded primary failure text.
+- Multicolor remains limited to 3MF files with embedded settings; no color assignment or printer submission workflow exists yet.
 
 ## Database and Persistence Guidance
 

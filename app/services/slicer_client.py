@@ -139,13 +139,6 @@ class SlicerClient:
         slicer_options: dict | None = None,
         preserve_orientation: bool | None = None,
     ) -> dict[str, Any]:
-        """Stream one native artifact into the caller-owned private workspace.
-
-        ``workspace`` remains caller-owned. Keep its exact inode, ownership,
-        and ``0700`` mode unchanged until the successful result's
-        ``artifact_path`` is consumed or persisted.
-        """
-
         import json
 
         options_json = json.dumps(slicer_options) if slicer_options else None
@@ -172,6 +165,13 @@ class SlicerClient:
         slicer_options: dict | None = None,
         preserve_orientation: bool | None = None,
     ) -> dict[str, Any]:
+        """Stream one native artifact into the caller-owned private workspace.
+
+        ``workspace`` remains caller-owned. Keep its exact inode, ownership,
+        and ``0700`` mode unchanged until the successful result's
+        ``artifact_path`` is consumed or persisted.
+        """
+
         if not self.is_configured():
             return {"success": False, "error": "DFPos Slicer service is not configured."}
 

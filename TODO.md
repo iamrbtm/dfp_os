@@ -12,7 +12,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 
 ## Current Focus
 
-- `in-progress` Move the Product Studio model pipeline to Bambu-primary/Prusa-fallback slicing with native artifact storage.
+- `done` Moved the Product Studio model pipeline to Bambu-primary/Prusa-fallback slicing with native artifact storage, run metadata display, and pinned local slicer base image wiring.
 - `done` Added Product Studio slicer-settings upload flow, optional GLB/G-code generation,
   versioned JSON metadata sidecars, hardened G-code comment parsing, and a product-scoped
   S3 Assets modal.
@@ -64,6 +64,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 
 - `todo` Decide later whether a separate `ROADMAP.md` is still useful for longer-term planning beyond the active working list.
 - `todo` Add milestone-based phases here if the project shifts from feature work into release planning.
+- `todo` Future printer gateway/direct-print work: design Bambu printer credentials, network submission, status polling, and direct-print controls separately from Product Studio analysis.
 
 ## Recently Completed
 

@@ -25,6 +25,9 @@ Primary files involved:
 - `app/services/storage.py`
 - `app/services/product_ops.py`
 - `app/services/admin_mutations.py`
+- `app/services/slicer_client.py`
+- `services/slicer/app/services/engines/`
+- `services/slicer/app/api/routes/slice.py`
 
 The products blueprint is registered as `products` with `url_prefix="/products"` in `app/blueprints/products/__init__.py`.
 
@@ -39,7 +42,7 @@ The request path is protected before the product workflow starts.
 - At least one `Category` must exist for normal product creation, because `ProductStudioForm.category_id` is required and its choices are loaded from the database.
 - Model analysis requires the background worker stack to be functional. The route queues a Celery task; the actual slicing/analyzing work happens in `app.tasks.model_analysis.analyze_product_model`.
 - Model validation requires `trimesh` to be installed.
-- Filament/time estimates require `PrusaSlicer` to be installed or `PRUSA_SLICER_PATH` to point to it.
+- Filament/time estimates require the slicer microservice. Its local base image pins Bambu Studio `2.7.1.62` as primary and Debian `prusa-slicer` as the fallback engine.
 
 ## High-Level Flow
 
@@ -245,10 +248,10 @@ Browser/screen behavior:
 
 Upload settings shown in the modal:
 
-- Printer profile: `bambu_a1.ini`, `bambu_x1c.ini`, or `bambu_p1p.ini`
+- Printer profile: `bambu_a1`, `bambu_x1c`, or `bambu_p1p`
 - Material: `PLA`, `PETG`, `ABS`, `ASA`, or `TPU`
 - Filament density
-- Nozzle diameter
+- Nozzle diameter: fixed `0.4` mm select; tampered values are rejected server-side
 - Layer height
 - Walls/perimeters
 - Top solid layers
@@ -268,7 +271,9 @@ Upload settings shown in the modal:
 Developer note:
 
 - These settings are stored on `Product.model_analysis_config`.
-- Not all settings are currently passed through to the PrusaSlicer CLI. The slicer command uses layer height, perimeters, top/bottom layers, infill pattern, brim width, infill percent, and support settings. Other fields are stored as metadata/config and may affect parsing or future workflows.
+- Legacy saved `.ini` printer values are normalized with `Path(value).stem` before reuse.
+- Browser input never supplies engine names, executable paths, or profile filesystem paths. The slicer service resolves engines and profiles from its own allowlists.
+- Multicolor is limited to 3MF files with embedded settings in this phase. DFPos does not yet assign colors or submit jobs directly to printers.
 
 ## Phase 6: User Uploads The Model
 
@@ -298,12 +303,12 @@ Backend steps:
 - Resolve storage bucket/root from config:
   - `PRODUCT_ASSETS_BUCKET`, default `products`
   - `PRODUCT_ASSETS_PATH`, default `uploads/products`
-- Store the file at `products/<product_id>/<uuid>.<ext>` using `upload_bytes_to_storage`.
+- Stream the file to storage at `products/<product_id>/<uuid>.<ext>` while computing SHA-256 and size.
 - Local storage returns an absolute local file path.
 - S3 storage returns an `s3://bucket/key` reference.
 - Set `product.model_file_path` to the storage reference.
 - Set `product.model_convert_to_glb` from the upload form.
-- Write all upload/slicer settings into `product.model_analysis_config`.
+- Write scalar upload/slicer settings into `product.model_analysis_config` after sanitizing and normalizing the printer profile.
 - Set `product.analysis_status = "pending"`.
 - Clear previous analysis/conversion state:
   - `analysis_error = None`
@@ -313,11 +318,11 @@ Backend steps:
   - `converted_model_path = None`
   - `gcode_path = None`
 - Set `analysis_requested_at` to the current UTC time.
-- Write an initial model metadata JSON file through `write_model_metadata(product, source_bytes=source_bytes)`.
+- Create a current `ProductModelAsset` for the uploaded source model and write initial model metadata.
 - Commit the database transaction.
 - Record audit event `product_model.uploaded`.
 - Record audit event `model_analysis.queued`.
-- Queue Celery task `analyze_product_model.delay(product.id)` if Celery is available.
+- Create a current `ProductAnalysisRun` and queue Celery task `analyze_product_model.delay(product.id, run.id)` if Celery is healthy.
 - Return JSON containing `success`, `product_id`, `task_id`, and `file_location`.
 
 Important persistence after upload:
@@ -411,38 +416,35 @@ Failure behavior:
 
 Background service:
 
-- `slice_with_prusaslicer(model_path, profile_name=..., output_path=..., slicer_options=...)` in `app/services/model_analysis.py` runs PrusaSlicer.
+- `slice_with_slicer(model_path, workspace=..., profile_name=..., slicer_options=...)` in `app/services/model_analysis.py` calls `SlicerClient.slice_artifact()`.
+- `SlicerClient.slice_artifact()` streams the response from `POST /api/v1/slice-artifact` into a caller-owned private `0700` workspace and validates the compact metadata header.
+- `services/slicer/app/api/dependencies.py` builds a Bambu-first `SlicerOrchestrator` with `BambuEngine` first and `PrusaEngine` second.
 
 Backend steps:
 
 - Set `product.analysis_status = "slicing"` and commit.
 - Emit `model_analysis.slicing_started` at 45%.
-- Build a PrusaSlicer command:
-  - Executable from `PRUSA_SLICER_PATH`, default `prusa-slicer`
-  - `--export-gcode`
-  - `--load <slicer_profile>`
-  - `--output <tmp>/quote.gcode`
-  - `--center 128,128` for the first attempt
-  - Optional CLI flags for layer height, walls, top/bottom layers, infill pattern, brim, infill percent, and supports
-  - Uploaded model path
-- Before slicing, verify the executable responds to `--help-fff`.
-- Run the slicer with a 600 second timeout.
-- If centered slicing fails, try again with default profile and no center argument.
+- Send the uploaded model and sanitized settings to the slicer service.
+- The slicer service validates printer/material/nozzle/model suffix before invoking any engine.
+- The profile matrix supports `bambu_a1`, `bambu_p1p`, and `bambu_x1c`, fixed to `0.4` mm nozzles.
+- Bambu Studio is attempted first using version-pinned machine/process/filament profiles from `/opt/bambu-studio/resources/profiles/BBL`.
+- PrusaSlicer runs only when the Bambu failure is fallback-eligible.
+- The slicer service returns a binary artifact plus base64 JSON metadata in `X-DFPOS-Slicer-Metadata`.
 
 What counts as a successful slice:
 
-- PrusaSlicer exits with return code 0.
-- It writes a G-code file.
-- `_parse_gcode_stats` can find both filament and print time in G-code comments.
+- Bambu Studio produces a valid native `.gcode.3mf` artifact and parseable filament/time metadata.
+- Or PrusaSlicer produces a `.gcode` artifact with parseable filament/time metadata as an estimate-only fallback.
+- The Flask client verifies artifact filename, media type, size, SHA-256, direct-print eligibility, estimate-only flags, and profile IDs before publishing results.
 
-How filament is parsed:
+How filament is parsed for Prusa fallback:
 
 - First preference: a G-code comment matching `; total filament used [g] = <number>`.
 - Fallback: a G-code comment matching `; filament used [cm3] = <number>`.
 - If only cubic centimeters are present, grams are calculated as `cm3 * filament_density`.
 - Default density is PLA density `1.24 g/cm3`, unless upload/embedded settings provide another density.
 
-How print time is parsed:
+How print time is parsed for Prusa fallback:
 
 - The parser looks for comments like `; estimated printing time = ...` or `; estimated print time = ...`.
 - It parses days, hours, minutes, and seconds into total minutes.
@@ -457,6 +459,7 @@ Database updates after successful slicing:
 - `product.parsed_filament_grams`
 - `product.parsed_print_minutes`
 - `product.parsed_material_cost`
+- `ProductAnalysisRun.slicer_stats_json` stores engine name/version, fallback state, primary failure summary, profile IDs, artifact metadata, direct-print eligibility, estimate-only flag, and cost inputs.
 
 Important material-cost detail:
 
@@ -476,7 +479,7 @@ Failure behavior:
 - The task records `model_analysis.failed` with `step = slicing`.
 - No filament/time estimates are stored for that run.
 
-## Phase 11: G-code Storage
+## Phase 11: Native Artifact Storage
 
 Condition:
 
@@ -484,10 +487,12 @@ Condition:
 
 Backend behavior:
 
-- The generated G-code is uploaded to product asset storage.
-- The preferred filename is based on the product slug/name, for example `<product-slug>.gcode`.
-- `product.gcode_path` is set to the storage reference.
+- The slicer artifact is uploaded to product asset storage under the current analysis run, for example `analysis-runs/<run_id>/<artifact>`.
+- Bambu artifacts preserve `.gcode.3mf`; Prusa fallback artifacts preserve `.gcode`. DFPos does not convert one format into the other.
+- A generated `ProductModelAsset` with `asset_kind=AssetKind.GCODE` is linked to `ProductAnalysisRun.gcode_asset_id`.
+- `product.gcode_path` is set to the storage reference for compatibility.
 - The task emits `model_analysis.gcode_stored` at 80%.
+- Generated run-scoped assets are protected from deletion while downloads remain supported.
 
 Failure behavior:
 

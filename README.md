@@ -120,6 +120,28 @@ Migrations are intentionally not run by the web container. Run the `release` pro
 
 The production image builds Python dependencies with `uv sync --frozen --no-dev`, builds Tailwind during image build, and runs as a non-root user. For local development, use `.env.example` as a template and replace every `change-me` value before using compose on any reachable host.
 
+### Slicer Microservice
+
+Product Studio model analysis uses `services/slicer/`, a FastAPI microservice on port `8092`. Bambu Studio `2.7.1.62` is the primary slicer and Debian `prusa-slicer` is the fallback engine. The slow runtime layer lives in `services/slicer/Dockerfile.base`; the normal `services/slicer/Dockerfile` starts from `dfpos-slicer-base:${DFPOS_IMAGE_TAG:-local}` and should not reinstall apt packages, PrusaSlicer, or Bambu Studio.
+
+Safe operator commands:
+
+```bash
+docker build -f services/slicer/Dockerfile.base -t dfpos-slicer-base:local services/slicer
+docker compose --env-file .env.example build slicer
+docker compose --env-file .env.example up -d
+docker compose --env-file .env.example --profile build build slicer-base
+```
+
+No slicer command requires deleting Docker volumes, removing database containers, or running `docker system prune --volumes`.
+
+Runtime policy:
+
+- Bambu success stores a native `.gcode.3mf` artifact and engine metadata.
+- Prusa fallback stores `.gcode`, is estimate-only, and is not direct-print eligible.
+- Product Studio currently allows `bambu_a1`, `bambu_p1p`, and `bambu_x1c` with a fixed `0.4` mm nozzle.
+- Multicolor is limited to 3MF files with embedded settings; direct printer submission is future work.
+
 ### E2E Tests
 
 Playwright smoke tests live under `tests/e2e/`.
