@@ -68,6 +68,17 @@ class SlicerResult:
     filament_grams: Decimal = Decimal("0")
     print_minutes: Decimal = Decimal("0")
     profile_used: str = ""
+    artifact_path: Path | None = None
+    artifact_filename: str = ""
+    artifact_media_type: str = ""
+    artifact_size: int = 0
+    artifact_sha256: str = ""
+    engine_key: str = ""
+    engine_name: str = ""
+    engine_version: str = ""
+    fallback_used: bool = False
+    direct_print_eligible: bool = False
+    estimate_only: bool = False
     error: str | None = None
     success: bool = False
     stats: dict = field(default_factory=dict)
@@ -118,8 +129,7 @@ def extract_3mf_slicer_settings(file_path: str | Path) -> dict:
         candidates = [
             name
             for name in archive.namelist()
-            if name.lower().endswith((".config", ".ini"))
-            or "project_settings" in name.lower()
+            if name.lower().endswith((".config", ".ini")) or "project_settings" in name.lower()
         ]
         for name in candidates:
             text = archive.read(name).decode("utf-8", errors="replace")
@@ -204,7 +214,7 @@ def normalize_scale_percent(value: object) -> int | None:
         return None
     try:
         return int(Decimal(text))
-    except (ArithmeticError, ValueError, TypeError):
+    except ArithmeticError, ValueError, TypeError:
         return None
 
 
@@ -292,9 +302,10 @@ def validate_model_file(file_path: str | Path) -> ValidationResult:
     return result
 
 
-def slice_with_prusaslicer(
+def slice_with_slicer(
     model_path: str | Path,
     *,
+    workspace: str | Path | None = None,
     profile_name: str | None = None,
     output_path: str | Path | None = None,
     center: str | None = "128,128",
@@ -311,8 +322,8 @@ def slice_with_prusaslicer(
     profile_path = slicer_profile_path(profile_name)
     result.profile_used = profile_path.name
 
-    if output_path is None:
-        output_path = model_path.with_suffix(".gcode")
+    if workspace is None:
+        workspace = Path(output_path).parent if output_path is not None else model_path.parent
 
     try:
         from app.services.slicer_client import get_slicer_client
@@ -322,8 +333,9 @@ def slice_with_prusaslicer(
             result.error = "Slicer microservice is not configured."
             return result
 
-        response = client.slice(
+        response = client.slice_artifact(
             model_file_path=str(model_path),
+            workspace=workspace,
             profile_name=profile_name,
             center=center,
             slicer_options=slicer_options,
@@ -339,19 +351,49 @@ def slice_with_prusaslicer(
 
         result.filament_grams = Decimal(str(response.get("filament_grams", "0")))
         result.print_minutes = Decimal(str(response.get("print_minutes", "0")))
-        result.stats = response.get("stats", {})
-        if output_path is not None and response.get("gcode"):
-            Path(output_path).write_text(
-                str(response["gcode"]),
-                encoding="utf-8",
-                errors="replace",
-            )
+        result.artifact_path = Path(response["artifact_path"])
+        result.artifact_filename = str(response["artifact_filename"])
+        result.artifact_media_type = str(response["artifact_media_type"])
+        result.artifact_size = int(response["artifact_size"])
+        result.artifact_sha256 = str(response["artifact_sha256"])
+        result.engine_key = str(response["engine_key"])
+        result.engine_name = str(response["engine_name"])
+        result.engine_version = str(response["engine_version"])
+        result.fallback_used = bool(response["fallback_used"])
+        result.direct_print_eligible = bool(response["direct_print_eligible"])
+        result.estimate_only = bool(response["estimate_only"])
+        result.stats = {
+            "layer_count": response.get("layer_count"),
+            "profile_ids": response.get("profile_ids", {}),
+            "primary_failure": response.get("primary_failure"),
+        }
         result.success = True
         return result
 
     except Exception as exc:
         result.error = f"Slicer microservice call failed: {exc}"
         return result
+
+
+def slice_with_prusaslicer(
+    model_path: str | Path,
+    *,
+    profile_name: str | None = None,
+    output_path: str | Path | None = None,
+    center: str | None = "128,128",
+    slicer_options: dict | None = None,
+    preserve_orientation: bool | None = None,
+) -> SlicerResult:
+    """Temporary compatibility name for callers migrated in the next pipeline phase."""
+
+    return slice_with_slicer(
+        model_path,
+        profile_name=profile_name,
+        output_path=output_path,
+        center=center,
+        slicer_options=slicer_options,
+        preserve_orientation=preserve_orientation,
+    )
 
 
 PLA_DENSITY_G_PER_CM3 = Decimal("1.24")
@@ -382,21 +424,26 @@ def _parse_gcode_stats(
     # explicit "total filament used [g]" wins, then Bambu's "filament used [g]",
     # then the cm3 volume fallback (converted with the chosen density).
     grams_patterns: list[tuple[str, re.Pattern[str]]] = [
-        ("total_filament_used_g", re.compile(r";\s*total filament used\s*\[g\]\s*=\s*([\d.]+)", re.IGNORECASE)),
+        (
+            "total_filament_used_g",
+            re.compile(r";\s*total filament used\s*\[g\]\s*=\s*([\d.]+)", re.IGNORECASE),
+        ),
         ("filament_used_g", re.compile(r";\s*filament used\s*\[g\]\s*=\s*([\d.]+)", re.IGNORECASE)),
     ]
     volume_pattern = re.compile(r";\s*filament used\s*\[cm3\]\s*=\s*([\d.]+)", re.IGNORECASE)
     cost_pattern = re.compile(r";\s*total filament cost\s*=\s*([\d.]+)", re.IGNORECASE)
     # Time patterns across slicers; first match wins per line.
     time_patterns: list[tuple[str, re.Pattern[str]]] = [
-        ("estimated_printing_time_normal", re.compile(
-            r";\s*estimated printing time\s*\(normal mode\)\s*=\s*(.+)", re.IGNORECASE)),
-        ("estimated_printing_time", re.compile(
-            r";\s*estimated (?:printing|print) time\s*=\s*(.+)", re.IGNORECASE)),
-        ("total_estimated_time", re.compile(
-            r";\s*total estimated time\s*=\s*(.+)", re.IGNORECASE)),
-        ("estimated_time", re.compile(
-            r";\s*estimated time\s*=\s*(.+)", re.IGNORECASE)),
+        (
+            "estimated_printing_time_normal",
+            re.compile(r";\s*estimated printing time\s*\(normal mode\)\s*=\s*(.+)", re.IGNORECASE),
+        ),
+        (
+            "estimated_printing_time",
+            re.compile(r";\s*estimated (?:printing|print) time\s*=\s*(.+)", re.IGNORECASE),
+        ),
+        ("total_estimated_time", re.compile(r";\s*total estimated time\s*=\s*(.+)", re.IGNORECASE)),
+        ("estimated_time", re.compile(r";\s*estimated time\s*=\s*(.+)", re.IGNORECASE)),
     ]
     layer_pattern = re.compile(
         r";\s*(?:total layers count|layer_count)\s*[:=]\s*(\d+)", re.IGNORECASE
