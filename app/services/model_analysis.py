@@ -312,6 +312,14 @@ def slice_with_slicer(
     slicer_options: dict | None = None,
     preserve_orientation: bool | None = None,
 ) -> SlicerResult:
+    """Slice a model while preserving the caller's exclusive workspace lifecycle.
+
+    The workspace (or ``output_path`` parent for the compatibility path) must
+    be caller-owned, non-symlinked, and mode ``0700``. The caller must keep it
+    unchanged and private until ``SlicerResult.artifact_path`` is consumed or
+    persisted; this function does not take ownership of workspace cleanup.
+    """
+
     result = SlicerResult()
 
     model_path = Path(model_path)

@@ -6,6 +6,7 @@ import json
 import os
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -83,7 +84,8 @@ def _call_artifact_client(
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "artifacts"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir(exist_ok=True)
+    workspace.mkdir(mode=0o700, exist_ok=True)
+    workspace.chmod(0o700)
     headers = {
         "Content-Length": str(len(payload)),
         "Content-Type": str(metadata.get("artifact_media_type", "application/octet-stream")),
@@ -108,7 +110,7 @@ def test_slice_artifact_streams_authenticated_multipart_to_workspace(tmp_path):
     payload = b"PK\x03\x04native-bambu-artifact\x00\xff"
     model_path = tmp_path / "model.stl"
     workspace = tmp_path / "workspace"
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     model_path.write_bytes(b"solid model\nendsolid model\n")
     requests: list[httpx.Request] = []
 
@@ -285,7 +287,7 @@ def test_slice_artifact_returns_bounded_sanitized_json_service_error(tmp_path):
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "workspace"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     response_body = {
         "success": False,
         "error": {
@@ -313,7 +315,7 @@ def test_slice_artifact_does_not_delete_preexisting_workspace_file(tmp_path):
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "workspace"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     existing = workspace / "dragon.gcode.3mf"
     existing.write_bytes(b"keep this file")
     metadata = _metadata(payload)
@@ -346,7 +348,7 @@ def test_slice_artifact_rejects_symlink_workspace_without_touching_target(tmp_pa
     target = tmp_path / "real-workspace"
     workspace_link = tmp_path / "workspace-link"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    target.mkdir()
+    target.mkdir(mode=0o700)
     workspace_link.symlink_to(target, target_is_directory=True)
     client = slicer_client.SlicerClient(
         base_url="http://slicer.test",
@@ -363,6 +365,62 @@ def test_slice_artifact_rejects_symlink_workspace_without_touching_target(tmp_pa
     assert list(target.iterdir()) == []
 
 
+@pytest.mark.parametrize("mode", [0o750, 0o707, 0o777])
+def test_slice_artifact_rejects_workspace_without_exact_private_mode(tmp_path, mode):
+    model_path = tmp_path / "source.stl"
+    workspace = tmp_path / "workspace"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    workspace.mkdir(mode=mode)
+    workspace.chmod(mode)
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        transport=httpx.MockTransport(
+            lambda _request: pytest.fail("workspace mode validation must precede HTTP")
+        ),
+    )
+
+    result = client.slice_artifact(model_path, workspace)
+
+    assert result["success"] is False
+    assert "0700" in result["error"]
+    assert list(workspace.iterdir()) == []
+
+
+def test_slice_artifact_rejects_workspace_not_owned_by_effective_user(tmp_path, monkeypatch):
+    model_path = tmp_path / "source.stl"
+    workspace = tmp_path / "workspace"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    workspace.mkdir(mode=0o700)
+    real_lstat = os.lstat
+
+    def foreign_owned_lstat(path):
+        result = real_lstat(path)
+        if Path(path) != workspace:
+            return result
+        return SimpleNamespace(
+            st_mode=result.st_mode,
+            st_dev=result.st_dev,
+            st_ino=result.st_ino,
+            st_uid=os.geteuid() + 1,
+        )
+
+    monkeypatch.setattr(slicer_client.os, "lstat", foreign_owned_lstat)
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        transport=httpx.MockTransport(
+            lambda _request: pytest.fail("workspace ownership validation must precede HTTP")
+        ),
+    )
+
+    result = client.slice_artifact(model_path, workspace)
+
+    assert result["success"] is False
+    assert "effective user" in result["error"].lower()
+    assert list(workspace.iterdir()) == []
+
+
 def test_slice_artifact_directory_swap_cleans_only_original_fd_relative_file(tmp_path, monkeypatch):
     payload = b"native artifact"
     metadata = _metadata(payload)
@@ -370,7 +428,7 @@ def test_slice_artifact_directory_swap_cleans_only_original_fd_relative_file(tmp
     workspace = tmp_path / "workspace"
     original_after_swap = tmp_path / "original-workspace"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     unlink_calls = []
     real_unlink = os.unlink
 
@@ -384,7 +442,7 @@ def test_slice_artifact_directory_swap_cleans_only_original_fd_relative_file(tmp
 
     def handler(_request):
         workspace.rename(original_after_swap)
-        workspace.mkdir()
+        workspace.mkdir(mode=0o700)
         (workspace / "replacement-marker").write_bytes(b"do not touch")
         return httpx.Response(
             200,
@@ -412,13 +470,48 @@ def test_slice_artifact_directory_swap_cleans_only_original_fd_relative_file(tmp
     assert any(path == "dragon.gcode.3mf" and dir_fd is not None for path, dir_fd in unlink_calls)
 
 
+def test_slice_artifact_caller_keeps_workspace_stable_until_artifact_is_consumed(tmp_path):
+    payload = b"native artifact"
+    metadata = _metadata(payload)
+    model_path = tmp_path / "source.stl"
+    workspace = tmp_path / "workspace"
+    moved_workspace = tmp_path / "moved-workspace"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    workspace.mkdir(mode=0o700)
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                headers={
+                    "Content-Length": str(len(payload)),
+                    "Content-Type": metadata["artifact_media_type"],
+                    "X-DFPOS-Slicer-Metadata": _metadata_header(metadata),
+                },
+                content=payload,
+            )
+        ),
+    )
+
+    result = client.slice_artifact(model_path, workspace)
+
+    assert result["success"] is True
+    workspace.rename(moved_workspace)
+    workspace.mkdir(mode=0o700)
+    # The returned path is intentionally path-based. A same-UID caller replacing
+    # its workspace after return is outside the client's exclusive-owner contract.
+    assert not Path(result["artifact_path"]).exists()
+    assert (moved_workspace / "dragon.gcode.3mf").read_bytes() == payload
+
+
 def test_slice_artifact_closes_created_descriptor_when_fdopen_fails(tmp_path, monkeypatch):
     payload = b"native artifact"
     metadata = _metadata(payload)
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "workspace"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     artifact_descriptors = []
     real_open = os.open
 
@@ -458,6 +551,105 @@ def test_slice_artifact_closes_created_descriptor_when_fdopen_fails(tmp_path, mo
     with pytest.raises(OSError):
         os.fstat(artifact_descriptors[0])
     assert list(workspace.iterdir()) == []
+
+
+def test_slice_artifact_closes_workspace_descriptor_when_initial_fstat_fails(tmp_path, monkeypatch):
+    model_path = tmp_path / "source.stl"
+    workspace = tmp_path / "workspace"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    workspace.mkdir(mode=0o700)
+    unrelated = workspace / "keep.txt"
+    unrelated.write_bytes(b"keep")
+    opened_descriptors = []
+    real_open = os.open
+    real_fstat = os.fstat
+
+    def tracking_open(path, flags, mode=0o777, *, dir_fd=None):
+        descriptor = (
+            real_open(path, flags, mode)
+            if dir_fd is None
+            else real_open(path, flags, mode, dir_fd=dir_fd)
+        )
+        opened_descriptors.append(descriptor)
+        return descriptor
+
+    monkeypatch.setattr(slicer_client.os, "open", tracking_open)
+    monkeypatch.setattr(
+        slicer_client.os,
+        "fstat",
+        lambda _descriptor: (_ for _ in ()).throw(OSError("workspace fstat failed")),
+    )
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        transport=httpx.MockTransport(
+            lambda _request: pytest.fail("workspace fstat must precede the HTTP request")
+        ),
+    )
+
+    result = client.slice_artifact(model_path, workspace)
+
+    assert result["success"] is False
+    assert len(opened_descriptors) == 1
+    with pytest.raises(OSError):
+        real_fstat(opened_descriptors[0])
+    assert unrelated.read_bytes() == b"keep"
+
+
+def test_slice_artifact_closes_and_unlinks_when_artifact_fstat_fails(tmp_path, monkeypatch):
+    payload = b"native artifact"
+    metadata = _metadata(payload)
+    model_path = tmp_path / "source.stl"
+    workspace = tmp_path / "workspace"
+    model_path.write_bytes(b"solid source\nendsolid source\n")
+    workspace.mkdir(mode=0o700)
+    unrelated = workspace / "keep.txt"
+    unrelated.write_bytes(b"keep")
+    artifact_descriptors = []
+    real_open = os.open
+    real_fstat = os.fstat
+
+    def tracking_open(path, flags, mode=0o777, *, dir_fd=None):
+        descriptor = (
+            real_open(path, flags, mode)
+            if dir_fd is None
+            else real_open(path, flags, mode, dir_fd=dir_fd)
+        )
+        if dir_fd is not None:
+            artifact_descriptors.append(descriptor)
+        return descriptor
+
+    def fail_artifact_fstat(descriptor):
+        if descriptor in artifact_descriptors:
+            raise OSError("artifact fstat failed")
+        return real_fstat(descriptor)
+
+    monkeypatch.setattr(slicer_client.os, "open", tracking_open)
+    monkeypatch.setattr(slicer_client.os, "fstat", fail_artifact_fstat)
+    client = slicer_client.SlicerClient(
+        base_url="http://slicer.test",
+        token="secret-token",
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                headers={
+                    "Content-Length": str(len(payload)),
+                    "Content-Type": metadata["artifact_media_type"],
+                    "X-DFPOS-Slicer-Metadata": _metadata_header(metadata),
+                },
+                content=payload,
+            )
+        ),
+    )
+
+    result = client.slice_artifact(model_path, workspace)
+
+    assert result["success"] is False
+    assert len(artifact_descriptors) == 1
+    with pytest.raises(OSError):
+        real_fstat(artifact_descriptors[0])
+    assert not (workspace / "dragon.gcode.3mf").exists()
+    assert unrelated.read_bytes() == b"keep"
 
 
 def test_slice_artifact_rejects_response_media_type_that_disagrees_with_metadata(tmp_path):
@@ -637,7 +829,7 @@ def test_slice_artifact_writes_successful_response_incrementally(tmp_path, monke
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "workspace"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     client = slicer_client.SlicerClient(
         base_url="http://slicer.test",
         token="secret-token",
@@ -669,7 +861,7 @@ def test_slice_artifact_rejects_declared_size_disagreement_before_reading_body(t
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "workspace"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     client = slicer_client.SlicerClient(
         base_url="http://slicer.test",
         token="secret-token",
@@ -712,7 +904,7 @@ def test_slice_artifact_rejects_consistent_oversized_response_before_reading_bod
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "workspace"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     client = slicer_client.SlicerClient(
         base_url="http://slicer.test",
         token="secret-token",
@@ -746,7 +938,7 @@ def test_slice_artifact_deletes_partial_file_and_closes_interrupted_response(tmp
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "workspace"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     client = slicer_client.SlicerClient(
         base_url="http://slicer.test",
         token="secret-token",
@@ -788,7 +980,7 @@ def test_slice_artifact_bounds_non_json_error_reading_and_closes_response(tmp_pa
     model_path = tmp_path / "source.stl"
     workspace = tmp_path / "workspace"
     model_path.write_bytes(b"solid source\nendsolid source\n")
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     stream = _OversizedErrorStream()
     client = slicer_client.SlicerClient(
         base_url="http://slicer.test",
@@ -836,7 +1028,7 @@ class _FakeSlicerClient:
 def test_slice_with_slicer_returns_native_artifact_and_engine_metadata(tmp_path, monkeypatch):
     model_path = tmp_path / "model.stl"
     workspace = tmp_path / "workspace"
-    workspace.mkdir()
+    workspace.mkdir(mode=0o700)
     model_path.write_text("solid model\nendsolid model\n", encoding="utf-8")
     monkeypatch.setattr(slicer_client, "get_slicer_client", lambda: _FakeSlicerClient())
 

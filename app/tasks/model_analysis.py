@@ -359,7 +359,11 @@ def analyze_product_model(self, product_id: int) -> dict:
         if not file_location:
             raise ValueError("No file location set on product")
 
+        # mkdtemp creates the exclusive 0700 workspace required by SlicerClient.
+        # This task retains it unchanged for the complete analysis attempt and
+        # removes it only in the task's finally block.
         tmp_dir = Path(tempfile.mkdtemp(prefix="dfp-model-"))
+        tmp_dir.chmod(0o700)
         work_dir = tmp_dir
 
         if is_s3_reference(file_location):

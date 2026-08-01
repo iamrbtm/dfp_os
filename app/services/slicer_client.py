@@ -76,6 +76,17 @@ _SECURE_DIR_FD_SUPPORTED = (
 
 
 class SlicerClient:
+    """Internal slicer HTTP client with an exclusive private-workspace contract.
+
+    Artifact callers must supply a real, non-symlink directory owned by the
+    current effective user with mode exactly ``0700``. The caller must retain
+    exclusive control of that directory and must not rename, replace, chmod,
+    or share it until the returned ``artifact_path`` has been consumed or
+    persisted. Directory-FD pinning protects the transfer from path swaps; it
+    does not claim immunity from a same-UID caller that violates this contract
+    after the method returns.
+    """
+
     def __init__(
         self,
         base_url: str | None = None,
@@ -128,6 +139,13 @@ class SlicerClient:
         slicer_options: dict | None = None,
         preserve_orientation: bool | None = None,
     ) -> dict[str, Any]:
+        """Stream one native artifact into the caller-owned private workspace.
+
+        ``workspace`` remains caller-owned. Keep its exact inode, ownership,
+        and ``0700`` mode unchanged until the successful result's
+        ``artifact_path`` is consumed or persisted.
+        """
+
         import json
 
         options_json = json.dumps(slicer_options) if slicer_options else None
@@ -224,7 +242,15 @@ class SlicerClient:
                             0o600,
                             dir_fd=workspace_fd,
                         )
-                        created_stat = os.fstat(descriptor)
+                        try:
+                            created_stat = os.fstat(descriptor)
+                            _validate_private_artifact_stat(created_stat)
+                        except BaseException:
+                            try:
+                                os.close(descriptor)
+                            finally:
+                                _unlink_created_artifact(workspace_fd, artifact_filename)
+                            raise
                         artifact_identity = (created_stat.st_dev, created_stat.st_ino)
                         try:
                             artifact_stream = os.fdopen(descriptor, "wb")
@@ -253,11 +279,11 @@ class SlicerClient:
                             follow_symlinks=False,
                         )
                         if (
-                            not stat.S_ISREG(final_stat.st_mode)
-                            or (final_stat.st_dev, final_stat.st_ino) != artifact_identity
-                            or final_stat.st_size != actual_size
-                        ):
+                            final_stat.st_dev,
+                            final_stat.st_ino,
+                        ) != artifact_identity or final_stat.st_size != actual_size:
                             raise ValueError("The slicer artifact file identity changed.")
+                        _validate_private_artifact_stat(final_stat)
                         _verify_workspace_path_identity(workspace_path, workspace_identity)
 
                         return {**metadata, "artifact_path": destination}
@@ -278,8 +304,7 @@ def _open_workspace_fd(workspace: Path) -> tuple[int, tuple[int, int]]:
         before = os.lstat(workspace)
     except OSError as exc:
         raise ValueError("The slicer workspace is not an accessible real directory.") from exc
-    if not stat.S_ISDIR(before.st_mode) or stat.S_ISLNK(before.st_mode):
-        raise ValueError("The slicer workspace must be a real directory, not a symlink.")
+    _validate_private_workspace_stat(before)
 
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     if hasattr(os, "O_CLOEXEC"):
@@ -289,9 +314,18 @@ def _open_workspace_fd(workspace: Path) -> tuple[int, tuple[int, int]]:
     except OSError as exc:
         raise ValueError("The slicer workspace could not be opened safely.") from exc
 
-    opened = os.fstat(workspace_fd)
+    try:
+        opened = os.fstat(workspace_fd)
+    except BaseException:
+        os.close(workspace_fd)
+        raise
     identity = (opened.st_dev, opened.st_ino)
-    if not stat.S_ISDIR(opened.st_mode) or identity != (before.st_dev, before.st_ino):
+    try:
+        _validate_private_workspace_stat(opened)
+    except BaseException:
+        os.close(workspace_fd)
+        raise
+    if identity != (before.st_dev, before.st_ino):
         os.close(workspace_fd)
         raise ValueError("The slicer workspace changed while it was being opened.")
     return workspace_fd, identity
@@ -302,8 +336,36 @@ def _verify_workspace_path_identity(workspace: Path, identity: tuple[int, int]) 
         current = os.lstat(workspace)
     except OSError as exc:
         raise ValueError("The slicer workspace changed during artifact transfer.") from exc
-    if not stat.S_ISDIR(current.st_mode) or (current.st_dev, current.st_ino) != identity:
+    _validate_private_workspace_stat(current)
+    if (current.st_dev, current.st_ino) != identity:
         raise ValueError("The slicer workspace changed during artifact transfer.")
+
+
+def _validate_private_workspace_stat(value: os.stat_result) -> None:
+    if not stat.S_ISDIR(value.st_mode) or stat.S_ISLNK(value.st_mode):
+        raise ValueError("The slicer workspace must be a real directory, not a symlink.")
+    if value.st_uid != os.geteuid():
+        raise ValueError("The slicer workspace must be owned by the current effective user.")
+    if stat.S_IMODE(value.st_mode) != 0o700:
+        raise ValueError("The slicer workspace mode must be exactly 0700.")
+
+
+def _validate_private_artifact_stat(value: os.stat_result) -> None:
+    if (
+        not stat.S_ISREG(value.st_mode)
+        or value.st_uid != os.geteuid()
+        or stat.S_IMODE(value.st_mode) != 0o600
+    ):
+        raise ValueError("The slicer artifact must be a private regular file.")
+
+
+def _unlink_created_artifact(workspace_fd: int, artifact_filename: str) -> None:
+    try:
+        os.unlink(artifact_filename, dir_fd=workspace_fd)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        _log_warning("slicer artifact cleanup failed: %s", exc)
 
 
 def _unlink_matching_artifact(
