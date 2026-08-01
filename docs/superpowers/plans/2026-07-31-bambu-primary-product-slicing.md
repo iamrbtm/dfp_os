@@ -1034,6 +1034,28 @@ assert "content-range: bytes 0-63/" in headers, headers
 assert "x-dfpos-slicer-metadata:" in headers, headers
 PY
 
+MALFORMED_RANGE_STATUS="$(curl --silent --show-error --max-time 900 \
+  --request POST \
+  --header "Authorization: Bearer $SMOKE_TOKEN" \
+  --header 'Range: nope' \
+  --dump-header "$SMOKE_DIR/malformed-range.headers" \
+  --output "$SMOKE_DIR/malformed-range.body" \
+  --write-out '%{http_code}' \
+  --form "model_file=@$SMOKE_DIR/cube-over-spool-threshold.stl;type=model/stl" \
+  --form 'profile_name=bambu_a1' \
+  --form 'slicer_options={"material":"PLA","nozzle_diameter":"0.4"}' \
+  "$SMOKE_BASE_URL/api/v1/slice-artifact")"
+test "$MALFORMED_RANGE_STATUS" = "400"
+timeout 30s env UV_CACHE_DIR=/tmp/dfpos-uv-cache uv run python - <<'PY'
+import os
+from pathlib import Path
+
+root = Path(os.environ["SMOKE_DIR"])
+assert (root / "malformed-range.body").read_bytes() == b"Malformed range header."
+headers = (root / "malformed-range.headers").read_text(encoding="latin-1").lower()
+assert "content-type: text/plain" in headers, headers
+PY
+
 UNSATISFIABLE_STATUS="$(curl --silent --show-error --max-time 900 \
   --request POST \
   --header "Authorization: Bearer $SMOKE_TOKEN" \
@@ -1058,7 +1080,7 @@ trap - EXIT INT TERM
 rm -rf -- "$SMOKE_DIR"
 ```
 
-Expected: readiness reports Bambu primary; the upload is larger than Starlette's 1 MiB spool threshold; the normal response is a valid metadata-matched `.gcode.3mf`; the range response is HTTP 206 with the exact first 64 bytes; the unsatisfiable range is HTTP 416; no `dfpos-slicer-request-*` directory remains; and only the temporary smoke container/directory are removed. No Docker volume command or project database command is permitted.
+Expected: readiness reports Bambu primary; the upload is larger than Starlette's 1 MiB spool threshold; the normal response is a valid metadata-matched `.gcode.3mf`; the valid range response is HTTP 206 with the exact first 64 bytes; the syntactically malformed `Range: nope` request is HTTP 400 with the exact plain-text `Malformed range header.` response; the distinct unsatisfiable range is HTTP 416; no `dfpos-slicer-request-*` directory remains after all four artifact requests; and only the temporary smoke container/directory are removed. No Docker volume command or project database command is permitted.
 
 If readiness, slicing, range handling, metadata validation, or workspace cleanup times out/fails, the cleanup trap prints bounded container logs and any remaining request-workspace names before it removes the temporary container.
 
