@@ -1,0 +1,6 @@
+{
+  "$schema": "https://opencode.ai/config.schema.json",
+  "instructions": [
+    "CRITICAL: Always pipe long bash outputs to '| head -n 50' or redirect to '/tmp/agent.log' to prevent RAM inflation."
+  ]
+}
