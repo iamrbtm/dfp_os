@@ -15,8 +15,8 @@ from app.services.storage import (
     converted_storage_key,
     delete_storage_reference,
     download_storage_bytes,
-    gcode_storage_key,
     image_storage_key,
+    legacy_gcode_storage_key,
     product_storage_key,
     storage_reference_name,
     upload_bytes_to_storage,
@@ -166,7 +166,7 @@ def migrate_file_paths() -> None:
         new_gcode = _migrate_ref(
             product.gcode_path,
             product_id=product.id,
-            storage_key_fn=gcode_storage_key,
+            storage_key_fn=legacy_gcode_storage_key,
         )
 
         if new_file or new_converted or new_gcode:

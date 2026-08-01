@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from flask import Flask
+
 from app.models import Product
 from app.services.storage import (
     converted_storage_key,
     gcode_storage_key,
     image_storage_key,
+    legacy_gcode_storage_key,
     list_product_assets,
     metadata_storage_key,
     normalize_storage_filename,
     product_storage_key,
+    planned_storage_reference,
     storage_slug,
 )
 from app.tasks.model_analysis import (
@@ -58,6 +62,45 @@ def test_gcode_storage_keys_are_immutable_per_run_and_safely_normalized():
     assert first == "products/14/analysis-runs/101/Rainbow_Dragon.gcode.3mf"
     assert second == "products/14/analysis-runs/102/Rainbow_Dragon.gcode.3mf"
     assert first != second
+
+
+def test_legacy_gcode_migration_key_is_deterministic_and_cannot_collide_with_runs():
+    legacy = legacy_gcode_storage_key(14, "Rainbow Dragon.gcode.3MF")
+
+    assert legacy == "products/14/legacy-migration/Rainbow_Dragon.gcode.3mf"
+    assert legacy != gcode_storage_key(14, "Rainbow Dragon.gcode.3MF", run_id=101)
+
+
+def test_planned_local_reference_is_exact_before_copy(tmp_path):
+    app = Flask(__name__)
+    app.config["FILE_STORAGE_BACKEND"] = "local"
+
+    with app.app_context():
+        reference = planned_storage_reference(
+            bucket="products",
+            key="products/14/analysis-runs/101/dragon.gcode.3mf",
+            local_root=tmp_path,
+        )
+
+    assert reference == str((tmp_path / "products/14/analysis-runs/101/dragon.gcode.3mf").resolve())
+
+
+def test_local_product_asset_listing_recurses_nested_run_keys_without_symlink_escape(tmp_path):
+    app = Flask(__name__)
+    app.config["FILE_STORAGE_BACKEND"] = "local"
+    product_root = tmp_path / "products" / "14"
+    nested = product_root / "analysis-runs" / "101"
+    nested.mkdir(parents=True)
+    (nested / "dragon.gcode.3mf").write_bytes(b"native")
+    outside = tmp_path / "outside.gcode"
+    outside.write_bytes(b"outside")
+    (product_root / "escaped.gcode").symlink_to(outside)
+
+    with app.app_context():
+        assets = list_product_assets(14, bucket="products", local_root=tmp_path)
+
+    assert [asset["name"] for asset in assets] == ["analysis-runs/101/dragon.gcode.3mf"]
+    assert assets[0]["reference"] == str((nested / "dragon.gcode.3mf").resolve())
 
 
 def test_analysis_output_filenames_follow_product_convention():

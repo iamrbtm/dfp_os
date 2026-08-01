@@ -54,6 +54,7 @@ from app.services.product_analysis import (
     create_model_asset,
     current_asset,
     is_analysis_in_progress,
+    lock_product_for_analysis,
     reset_product_analysis,
     sanitize_analysis_config,
     start_analysis_run,
@@ -526,8 +527,6 @@ def upload_model(product_id: int):
 
     quotable = is_quotable_format(file.filename)
 
-    product.model_file_path = storage_ref
-    product.model_convert_to_glb = bool(upload_form.convert_to_glb.data)
     config = {
         "original_filename": file.filename,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
@@ -552,6 +551,16 @@ def upload_model(product_id: int):
         "retain_gcode": bool(upload_form.retain_gcode.data),
         "convert_to_glb": bool(upload_form.convert_to_glb.data),
     }
+    # Serialize the source-current flip and exact-run supersession. This lock is
+    # held until the single commit below, so concurrent uploads cannot leave a
+    # source asset without its corresponding current run.
+    product = lock_product_for_analysis(product.id)
+    if product is None:  # Product may have been removed while the file streamed.
+        db.session.rollback()
+        return jsonify({"success": False, "error": "Product not found"}), 404
+
+    product.model_file_path = storage_ref
+    product.model_convert_to_glb = bool(upload_form.convert_to_glb.data)
     # Issue 40 — only scalar settings may live on the product row.
     product.model_analysis_config = sanitize_analysis_config(config)
     product.analysis_error = None
@@ -609,17 +618,16 @@ def upload_model(product_id: int):
             }
         )
 
-    product.analysis_status = "pending"
-    product.analysis_requested_at = datetime.now(timezone.utc)
-    db.session.commit()
-
     # Issue 6 — create the exact race-proof run before enqueueing. Its identity
     # and immutable source/settings snapshot travel with the Celery message.
+    product.analysis_status = "pending"
+    product.analysis_requested_at = datetime.now(timezone.utc)
     run = start_analysis_run(
         product,
         source_asset=asset,
         requested_by_id=current_user.id,
         settings=config,
+        product_locked=True,
     )
     db.session.commit()
 
@@ -1100,7 +1108,7 @@ def view_model(product_id: int):
 @bp.route("/studio/reanalyze/<int:product_id>", methods=["POST"])
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def reanalyze_model(product_id: int):
-    product = get_by_id(Product, product_id)
+    product = lock_product_for_analysis(product_id)
     if product is None:
         return jsonify({"success": False, "error": "Product not found"}), 404
 
@@ -1128,6 +1136,7 @@ def reanalyze_model(product_id: int):
         source_asset=source_asset,
         requested_by_id=current_user.id,
         settings=dict(product.model_analysis_config or {}),
+        product_locked=True,
     )
     db.session.commit()
 

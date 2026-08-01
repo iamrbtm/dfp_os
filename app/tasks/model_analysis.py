@@ -39,8 +39,9 @@ from app.services.model_analysis import (
 from app.services.product_analysis import (
     claim_analysis_run,
     create_model_asset,
-    is_current_run,
+    lock_current_analysis_run_for_publish,
     publish_run_results,
+    requeue_analysis_run,
     sanitize_analysis_config,
     set_run_status,
 )
@@ -52,6 +53,7 @@ from app.services.storage import (
     gcode_storage_key,
     is_s3_reference,
     normalize_storage_filename,
+    planned_storage_reference,
     product_storage_key,
     storage_reference_name,
     storage_slug,
@@ -66,26 +68,36 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _ArtifactPublicationState:
     storage_reference: str | None = None
+    artifact_size: int | None = None
+    artifact_sha256: str | None = None
     commit_attempted: bool = False
     committed: bool = False
 
 
-def _artifact_reference_committed(*, storage_reference: str, run_id: int) -> bool:
+def _artifact_reference_committed(
+    *,
+    storage_reference: str,
+    run_id: int,
+    artifact_size: int | None,
+    artifact_sha256: str | None,
+    session=None,
+) -> bool:
     """Check a possibly ambiguous commit using the caller's fresh session."""
+    session = session or db.session
+    run = session.get(ProductAnalysisRun, run_id)
     artifact = (
-        db.session.query(ProductModelAsset)
-        .filter(
-            ProductModelAsset.storage_reference == storage_reference,
-            ProductModelAsset.asset_kind == AssetKind.GCODE,
-        )
-        .one_or_none()
+        session.get(ProductModelAsset, run.gcode_asset_id)
+        if run is not None and run.gcode_asset_id is not None
+        else None
     )
-    run = db.session.get(ProductAnalysisRun, run_id)
     return bool(
         artifact
         and run
-        and run.status == AnalysisRunStatus.COMPLETE
         and run.gcode_asset_id == artifact.id
+        and artifact.storage_reference == storage_reference
+        and artifact.size_bytes == artifact_size
+        and artifact.sha256 == artifact_sha256
+        and artifact.asset_kind == AssetKind.GCODE
     )
 
 
@@ -156,6 +168,8 @@ def _recover_failed_publication(
                 committed_check(
                     storage_reference=state.storage_reference,
                     run_id=run_id,
+                    artifact_size=state.artifact_size,
+                    artifact_sha256=state.artifact_sha256,
                 )
             )
         except Exception:
@@ -410,6 +424,13 @@ def _persist_slicer_artifact(
         fallback_stem=_preferred_gcode_filename(product, slicer_result.engine_key),
     )
     key = gcode_storage_key(product.id, safe_filename, run_id=run.id)
+    publication.storage_reference = planned_storage_reference(
+        bucket=bucket,
+        key=key,
+        local_root=local_root,
+    )
+    publication.artifact_size = slicer_result.artifact_size
+    publication.artifact_sha256 = slicer_result.artifact_sha256
     storage_reference = upload(
         slicer_result.artifact_path,
         bucket=bucket,
@@ -431,6 +452,52 @@ def _persist_slicer_artifact(
         asset_kind=AssetKind.GCODE,
     )
     return asset, storage_reference
+
+
+def _dispatch_completion_side_effects(
+    *,
+    product: Product,
+    slicer_result,
+    convert_dispatch=None,
+    audit_record=None,
+) -> str | None:
+    """Dispatch best-effort work after the analysis commit without reopening it."""
+    convert_dispatch = convert_dispatch or convert_product_model_for_viewer.delay
+    audit_record = audit_record or get_audit_client().record
+    convert_task_id = None
+    if product.model_convert_to_glb:
+        try:
+            convert_task = convert_dispatch(product.id)
+            convert_task_id = getattr(convert_task, "id", None)
+        except Exception:
+            logger.exception(
+                "committed model analysis GLB dispatch failed for product %s",
+                product.id,
+            )
+    try:
+        audit_record(
+            action="model_analysis.completed",
+            entity_type="product",
+            entity_id=str(product.id),
+            actor_type="system",
+            source_module="app.tasks.model_analysis",
+            tenant_id=str(product.business_id) if product.business_id else None,
+            metadata={
+                "percent": 100,
+                "conversion_queued": convert_task_id is not None,
+                "outcome": "success",
+                "engine_key": slicer_result.engine_key,
+                "fallback_used": slicer_result.fallback_used,
+                "estimate_only": slicer_result.estimate_only,
+                "artifact_sha256": slicer_result.artifact_sha256,
+            },
+        )
+    except Exception:
+        logger.exception(
+            "committed model analysis completion audit failed for product %s",
+            product.id,
+        )
+    return convert_task_id
 
 
 def _apply_initial_cost_snapshot(
@@ -596,8 +663,7 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
 
         validation = validate_model_file(analysis_path)
         if not validation.success:
-            if is_current_run(run.id, for_update=True):
-                publish_run_results(run, product, error=validation.error)
+            if publish_run_results(run, product, error=validation.error):
                 db.session.commit()
             get_audit_client().record(
                 action="model_analysis.failed",
@@ -646,10 +712,11 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
             self, product, step="validated", percent=35, message="Geometry validation complete"
         )
 
-        if not is_current_run(run.id, for_update=True):
-            set_run_status(run, AnalysisRunStatus.SUPERSEDED)
-            db.session.commit()
+        locked_after_validation = lock_current_analysis_run_for_publish(product_id, run_id)
+        if locked_after_validation is None:
+            db.session.rollback()
             return task_envelope(False, error="superseded by a newer upload")
+        product, run = locked_after_validation
 
         # Preview-only formats are not sliced (Issue 8): the upload route skips
         # slicing for these; if we somehow get here, publish geometry only.
@@ -662,6 +729,7 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
                 parsed_volume_mm3=Decimal(str(validation.volume_mm3)),
                 parsed_surface_area_mm2=Decimal(str(validation.surface_area_mm2)),
                 parsed_triangle_count=validation.triangle_count,
+                already_locked=True,
             )
             db.session.commit()
             if not published:
@@ -705,8 +773,7 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
         if not slicer_result.success:
             slicer_errors = [str(slicer_result.error or "Slicer service returned no result")]
             error_msg = "Could not slice this model.\n" + slicer_errors[0]
-            if is_current_run(run.id, for_update=True):
-                publish_run_results(run, product, geometry=geometry, error=error_msg)
+            if publish_run_results(run, product, geometry=geometry, error=error_msg):
                 db.session.commit()
             get_audit_client().record(
                 action="model_analysis.failed",
@@ -725,12 +792,6 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
                 },
                 error=error_msg,
             )
-
-        # Race guard before publishing.
-        if not is_current_run(run.id, for_update=True):
-            set_run_status(run, AnalysisRunStatus.SUPERSEDED)
-            db.session.commit()
-            return task_envelope(False, error="superseded by a newer upload")
 
         unit_grams = slicer_result.filament_grams
         unit_minutes = slicer_result.print_minutes
@@ -762,10 +823,11 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
         # Lock and refresh the current run before creating a current generated
         # asset. The lock is held through publish + commit so a newer upload
         # cannot interleave and leave this superseded run's G-code current.
-        if not is_current_run(run.id, for_update=True):
-            set_run_status(run, AnalysisRunStatus.SUPERSEDED)
-            db.session.commit()
+        locked_publication = lock_current_analysis_run_for_publish(product_id, run_id)
+        if locked_publication is None:
+            db.session.rollback()
             return task_envelope(False, error="superseded by a newer upload")
+        product, run = locked_publication
 
         gcode_asset = None
         product.model_analysis_config = sanitize_analysis_config(analysis_config)
@@ -828,6 +890,7 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
             parsed_print_minutes=unit_minutes,
             parsed_material_cost=per_unit_cost,
             gcode_asset_id=gcode_asset.id if gcode_asset is not None else None,
+            already_locked=True,
         )
         if not published:
             db.session.commit()
@@ -851,27 +914,9 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
         db.session.commit()
         publication.committed = True
 
-        convert_task = (
-            convert_product_model_for_viewer.delay(product_id)
-            if product.model_convert_to_glb
-            else None
-        )
-        get_audit_client().record(
-            action="model_analysis.completed",
-            entity_type="product",
-            entity_id=str(product.id),
-            actor_type="system",
-            source_module="app.tasks.model_analysis",
-            tenant_id=str(product.business_id) if product.business_id else None,
-            metadata={
-                "percent": 100,
-                "conversion_queued": bool(convert_task),
-                "outcome": "success",
-                "engine_key": slicer_result.engine_key,
-                "fallback_used": slicer_result.fallback_used,
-                "estimate_only": slicer_result.estimate_only,
-                "artifact_sha256": slicer_result.artifact_sha256,
-            },
+        convert_task_id = _dispatch_completion_side_effects(
+            product=product,
+            slicer_result=slicer_result,
         )
         return task_envelope(
             True,
@@ -884,16 +929,19 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
                 "per_unit_cost": str(per_unit_cost),
                 "copies": copies,
                 "slicer_profile": slicer_result.profile_used,
-                "convert_task_id": convert_task.id if convert_task else None,
+                "convert_task_id": convert_task_id,
             },
         )
     except Exception as exc:
         logger.exception("model analysis failed for run %s", run_id)
+        retry_count = int(getattr(self.request, "retries", 0) or 0)
+        retries_remain = retry_count < int(self.max_retries or 0)
         _recover_failed_publication(
             publication,
             product_id=product_id,
             run_id=run_id,
             original_error=exc,
+            mark_failed=(lambda **kwargs: None) if retries_remain else None,
         )
         try:
             get_audit_client().record(
@@ -906,7 +954,14 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
             )
         except Exception:
             logger.exception("model analysis failure audit dispatch failed")
-        raise analyze_product_model.retry(exc=exc)
+        if retries_remain and requeue_analysis_run(product_id, run_id):
+            raise analyze_product_model.retry(exc=exc)
+        if retries_remain:
+            try:
+                _mark_run_failed_fresh(product_id=product_id, run_id=run_id, error=str(exc))
+            except Exception:
+                logger.exception("analysis retry could not requeue or mark run failed")
+        raise
     finally:
         if work_dir and work_dir.exists():
             shutil.rmtree(work_dir, ignore_errors=True)

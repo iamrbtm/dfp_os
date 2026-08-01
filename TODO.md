@@ -67,6 +67,9 @@ This file is the live working list for AI agents and humans collaborating in thi
 
 ## Recently Completed
 
+- `done` Task 8 native slicer artifact persistence hardening: immutable run-scoped G-code,
+  product-serialized source/run creation and publication, bounded retry leases, and safe
+  post-commit conversion/audit dispatch.
 - `done` Built legacy MariaDB import pipeline for DFPos Intelligence: raw row staging (`legacy_import_row_stage`), per-table manifests (`legacy_table_manifests`), review decision tracking (`legacy_table_review_state`), Alembic migration 0004, full API for import-all/list/review/delete, 12 targeted tests, and Flask client methods.
 - `done` Added public storefront checkout with session cart, customer checkout form, Square payment-link integration, and Venmo fallback confirmation flow.
 - `done` Upgraded the public website with richer home/shop/product pages plus 3D printing basics, returns, and customer policies pages.

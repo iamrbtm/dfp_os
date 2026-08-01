@@ -11,7 +11,7 @@ leaves the product alone.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -75,6 +75,7 @@ def sanitize_analysis_config(config: dict | None) -> dict:
 # source of truth for the retention rule so the UI and any cleanup job agree.
 STALE_ASSET_RETENTION_DAYS = 30
 STALE_ASSET_POLICY = "archive_after_retention"
+ANALYSIS_LEASE_TIMEOUT = timedelta(minutes=15)
 
 
 def stale_asset_age_days(asset: ProductModelAsset) -> int | None:
@@ -166,14 +167,23 @@ def start_analysis_run(
     requested_by_id: int | None = None,
     settings: dict | None = None,
     embedded_settings: dict | None = None,
+    session: Any | None = None,
+    product_locked: bool = False,
 ) -> ProductAnalysisRun:
     """Create a new current analysis run and supersede any prior current run.
 
     Called at enqueue time. The returned run's ``id`` is what the Celery task
     carries so it can later check "am I still current?" before writing.
     """
+    session = session or db.session
+    if not product_locked:
+        locked_product = lock_product_for_analysis(product.id, session=session)
+        if locked_product is None:
+            raise ValueError("Product not found while starting analysis run")
+        product = locked_product
+
     now = datetime.now(timezone.utc)
-    db.session.query(ProductAnalysisRun).filter(
+    session.query(ProductAnalysisRun).filter(
         ProductAnalysisRun.product_id == product.id,
         ProductAnalysisRun.is_current.is_(True),
     ).update(
@@ -195,9 +205,25 @@ def start_analysis_run(
         settings_json=settings,
         embedded_settings_json=embedded_settings,
     )
-    db.session.add(run)
-    db.session.flush()
+    session.add(run)
+    session.flush()
     return run
+
+
+def lock_product_for_analysis(
+    product_id: int,
+    *,
+    session: Any | None = None,
+) -> Product | None:
+    """Serialize source-asset and run changes for one product."""
+    session = session or db.session
+    return (
+        session.query(Product)
+        .filter(Product.id == product_id)
+        .populate_existing()
+        .with_for_update()
+        .one_or_none()
+    )
 
 
 def claim_analysis_run(
@@ -205,6 +231,8 @@ def claim_analysis_run(
     run_id: int,
     *,
     session: Any | None = None,
+    now: datetime | None = None,
+    lease_timeout: timedelta = ANALYSIS_LEASE_TIMEOUT,
 ) -> ProductAnalysisRun | None:
     """Atomically claim one exact queued/current analysis run.
 
@@ -213,6 +241,62 @@ def claim_analysis_run(
     before external work begins.
     """
     session = session or db.session
+    now = now or datetime.now(timezone.utc)
+    product = lock_product_for_analysis(product_id, session=session)
+    if product is None:
+        session.rollback()
+        return None
+
+    run = (
+        session.query(ProductAnalysisRun)
+        .filter(
+            ProductAnalysisRun.id == run_id,
+            ProductAnalysisRun.product_id == product_id,
+        )
+        .populate_existing()
+        .with_for_update()
+        .one_or_none()
+    )
+    updated_at = run.updated_at if run is not None else None
+    if updated_at is not None and updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    stale_started = bool(
+        run
+        and run.status == AnalysisRunStatus.STARTED
+        and updated_at is not None
+        and updated_at <= now - lease_timeout
+    )
+    if (
+        run is None
+        or run.product_id != product_id
+        or (run.status != AnalysisRunStatus.QUEUED and not stale_started)
+        or not run.is_current
+    ):
+        session.rollback()
+        return None
+
+    run.status = AnalysisRunStatus.STARTED
+    run.updated_at = now
+    product.analysis_status = "analyzing"
+    session.add(run)
+    session.add(product)
+    session.flush()
+    session.commit()
+    return run
+
+
+def requeue_analysis_run(
+    product_id: int,
+    run_id: int,
+    *,
+    session: Any | None = None,
+) -> bool:
+    """Make one current nonterminal run claimable before a Celery retry."""
+    session = session or db.session
+    product = lock_product_for_analysis(product_id, session=session)
+    if product is None:
+        session.rollback()
+        return False
     run = (
         session.query(ProductAnalysisRun)
         .filter(
@@ -225,25 +309,57 @@ def claim_analysis_run(
     )
     if (
         run is None
-        or run.product_id != product_id
-        or run.status != AnalysisRunStatus.QUEUED
         or not run.is_current
+        or run.status in {AnalysisRunStatus.COMPLETE, AnalysisRunStatus.SUPERSEDED}
     ):
         session.rollback()
-        return None
-
-    product = session.get(Product, product_id)
-    if product is None:
-        session.rollback()
-        return None
-
-    run.status = AnalysisRunStatus.STARTED
-    product.analysis_status = "analyzing"
+        return False
+    run.status = AnalysisRunStatus.QUEUED
+    run.error = None
+    run.completed_at = None
+    product.analysis_status = "pending"
+    product.analysis_error = None
     session.add(run)
     session.add(product)
     session.flush()
     session.commit()
-    return run
+    return True
+
+
+def lock_current_analysis_run_for_publish(
+    product_id: int,
+    run_id: int,
+    *,
+    session: Any | None = None,
+) -> tuple[Product, ProductAnalysisRun] | None:
+    """Lock product and exact run, then verify it is the sole current run."""
+    session = session or db.session
+    product = lock_product_for_analysis(product_id, session=session)
+    if product is None:
+        return None
+    run = (
+        session.query(ProductAnalysisRun)
+        .filter(
+            ProductAnalysisRun.id == run_id,
+            ProductAnalysisRun.product_id == product_id,
+        )
+        .populate_existing()
+        .with_for_update()
+        .one_or_none()
+    )
+    current_runs = (
+        session.query(ProductAnalysisRun)
+        .filter(
+            ProductAnalysisRun.product_id == product_id,
+            ProductAnalysisRun.is_current.is_(True),
+        )
+        .populate_existing()
+        .with_for_update()
+        .all()
+    )
+    if run is None or not run.is_current or len(current_runs) != 1 or current_runs[0].id != run_id:
+        return None
+    return product, run
 
 
 def is_current_run(run_id: int, *, for_update: bool = False) -> bool:
@@ -300,19 +416,32 @@ def publish_run_results(
     preview_asset_id: int | None = None,
     metadata_asset_id: int | None = None,
     error: str | None = None,
+    session: Any | None = None,
+    already_locked: bool = False,
 ) -> bool:
     """Copy run summary fields onto the Product row ONLY if still current.
 
     Returns ``True`` if the product was updated, ``False`` if the run was
     superseded by a newer upload and must not touch the product (Issue 6).
     """
+    session = session or db.session
+    if not already_locked:
+        locked = lock_current_analysis_run_for_publish(
+            product.id,
+            run.id,
+            session=session,
+        )
+        if locked is None:
+            return False
+        product, run = locked
+
     if not run.is_current:
         run.status = AnalysisRunStatus.SUPERSEDED
         if run.superseded_at is None:
             run.superseded_at = datetime.now(timezone.utc)
         if run.completed_at is None:
             run.completed_at = run.superseded_at
-        db.session.add(run)
+        session.add(run)
         return False
 
     if geometry is not None:
@@ -352,7 +481,7 @@ def publish_run_results(
         product.parsed_print_minutes = parsed_print_minutes
         product.parsed_material_cost = parsed_material_cost
         product.analysis_completed_at = run.completed_at
-    db.session.add(run)
+    session.add(run)
     return True
 
 
@@ -405,7 +534,10 @@ __all__ = [
     "mark_asset_stale",
     "current_asset",
     "start_analysis_run",
+    "lock_product_for_analysis",
     "claim_analysis_run",
+    "requeue_analysis_run",
+    "lock_current_analysis_run_for_publish",
     "is_current_run",
     "get_current_run",
     "set_run_status",

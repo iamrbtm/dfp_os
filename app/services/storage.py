@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
-from flask import abort, current_app, send_file
+from flask import abort, current_app, has_app_context, send_file
 from werkzeug.utils import secure_filename
 
 
@@ -108,21 +108,26 @@ def upload_file_to_storage(
     content_type: str | None = None,
 ) -> str:
     source = Path(local_path)
+    destination_reference = planned_storage_reference(
+        bucket=bucket,
+        key=key,
+        local_root=local_root,
+    )
     if using_s3_storage():
         ensure_bucket(bucket)
         extra_args = {}
         if content_type:
             extra_args["ContentType"] = content_type
         _s3_client().upload_file(str(source), bucket, key, ExtraArgs=extra_args or None)
-        return build_s3_reference(bucket, key)
+        return destination_reference
 
-    destination = Path(local_root) / key
+    destination = Path(destination_reference)
     destination.parent.mkdir(parents=True, exist_ok=True)
     if source.resolve() != destination.resolve():
         shutil.copy2(source, destination)
     else:
         destination.parent.mkdir(parents=True, exist_ok=True)
-    return str(destination.resolve())
+    return destination_reference
 
 
 def upload_bytes_to_storage(
@@ -299,6 +304,23 @@ def gcode_storage_key(product_id: int, filename: str, *, run_id: int) -> str:
     return f"products/{product_id}/analysis-runs/{int(run_id)}/{safe_filename}"
 
 
+def legacy_gcode_storage_key(product_id: int, filename: str) -> str:
+    safe_filename = normalize_storage_filename(filename, fallback_stem="artifact.gcode")
+    return f"products/{product_id}/legacy-migration/{safe_filename}"
+
+
+def planned_storage_reference(*, bucket: str, key: str, local_root: str | Path) -> str:
+    """Return the exact destination reference before an upload is attempted."""
+    if has_app_context() and using_s3_storage():
+        return build_s3_reference(bucket, key)
+
+    root = Path(local_root).resolve()
+    destination = (root / key).resolve()
+    if not destination.is_relative_to(root):
+        raise ValueError("Storage key escapes the configured local root")
+    return str(destination)
+
+
 def image_storage_key(product_id: int, filename: str) -> str:
     return product_asset_key(product_id, filename)
 
@@ -319,25 +341,29 @@ def list_product_assets(product_id: int, *, bucket: str, local_root: str | Path)
                 if key.endswith("/"):
                     continue
                 modified = item.get("LastModified")
+                relative_name = key.removeprefix(prefix)
                 assets.append(
                     {
-                        "name": Path(key).name,
+                        "name": relative_name,
                         "reference": build_s3_reference(bucket, key),
                         "size": int(item.get("Size", 0)),
                         "updated_at": modified.isoformat() if modified else None,
                     }
                 )
     else:
-        directory = Path(local_root) / prefix
+        directory = (Path(local_root) / prefix).resolve()
         if directory.exists():
-            for path in directory.iterdir():
-                if not path.is_file():
+            for path in directory.rglob("*"):
+                if path.is_symlink() or not path.is_file():
+                    continue
+                resolved = path.resolve()
+                if not resolved.is_relative_to(directory):
                     continue
                 stat = path.stat()
                 assets.append(
                     {
-                        "name": path.name,
-                        "reference": str(path.resolve()),
+                        "name": path.relative_to(directory).as_posix(),
+                        "reference": str(resolved),
                         "size": stat.st_size,
                         "updated_at": datetime.fromtimestamp(
                             stat.st_mtime, tz=timezone.utc

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import threading
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock
@@ -17,7 +18,11 @@ from app.models import (
     ProductType,
 )
 from app.services.model_analysis import SlicerResult, ValidationResult
-from app.services.product_analysis import create_model_asset, start_analysis_run
+from app.services.product_analysis import (
+    create_model_asset,
+    lock_product_for_analysis,
+    start_analysis_run,
+)
 from app.tasks import model_analysis as analysis_task
 
 
@@ -392,3 +397,79 @@ def test_two_runs_with_same_native_filename_keep_distinct_references_and_bytes(
         assert f"/analysis-runs/{second_run.id}/" in second_asset.storage_reference
         assert Path(first_reference).read_bytes() == b"native-bambu-package"
         assert Path(second_asset.storage_reference).read_bytes() == b"new-native-bambu-package"
+
+
+def test_concurrent_uploads_serialize_source_and_run_as_one_locked_transaction(app, tmp_path):
+    with app.app_context():
+        product_id, _ = _product_with_run(tmp_path)
+
+    first_locked = threading.Event()
+    second_attempting = threading.Event()
+    first_committed = threading.Event()
+    second_acquired = threading.Event()
+    errors: list[BaseException] = []
+
+    def upload(index: int) -> None:
+        with app.app_context():
+            try:
+                if index == 2:
+                    assert first_locked.wait(timeout=10)
+                    second_attempting.set()
+                product = lock_product_for_analysis(product_id)
+                assert product is not None
+                if index == 1:
+                    first_locked.set()
+                    assert second_attempting.wait(timeout=10)
+                    assert second_acquired.is_set() is False
+                else:
+                    second_acquired.set()
+                    assert first_committed.is_set() is True
+                payload = f"source-{index}".encode()
+                source = create_model_asset(
+                    product,
+                    storage_reference=str(tmp_path / f"source-{index}.stl"),
+                    original_filename=f"source-{index}.stl",
+                    safe_filename=f"source-{index}.stl",
+                    content_type="model/stl",
+                    size_bytes=len(payload),
+                    sha256=hashlib.sha256(payload).hexdigest(),
+                    asset_kind=AssetKind.SOURCE_MODEL,
+                )
+                start_analysis_run(
+                    product,
+                    source_asset=source,
+                    settings={"material": "PLA", "copies": index},
+                    product_locked=True,
+                )
+                db.session.commit()
+                if index == 1:
+                    first_committed.set()
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                db.session.rollback()
+                errors.append(exc)
+                first_committed.set()
+            finally:
+                db.session.remove()
+
+    first = threading.Thread(target=upload, args=(1,))
+    second = threading.Thread(target=upload, args=(2,))
+    first.start()
+    second.start()
+    first.join(timeout=20)
+    second.join(timeout=20)
+
+    assert first.is_alive() is False
+    assert second.is_alive() is False
+    assert errors == []
+    with app.app_context():
+        current_source = ProductModelAsset.query.filter_by(
+            product_id=product_id,
+            asset_kind=AssetKind.SOURCE_MODEL,
+            is_current=True,
+        ).one()
+        current_run = ProductAnalysisRun.query.filter_by(
+            product_id=product_id,
+            is_current=True,
+        ).one()
+        assert current_run.source_asset_id == current_source.id
+        assert current_run.settings_json["copies"] == 2
