@@ -16,10 +16,12 @@ from app.models import (
     Product,
     ProductAnalysisRun,
     ProductImage,
+    ProductPhotoShot,
     ProductStatus,
     ProductType,
 )
 from app.services.image_validation import validate_image_file
+from app.services.product_ops import ensure_product_ops_defaults
 
 
 def test_product_studio_renders_current_analysis_engine_metadata(
@@ -283,3 +285,66 @@ def test_upload_image_accepts_real_png(app, client, login_admin, catalog_product
         img = db.session.get(ProductImage, payload["image_id"])
         assert img is not None
         assert img.alt_text == "A green square"
+
+
+def test_photo_shot_autosave_returns_json(app, client, login_admin, catalog_product):
+    with app.app_context():
+        product = db.session.get(Product, catalog_product)
+        ensure_product_ops_defaults(product)
+        db.session.commit()
+        shot = ProductPhotoShot.query.filter_by(product_id=catalog_product).first()
+        shot_id = shot.id
+
+    r = client.post(
+        f"/products/studio/{catalog_product}/photo-shot/{shot_id}",
+        data={
+            "completed": "on",
+            "image_reference": "uploads/products/example.png",
+            "notes": "Done",
+        },
+        headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"},
+    )
+
+    assert r.status_code == 200
+    payload = r.get_json()
+    assert payload["success"] is True
+    assert payload["shot"]["completed"] is True
+    with app.app_context():
+        shot = db.session.get(ProductPhotoShot, shot_id)
+        assert shot.completed is True
+        assert shot.image_reference == "uploads/products/example.png"
+        assert shot.notes == "Done"
+
+
+def test_upload_image_can_complete_originating_photo_shot(
+    app, client, login_admin, catalog_product
+):
+    with app.app_context():
+        product = db.session.get(Product, catalog_product)
+        ensure_product_ops_defaults(product)
+        db.session.commit()
+        shot = ProductPhotoShot.query.filter_by(product_id=catalog_product).first()
+        shot_id = shot.id
+
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), "yellow").save(buf, "PNG")
+    r = client.post(
+        f"/products/studio/{catalog_product}/upload-image",
+        data={
+            "image": (io.BytesIO(buf.getvalue()), "shot.png"),
+            "alt_text": "Photo shot upload",
+            "photo_shot_id": str(shot_id),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert r.status_code == 200, r.get_json()
+    payload = r.get_json()
+    assert payload["success"] is True
+    assert payload["shot"]["id"] == shot_id
+    assert payload["shot"]["completed"] is True
+    assert payload["shot"]["image_reference"] == payload["file_path"]
+    with app.app_context():
+        shot = db.session.get(ProductPhotoShot, shot_id)
+        assert shot.completed is True
+        assert shot.image_reference == payload["file_path"]

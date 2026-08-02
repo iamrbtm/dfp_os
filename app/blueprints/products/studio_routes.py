@@ -4,6 +4,7 @@ import io
 import json
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path, PurePosixPath
 
 from flask import (
@@ -27,14 +28,27 @@ from app.models import (
     AssetKind,
     Category,
     Collection,
+    ContentDraft,
     CostSnapshot,
     DeadStockRecommendation,
+    InternalDemandEvent,
+    InventoryMovement,
+    InventoryRecord,
+    MarketPackingList,
+    MarketTablePlacement,
+    OrderItem,
+    PosSaleItem,
     Product,
     ProductAnalysisRun,
     ProductImage,
     ProductLaunchChecklistItem,
+    ProductModelAsset,
     ProductPhotoShot,
     ProductStatus,
+    PrintFailureAutopsy,
+    PrintJob,
+    SignAsset,
+    TrendOpportunityScore,
     UserRole,
 )
 from app.services.admin_mutations import (
@@ -67,6 +81,7 @@ from app.services.product_ops import (
     ensure_product_ops_defaults,
     generate_dead_stock_recommendation,
     launch_gate,
+    product_inventory_readiness_score,
     retire_product,
     sync_launch_checklist,
     update_checklist_item,
@@ -138,8 +153,209 @@ def _audit_image_action(image: ProductImage, action: str) -> None:
 def _load_products() -> list[Product]:
     return (
         Product.query.filter(Product.deleted_at.is_(None))
-        .order_by(Product.updated_at.desc(), Product.name.asc())
+        .join(Category)
+        .order_by(Category.name.asc(), Product.name.asc())
         .all()
+    )
+
+
+def _product_list_groups() -> list[dict[str, object]]:
+    groups: list[dict[str, object]] = []
+    by_category: dict[str, dict[str, object]] = {}
+    for product in _load_products():
+        category_name = product.category.name if product.category else "Uncategorized"
+        group = by_category.get(category_name)
+        if group is None:
+            group = {"category": category_name, "items": []}
+            by_category[category_name] = group
+            groups.append(group)
+        inventory_score, _reason = product_inventory_readiness_score(product)
+        base_price = Decimal(str(product.base_price or 0))
+        profit = Decimal(str(product.estimated_profit or 0))
+        cost = (
+            max(Decimal("0"), base_price - profit)
+            if profit
+            else Decimal(str(product.estimated_material_cost or 0))
+        )
+        margin = (profit / base_price * Decimal("100")) if base_price > 0 and profit else None
+        if inventory_score == Decimal("7"):
+            inventory_tone = "success"
+        elif inventory_score == Decimal("3.5"):
+            inventory_tone = "warning"
+        else:
+            inventory_tone = "danger"
+        group["items"].append(
+            {
+                "product": product,
+                "inventory_score": inventory_score,
+                "inventory_tone": inventory_tone,
+                "inventory": sum(record.quantity_on_hand for record in product.inventory_records),
+                "sale_price": base_price,
+                "cost": cost,
+                "margin": margin,
+            }
+        )
+    return groups
+
+
+def _product_cost_summary(product: Product | None) -> dict[str, Decimal | None | str]:
+    if product is None:
+        return {
+            "base_price": Decimal("0"),
+            "unit_cost": Decimal("0"),
+            "margin": None,
+            "tone": "muted",
+        }
+    base_price = Decimal(str(product.base_price or 0))
+    profit = Decimal(str(product.estimated_profit or 0))
+    unit_cost = (
+        max(Decimal("0"), base_price - profit)
+        if profit
+        else Decimal(str(product.estimated_material_cost or 0))
+    )
+    margin = (profit / base_price * Decimal("100")) if base_price > 0 and profit else None
+    if margin is None:
+        tone = "muted"
+    elif margin >= Decimal("50"):
+        tone = "success"
+    elif margin >= Decimal("30"):
+        tone = "warning"
+    else:
+        tone = "danger"
+    return {"base_price": base_price, "unit_cost": unit_cost, "margin": margin, "tone": tone}
+
+
+def _decimal_from_payload(data: dict, key: str) -> Decimal | None:
+    value = data.get(key)
+    if value in (None, ""):
+        return None
+    return Decimal(str(value))
+
+
+def _int_from_payload(data: dict, key: str) -> int | None:
+    value = data.get(key)
+    if value in (None, ""):
+        return None
+    return int(value)
+
+
+def _cost_preview_payload(breakdown, *, sale_price: Decimal) -> dict[str, str | None]:
+    return {
+        "base_price": str(sale_price),
+        "material_cost": str(breakdown.material_cost),
+        "filament_grams": str(breakdown.filament_grams),
+        "cost_per_gram": str(breakdown.cost_per_gram),
+        "labor_minutes": str(breakdown.labor_minutes),
+        "labor_cost": str(breakdown.labor_cost),
+        "print_minutes": str(breakdown.print_minutes),
+        "machine_cost": str(breakdown.machine_cost),
+        "packaging_cost": str(breakdown.packaging_cost),
+        "payment_fees": str(breakdown.payment_fees),
+        "market_allocation": str(breakdown.market_allocation),
+        "failure_adjustment": str(breakdown.failure_adjustment),
+        "total_cost": str(breakdown.total_cost),
+        "suggested_price": str(breakdown.suggested_price),
+        "margin_dollars": str(breakdown.margin_dollars),
+        "margin_percent": str(breakdown.margin_percent),
+        "profit_per_print_hour": str(breakdown.profit_per_print_hour),
+        "confidence": breakdown.confidence,
+        "evidence_source": breakdown.evidence_source,
+    }
+
+
+def _delete_product_files(product: Product) -> None:
+    refs = {
+        product.model_file_path,
+        product.model_proof_of_license_path,
+        product.converted_model_path,
+        product.gcode_path,
+        product.model_metadata_path,
+    }
+    refs.update(image.file_path for image in product.images if image.file_path)
+    refs.update(
+        asset.storage_reference for asset in product.model_assets if asset.storage_reference
+    )
+    bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
+    local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
+    refs.update(
+        asset["reference"]
+        for asset in list_product_assets(product.id, bucket=bucket, local_root=local_root)
+    )
+    for ref in {ref for ref in refs if ref}:
+        delete_storage_reference(ref)
+
+
+def _delete_product(product: Product) -> None:
+    before_state = snapshot_instance(product)
+    _delete_product_files(product)
+
+    nullable_product_models = [
+        ContentDraft,
+        InternalDemandEvent,
+        InventoryMovement,
+        OrderItem,
+        PosSaleItem,
+        PrintFailureAutopsy,
+        PrintJob,
+        SignAsset,
+        TrendOpportunityScore,
+    ]
+    for model in nullable_product_models:
+        db.session.query(model).filter(model.product_id == product.id).update(
+            {model.product_id: None}, synchronize_session=False
+        )
+
+    inventory_record_ids = [record.id for record in product.inventory_records]
+    if inventory_record_ids:
+        db.session.query(InventoryMovement).filter(
+            InventoryMovement.inventory_record_id.in_(inventory_record_ids)
+        ).update({InventoryMovement.inventory_record_id: None}, synchronize_session=False)
+
+    db.session.query(MarketPackingList).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+    db.session.query(MarketTablePlacement).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+    db.session.query(InventoryRecord).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+    db.session.query(CostSnapshot).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+    db.session.query(ProductLaunchChecklistItem).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+    db.session.query(ProductPhotoShot).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+    db.session.query(DeadStockRecommendation).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+    db.session.query(ProductAnalysisRun).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+    db.session.query(ProductModelAsset).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+    db.session.query(ProductImage).filter_by(product_id=product.id).delete(
+        synchronize_session=False
+    )
+
+    product_id = product.id
+    business_id = product.business_id
+    db.session.delete(product)
+    db.session.commit()
+    get_audit_client().record(
+        action="product.deleted",
+        entity_type="product",
+        entity_id=str(product_id),
+        actor_id=str(current_user.id),
+        actor_type="user",
+        actor_display_name=getattr(current_user, "display_name", None),
+        source_module="products.studio_routes",
+        tenant_id=str(business_id) if business_id else None,
+        before_state=before_state,
     )
 
 
@@ -166,8 +382,18 @@ def _preferred_image_filename(product: Product, original_filename: str) -> str:
     return _unique_storage_filename(existing_names, original_filename)
 
 
+def _request_wants_json() -> bool:
+    return request.headers.get(
+        "X-Requested-With"
+    ) == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", "")
+
+
 def _render_studio(
-    product: Product | None, form: ProductStudioForm, mode: str, status_code: int = 200
+    product: Product | None,
+    form: ProductStudioForm,
+    mode: str,
+    status_code: int = 200,
+    template: str = "products/studio.html",
 ):
     readiness = None
     launch_items = []
@@ -195,16 +421,17 @@ def _render_studio(
         db.session.commit()
     return (
         render_template(
-            "products/studio.html",
+            template,
             form=form,
             product=product,
             mode=mode,
             categories=Category.query.order_by(Category.name).all(),
             collections=Collection.query.order_by(Collection.name).all(),
-            products=_load_products(),
+            product_groups=_product_list_groups(),
             product_images=list(product.images) if product else [],
             upload_form=ProductModelUploadForm(),
             readiness=readiness,
+            cost_summary=_product_cost_summary(product),
             launch_items=launch_items,
             photo_shots=photo_shots,
             dead_stock_recommendations=dead_stock_recommendations,
@@ -328,6 +555,21 @@ def studio(product_id: int | None = None):
     return _render_studio(product, form, mode, 400)
 
 
+@bp.get("/studio/workspace")
+@bp.get("/studio/<int:product_id>/workspace")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def studio_workspace(product_id: int | None = None):
+    product = get_by_id(Product, product_id) if product_id else None
+    form = ProductStudioForm()
+    mode = "edit" if product else "create"
+    if product:
+        form.instance_id = product.id
+        form.load_from_product(product)
+    else:
+        form.status.data = ProductStatus.DRAFT.value
+    return _render_studio(product, form, mode, template="products/_studio_workspace.html")
+
+
 @bp.route("/studio/<int:product_id>/checklist/<int:item_id>", methods=["POST"])
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def update_launch_checklist_item(product_id: int, item_id: int):
@@ -335,13 +577,25 @@ def update_launch_checklist_item(product_id: int, item_id: int):
     item = ProductLaunchChecklistItem.query.filter_by(id=item_id, product_id=product_id).first()
     if product is None or item is None:
         abort(404)
-    update_checklist_item(
+    item = update_checklist_item(
         item,
         completed=bool(request.form.get("completed")),
         notes=(request.form.get("notes") or "").strip() or None,
         override_reason=(request.form.get("override_reason") or "").strip() or None,
         actor_id=current_user.id,
     )
+    if _request_wants_json():
+        return jsonify(
+            {
+                "success": True,
+                "item": {
+                    "id": item.id,
+                    "completed": item.completed,
+                    "notes": item.notes,
+                    "override_reason": item.override_reason,
+                },
+            }
+        )
     flash("Launch checklist updated.", "success")
     return redirect(url_for("products.studio", product_id=product.id))
 
@@ -353,13 +607,25 @@ def update_product_photo_shot(product_id: int, shot_id: int):
     shot = ProductPhotoShot.query.filter_by(id=shot_id, product_id=product_id).first()
     if product is None or shot is None:
         abort(404)
-    update_photo_shot(
+    shot = update_photo_shot(
         shot,
         completed=bool(request.form.get("completed")),
         image_reference=(request.form.get("image_reference") or "").strip() or None,
         notes=(request.form.get("notes") or "").strip() or None,
         actor_id=current_user.id,
     )
+    if _request_wants_json():
+        return jsonify(
+            {
+                "success": True,
+                "shot": {
+                    "id": shot.id,
+                    "completed": shot.completed,
+                    "image_reference": shot.image_reference,
+                    "notes": shot.notes,
+                },
+            }
+        )
     flash("Photo shot list updated.", "success")
     return redirect(url_for("products.studio", product_id=product.id))
 
@@ -494,6 +760,27 @@ def retire_studio_product(product_id: int):
     )
     flash("Product retired and hidden from public/POS sales.", "success")
     return redirect(url_for("products.studio", product_id=product.id))
+
+
+@bp.route("/studio/<int:product_id>/delete", methods=["POST"])
+@roles_required(UserRole.ADMIN)
+def delete_studio_product(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
+        abort(404)
+    confirmation = (request.form.get("confirm_slug") or "").strip()
+    if confirmation != product.slug:
+        flash(f'Type the product slug "{product.slug}" to confirm deletion.', "danger")
+        return redirect(url_for("products.studio", product_id=product.id))
+    try:
+        _delete_product(product)
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("product delete failed: %s", exc)
+        flash("Product deletion failed. Check related records and try again.", "danger")
+        return redirect(url_for("products.studio", product_id=product.id))
+    flash("Product and related product files/records were deleted.", "success")
+    return redirect(url_for("products.studio"))
 
 
 @bp.route("/studio/<int:product_id>/upload-model", methods=["POST"])
@@ -1043,6 +1330,49 @@ def calculate_product_costs(product_id: int):
     )
 
 
+@bp.route("/studio/<int:product_id>/preview-costs", methods=["POST"])
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def preview_product_costs(product_id: int):
+    product = get_by_id(Product, product_id)
+    if product is None:
+        return jsonify({"success": False, "error": "Product not found"}), 404
+
+    data = request.get_json(silent=True) or request.form.to_dict()
+    try:
+        sale_price = _decimal_from_payload(data, "base_price")
+        packaging_cost = _decimal_from_payload(data, "packaging_cost_override")
+        target_margin_percent = _decimal_from_payload(data, "target_margin_percent_override")
+        market_allocation = _decimal_from_payload(data, "market_allocation_override")
+        payment_fee_rate = _decimal_from_payload(data, "payment_fee_rate_override")
+        product.estimated_labor_minutes = _int_from_payload(data, "estimated_labor_minutes") or 0
+        product.material_spool_override = _int_from_payload(data, "material_spool_override")
+        breakdown = calculate_product_cost(
+            product=product,
+            sale_price=sale_price,
+            packaging_cost=packaging_cost,
+            target_margin_percent=target_margin_percent,
+            market_allocation=market_allocation,
+            payment_fee_rate=payment_fee_rate,
+        )
+    except (ArithmeticError, TypeError, ValueError) as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": f"Unable to preview costs: {exc}"}), 400
+
+    db.session.rollback()
+    return jsonify(
+        {
+            "success": True,
+            "status": "complete",
+            "data": _cost_preview_payload(
+                breakdown,
+                sale_price=sale_price
+                if sale_price is not None
+                else Decimal(str(product.base_price or 0)),
+            ),
+        }
+    )
+
+
 @bp.route("/studio/task-status/<task_id>")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def task_status(task_id: str):
@@ -1256,6 +1586,17 @@ def upload_product_image(product_id: int):
     if product is None:
         abort(404)
 
+    photo_shot = None
+    photo_shot_id = (request.form.get("photo_shot_id") or "").strip()
+    if photo_shot_id:
+        if not photo_shot_id.isdigit():
+            return jsonify({"success": False, "error": "Invalid photo shot"}), 400
+        photo_shot = ProductPhotoShot.query.filter_by(
+            id=int(photo_shot_id), product_id=product.id
+        ).first()
+        if photo_shot is None:
+            return jsonify({"success": False, "error": "Photo shot not found"}), 404
+
     file = request.files.get("image")
     if not file:
         return jsonify({"success": False, "error": "No image file provided"}), 400
@@ -1341,6 +1682,15 @@ def upload_product_image(product_id: int):
         product.pos_image_path = storage_ref
     db.session.commit()
 
+    if photo_shot is not None:
+        photo_shot = update_photo_shot(
+            photo_shot,
+            completed=True,
+            image_reference=storage_ref,
+            notes=photo_shot.notes,
+            actor_id=current_user.id,
+        )
+
     # Issue 22 — audit the upload.
     get_audit_client().record(
         action="product_image.uploaded",
@@ -1359,6 +1709,7 @@ def upload_product_image(product_id: int):
             "content_type": content_type,
             "size_bytes": file_size,
             "sha256": file_sha256,
+            "photo_shot_id": photo_shot.id if photo_shot else None,
         },
         metadata={"filename": file.filename, "alt_text": img.alt_text},
     )
@@ -1371,6 +1722,16 @@ def upload_product_image(product_id: int):
             "is_default": img.is_default,
             "is_pos": img.is_pos,
             "url": url_for("products.serve_product_image", image_id=img.id),
+            "shot": (
+                {
+                    "id": photo_shot.id,
+                    "completed": photo_shot.completed,
+                    "image_reference": photo_shot.image_reference,
+                    "label": photo_shot.label,
+                }
+                if photo_shot
+                else None
+            ),
         }
     )
 

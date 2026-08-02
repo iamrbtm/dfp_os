@@ -13,6 +13,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     String,
+    Table,
     Text,
     event,
 )
@@ -48,6 +49,16 @@ class LicenseStatus(StrEnum):
     NEEDS_REVIEW = "needs_review"
     RESTRICTED = "restricted"
     RETIRED = "retired"
+
+
+product_collections = Table(
+    "product_collections",
+    db.metadata,
+    db.Column("product_id", ForeignKey("products.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("collection_id", ForeignKey("collections.id", ondelete="CASCADE"), primary_key=True),
+    Index("ix_product_collections_product_id", "product_id"),
+    Index("ix_product_collections_collection_id", "collection_id"),
+)
 
 
 class ModelSourceType(StrEnum):
@@ -192,7 +203,15 @@ class Collection(PrimaryKeyMixin, TimestampMixin, db.Model):
     is_public: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(default=0, nullable=False)
 
-    products = relationship("Product", back_populates="collection", order_by="Product.name")
+    primary_products = relationship(
+        "Product", back_populates="collection", order_by=lambda: Product.name
+    )
+    products = relationship(
+        "Product",
+        secondary=product_collections,
+        back_populates="collections",
+        order_by=lambda: Product.name,
+    )
 
 
 class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
@@ -310,7 +329,13 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     category = relationship("Category", back_populates="products")
-    collection = relationship("Collection", back_populates="products")
+    collection = relationship("Collection", back_populates="primary_products")
+    collections = relationship(
+        "Collection",
+        secondary=product_collections,
+        back_populates="products",
+        order_by=lambda: (Collection.sort_order, Collection.name),
+    )
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     inventory_records = relationship("InventoryRecord", back_populates="product")
     cost_snapshots = relationship(
@@ -337,6 +362,11 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
         cascade="all, delete-orphan",
         order_by="DeadStockRecommendation.created_at.desc()",
     )
+
+    @property
+    def collection_ids(self) -> list[int]:
+        return [collection.id for collection in self.collections]
+
     model_assets = relationship(
         "ProductModelAsset",
         back_populates="product",

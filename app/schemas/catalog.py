@@ -44,6 +44,7 @@ class ProductSchema(Schema):
     description = fields.String(allow_none=True)
     category_id = fields.Integer(required=True)
     collection_id = fields.Integer(allow_none=True)
+    collection_ids = fields.List(fields.Integer(), load_default=None)
     product_type = fields.String(required=True)
     status = fields.String(required=True)
     is_public = fields.Boolean()

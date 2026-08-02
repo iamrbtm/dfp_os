@@ -1,0 +1,539 @@
+<div id="product-studio-workspace" class="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_340px] 2xl:grid-cols-[300px_minmax(0,1fr)_380px]" data-product-studio-workspace>
+  <aside class="app-card p-4 space-y-4 self-start">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">Products</h2>
+      <a href="{{ url_for('products.studio') }}"
+         hx-get="{{ url_for('products.studio_workspace') }}"
+         hx-target="#product-studio-workspace"
+         hx-swap="outerHTML"
+         hx-push-url="{{ url_for('products.studio') }}"
+         class="app-btn app-btn-primary text-sm">+ New</a>
+    </div>
+
+    <input type="search" class="app-input text-sm" placeholder="Filter by name or SKU" data-product-filter>
+
+    <div class="space-y-3">
+      {% for group in product_groups %}
+      {% set active_category = product and product.category and product.category.name == group.category %}
+      <section class="rounded-2xl border" style="border-color: var(--color-border);" data-product-category>
+        <button type="button" class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em]" style="color: var(--color-text-muted);" data-category-toggle aria-expanded="{{ 'true' if active_category else 'false' }}">
+          <span><span data-category-icon>{{ '▼' if active_category else '▶' }}</span> {{ group.category }} ({{ group["items"]|length }})</span>
+        </button>
+        <div class="space-y-2 px-2 pb-2" data-category-products {% if not active_category %}hidden{% endif %}>
+          {% for card in group["items"] %}
+          {% set item = card.product %}
+          {% set is_active = product and product.id == item.id %}
+          {% set border_color = 'var(--color-success)' if card.inventory_tone == 'success' else 'var(--color-warning)' if card.inventory_tone == 'warning' else 'var(--color-danger)' %}
+          <a href="{{ url_for('products.studio', product_id=item.id) }}"
+             hx-get="{{ url_for('products.studio_workspace', product_id=item.id) }}"
+             hx-target="#product-studio-workspace"
+             hx-swap="outerHTML"
+             hx-push-url="{{ url_for('products.studio', product_id=item.id) }}"
+             data-filter-text="{{ (item.name ~ ' ' ~ (item.sku_base or item.slug))|lower }}"
+             class="block rounded-xl border border-l-4 px-3 py-2 transition {% if is_active %}ring-2{% endif %}"
+             style="border-color: var(--color-border); border-left-color: {{ border_color }}; color: var(--color-text); --tw-ring-color: var(--color-primary); background: {% if is_active %}var(--color-bg-surface-soft){% else %}transparent{% endif %};">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold">{{ item.name }}</p>
+                <p class="mt-0.5 truncate text-[11px] font-mono" style="color: var(--color-text-muted);">{{ item.sku_base or item.slug }}</p>
+              </div>
+              <div class="flex shrink-0 gap-1">
+                {% if item.status.value != 'active' %}<span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold" style="background: var(--color-warning-bg); color: var(--color-warning);">WIP</span>{% endif %}
+                {% if item.is_pos_visible %}<span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold" style="background: var(--color-info-bg); color: var(--color-info);">POS</span>{% endif %}
+              </div>
+            </div>
+            <div class="mt-2 grid grid-cols-4 gap-1 text-[10px]">
+              <div><span style="color: var(--color-text-muted);">Sale</span><br><strong>${{ "%.2f"|format(card.sale_price) }}</strong></div>
+              <div><span style="color: var(--color-text-muted);">Cost</span><br><strong>${{ "%.2f"|format(card.cost) }}</strong></div>
+              <div><span style="color: var(--color-text-muted);">Margin</span><br><strong>{% if card.margin is not none %}{{ "%.0f"|format(card.margin) }}%{% else %}n/a{% endif %}</strong></div>
+              <div><span style="color: var(--color-text-muted);">Inv</span><br><strong>{{ card.inventory }}</strong></div>
+            </div>
+          </a>
+          {% endfor %}
+        </div>
+      </section>
+      {% else %}
+      <div class="rounded-2xl border border-dashed p-4 text-center text-sm" style="border-color: var(--color-border); color: var(--color-text-muted);">No products yet.</div>
+      {% endfor %}
+    </div>
+
+    <div class="pt-2 space-y-2 text-sm">
+      <a href="{{ url_for('products.list_resource', resource_key='categories') }}" class="block" style="color: var(--color-link);">Manage categories</a>
+      <a href="{{ url_for('products.list_resource', resource_key='collections') }}" class="block" style="color: var(--color-link);">Manage collections</a>
+    </div>
+  </aside>
+
+  <form method="post" action="{{ url_for('products.studio', product_id=product.id) if product else url_for('products.studio') }}" class="contents">
+    {{ form.hidden_tag() }}
+    {%- macro field_errors(field) -%}
+      {%- if field.errors -%}
+        <ul class="mt-1 space-y-0.5 text-sm" style="color: var(--color-danger);">
+          {%- for error in field.errors -%}<li>{{ error }}</li>{%- endfor -%}
+        </ul>
+      {%- endif -%}
+    {%- endmacro -%}
+
+    <section class="app-card p-5 space-y-5 self-start">
+      <div class="flex flex-wrap gap-2 border-b pb-3" style="border-color: var(--color-border);">
+        <button type="button" class="app-btn app-btn-primary text-sm" data-studio-tab-button="general" aria-selected="true">🏷️ General</button>
+        <button type="button" class="app-btn app-btn-secondary text-sm" data-studio-tab-button="cost" aria-selected="false">💰 Financials</button>
+        <button type="button" class="app-btn app-btn-secondary text-sm" data-studio-tab-button="model" aria-selected="false">🧵 3D Model</button>
+        <button type="button" class="app-btn app-btn-secondary text-sm" data-studio-tab-button="license" aria-selected="false">📜 Licensing</button>
+        <button type="button" class="app-btn app-btn-secondary text-sm" data-studio-tab-button="checklists" aria-selected="false">✅ Checklists</button>
+        <button type="button" class="app-btn app-btn-secondary text-sm" data-studio-tab-button="other" aria-selected="false">••• Other</button>
+      </div>
+
+      {% if form.errors %}
+      <div class="rounded-xl border p-3 text-sm" role="alert" style="border-color: var(--color-danger); color: var(--color-danger);">Please correct the errors below.</div>
+      {% endif %}
+
+      <div class="space-y-5" data-studio-tab-panel="general">
+        <div class="grid gap-5 md:grid-cols-2">
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.name.label.text }}</label>{{ form.name(class="app-input") }}{{ field_errors(form.name) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.slug.label.text }}</label>{{ form.slug(class="app-input font-mono text-sm") }}{{ field_errors(form.slug) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.sku_base.label.text }}</label>{{ form.sku_base(class="app-input font-mono text-sm") }}{{ field_errors(form.sku_base) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.base_price.label.text }}</label>{{ form.base_price(class="app-input", data_financial_input="true") }}{{ field_errors(form.base_price) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.category_id.label.text }}</label>{{ form.category_id(class="app-input") }}{{ field_errors(form.category_id) }}</div>
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.collection_ids.label.text }}</label>
+            {% set selected_collection_ids = form.collection_ids.data or [] %}
+            <details class="relative" data-checkbox-dropdown>
+              <summary class="app-input flex cursor-pointer list-none items-center justify-between gap-3" data-checkbox-dropdown-summary>
+                <span data-checkbox-dropdown-label>{% if selected_collection_ids|length %}{{ selected_collection_ids|length }} selected{% else %}Choose collections{% endif %}</span>
+                <span aria-hidden="true" style="color: var(--color-text-muted);">▾</span>
+              </summary>
+              <div class="absolute z-30 mt-2 max-h-64 w-full overflow-auto rounded-2xl border p-2 shadow-lg" style="border-color: var(--color-border); background: var(--color-bg-surface);">
+                {% for value, label in form.collection_ids.choices %}
+                <label class="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm hover:bg-[var(--color-bg-surface-soft)]" style="color: var(--color-text);">
+                  <input type="checkbox" name="{{ form.collection_ids.name }}" value="{{ value }}" {% if value in selected_collection_ids %}checked{% endif %} class="h-4 w-4 rounded" data-checkbox-dropdown-input>
+                  <span>{{ label }}</span>
+                </label>
+                {% else %}
+                <p class="px-3 py-2 text-sm" style="color: var(--color-text-muted);">No collections have been created yet.</p>
+                {% endfor %}
+              </div>
+            </details>
+            <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Select every collection this product belongs in. The first checked collection is used as the primary collection for older reports.</p>
+            {{ field_errors(form.collection_ids) }}
+          </div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.product_type.label.text }}</label>{{ form.product_type(class="app-input") }}</div>
+        </div>
+        <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.short_description.label.text }}</label>{{ form.short_description(class="app-input", rows=3) }}</div>
+        <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.description.label.text }}</label>{{ form.description(class="app-input", rows=6) }}</div>
+        <div class="rounded-2xl border p-4 space-y-4" style="border-color: var(--color-border); background: var(--color-bg-surface-soft);">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Product Story Card</h3>
+            {% if product and ai_story_card_enabled %}
+            <button type="button" class="app-btn app-btn-secondary text-xs px-3 py-2"
+                    data-story-generate
+                    data-url="{{ url_for('products.generate_product_story_card', product_id=product.id) }}"
+                    aria-label="Generate a story card draft with AI">Generate with AI</button>
+            {% endif %}
+          </div>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.story_what_it_is.label.text }}</label>{{ form.story_what_it_is(id="story_what_it_is", class="app-input", rows=3) }}</div>
+            <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.story_who_it_is_for.label.text }}</label>{{ form.story_who_it_is_for(id="story_who_it_is_for", class="app-input", rows=3) }}</div>
+            <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.story_materials.label.text }}</label>{{ form.story_materials(id="story_materials", class="app-input", rows=3) }}</div>
+            <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.story_customization_options.label.text }}</label>{{ form.story_customization_options(id="story_customization_options", class="app-input", rows=3) }}</div>
+          </div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.story_internal_compliance_notes.label.text }}</label>{{ form.story_internal_compliance_notes(id="story_internal_compliance_notes", class="app-input", rows=3) }}</div>
+          <p class="text-xs" style="color: var(--color-text-muted);">AI drafts are suggestions. Review, then use Save Product to persist the story card.</p>
+        </div>
+      </div>
+
+      <div class="space-y-5" data-studio-tab-panel="cost" {% if product %}data-live-cost-url="{{ url_for('products.preview_product_costs', product_id=product.id) }}"{% endif %} hidden>
+        <p class="text-sm" style="color: var(--color-text-muted);">Override global defaults for this item only. Changes recalculate automatically here and do not save until you press Save Product.</p>
+        {% set cd = cost_defaults or {} %}
+        <div class="grid gap-5 md:grid-cols-2">
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.estimated_labor_minutes.label.text }}</label>{{ form.estimated_labor_minutes(class="app-input", data_financial_input="true") }}<p class="mt-1 text-xs" style="color: var(--color-text-muted);">Global default: ${{ cd.labor_rate }}/hr</p>{{ field_errors(form.estimated_labor_minutes) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.packaging_cost_override.label.text }}</label>{{ form.packaging_cost_override(class="app-input", data_financial_input="true") }}<p class="mt-1 text-xs" style="color: var(--color-text-muted);">Global default: ${{ cd.packaging_cost }}</p>{{ field_errors(form.packaging_cost_override) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.target_margin_percent_override.label.text }}</label>{{ form.target_margin_percent_override(class="app-input", data_financial_input="true") }}<p class="mt-1 text-xs" style="color: var(--color-text-muted);">Global default: {{ cd.target_margin_percent }}%</p>{{ field_errors(form.target_margin_percent_override) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.market_allocation_override.label.text }}</label>{{ form.market_allocation_override(class="app-input", data_financial_input="true") }}<p class="mt-1 text-xs" style="color: var(--color-text-muted);">Global default: ${{ cd.market_allocation }}</p>{{ field_errors(form.market_allocation_override) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.payment_fee_rate_override.label.text }}</label>{{ form.payment_fee_rate_override(class="app-input", data_financial_input="true") }}<p class="mt-1 text-xs" style="color: var(--color-text-muted);">Global default: {{ cd.payment_fee_rate }}</p>{{ field_errors(form.payment_fee_rate_override) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.material_spool_override.label.text }}</label>{{ form.material_spool_override(class="app-input", data_financial_input="true") }}<p class="mt-1 text-xs" style="color: var(--color-text-muted);">Dropdown</p>{{ field_errors(form.material_spool_override) }}</div>
+        </div>
+        <div class="rounded-2xl border p-4" style="border-color: var(--color-border); background: var(--color-bg-surface-soft);">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Live Cost Preview</h3>
+            <span class="text-xs" data-live-cost-status style="color: var(--color-text-muted);">Auto-calculates as you edit</span>
+          </div>
+          <div class="mt-4 grid gap-3 md:grid-cols-3">
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);"><p class="text-xs" style="color: var(--color-text-muted);">Total Cost</p><strong data-live-cost-field="total_cost" style="color: var(--color-text);">${{ "%.2f"|format(cost_summary.unit_cost) }}</strong></div>
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);"><p class="text-xs" style="color: var(--color-text-muted);">Suggested Price</p><strong data-live-cost-field="suggested_price" style="color: var(--color-text);">n/a</strong></div>
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);"><p class="text-xs" style="color: var(--color-text-muted);">Margin</p><strong data-live-cost-field="margin_percent" style="color: var(--color-text);">{% if cost_summary.margin is not none %}{{ "%.1f"|format(cost_summary.margin) }}%{% else %}n/a{% endif %}</strong></div>
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);"><p class="text-xs" style="color: var(--color-text-muted);">Material</p><strong data-live-cost-field="material_cost" style="color: var(--color-text);">${{ "%.2f"|format(product.estimated_material_cost or 0) if product else "0.00" }}</strong></div>
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);"><p class="text-xs" style="color: var(--color-text-muted);">Labor</p><strong data-live-cost-field="labor_cost" style="color: var(--color-text);">n/a</strong></div>
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);"><p class="text-xs" style="color: var(--color-text-muted);">Payment Fees</p><strong data-live-cost-field="payment_fees" style="color: var(--color-text);">n/a</strong></div>
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);"><p class="text-xs" style="color: var(--color-text-muted);">Profit Dollars</p><strong data-live-cost-field="margin_dollars" style="color: var(--color-text);">${{ "%.2f"|format(product.estimated_profit or 0) if product else "0.00" }}</strong></div>
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);"><p class="text-xs" style="color: var(--color-text-muted);">Print Time</p><strong data-live-cost-field="print_minutes" style="color: var(--color-text);">{% if product %}{{ (product.estimated_print_minutes or product.parsed_print_minutes or 0)|duration_minutes }}{% else %}0m{% endif %}</strong></div>
+            <div class="rounded-xl border p-3" style="border-color: var(--color-border);"><p class="text-xs" style="color: var(--color-text-muted);">Filament</p><strong data-live-cost-field="filament_grams" style="color: var(--color-text);">{% if product and product.parsed_filament_grams %}{{ "%.1f"|format(product.parsed_filament_grams) }}g{% else %}n/a{% endif %}</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-5" data-studio-tab-panel="model" hidden>
+        {% if product %}
+        <div class="app-card p-4 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Model File</h3>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="app-btn app-btn-secondary text-sm" id="open-assets-modal" data-url="{{ url_for('products.product_assets', product_id=product.id) }}">Assets</button>
+              <button type="button" class="app-btn app-btn-secondary text-sm" data-calc-costs data-url="{{ url_for('products.calculate_product_costs', product_id=product.id) }}" data-result-target="cost-results" data-product-id="{{ product.id }}">Calculate Cost</button>
+              <button type="button" class="app-btn app-btn-secondary text-sm" id="trend-score-btn" data-url="{{ url_for('products.trend_score', product_id=product.id) }}">Calculate Trend Score</button>
+            </div>
+          </div>
+          <div id="model-drop-zone" class="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer" style="border-color: var(--color-border);">
+            <div class="text-4xl mb-3">📁</div>
+            <p id="drop-zone-label" style="color: var(--color-text-muted);">{% if product.model_file_path %}{{ storage_reference_name(product.model_file_path) }}{% else %}Drop a 3D model file here or click to browse{% endif %}</p>
+            <p class="text-xs mt-2" style="color: var(--color-text-muted);">STL, GLB, GLTF, 3MF, OBJ up to 256 MB</p>
+            <p class="text-xs mt-1" style="color: var(--color-text-muted);">STL, 3MF, and OBJ can be analyzed for filament/time. GLB and GLTF are preview-only and cannot be analyzed.</p>
+            <input form="model-upload-form" type="file" name="model_file" id="model_file" accept=".stl,.glb,.gltf,.3mf,.obj" class="hidden">
+          </div>
+          <button type="button" id="open-upload-settings" class="app-btn app-btn-primary w-full">Upload &amp; Analyze</button>
+          <div id="analysis-live-status" class="hidden rounded-2xl border p-4" aria-live="polite" style="border-color: var(--color-border);">
+            <div class="flex items-center justify-between gap-3">
+              <p id="analysis-live-message" class="text-sm font-medium" style="color: var(--color-text);">Preparing upload...</p>
+              <span id="analysis-live-percent" class="text-xs font-semibold" style="color: var(--color-link);">0%</span>
+            </div>
+            <div class="mt-3 h-2 overflow-hidden rounded-full" style="background: var(--color-bg-surface-soft);">
+              <div id="analysis-live-bar" class="h-full rounded-full transition-all" style="width: 0%; background: var(--color-primary);"></div>
+            </div>
+            <p id="analysis-live-step" class="mt-2 text-xs" style="color: var(--color-text-muted);">Waiting</p>
+          </div>
+          {% if product.model_file_path %}
+          <div class="rounded-2xl border p-4 space-y-2" style="border-color: var(--color-border);">
+            <p class="text-sm font-medium" style="color: var(--color-text);">{{ product.model_notes or product.name }}</p>
+            <p class="text-xs font-mono" style="color: var(--color-text-muted);">{{ storage_reference_name(product.model_file_path) }}</p>
+            <div class="flex flex-wrap gap-2">
+              <a href="{{ url_for('products.download_model', product_id=product.id) }}" class="app-btn text-xs px-2 py-1">Download</a>
+              <button type="button" class="app-btn app-btn-secondary text-xs px-2 py-1" data-reanalyze data-url="{{ url_for('products.reanalyze_model', product_id=product.id) }}" data-product-id="{{ product.id }}">Re-analyze</button>
+            </div>
+            {% if product.analysis_error %}<p class="text-xs" style="color: var(--color-danger);">{{ product.analysis_error }}</p>{% endif %}
+          </div>
+          {% endif %}
+          <div id="cost-results" class="grid gap-4 md:grid-cols-4">
+            <div class="app-card p-4 text-center"><p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Material Cost</p><p id="product-analysis-material-cost" class="text-2xl font-bold mt-1" style="color: var(--color-text);">${{ "%.2f"|format(product.estimated_material_cost or 0) }}</p></div>
+            <div class="app-card p-4 text-center"><p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Profit</p><p class="text-2xl font-bold mt-1" style="color: var(--color-text);">${{ "%.2f"|format(product.estimated_profit or 0) }}</p></div>
+            <div class="app-card p-4 text-center"><p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Print Time</p><p id="product-analysis-time" class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ (product.estimated_print_minutes or 0)|duration_minutes }}</p></div>
+            <div class="app-card p-4 text-center"><p class="text-xs uppercase tracking-wider" style="color: var(--color-text-muted);">Analysis</p><p id="product-analysis-status" class="text-sm font-semibold mt-2" style="color: var(--color-text);">{{ product.analysis_status or "none" }}</p></div>
+          </div>
+          <div id="trend-score-results" class="hidden"><div class="app-card p-4"><div class="flex items-center justify-between mb-3"><h3 class="text-base font-semibold" style="color: var(--color-text);">Trend Scout Score</h3><a href="{{ url_for('trend_scout.index') }}" class="text-xs" style="color: var(--color-link);">View in Trend Scout &rarr;</a></div><div id="trend-score-display" class="grid gap-3 sm:grid-cols-4"></div><div id="trend-score-error" class="hidden text-sm" style="color: var(--color-danger);"></div></div></div>
+        </div>
+        {% else %}
+        <div class="rounded-2xl border border-dashed p-5 text-sm" style="border-color: var(--color-border); color: var(--color-text-muted);">Save the product before uploading model files.</div>
+        {% endif %}
+      </div>
+
+      <div class="space-y-5" data-studio-tab-panel="license" hidden>
+        <div class="grid gap-5 md:grid-cols-2">
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.design_source.label.text }}</label>{{ form.design_source(class="app-input") }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_source_type.label.text }}</label>{{ form.model_source_type(class="app-input") }}{{ field_errors(form.model_source_type) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_designer_name.label.text }}</label>{{ form.model_designer_name(class="app-input") }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_source_url.label.text }}</label>{{ form.model_source_url(class="app-input") }}{{ field_errors(form.model_source_url) }}</div>
+          <div class="md:col-span-2"><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_notes.label.text }}</label>{{ form.model_notes(class="app-input", rows=4) }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.license_status.label.text }}</label>{{ form.license_status(class="app-input") }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_license_type.label.text }}</label>{{ form.model_license_type(class="app-input") }}</div>
+          <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_license_expiration.label.text }}</label>{{ form.model_license_expiration(class="app-input") }}</div>
+          <label class="app-card flex items-center gap-3 px-4 py-3 text-sm" style="color: var(--color-text);">{{ form.model_commercial_use_allowed(class="app-checkbox") }}<span>{{ form.model_commercial_use_allowed.label.text }}</span></label>
+        </div>
+        <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.commercial_license_notes.label.text }}</label>{{ form.commercial_license_notes(class="app-input", rows=4) }}</div>
+        <div><label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.launch_override_reason.label.text }}</label>{{ form.launch_override_reason(class="app-input", rows=3, placeholder="Required (10-7000 characters) before launching with incomplete critical readiness items.") }}{{ field_errors(form.launch_override_reason) }}</div>
+      </div>
+
+      <div class="space-y-5" data-studio-tab-panel="checklists" hidden>
+        {% if product %}
+        <div>
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Launch Checklist</h3>
+            <span class="text-xs" style="color: var(--color-text-muted);">{{ launch_items|selectattr("completed")|list|length }}/{{ launch_items|length }} complete</span>
+          </div>
+          <div class="overflow-x-auto rounded-2xl border" style="border-color: var(--color-border);">
+            <table class="app-table text-sm">
+              <thead>
+                <tr><th>Done</th><th>Item</th><th>Notes</th><th>Override</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {% for item in launch_items %}
+                <tr data-autosave-row>
+                  <td><input form="launch-checklist-{{ item.id }}" type="checkbox" name="completed" class="app-checkbox" data-checklist-autosave {% if item.completed %}checked{% endif %}></td>
+                  <td class="font-medium" style="color: var(--color-text);">{{ item.label }}</td>
+                  <td><input form="launch-checklist-{{ item.id }}" name="notes" value="{{ item.notes or '' }}" class="app-input text-sm" placeholder="Notes" data-checklist-autosave></td>
+                  <td><input form="launch-checklist-{{ item.id }}" name="override_reason" value="{{ item.override_reason or '' }}" class="app-input text-sm" placeholder="Override reason" data-checklist-autosave></td>
+                  <td><span class="text-xs" style="color: var(--color-text-muted);" data-autosave-status>Saved</span></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Photo Shot List</h3>
+            <span class="text-xs" style="color: var(--color-text-muted);">Assign uploaded images to each shot.</span>
+          </div>
+          <div class="overflow-x-auto rounded-2xl border" style="border-color: var(--color-border);">
+            <table class="app-table text-sm">
+              <thead>
+                <tr><th>Done</th><th>Shot</th><th>Uploaded Image</th><th>Notes</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {% for shot in photo_shots %}
+                <tr data-autosave-row>
+                  <td><input form="photo-shot-{{ shot.id }}" type="checkbox" name="completed" class="app-checkbox" data-checklist-autosave {% if shot.completed %}checked{% endif %}></td>
+                  <td class="font-medium" style="color: var(--color-text);">{{ shot.label }}</td>
+                  <td>
+                    <select form="photo-shot-{{ shot.id }}" name="image_reference" class="app-input text-sm" data-checklist-autosave data-photo-shot-image-select data-photo-shot-id="{{ shot.id }}" data-upload-url="{{ url_for('products.upload_product_image', product_id=product.id) }}">
+                      <option value="">No image selected</option>
+                      {% for img in product_images %}
+                      <option value="{{ img.file_path }}" {% if shot.image_reference == img.file_path %}selected{% endif %}>{{ storage_reference_name(img.file_path) }}</option>
+                      {% endfor %}
+                      <option value="__upload_new__">Upload a new image...</option>
+                    </select>
+                    <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp" class="hidden" data-photo-shot-file data-photo-shot-id="{{ shot.id }}">
+                  </td>
+                  <td><input form="photo-shot-{{ shot.id }}" name="notes" value="{{ shot.notes or '' }}" class="app-input text-sm" placeholder="Shot notes" data-checklist-autosave></td>
+                  <td><span class="text-xs" style="color: var(--color-text-muted);" data-autosave-status>Saved</span></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% else %}
+        <div class="rounded-2xl border border-dashed p-5 text-sm" style="border-color: var(--color-border); color: var(--color-text-muted);">Save the product before using launch and photo checklists.</div>
+        {% endif %}
+      </div>
+
+      <div class="space-y-5" data-studio-tab-panel="other" hidden>
+        {% if product %}
+        <div class="grid gap-5 xl:grid-cols-2">
+          <section class="rounded-2xl border p-5 space-y-4" style="border-color: var(--color-border); background: var(--color-bg-surface-soft);">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h3 class="text-base font-semibold" style="color: var(--color-text);">Dead Stock Rescue</h3>
+                <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Generate or review rescue actions for products that are not moving.</p>
+              </div>
+              <button form="dead-stock-generate" type="submit" class="app-btn app-btn-secondary text-xs px-3 py-2">Analyze</button>
+            </div>
+            <div class="space-y-3">
+              {% for rec in dead_stock_recommendations %}
+              <div class="rounded-xl border p-3" style="border-color: var(--color-border);">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm font-medium" style="color: var(--color-text);">{{ rec.suggested_action|replace('_', ' ')|title }}</p>
+                  <span class="app-badge app-badge-warning">{{ rec.score }}</span>
+                </div>
+                <p class="mt-2 text-xs leading-5" style="color: var(--color-text-muted);">{{ rec.reason }}</p>
+                <p class="mt-2 text-xs uppercase" style="color: var(--color-text-muted);">{{ rec.status.value }}</p>
+                {% if rec.status.value == "open" %}
+                <div class="mt-3 grid gap-2">
+                  <input form="dead-stock-accept-{{ rec.id }}" name="action_notes" class="app-input text-sm" placeholder="Action notes">
+                  <div class="flex flex-wrap gap-2">
+                    <button form="dead-stock-accept-{{ rec.id }}" type="submit" class="app-btn app-btn-primary text-xs px-3 py-2">Accept</button>
+                    <button form="dead-stock-dismiss-{{ rec.id }}" type="submit" class="app-btn app-btn-secondary text-xs px-3 py-2">Dismiss</button>
+                  </div>
+                </div>
+                {% endif %}
+              </div>
+              {% else %}
+              <p class="rounded-xl border border-dashed p-3 text-sm" style="border-color: var(--color-border); color: var(--color-text-muted);">No recommendations generated yet.</p>
+              {% endfor %}
+            </div>
+          </section>
+
+          <section class="rounded-2xl border p-5 space-y-4" style="border-color: var(--color-border); background: var(--color-bg-surface-soft);">
+            <h3 class="text-base font-semibold" style="color: var(--color-text);">Retirement Workflow</h3>
+            <p class="text-sm" style="color: var(--color-text-muted);">Retire this product and hide it from public/POS sales when it is no longer going to be stocked.</p>
+            <textarea form="retire-product" name="reason" class="app-input" rows="4" placeholder="Reason required before retirement"></textarea>
+            <label class="flex items-center gap-3 text-sm" style="color: var(--color-text);">
+              <input form="retire-product" type="checkbox" name="discount_remaining" class="app-checkbox">
+              <span>Tag remaining stock for retirement discount</span>
+            </label>
+            <button form="retire-product" type="submit" class="app-btn app-btn-secondary" onclick="return confirm('Retire this product and hide it from public/POS sales?')">Retire Product</button>
+          </section>
+
+          <section class="rounded-2xl border p-5 space-y-4 xl:col-span-2" style="border-color: var(--color-danger); background: var(--color-bg-surface-soft);">
+            <h3 class="text-base font-semibold" style="color: var(--color-danger);">Delete Product</h3>
+            <p class="text-sm" style="color: var(--color-text-muted);">This permanently deletes the product, product-owned records, images, and model files. Historical sale/order/print-job rows keep their history but are unlinked from this product.</p>
+            <label class="block text-sm" style="color: var(--color-text);">
+              Type <span class="font-mono font-semibold">{{ product.slug }}</span> to confirm
+              <input form="delete-product" name="confirm_slug" class="app-input mt-2 font-mono text-sm" autocomplete="off">
+            </label>
+            <button form="delete-product" type="submit" class="app-btn" style="background: var(--color-danger); color: white;" onclick="return confirm('Permanently delete this product and related product files/records?')">Delete Product</button>
+          </section>
+        </div>
+        {% else %}
+        <div class="rounded-2xl border border-dashed p-5 text-sm" style="border-color: var(--color-border); color: var(--color-text-muted);">Save the product before using product lifecycle actions.</div>
+        {% endif %}
+      </div>
+    </section>
+
+    <aside class="app-card p-5 space-y-5 self-start xl:sticky xl:top-24">
+      {{ form.submit(class="app-btn app-btn-primary w-full text-base px-6 py-3") }}
+      {% set status_meta = {
+        'draft': {'label': 'Draft', 'tone': 'slate', 'color': 'var(--color-text-muted)', 'bg': 'var(--color-bg-surface-soft)', 'description': 'The product is work-in-progress and has not yet been finalized or published to your store.'},
+        'active': {'label': 'Active', 'tone': 'green', 'color': 'var(--color-success)', 'bg': 'var(--color-success-bg)', 'description': 'The product is fully published, live, and available for customers to view and purchase.'},
+        'hidden': {'label': 'Hidden', 'tone': 'blue', 'color': 'var(--color-info)', 'bg': 'var(--color-info-bg)', 'description': 'The product is complete and available in your backend system, but temporarily hidden from public customer view.'},
+        'retired': {'label': 'Retired', 'tone': 'red-brown', 'color': 'var(--color-danger)', 'bg': 'var(--color-danger-bg)', 'description': 'The product is permanently discontinued and will no longer be stocked or sold.'},
+        'needs_review': {'label': 'Needs Review', 'tone': 'yellow', 'color': 'var(--color-warning)', 'bg': 'var(--color-warning-bg)', 'description': 'The product listing requires attention, updates, or approval before it can be activated.'}
+      } %}
+      {% set current_status = form.status.data or 'draft' %}
+      {% set current_status_meta = status_meta.get(current_status, status_meta.draft) %}
+      <div class="group relative" data-status-picker>
+        <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.status.label.text }}</label>
+        {{ form.status(class="hidden", data_status_select="true") }}
+        <button type="button" class="flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left" style="border-color: var(--color-border); background: var(--color-bg-surface-soft);" data-status-trigger aria-expanded="false">
+          <span class="flex min-w-0 items-center gap-3">
+            <span class="h-3 w-3 shrink-0 rounded-full" style="background: {{ current_status_meta.color }}; box-shadow: 0 0 0 4px {{ current_status_meta.bg }};" data-status-dot></span>
+            <span class="min-w-0">
+              <span class="block text-sm font-semibold" style="color: var(--color-text);" data-status-label>{{ current_status_meta.label }}</span>
+              <span class="block truncate text-xs" style="color: var(--color-text-muted);" data-status-description>{{ current_status_meta.description }}</span>
+            </span>
+          </span>
+          <span class="text-xs" style="color: var(--color-text-muted);">Change</span>
+        </button>
+        <div class="pointer-events-none absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border p-3 text-xs opacity-0 shadow-lg transition group-hover:opacity-100" style="border-color: var(--color-border); background: var(--color-surface); color: var(--color-text-muted);" data-status-legend>
+          <div class="space-y-2">
+            {% for value, meta in status_meta.items() %}
+            <div class="flex gap-2"><span class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style="background: {{ meta.color }};"></span><span><strong style="color: var(--color-text);">{{ meta.label }}:</strong> {{ meta.description }}</span></div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="absolute left-0 right-0 top-full z-30 mt-2 hidden overflow-hidden rounded-xl border shadow-lg" style="border-color: var(--color-border); background: var(--color-surface);" data-status-menu>
+          {% for value, meta in status_meta.items() %}
+          <button type="button" class="flex w-full items-start gap-3 px-4 py-3 text-left text-sm hover:opacity-90" style="background: {{ meta.bg }}; color: var(--color-text);" data-status-option data-status-value="{{ value }}" data-status-label-value="{{ meta.label }}" data-status-description-value="{{ meta.description }}" data-status-color="{{ meta.color }}" data-status-bg="{{ meta.bg }}">
+            <span class="mt-1 h-3 w-3 shrink-0 rounded-full" style="background: {{ meta.color }};"></span>
+            <span><strong class="block">{{ meta.label }}</strong><span class="block text-xs" style="color: var(--color-text-muted);">{{ meta.description }}</span></span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="space-y-3">
+        <label class="flex items-center gap-3 rounded-xl border px-4 py-3 text-sm" style="border-color: var(--color-border); color: var(--color-text);">{{ form.is_public(class="app-checkbox") }}<span>{{ form.is_public.label.text }}</span></label>
+        <label class="flex items-center gap-3 rounded-xl border px-4 py-3 text-sm" style="border-color: var(--color-border); color: var(--color-text);">{{ form.is_pos_visible(class="app-checkbox") }}<span>{{ form.is_pos_visible.label.text }}</span></label>
+        <label class="flex items-center gap-3 rounded-xl border px-4 py-3 text-sm" style="border-color: var(--color-border); color: var(--color-text);">{{ form.is_featured(class="app-checkbox") }}<span>{{ form.is_featured.label.text }}</span></label>
+      </div>
+      {% if product %}
+      <div class="rounded-2xl border p-3" style="border-color: var(--color-border); background: var(--color-bg-surface-soft);">
+        <p class="mb-2 text-xs uppercase tracking-[0.16em]" style="color: var(--color-text-muted);">Model Preview</p>
+        {% if product.model_file_path %}
+        <model-viewer
+          src="{{ url_for('products.view_model', product_id=product.id) }}"
+          alt="{{ product.name }}"
+          camera-controls
+          auto-rotate
+          shadow-intensity="1"
+          exposure="0.8"
+          style="width: 100%; height: 260px; border-radius: var(--radius-lg); background: var(--color-surface);"
+        ></model-viewer>
+        {% else %}
+        <div class="flex h-52 items-center justify-center rounded-2xl border-2 border-dashed text-center" style="border-color: var(--color-border);">
+          <div class="space-y-2">
+            <div class="text-4xl">🧊</div>
+            <p class="text-xs" style="color: var(--color-text-muted);">Upload a model to preview it here.</p>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+      <div class="rounded-2xl border p-4" style="border-color: var(--color-border); background: var(--color-bg-surface-soft);">
+        <p class="text-xs uppercase tracking-[0.16em]" style="color: var(--color-text-muted);">Financial Summary</p>
+        <dl class="mt-4 space-y-3 text-sm">
+          <div class="flex justify-between gap-3"><dt style="color: var(--color-text-muted);">Base Price</dt><dd class="font-semibold" data-live-cost-field="base_price" style="color: var(--color-text);">${{ "%.2f"|format(cost_summary.base_price) }}</dd></div>
+          <div class="flex justify-between gap-3"><dt style="color: var(--color-text-muted);">Calculated Unit Cost</dt><dd class="font-semibold" data-live-cost-field="sidebar_total_cost" style="color: var(--color-text);">${{ "%.2f"|format(cost_summary.unit_cost) }}</dd></div>
+          <div class="flex justify-between gap-3"><dt style="color: var(--color-text-muted);">Effective Profit Margin</dt><dd class="font-semibold" data-live-cost-field="sidebar_margin_percent" style="color: {{ 'var(--color-success)' if cost_summary.tone == 'success' else 'var(--color-warning)' if cost_summary.tone == 'warning' else 'var(--color-danger)' if cost_summary.tone == 'danger' else 'var(--color-text-muted)' }};">{% if cost_summary.margin is not none %}{{ "%.1f"|format(cost_summary.margin) }}%{% else %}n/a{% endif %}</dd></div>
+          <div class="flex justify-between gap-3"><dt style="color: var(--color-text-muted);">Time to Print</dt><dd class="font-semibold" style="color: var(--color-text);">{% if product %}{{ (product.estimated_print_minutes or product.parsed_print_minutes or 0)|duration_minutes }}{% else %}0m{% endif %}</dd></div>
+          <div class="flex justify-between gap-3"><dt style="color: var(--color-text-muted);">Filament Required</dt><dd class="font-semibold" style="color: var(--color-text);">{% if product and product.parsed_filament_grams %}{{ "%.1f"|format(product.parsed_filament_grams) }}g{% else %}n/a{% endif %}</dd></div>
+        </dl>
+      </div>
+      {% if product %}
+      <div class="rounded-2xl border p-4" style="border-color: var(--color-border);">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-xs uppercase tracking-[0.16em]" style="color: var(--color-text-muted);">Readiness</p>
+          <strong class="text-2xl" style="color: var(--color-primary);">{{ readiness.score if readiness else 0 }}</strong>
+        </div>
+        <div class="mt-3 space-y-2">
+          {% for item in readiness.breakdown if readiness %}
+          <div class="flex justify-between gap-3 text-xs">
+            <span style="color: var(--color-text-muted);">{{ item.label }}</span>
+            <span class="font-semibold" style="color: var(--color-text);">{{ item.earned }}/{{ item.points }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="rounded-2xl border p-4" style="border-color: var(--color-border);">
+        <p class="text-xs uppercase tracking-[0.16em]" style="color: var(--color-text-muted);">Advanced Tools</p>
+        <div class="mt-3 grid gap-2 text-sm">
+          <button type="button" class="app-btn app-btn-secondary w-full" data-studio-tab-button="model">Model, Assets &amp; Images</button>
+          <button type="button" class="app-btn app-btn-secondary w-full" data-studio-tab-button="checklists">Checklists</button>
+          <button type="button" class="app-btn app-btn-secondary w-full" data-studio-tab-button="other">Other Actions</button>
+        </div>
+      </div>
+      {% endif %}
+    </aside>
+  </form>
+  {% if product %}
+    {% for item in launch_items %}
+    <form id="launch-checklist-{{ item.id }}" method="post" action="{{ url_for('products.update_launch_checklist_item', product_id=product.id, item_id=item.id) }}" class="hidden">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% endfor %}
+    {% for shot in photo_shots %}
+    <form id="photo-shot-{{ shot.id }}" method="post" action="{{ url_for('products.update_product_photo_shot', product_id=product.id, shot_id=shot.id) }}" class="hidden">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% endfor %}
+    <form id="dead-stock-generate" method="post" action="{{ url_for('products.generate_product_dead_stock', product_id=product.id) }}" class="hidden">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% for rec in dead_stock_recommendations %}
+    <form id="dead-stock-accept-{{ rec.id }}" method="post" action="{{ url_for('products.update_dead_stock_recommendation', recommendation_id=rec.id, action='accept') }}" class="hidden">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    <form id="dead-stock-dismiss-{{ rec.id }}" method="post" action="{{ url_for('products.update_dead_stock_recommendation', recommendation_id=rec.id, action='dismiss') }}" class="hidden">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% endfor %}
+    <form id="retire-product" method="post" action="{{ url_for('products.retire_studio_product', product_id=product.id) }}" class="hidden">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    <form id="delete-product" method="post" action="{{ url_for('products.delete_studio_product', product_id=product.id) }}" class="hidden">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    <form id="model-upload-form" data-product-id="{{ product.id }}" enctype="multipart/form-data" class="hidden">
+      {{ upload_form.csrf_token(form="model-upload-form") }}
+    </form>
+    <div id="upload-settings-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="upload-settings-title">
+      <button type="button" class="absolute inset-0" style="background: rgb(15 23 42 / 0.58);" data-close-upload-modal aria-label="Close upload settings"></button>
+      <div class="app-card relative z-10 max-h-[90vh] w-full max-w-4xl overflow-y-auto p-6">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h3 id="upload-settings-title" class="text-xl font-semibold" style="color: var(--color-text);">Model slicing settings</h3>
+            <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Confirm the settings used for analysis and quoting. Embedded 3MF settings can be preferred when present.</p>
+          </div>
+          <button type="button" class="app-btn app-btn-secondary" data-close-upload-modal aria-label="Close">×</button>
+        </div>
+        <div class="mt-6 grid gap-4 md:grid-cols-3">
+          {% for field in [upload_form.printer_profile, upload_form.material, upload_form.filament_density, upload_form.nozzle_diameter, upload_form.layer_height, upload_form.perimeters, upload_form.top_solid_layers, upload_form.bottom_solid_layers, upload_form.infill_percent, upload_form.infill_pattern, upload_form.supports, upload_form.brim_width, upload_form.copies, upload_form.scale_percent] %}
+          <div>
+            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);" for="{{ field.id }}">{{ field.label.text }}</label>
+            {{ field(class="app-input", form="model-upload-form") }}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="mt-5 grid gap-3 md:grid-cols-2">
+          {% for field in [upload_form.preserve_orientation, upload_form.multicolor, upload_form.use_embedded_settings, upload_form.convert_to_glb, upload_form.retain_gcode] %}
+          <label class="app-card flex items-center gap-3 px-4 py-3 text-sm" style="color: var(--color-text);">
+            {{ field(class="app-checkbox", form="model-upload-form") }} <span>{{ field.label.text }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <div id="upload-settings-error" class="mt-4 hidden rounded-xl border px-4 py-3 text-sm" role="alert" style="border-color: var(--color-danger); color: var(--color-danger);"></div>
+        <div class="mt-6 flex justify-end gap-3">
+          <button type="button" class="app-btn app-btn-secondary" data-close-upload-modal>Cancel</button>
+          <button form="model-upload-form" type="submit" class="app-btn app-btn-primary">Upload with these settings</button>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>

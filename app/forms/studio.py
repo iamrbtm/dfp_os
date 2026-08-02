@@ -10,6 +10,7 @@ from wtforms import (
     DecimalField,
     IntegerField,
     SelectField,
+    SelectMultipleField,
     StringField,
     SubmitField,
     TextAreaField,
@@ -44,7 +45,7 @@ class ProductStudioForm(FlaskForm):
     short_description = TextAreaField("Short Description", validators=[Optional()])
     description = TextAreaField("Full Description", validators=[Optional()])
     category_id = SelectField("Category", coerce=int, validators=[DataRequired()])
-    collection_id = OptionalSelectField("Collection", coerce=int, validators=[Optional()])
+    collection_ids = SelectMultipleField("Collections", coerce=int, validators=[Optional()])
     product_type = SelectField(
         "Product Type", choices=enum_choices(ProductType), validators=[DataRequired()]
     )
@@ -84,7 +85,7 @@ class ProductStudioForm(FlaskForm):
     safety_notes = TextAreaField("Safety Notes", validators=[Optional()])
     launch_override_reason = TextAreaField(
         "Launch Override Reason",
-        validators=[Optional(), Length(min=10, max=2000)],
+        validators=[Optional(), Length(min=10, max=7000)],
     )
     license_status = SelectField(
         "License Status", choices=enum_choices(LicenseStatus), validators=[DataRequired()]
@@ -106,6 +107,13 @@ class ProductStudioForm(FlaskForm):
         validators=[Optional()],
     )
     model_notes = TextAreaField("Model Notes", validators=[Optional()])
+    story_what_it_is = TextAreaField("What It Is", validators=[Optional()])
+    story_who_it_is_for = TextAreaField("Who It Is For", validators=[Optional()])
+    story_materials = TextAreaField("Materials", validators=[Optional()])
+    story_customization_options = TextAreaField("Customization Options", validators=[Optional()])
+    story_internal_compliance_notes = TextAreaField(
+        "Internal Compliance Notes", validators=[Optional()]
+    )
     submit = SubmitField("Save Product")
 
     def __init__(self, *args, **kwargs):
@@ -113,7 +121,7 @@ class ProductStudioForm(FlaskForm):
         self.category_id.choices = [
             (item.id, f"{item.name}") for item in Category.query.order_by(Category.name)
         ]
-        self.collection_id.choices = [(0, "— No Collection —")] + [
+        self.collection_ids.choices = [
             (item.id, f"{item.name}") for item in Collection.query.order_by(Collection.name)
         ]
         # Issue 14 — preferred filament spool choices. 0 means "no override,
@@ -146,9 +154,14 @@ class ProductStudioForm(FlaskForm):
             raise ValidationError("A product with that slug already exists.")
 
     def validate_sku_base(self, field):
+        field.data = (field.data or "").strip()
+        if not field.data:
+            generated = slugify(self.slug.data or self.name.data or "").upper()
+            field.data = generated or None
         if not field.data:
             return
-        existing = Product.query.filter_by(sku_base=field.data.strip()).first()
+        field.data = field.data.upper()
+        existing = Product.query.filter_by(sku_base=field.data).first()
         if existing and getattr(self, "instance_id", None) != existing.id:
             from wtforms.validators import ValidationError
 
@@ -157,11 +170,18 @@ class ProductStudioForm(FlaskForm):
     def populate_product(self, product: Product) -> Product:
         product.name = self.name.data.strip()
         product.slug = slugify(self.slug.data or "") or slugify(self.name.data.strip())
-        product.sku_base = self.sku_base.data.strip() if self.sku_base.data else None
+        sku = (self.sku_base.data or "").strip().upper()
+        product.sku_base = sku or product.slug.upper()
         product.short_description = self.short_description.data
         product.description = self.description.data
         product.category_id = self.category_id.data
-        product.collection_id = self.collection_id.data or None
+        selected_collection_ids = self.collection_ids.data or []
+        product.collection_id = selected_collection_ids[0] if selected_collection_ids else None
+        product.collections = (
+            Collection.query.filter(Collection.id.in_(selected_collection_ids)).all()
+            if selected_collection_ids
+            else []
+        )
         product.product_type = ProductType(self.product_type.data)
         product.status = ProductStatus(self.status.data)
         product.is_public = bool(self.is_public.data)
@@ -182,10 +202,10 @@ class ProductStudioForm(FlaskForm):
         product.care_instructions = self.care_instructions.data
         product.safety_notes = self.safety_notes.data
         # Issue 55 — strip and cap the override reason server-side as a second
-        # line of defense behind the Length(min=10, max=2000) validator.
+        # line of defense behind the Length(min=10, max=7000) validator.
         override = self.launch_override_reason.data
         if override:
-            override = override.strip()[:2000]
+            override = override.strip()[:7000]
         product.launch_override_reason = override or None
         product.license_status = LicenseStatus(self.license_status.data)
         product.design_source = self.design_source.data or None
@@ -197,6 +217,11 @@ class ProductStudioForm(FlaskForm):
         product.model_commercial_use_allowed = bool(self.model_commercial_use_allowed.data)
         product.model_license_expiration = self.model_license_expiration.data
         product.model_notes = self.model_notes.data
+        product.story_what_it_is = self.story_what_it_is.data or None
+        product.story_who_it_is_for = self.story_who_it_is_for.data or None
+        product.story_materials = self.story_materials.data or None
+        product.story_customization_options = self.story_customization_options.data or None
+        product.story_internal_compliance_notes = self.story_internal_compliance_notes.data or None
         return product
 
     def load_from_product(self, product: Product) -> None:
@@ -206,7 +231,10 @@ class ProductStudioForm(FlaskForm):
         self.short_description.data = product.short_description
         self.description.data = product.description
         self.category_id.data = product.category_id
-        self.collection_id.data = product.collection_id or 0
+        collection_ids = [collection.id for collection in product.collections]
+        if product.collection_id and product.collection_id not in collection_ids:
+            collection_ids.insert(0, product.collection_id)
+        self.collection_ids.data = collection_ids
         self.product_type.data = product.product_type.value
         self.status.data = product.status.value
         self.is_public.data = product.is_public
@@ -233,6 +261,11 @@ class ProductStudioForm(FlaskForm):
         self.model_commercial_use_allowed.data = product.model_commercial_use_allowed
         self.model_license_expiration.data = product.model_license_expiration
         self.model_notes.data = product.model_notes
+        self.story_what_it_is.data = product.story_what_it_is
+        self.story_who_it_is_for.data = product.story_who_it_is_for
+        self.story_materials.data = product.story_materials
+        self.story_customization_options.data = product.story_customization_options
+        self.story_internal_compliance_notes.data = product.story_internal_compliance_notes
 
 
 class ProductModelUploadForm(FlaskForm):

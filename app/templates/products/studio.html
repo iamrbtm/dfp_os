@@ -3,9 +3,22 @@
 {% block head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/style.css">
 <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js"></script>
+<style>
+  .product-studio-shell {
+    max-width: none;
+    width: min(100%, calc(100vw - 2rem));
+  }
+  @media (min-width: 1024px) {
+    .product-studio-shell {
+      width: calc(100vw - 18rem);
+      margin-left: 50%;
+      transform: translateX(-50%);
+    }
+  }
+</style>
 {% endblock %}
 {% block content %}
-<section class="mx-auto max-w-7xl space-y-8">
+<section class="product-studio-shell mx-auto space-y-8">
   <div>
     <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
     <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Product Studio</h1>
@@ -14,223 +27,9 @@
     </p>
   </div>
 
-  <div class="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-    <aside class="app-card p-4 space-y-4">
-      <div class="flex items-center justify-between gap-3">
-        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Products</h2>
-        <a href="{{ url_for('products.studio') }}" class="app-btn app-btn-primary text-sm">New</a>
-      </div>
-      <div class="space-y-2">
-        {% for item in products %}
-        <a href="{{ url_for('products.studio', product_id=item.id) }}"
-           class="block rounded-2xl border px-3 py-3 transition {% if product and product.id == item.id %}border-current{% endif %}"
-           style="border-color: var(--color-border); color: var(--color-text);">
-          <p class="font-medium">{{ item.name }}</p>
-          <p class="text-xs font-mono mt-1" style="color: var(--color-text-muted);">{{ item.sku_base or item.slug }}</p>
-        </a>
-        {% else %}
-        <div class="rounded-2xl border border-dashed p-4 text-sm text-center" style="border-color: var(--color-border); color: var(--color-text-muted);">
-          No products yet.
-        </div>
-        {% endfor %}
-      </div>
-      <div class="pt-2 space-y-2 text-sm">
-        <a href="{{ url_for('products.list_resource', resource_key='categories') }}" class="block" style="color: var(--color-link);">Manage categories</a>
-        <a href="{{ url_for('products.list_resource', resource_key='collections') }}" class="block" style="color: var(--color-link);">Manage collections</a>
-      </div>
-    </aside>
+  {% include "products/_studio_workspace.html" %}
 
-    <div class="space-y-6">
-      <form method="post" action="{{ url_for('products.studio', product_id=product.id) if product else url_for('products.studio') }}" class="space-y-6">
-        {{ form.hidden_tag() }}
-
-        {#- Issue 3 — error summary banner + per-field error lists -#}
-        {%- macro field_errors(field) -%}
-          {%- if field.errors -%}
-            <ul class="text-red-500 text-sm mt-1 space-y-0.5">
-              {%- for error in field.errors -%}<li>{{ error }}</li>{%- endfor -%}
-            </ul>
-          {%- endif -%}
-        {%- endmacro -%}
-        {%- if form.errors -%}
-          <div class="app-card p-4 border border-red-400/60 rounded-lg" role="alert">
-            <p class="font-semibold text-red-500">Please correct the errors below.</p>
-          </div>
-        {%- endif -%}
-
-        <div class="app-card p-6 space-y-6">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <h2 class="text-xl font-semibold" style="color: var(--color-text);">
-              {{ "Edit" if mode == "edit" else "New" }} Product
-            </h2>
-            {{ form.submit(class="app-btn app-btn-primary text-lg px-8 py-3") }}
-          </div>
-
-          <div class="grid gap-5 md:grid-cols-2">
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.name.label.text }}</label>
-              {{ form.name(class="app-input") }}
-              {{ field_errors(form.name) }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.slug.label.text }}</label>
-              {{ form.slug(class="app-input font-mono text-sm") }}
-              {{ field_errors(form.slug) }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.sku_base.label.text }}</label>
-              {{ form.sku_base(class="app-input font-mono text-sm") }}
-              {{ field_errors(form.sku_base) }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.base_price.label.text }}</label>
-              {{ form.base_price(class="app-input") }}
-              {{ field_errors(form.base_price) }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.category_id.label.text }}</label>
-              {{ form.category_id(class="app-input") }}
-              {{ field_errors(form.category_id) }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.collection_id.label.text }}</label>
-              {{ form.collection_id(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.product_type.label.text }}</label>
-              {{ form.product_type(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.status.label.text }}</label>
-              {{ form.status(class="app-input") }}
-            </div>
-          </div>
-
-          <div>
-            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.short_description.label.text }}</label>
-            {{ form.short_description(class="app-input", rows=3) }}
-          </div>
-          <div>
-            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.description.label.text }}</label>
-            {{ form.description(class="app-input", rows=5) }}
-          </div>
-
-          <div class="grid gap-5 md:grid-cols-3">
-            <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-              {{ form.is_public(class="app-checkbox") }}
-              <span>{{ form.is_public.label.text }}</span>
-            </label>
-            <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-              {{ form.is_pos_visible(class="app-checkbox") }}
-              <span>{{ form.is_pos_visible.label.text }}</span>
-            </label>
-            <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-              {{ form.is_featured(class="app-checkbox") }}
-              <span>{{ form.is_featured.label.text }}</span>
-            </label>
-          </div>
-
-          {% set cd = cost_defaults or {} %}
-          <div class="app-card p-5">
-            <h3 class="mb-1 text-base font-semibold" style="color: var(--color-text);">Cost Inputs</h3>
-            <p class="mb-4 text-xs" style="color: var(--color-text-muted, var(--color-text));">
-              Override the global cost-engine defaults for this product only. Leave a field blank to use the global default shown beside it.
-            </p>
-            <div class="grid gap-5 md:grid-cols-2">
-              <div>
-                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.estimated_labor_minutes.label.text }}</label>
-                {{ form.estimated_labor_minutes(class="app-input") }}
-                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text));">Global default labor rate: ${{ cd.labor_rate }}/hr</p>
-                {{ field_errors(form.estimated_labor_minutes) }}
-              </div>
-              <div>
-                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.packaging_cost_override.label.text }}</label>
-                {{ form.packaging_cost_override(class="app-input") }}
-                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text));">Global default: ${{ cd.packaging_cost }}</p>
-                {{ field_errors(form.packaging_cost_override) }}
-              </div>
-              <div>
-                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.target_margin_percent_override.label.text }}</label>
-                {{ form.target_margin_percent_override(class="app-input") }}
-                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text);">Global default: {{ cd.target_margin_percent }}%</p>
-                {{ field_errors(form.target_margin_percent_override) }}
-              </div>
-              <div>
-                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.market_allocation_override.label.text }}</label>
-                {{ form.market_allocation_override(class="app-input") }}
-                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text);">Global default: ${{ cd.market_allocation }}</p>
-                {{ field_errors(form.market_allocation_override) }}
-              </div>
-              <div>
-                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.payment_fee_rate_override.label.text }}</label>
-                {{ form.payment_fee_rate_override(class="app-input") }}
-                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text);">Global default: {{ cd.payment_fee_rate }}</p>
-                {{ field_errors(form.payment_fee_rate_override) }}
-              </div>
-              <div>
-                <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.material_spool_override.label.text }}</label>
-                {{ form.material_spool_override(class="app-input") }}
-                <p class="mt-1 text-xs" style="color: var(--color-text-muted, var(--color-text);">Pick a specific spool, or let the cost engine choose by material.</p>
-                {{ field_errors(form.material_spool_override) }}
-              </div>
-            </div>
-          </div>
-
-          <div class="grid gap-5 md:grid-cols-2">
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.license_status.label.text }}</label>
-              {{ form.license_status(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.design_source.label.text }}</label>
-              {{ form.design_source(class="app-input") }}
-            </div>
-          </div>
-          <div>
-            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.commercial_license_notes.label.text }}</label>
-            {{ form.commercial_license_notes(class="app-input", rows=3) }}
-          </div>
-          <div>
-            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.launch_override_reason.label.text }}</label>
-            {{ form.launch_override_reason(class="app-input", rows=2, placeholder="Required (10–2000 characters) before launching with incomplete critical readiness items.") }}
-            {{ field_errors(form.launch_override_reason) }}
-          </div>
-
-          <div class="grid gap-5 md:grid-cols-2">
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_source_type.label.text }}</label>
-              {{ form.model_source_type(class="app-input") }}
-              {{ field_errors(form.model_source_type) }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_source_url.label.text }}</label>
-              {{ form.model_source_url(class="app-input") }}
-              {{ field_errors(form.model_source_url) }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_designer_name.label.text }}</label>
-              {{ form.model_designer_name(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_license_type.label.text }}</label>
-              {{ form.model_license_type(class="app-input") }}
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_license_expiration.label.text }}</label>
-              {{ form.model_license_expiration(class="app-input") }}
-            </div>
-            <label class="flex items-center gap-3 app-card px-4 py-3 text-sm" style="color: var(--color-text);">
-              {{ form.model_commercial_use_allowed(class="app-checkbox") }}
-              <span>{{ form.model_commercial_use_allowed.label.text }}</span>
-            </label>
-          </div>
-
-          <div>
-            <label class="mb-2 block text-sm font-medium" style="color: var(--color-text);">{{ form.model_notes.label.text }}</label>
-            {{ form.model_notes(class="app-input", rows=3) }}
-          </div>
-        </div>
-      </form>
+    <div id="advanced-product-tools" class="hidden space-y-6">
 
       {% if product %}
       <div class="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -375,6 +174,17 @@
               <span>Tag remaining stock for retirement discount</span>
             </label>
             <button type="submit" class="app-btn app-btn-secondary" onclick="return confirm('Retire this product and hide it from public/POS sales?')">Retire Product</button>
+          </form>
+
+          <form method="post" action="{{ url_for('products.delete_studio_product', product_id=product.id) }}" class="app-card p-5 space-y-3 border" style="border-color: var(--color-danger);">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <h3 class="text-base font-semibold" style="color: var(--color-danger);">Delete Product</h3>
+            <p class="text-sm" style="color: var(--color-text-muted);">This permanently deletes the product, product-owned records, images, and model files. Historical sale/order/print-job rows keep their history but are unlinked from this product.</p>
+            <label class="block text-sm" style="color: var(--color-text);">
+              Type <span class="font-mono font-semibold">{{ product.slug }}</span> to confirm
+              <input name="confirm_slug" class="app-input mt-2 font-mono text-sm" autocomplete="off">
+            </label>
+            <button type="submit" class="app-btn" style="background: var(--color-danger); color: white;" onclick="return confirm('Permanently delete this product and related product files/records?')">Delete Product</button>
           </form>
         </div>
       </div>
@@ -630,7 +440,6 @@
       </div>
       {% endif %}
     </div>
-  </div>
 </section>
 
 {% if product %}
@@ -654,6 +463,109 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='src/js/studio.js') }}"></script>
 <script>
+  (function() {
+    function setTab(workspace, tabName) {
+      workspace.querySelectorAll('[data-studio-tab-button]').forEach(function(btn) {
+        var active = btn.getAttribute('data-studio-tab-button') === tabName;
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        btn.classList.toggle('app-btn-primary', active);
+        btn.classList.toggle('app-btn-secondary', !active);
+      });
+      workspace.querySelectorAll('[data-studio-tab-panel]').forEach(function(panel) {
+        panel.hidden = panel.getAttribute('data-studio-tab-panel') !== tabName;
+      });
+    }
+
+    function filterProducts(workspace, value) {
+      var query = (value || '').trim().toLowerCase();
+      workspace.querySelectorAll('[data-product-category]').forEach(function(category) {
+        var visibleCount = 0;
+        category.querySelectorAll('[data-filter-text]').forEach(function(card) {
+          var visible = !query || card.getAttribute('data-filter-text').includes(query);
+          card.hidden = !visible;
+          if (visible) visibleCount += 1;
+        });
+        var panel = category.querySelector('[data-category-products]');
+        if (panel && query) panel.hidden = visibleCount === 0;
+        category.hidden = query && visibleCount === 0;
+      });
+    }
+
+    document.addEventListener('click', function(event) {
+      var tabButton = event.target.closest('[data-studio-tab-button]');
+      if (tabButton) {
+        var workspace = tabButton.closest('[data-product-studio-workspace]');
+        if (workspace) setTab(workspace, tabButton.getAttribute('data-studio-tab-button'));
+        return;
+      }
+
+      var categoryButton = event.target.closest('[data-category-toggle]');
+      if (categoryButton) {
+        var category = categoryButton.closest('[data-product-category]');
+        var panel = category ? category.querySelector('[data-category-products]') : null;
+        var icon = categoryButton.querySelector('[data-category-icon]');
+        if (panel) {
+          panel.hidden = !panel.hidden;
+          categoryButton.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+          if (icon) icon.textContent = panel.hidden ? '▶' : '▼';
+        }
+        return;
+      }
+
+      var advancedButton = event.target.closest('[data-toggle-advanced-tools]');
+      if (advancedButton) {
+        var advanced = document.getElementById('advanced-product-tools');
+        if (advanced) {
+          advanced.classList.remove('hidden');
+          advanced.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        return;
+      }
+
+      var statusTrigger = event.target.closest('[data-status-trigger]');
+      if (statusTrigger) {
+        var statusPicker = statusTrigger.closest('[data-status-picker]');
+        var statusMenu = statusPicker ? statusPicker.querySelector('[data-status-menu]') : null;
+        if (statusMenu) {
+          statusMenu.classList.toggle('hidden');
+          statusTrigger.setAttribute('aria-expanded', statusMenu.classList.contains('hidden') ? 'false' : 'true');
+        }
+        return;
+      }
+
+      var statusOption = event.target.closest('[data-status-option]');
+      if (statusOption) {
+        var picker = statusOption.closest('[data-status-picker]');
+        var select = picker ? picker.querySelector('[data-status-select]') : null;
+        var menu = picker ? picker.querySelector('[data-status-menu]') : null;
+        var trigger = picker ? picker.querySelector('[data-status-trigger]') : null;
+        var dot = picker ? picker.querySelector('[data-status-dot]') : null;
+        var label = picker ? picker.querySelector('[data-status-label]') : null;
+        var description = picker ? picker.querySelector('[data-status-description]') : null;
+        if (select) select.value = statusOption.getAttribute('data-status-value');
+        if (dot) {
+          dot.style.background = statusOption.getAttribute('data-status-color');
+          dot.style.boxShadow = '0 0 0 4px ' + statusOption.getAttribute('data-status-bg');
+        }
+        if (label) label.textContent = statusOption.getAttribute('data-status-label-value');
+        if (description) description.textContent = statusOption.getAttribute('data-status-description-value');
+        if (menu) menu.classList.add('hidden');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        return;
+      }
+
+      document.querySelectorAll('[data-status-menu]').forEach(function(menu) {
+        if (!event.target.closest('[data-status-picker]')) menu.classList.add('hidden');
+      });
+    });
+
+    document.addEventListener('input', function(event) {
+      if (!event.target.matches('[data-product-filter]')) return;
+      var workspace = event.target.closest('[data-product-studio-workspace]');
+      if (workspace) filterProducts(workspace, event.target.value);
+    });
+  })();
+
   // trend score calculation
   var trendBtn = document.getElementById('trend-score-btn');
   if (trendBtn) {

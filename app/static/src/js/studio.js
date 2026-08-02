@@ -84,14 +84,318 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    initStudioWidgets();
+  });
+
+  document.addEventListener("htmx:afterSwap", function (event) {
+    if (event.target && event.target.id === "product-studio-workspace") {
+      initStudioWidgets();
+    }
+  });
+
+  function initStudioWidgets() {
     initModelUpload();
     initCostCalculation();
+    initLiveFinancials();
     initReanalyze();
     initImageManagement();
     initUploadSettingsModal();
     initAssetsModal();
     initStoryCardAI();
-  });
+    initCheckboxDropdowns();
+    initChecklistAutosave();
+  }
+
+  var checkboxDropdownsInitialized = false;
+
+  function initCheckboxDropdowns() {
+    document.querySelectorAll("[data-checkbox-dropdown]").forEach(updateCheckboxDropdownLabel);
+    if (checkboxDropdownsInitialized) return;
+    checkboxDropdownsInitialized = true;
+
+    document.addEventListener("change", function (event) {
+      if (!event.target.matches("[data-checkbox-dropdown-input]")) return;
+      updateCheckboxDropdownLabel(event.target.closest("[data-checkbox-dropdown]"));
+    });
+
+    document.addEventListener("click", function (event) {
+      document.querySelectorAll("[data-checkbox-dropdown][open]").forEach(function (dropdown) {
+        if (!dropdown.contains(event.target)) dropdown.removeAttribute("open");
+      });
+    });
+  }
+
+  function updateCheckboxDropdownLabel(dropdown) {
+    if (!dropdown) return;
+    var label = dropdown.querySelector("[data-checkbox-dropdown-label]");
+    if (!label) return;
+    var checked = dropdown.querySelectorAll("[data-checkbox-dropdown-input]:checked");
+    label.textContent = checked.length ? checked.length + " selected" : "Choose collections";
+  }
+
+  var checklistAutosaveInitialized = false;
+  var checklistAutosaveTimers = {};
+
+  function initChecklistAutosave() {
+    document.querySelectorAll("[data-photo-shot-image-select]").forEach(function (select) {
+      if (!select.dataset.lastValue || select.value !== "__upload_new__") {
+        select.dataset.lastValue = select.value || "";
+      }
+    });
+    if (checklistAutosaveInitialized) return;
+    checklistAutosaveInitialized = true;
+
+    document.addEventListener("input", function (event) {
+      if (!event.target.matches("[data-checklist-autosave]")) return;
+      scheduleChecklistAutosave(event.target, 500);
+    });
+
+    document.addEventListener("change", function (event) {
+      if (event.target.matches("[data-photo-shot-file]")) {
+        uploadPhotoShotImage(event.target);
+        return;
+      }
+      if (!event.target.matches("[data-checklist-autosave]")) return;
+      if (event.target.matches("[data-photo-shot-image-select]")) {
+        if (event.target.value === "__upload_new__") {
+          openPhotoShotImagePicker(event.target);
+          return;
+        }
+        event.target.dataset.lastValue = event.target.value || "";
+      }
+      scheduleChecklistAutosave(event.target, 0);
+    });
+  }
+
+  function openPhotoShotImagePicker(select) {
+    var row = select.closest("[data-autosave-row]");
+    var input = row ? row.querySelector("[data-photo-shot-file]") : null;
+    select.value = select.dataset.lastValue || "";
+    if (input) input.click();
+  }
+
+  function scheduleChecklistAutosave(control, delay) {
+    var formId = control.getAttribute("form");
+    if (!formId) return;
+    window.clearTimeout(checklistAutosaveTimers[formId]);
+    checklistAutosaveTimers[formId] = window.setTimeout(function () {
+      saveChecklistForm(formId, control.closest("[data-autosave-row]"));
+    }, delay == null ? 300 : delay);
+  }
+
+  function setAutosaveStatus(row, message, tone) {
+    if (!row) return;
+    var status = row.querySelector("[data-autosave-status]");
+    if (!status) return;
+    status.textContent = message;
+    var color = "var(--color-text-muted)";
+    if (tone === "saving") color = "var(--color-info)";
+    if (tone === "success") color = "var(--color-success)";
+    if (tone === "danger") color = "var(--color-danger)";
+    status.style.color = color;
+  }
+
+  function saveChecklistForm(formId, row) {
+    var form = document.getElementById(formId);
+    if (!form) return;
+    setAutosaveStatus(row, "Saving...", "saving");
+    fetch(form.action, {
+      method: "POST",
+      body: new FormData(form),
+      headers: {
+        "Accept": "application/json",
+        "X-CSRFToken": getCSRFToken(),
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    })
+      .then(function (r) {
+        return r.ok ? r.json() : r.json().then(function (d) {
+          throw new Error(d.error || "Save failed");
+        });
+      })
+      .then(function () {
+        setAutosaveStatus(row, "Saved", "success");
+      })
+      .catch(function (err) {
+        setAutosaveStatus(row, "Not saved", "danger");
+        showFlash(err.message || "Checklist update failed.", "danger");
+      });
+  }
+
+  function uploadPhotoShotImage(input) {
+    if (!input.files || !input.files.length) return;
+    var row = input.closest("[data-autosave-row]");
+    var select = row ? row.querySelector("[data-photo-shot-image-select]") : null;
+    if (!select) return;
+    var uploadUrl = select.getAttribute("data-upload-url");
+    var shotId = select.getAttribute("data-photo-shot-id");
+    if (!uploadUrl || !shotId) return;
+
+    var formData = new FormData();
+    formData.append("image", input.files[0]);
+    formData.append("alt_text", input.files[0].name);
+    formData.append("photo_shot_id", shotId);
+    setAutosaveStatus(row, "Uploading...", "saving");
+
+    fetch(uploadUrl, {
+      method: "POST",
+      body: formData,
+      headers: {
+        "Accept": "application/json",
+        "X-CSRFToken": getCSRFToken(),
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    })
+      .then(function (r) {
+        return r.ok ? r.json() : r.json().then(function (d) {
+          throw new Error(d.error || "Upload failed");
+        });
+      })
+      .then(function (data) {
+        addUploadedImageToPhotoShotSelects(data.file_path);
+        select.value = data.file_path;
+        select.dataset.lastValue = data.file_path;
+        var completed = row.querySelector("input[name='completed']");
+        if (completed) completed.checked = true;
+        setAutosaveStatus(row, "Uploaded", "success");
+      })
+      .catch(function (err) {
+        select.value = select.dataset.lastValue || "";
+        setAutosaveStatus(row, "Upload failed", "danger");
+        showFlash(err.message || "Image upload failed.", "danger");
+      })
+      .finally(function () {
+        input.value = "";
+      });
+  }
+
+  function addUploadedImageToPhotoShotSelects(filePath) {
+    if (!filePath) return;
+    var label = filePath.split("/").pop() || filePath;
+    document.querySelectorAll("[data-photo-shot-image-select]").forEach(function (select) {
+      var exists = Array.prototype.some.call(select.options, function (option) {
+        return option.value === filePath;
+      });
+      if (!exists) {
+        var option = document.createElement("option");
+        option.value = filePath;
+        option.textContent = label;
+        var uploadOption = select.querySelector("option[value='__upload_new__']");
+        select.insertBefore(option, uploadOption || null);
+      }
+    });
+  }
+
+  var liveFinancialsInitialized = false;
+  var liveFinancialTimer = null;
+
+  function initLiveFinancials() {
+    if (liveFinancialsInitialized) return;
+    liveFinancialsInitialized = true;
+
+    document.addEventListener("input", function (event) {
+      if (!event.target.matches("[data-financial-input]")) return;
+      scheduleLiveFinancialPreview(event.target.closest("[data-product-studio-workspace]"));
+    });
+
+    document.addEventListener("change", function (event) {
+      if (!event.target.matches("[data-financial-input]")) return;
+      scheduleLiveFinancialPreview(event.target.closest("[data-product-studio-workspace]"));
+    });
+
+    document.addEventListener("click", function (event) {
+      var tabButton = event.target.closest('[data-studio-tab-button="cost"]');
+      if (!tabButton) return;
+      scheduleLiveFinancialPreview(tabButton.closest("[data-product-studio-workspace]"), 0);
+    });
+  }
+
+  function scheduleLiveFinancialPreview(workspace, delay) {
+    if (!workspace) return;
+    window.clearTimeout(liveFinancialTimer);
+    liveFinancialTimer = window.setTimeout(function () {
+      runLiveFinancialPreview(workspace);
+    }, delay == null ? 250 : delay);
+  }
+
+  function runLiveFinancialPreview(workspace) {
+    var panel = workspace.querySelector("[data-live-cost-url]");
+    if (!panel) return;
+    var url = panel.getAttribute("data-live-cost-url");
+    if (!url) return;
+    var form = workspace.querySelector('form[action*="/products/studio"]');
+    if (!form) return;
+    var status = workspace.querySelector("[data-live-cost-status]");
+    if (status) status.textContent = "Calculating...";
+    var payload = {};
+    new FormData(form).forEach(function (value, key) { payload[key] = value; });
+
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": getCSRFToken() },
+      body: JSON.stringify(payload)
+    })
+      .then(function (response) {
+        return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+      })
+      .then(function (response) {
+        if (!response.ok || response.data.success === false) {
+          throw new Error(response.data.error || "Cost preview failed.");
+        }
+        updateLiveFinancialFields(workspace, response.data.data || {});
+        if (status) status.textContent = "Preview updated. Not saved yet.";
+      })
+      .catch(function (error) {
+        if (status) status.textContent = error.message || "Preview failed.";
+      });
+  }
+
+  function moneyValue(value) {
+    var number = Number(value || 0);
+    return "$" + number.toFixed(2);
+  }
+
+  function percentValue(value) {
+    var number = Number(value || 0);
+    return number.toFixed(1) + "%";
+  }
+
+  function minutesValue(value) {
+    var number = Number(value || 0);
+    if (number >= 60) {
+      var hours = Math.floor(number / 60);
+      var minutes = Math.round(number % 60);
+      return hours + "h " + minutes + "m";
+    }
+    return Math.round(number) + "m";
+  }
+
+  function gramsValue(value) {
+    var number = Number(value || 0);
+    return number > 0 ? number.toFixed(1) + "g" : "n/a";
+  }
+
+  function updateLiveFinancialFields(workspace, data) {
+    var formatters = {
+      base_price: moneyValue,
+      total_cost: moneyValue,
+      sidebar_total_cost: function () { return moneyValue(data.total_cost); },
+      suggested_price: moneyValue,
+      material_cost: moneyValue,
+      labor_cost: moneyValue,
+      payment_fees: moneyValue,
+      margin_dollars: moneyValue,
+      margin_percent: percentValue,
+      sidebar_margin_percent: function () { return percentValue(data.margin_percent); },
+      print_minutes: minutesValue,
+      filament_grams: gramsValue
+    };
+    Object.keys(formatters).forEach(function (key) {
+      workspace.querySelectorAll('[data-live-cost-field="' + key + '"]').forEach(function (el) {
+        el.textContent = formatters[key](data[key]);
+      });
+    });
+  }
 
   function initModelUpload() {
     var dropZone = document.getElementById("model-drop-zone");

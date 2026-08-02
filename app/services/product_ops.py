@@ -48,7 +48,7 @@ PHOTO_SHOT_LABELS = {
 
 @dataclass(frozen=True)
 class ReadinessResult:
-    score: int
+    score: int | Decimal
     breakdown: list[dict[str, object]]
     critical_blockers: list[str]
 
@@ -71,8 +71,15 @@ def calculate_product_readiness(product: Product) -> ReadinessResult:
     breakdown: list[dict[str, object]] = []
     blockers: list[str] = []
 
-    def add(label: str, points: int, passed: bool, reason: str, critical: bool = False):
-        earned = points if passed else 0
+    def add(
+        label: str,
+        points: int,
+        passed: bool,
+        reason: str,
+        critical: bool = False,
+        earned_override: Decimal | int | None = None,
+    ):
+        earned = earned_override if earned_override is not None else points if passed else 0
         breakdown.append(
             {"label": label, "points": points, "earned": earned, "passed": passed, "reason": reason}
         )
@@ -130,18 +137,25 @@ def calculate_product_readiness(product: Product) -> ReadinessResult:
         bool(product.safety_notes and product.care_instructions),
         "Safety or care notes are missing.",
     )
+    inventory_score, inventory_reason = product_inventory_readiness_score(product)
     add(
-        "Inventory", 7, _inventory_on_hand(product) > 0, "No finished goods inventory is available."
+        "Inventory",
+        7,
+        inventory_score == Decimal("7"),
+        inventory_reason,
+        earned_override=inventory_score,
     )
 
-    score = sum(int(item["earned"]) for item in breakdown)
+    score = sum(Decimal(str(item["earned"])) for item in breakdown)
     if product.license_status in {
         LicenseStatus.PERSONAL_ONLY,
         LicenseStatus.RESTRICTED,
         LicenseStatus.NEEDS_REVIEW,
     }:
-        score = min(score, 45)
-    return ReadinessResult(score=min(score, 100), breakdown=breakdown, critical_blockers=blockers)
+        score = min(score, Decimal("45"))
+    score = min(score, Decimal("100"))
+    display_score: int | Decimal = int(score) if score == score.to_integral_value() else score
+    return ReadinessResult(score=display_score, breakdown=breakdown, critical_blockers=blockers)
 
 
 def sync_launch_checklist(product: Product) -> list[ProductLaunchChecklistItem]:
@@ -163,7 +177,8 @@ def sync_launch_checklist(product: Product) -> list[ProductLaunchChecklistItem]:
         ProductLaunchChecklistKey.PUBLIC_DESCRIPTION: bool(
             product.description and product.short_description
         ),
-        ProductLaunchChecklistKey.INVENTORY_TARGET: _inventory_on_hand(product) > 0,
+        ProductLaunchChecklistKey.INVENTORY_TARGET: product_inventory_readiness_score(product)[0]
+        > Decimal("0"),
         ProductLaunchChecklistKey.MARKET_TEST_PLAN: bool(product.tags),
         ProductLaunchChecklistKey.SAFETY_CARE_NOTES: bool(
             product.safety_notes and product.care_instructions
@@ -355,7 +370,7 @@ def retire_product(
 
 def launch_gate(product: Product) -> tuple[bool, list[str]]:
     readiness = calculate_product_readiness(product)
-    # Issue 42 — the override reason must be a meaningful (10-2000 char) string.
+    # Issue 42 — the override reason must be a meaningful (10-7000 char) string.
     # A single space or "lol" must NOT bypass the gate, and this check is
     # server-side so it cannot be skirted by sending raw data past the form.
     override = (product.launch_override_reason or "").strip()
@@ -365,8 +380,8 @@ def launch_gate(product: Product) -> tuple[bool, list[str]]:
                 "Override reason must be at least 10 characters to bypass the launch gate.",
                 *readiness.critical_blockers,
             ]
-        if len(override) > 2000:
-            return False, ["Override reason must be 2000 characters or fewer."]
+        if len(override) > 7000:
+            return False, ["Override reason must be 7000 characters or fewer."]
         return True, []
     if readiness.critical_blockers:
         return False, readiness.critical_blockers
@@ -377,6 +392,23 @@ def launch_gate(product: Product) -> tuple[bool, list[str]]:
 
 def _inventory_on_hand(product: Product) -> int:
     return sum(record.quantity_on_hand for record in product.inventory_records)
+
+
+def product_inventory_readiness_score(product: Product) -> tuple[Decimal, str]:
+    stock = Decimal(str(_inventory_on_hand(product)))
+    # The product threshold is the sum of its per-location reorder thresholds.
+    threshold = Decimal(str(sum(record.reorder_threshold for record in product.inventory_records)))
+    if threshold <= 0:
+        return Decimal("0"), "Inventory threshold is not set."
+    if stock >= threshold * Decimal("1.5"):
+        return Decimal(
+            "7"
+        ), f"{int(stock)} in stock is at least 150% of the {int(threshold)} threshold."
+    if stock > threshold:
+        return Decimal(
+            "3.5"
+        ), f"{int(stock)} in stock is above the {int(threshold)} threshold, but below 150%."
+    return Decimal("0"), f"{int(stock)} in stock is at or below the {int(threshold)} threshold."
 
 
 def _audit(

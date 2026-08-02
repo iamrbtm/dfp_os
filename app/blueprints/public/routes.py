@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from flask import abort, current_app, flash, redirect, render_template, request, url_for
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.blueprints.public import bp
 from app.extensions import db
@@ -129,13 +129,32 @@ def shop():
 
     statement = _public_product_query()
     if category_slug:
-        statement = statement.join(Category).where(Category.slug == category_slug)
+        statement = statement.where(Product.category.has(Category.slug == category_slug))
     if collection_slug:
-        statement = statement.join(Collection).where(Collection.slug == collection_slug)
+        statement = statement.where(
+            or_(
+                Product.collection.has(Collection.slug == collection_slug),
+                Product.collections.any(Collection.slug == collection_slug),
+            )
+        )
     if search_term:
         statement = statement.where(Product.name.ilike(f"%{search_term}%"))
 
-    products = db.session.scalars(statement.order_by(Product.name.asc())).all()
+    products = db.session.scalars(
+        statement.join(Category, Product.category_id == Category.id).order_by(
+            Category.name.asc(), Product.name.asc()
+        )
+    ).all()
+    product_groups = []
+    groups_by_category = {}
+    for product in products:
+        category_name = product.category.name if product.category else "Other"
+        group = groups_by_category.get(category_name)
+        if group is None:
+            group = {"category": category_name, "products": []}
+            groups_by_category[category_name] = group
+            product_groups.append(group)
+        group["products"].append(product)
     if search_term:
         record_demand_event(
             InternalDemandEventType.STOREFRONT_SEARCH,
@@ -158,6 +177,7 @@ def shop():
     return render_template(
         "public/shop.html",
         products=products,
+        product_groups=product_groups,
         categories=categories,
         collections=collections,
         selected_category=category_slug,
@@ -489,8 +509,15 @@ def collection_detail(slug: str):
         abort(404)
 
     products = (
-        Product.query.filter_by(collection_id=collection.id, is_public=True)
-        .filter(Product.deleted_at.is_(None), Product.status == ProductStatus.ACTIVE)
+        Product.query.filter(
+            Product.is_public.is_(True),
+            Product.deleted_at.is_(None),
+            Product.status == ProductStatus.ACTIVE,
+            or_(
+                Product.collection_id == collection.id,
+                Product.collections.any(Collection.id == collection.id),
+            ),
+        )
         .order_by(Product.name.asc())
         .all()
     )

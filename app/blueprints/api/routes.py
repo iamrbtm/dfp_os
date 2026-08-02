@@ -293,7 +293,13 @@ def _apply_product(instance: Product, data: dict):
     instance.short_description = data.get("short_description")
     instance.description = data.get("description")
     instance.category_id = data["category_id"]
-    instance.collection_id = data.get("collection_id")
+    collection_ids = data.get("collection_ids")
+    if collection_ids is None:
+        collection_ids = [data["collection_id"]] if data.get("collection_id") else []
+    instance.collection_id = collection_ids[0] if collection_ids else None
+    instance.collections = (
+        Collection.query.filter(Collection.id.in_(collection_ids)).all() if collection_ids else []
+    )
     instance.product_type = ProductType(data["product_type"])
     instance.status = ProductStatus(data["status"])
     instance.is_public = data.get("is_public", False)
