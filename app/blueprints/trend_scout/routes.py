@@ -188,6 +188,7 @@ def latest_report():
 def run_pipeline():
     from app.services.ai.trend_scout import enabled_fetcher_count
     from app.tasks.trend_scout import trend_scout_pipeline
+
     task = trend_scout_pipeline.delay()
     session["trend_scout_task_id"] = task.id
 
@@ -283,38 +284,40 @@ def persisted_scores():
         .all()
     )
 
-    return jsonify({
-        "found": True,
-        "report_id": report.id,
-        "report_date": report.report_date.isoformat(),
-        "scores": [
-            {
-                "id": s.id,
-                "keyword": s.keyword,
-                "title": s.title or s.keyword,
-                "candidate_type": s.candidate_type,
-                "product_id": s.product_id,
-                "opportunity_score": s.opportunity_score,
-                "purchase_intent": s.purchase_intent,
-                "trend_velocity": s.trend_velocity,
-                "price_resilience": s.price_resilience,
-                "low_saturation": s.low_saturation,
-                "local_fit": s.local_fit,
-                "production_fit": s.production_fit,
-                "license_risk": s.license_risk,
-                "action": s.action,
-                "inventory_available": s.inventory_available,
-                "base_price": str(s.base_price),
-                "license_status": s.license_status,
-                "rank": s.rank,
-                "sources": s.sources,
-                "score_breakdown": s.score_breakdown,
-                "match_confidence": s.match_confidence,
-                "dismissed": s.dismissed,
-            }
-            for s in scores
-        ],
-    })
+    return jsonify(
+        {
+            "found": True,
+            "report_id": report.id,
+            "report_date": report.report_date.isoformat(),
+            "scores": [
+                {
+                    "id": s.id,
+                    "keyword": s.keyword,
+                    "title": s.title or s.keyword,
+                    "candidate_type": s.candidate_type,
+                    "product_id": s.product_id,
+                    "opportunity_score": s.opportunity_score,
+                    "purchase_intent": s.purchase_intent,
+                    "trend_velocity": s.trend_velocity,
+                    "price_resilience": s.price_resilience,
+                    "low_saturation": s.low_saturation,
+                    "local_fit": s.local_fit,
+                    "production_fit": s.production_fit,
+                    "license_risk": s.license_risk,
+                    "action": s.action,
+                    "inventory_available": s.inventory_available,
+                    "base_price": str(s.base_price),
+                    "license_status": s.license_status,
+                    "rank": s.rank,
+                    "sources": s.sources,
+                    "score_breakdown": s.score_breakdown,
+                    "match_confidence": s.match_confidence,
+                    "dismissed": s.dismissed,
+                }
+                for s in scores
+            ],
+        }
+    )
 
 
 @bp.get("/api/source-health")
@@ -331,22 +334,24 @@ def source_health():
         .all()
     )
 
-    return jsonify({
-        "found": True,
-        "report_id": report.id,
-        "records": [
-            {
-                "id": r.id,
-                "source": r.source,
-                "status": r.status,
-                "keyword": r.keyword,
-                "item_count": r.item_count,
-                "error_message": r.error_message,
-                "scraped_at": r.scraped_at.isoformat() if r.scraped_at else None,
-            }
-            for r in records
-        ],
-    })
+    return jsonify(
+        {
+            "found": True,
+            "report_id": report.id,
+            "records": [
+                {
+                    "id": r.id,
+                    "source": r.source,
+                    "status": r.status,
+                    "keyword": r.keyword,
+                    "item_count": r.item_count,
+                    "error_message": r.error_message,
+                    "scraped_at": r.scraped_at.isoformat() if r.scraped_at else None,
+                }
+                for r in records
+            ],
+        }
+    )
 
 
 @bp.get("/api/reports/<int:report_id>/scores")
@@ -372,42 +377,44 @@ def api_report_scores(report_id: int):
     query = query.order_by(*_ranked_opportunity_ordering())
     pagination = db.paginate(query, page=page, per_page=per_page, error_out=False)
 
-    return jsonify({
-        "found": True,
-        "report_id": report.id,
-        "report_date": report.report_date.isoformat(),
-        "page": pagination.page,
-        "per_page": pagination.per_page,
-        "total": pagination.total,
-        "pages": pagination.pages,
-        "scores": [
-            {
-                "id": s.id,
-                "keyword": s.keyword,
-                "title": s.title or s.keyword,
-                "candidate_type": s.candidate_type,
-                "product_id": s.product_id,
-                "opportunity_score": s.opportunity_score,
-                "purchase_intent": s.purchase_intent,
-                "trend_velocity": s.trend_velocity,
-                "price_resilience": s.price_resilience,
-                "low_saturation": s.low_saturation,
-                "local_fit": s.local_fit,
-                "production_fit": s.production_fit,
-                "license_risk": s.license_risk,
-                "action": s.action,
-                "inventory_available": s.inventory_available,
-                "base_price": str(s.base_price),
-                "license_status": s.license_status,
-                "rank": s.rank,
-                "sources": s.sources,
-                "score_breakdown": s.score_breakdown,
-                "match_confidence": s.match_confidence,
-                "dismissed": s.dismissed,
-            }
-            for s in pagination.items
-        ],
-    })
+    return jsonify(
+        {
+            "found": True,
+            "report_id": report.id,
+            "report_date": report.report_date.isoformat(),
+            "page": pagination.page,
+            "per_page": pagination.per_page,
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "scores": [
+                {
+                    "id": s.id,
+                    "keyword": s.keyword,
+                    "title": s.title or s.keyword,
+                    "candidate_type": s.candidate_type,
+                    "product_id": s.product_id,
+                    "opportunity_score": s.opportunity_score,
+                    "purchase_intent": s.purchase_intent,
+                    "trend_velocity": s.trend_velocity,
+                    "price_resilience": s.price_resilience,
+                    "low_saturation": s.low_saturation,
+                    "local_fit": s.local_fit,
+                    "production_fit": s.production_fit,
+                    "license_risk": s.license_risk,
+                    "action": s.action,
+                    "inventory_available": s.inventory_available,
+                    "base_price": str(s.base_price),
+                    "license_status": s.license_status,
+                    "rank": s.rank,
+                    "sources": s.sources,
+                    "score_breakdown": s.score_breakdown,
+                    "match_confidence": s.match_confidence,
+                    "dismissed": s.dismissed,
+                }
+                for s in pagination.items
+            ],
+        }
+    )
 
 
 @bp.get("/api/score-history")
@@ -478,28 +485,24 @@ def api_undo_dismiss(score_id: int):
 
 # -- Phase 8: Dedicated Settings Page --
 
+
 def _profile_storage_key(name: str) -> str:
     return f"trend_profile.{name}"
 
 
 def _list_profiles() -> list[str]:
-    records = (
-        db.session.query(Setting)
-        .filter(Setting.key.startswith("trend_profile."))
-        .all()
-    )
+    records = db.session.query(Setting).filter(Setting.key.startswith("trend_profile.")).all()
     return [r.key.replace("trend_profile.", "") for r in records]
 
 
 def _load_profile(name: str) -> dict | None:
     import json
-    record = db.session.query(Setting).filter(
-        Setting.key == _profile_storage_key(name)
-    ).first()
+
+    record = db.session.query(Setting).filter(Setting.key == _profile_storage_key(name)).first()
     if record and record.value:
         try:
             return json.loads(record.value)
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             return None
     return None
 
@@ -524,7 +527,7 @@ def settings():
                 if val is not None:
                     try:
                         save_weight(prefix, key, float(val))
-                    except (ValueError, TypeError):
+                    except ValueError, TypeError:
                         pass
             record_audit_event(
                 action="trend_scout.settings.weights_saved",
@@ -538,19 +541,24 @@ def settings():
             profile_name = request.form.get("profile_name", "").strip()
             if profile_name:
                 import json
+
                 weights = load_all_weights()
-                existing = db.session.query(Setting).filter(
-                    Setting.key == _profile_storage_key(profile_name)
-                ).first()
+                existing = (
+                    db.session.query(Setting)
+                    .filter(Setting.key == _profile_storage_key(profile_name))
+                    .first()
+                )
                 if existing:
                     existing.value = json.dumps(weights)
                 else:
-                    db.session.add(Setting(
-                        key=_profile_storage_key(profile_name),
-                        value=json.dumps(weights),
-                        description=f"Trend Scout profile: {profile_name}",
-                        type="json",
-                    ))
+                    db.session.add(
+                        Setting(
+                            key=_profile_storage_key(profile_name),
+                            value=json.dumps(weights),
+                            description=f"Trend Scout profile: {profile_name}",
+                            type="json",
+                        )
+                    )
                 db.session.commit()
                 record_audit_event(
                     action="trend_scout.settings.profile_saved",
@@ -565,7 +573,12 @@ def settings():
             if profile_name:
                 profile = _load_profile(profile_name)
                 if profile:
-                    for group_key in ("score_weights", "source_weights", "buyer_source_weights", "metric_weights"):
+                    for group_key in (
+                        "score_weights",
+                        "source_weights",
+                        "buyer_source_weights",
+                        "metric_weights",
+                    ):
                         prefix_map = {
                             "score_weights": PREFIX_SCORE,
                             "source_weights": PREFIX_SOURCE,
@@ -597,18 +610,18 @@ def settings():
             enabled = request.form.get("enabled", "1") == "1"
             if source_key:
                 setting_key = PREFIX_SOURCE_ENABLED + source_key
-                existing = db.session.query(Setting).filter(
-                    Setting.key == setting_key
-                ).first()
+                existing = db.session.query(Setting).filter(Setting.key == setting_key).first()
                 if existing:
                     existing.value = "1" if enabled else "0"
                 else:
-                    db.session.add(Setting(
-                        key=setting_key,
-                        value="1" if enabled else "0",
-                        description=f"Trend Scout source enabled: {source_key}",
-                        type="boolean",
-                    ))
+                    db.session.add(
+                        Setting(
+                            key=setting_key,
+                            value="1" if enabled else "0",
+                            description=f"Trend Scout source enabled: {source_key}",
+                            type="boolean",
+                        )
+                    )
                 db.session.commit()
                 record_audit_event(
                     action="trend_scout.settings.source_toggled",
@@ -638,6 +651,7 @@ def settings():
 
 
 # -- Phase 9: Report Detail & Comparison --
+
 
 @bp.get("/reports/<int:report_id>")
 @roles_required(UserRole.ADMIN)
@@ -674,8 +688,7 @@ def report_detail(report_id: int):
         if action_filter:
             cq = cq.filter(TrendOpportunityScore.action == action_filter)
         compare_scores = {
-            s.keyword: s.opportunity_score
-            for s in cq.order_by(TrendOpportunityScore.keyword).all()
+            s.keyword: s.opportunity_score for s in cq.order_by(TrendOpportunityScore.keyword).all()
         }
 
     source_health = (
@@ -686,10 +699,7 @@ def report_detail(report_id: int):
     )
 
     all_reports = (
-        db.session.query(TrendReport)
-        .order_by(TrendReport.report_date.desc())
-        .limit(100)
-        .all()
+        db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).limit(100).all()
     )
 
     return render_template(
@@ -722,23 +732,51 @@ def report_csv(report_id: int):
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "rank", "keyword", "title", "candidate_type", "action",
-        "opportunity_score", "purchase_intent", "trend_velocity",
-        "price_resilience", "low_saturation", "local_fit",
-        "production_fit", "license_risk", "inventory_available",
-        "base_price", "license_status", "match_confidence", "sources",
-    ])
+    writer.writerow(
+        [
+            "rank",
+            "keyword",
+            "title",
+            "candidate_type",
+            "action",
+            "opportunity_score",
+            "purchase_intent",
+            "trend_velocity",
+            "price_resilience",
+            "low_saturation",
+            "local_fit",
+            "production_fit",
+            "license_risk",
+            "inventory_available",
+            "base_price",
+            "license_status",
+            "match_confidence",
+            "sources",
+        ]
+    )
     for s in scores:
-        writer.writerow([
-            s.rank, s.keyword, s.title, s.candidate_type, s.action,
-            s.opportunity_score, s.purchase_intent, s.trend_velocity,
-            s.price_resilience, s.low_saturation, s.local_fit,
-            s.production_fit, s.license_risk, s.inventory_available,
-            str(s.base_price), s.license_status or "",
-            s.match_confidence or "",
-            ", ".join(s.sources) if s.sources else "",
-        ])
+        writer.writerow(
+            [
+                s.rank,
+                s.keyword,
+                s.title,
+                s.candidate_type,
+                s.action,
+                s.opportunity_score,
+                s.purchase_intent,
+                s.trend_velocity,
+                s.price_resilience,
+                s.low_saturation,
+                s.local_fit,
+                s.production_fit,
+                s.license_risk,
+                s.inventory_available,
+                str(s.base_price),
+                s.license_status or "",
+                s.match_confidence or "",
+                ", ".join(s.sources) if s.sources else "",
+            ]
+        )
 
     return Response(
         output.getvalue(),
@@ -798,10 +836,7 @@ def action_print_now():
         source_module=__name__,
     )
 
-    return (
-        f'<span class="text-xs" style="color:var(--color-success);">'
-        f'Queued #{job.id}</span>'
-    )
+    return f'<span class="text-xs" style="color:var(--color-success);">Queued #{job.id}</span>'
 
 
 @bp.post("/actions/create-product")
@@ -981,6 +1016,7 @@ def task_monitor_retry(run_id: str):
 
 # -- Phase 11: Calibration History & Comparison --
 
+
 @bp.get("/calibration")
 @roles_required(UserRole.ADMIN)
 def calibration():
@@ -1007,13 +1043,20 @@ def calibration():
         comparison = {
             "prev_date": prev.run_date,
             "curr_date": curr.run_date,
-            "mae_change": (curr.mae - prev.mae) if (curr.mae is not None and prev.mae is not None) else None,
+            "mae_change": (curr.mae - prev.mae)
+            if (curr.mae is not None and prev.mae is not None)
+            else None,
             "precision_change": (
                 (curr.precision_at_high_score - prev.precision_at_high_score)
-                if (curr.precision_at_high_score is not None and prev.precision_at_high_score is not None)
+                if (
+                    curr.precision_at_high_score is not None
+                    and prev.precision_at_high_score is not None
+                )
                 else None
             ),
-            "f1_change": (curr.f1_score - prev.f1_score) if (curr.f1_score is not None and prev.f1_score is not None) else None,
+            "f1_change": (curr.f1_score - prev.f1_score)
+            if (curr.f1_score is not None and prev.f1_score is not None)
+            else None,
             "prev": prev,
             "curr": curr,
         }
@@ -1037,6 +1080,7 @@ def calibration_detail(cal_id: int):
 
 
 # -- Phase 13: Market Prep Integration --
+
 
 @bp.route("/actions/add-to-market-prep", methods=["GET", "POST"])
 @roles_required(UserRole.ADMIN)

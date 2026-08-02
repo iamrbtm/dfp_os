@@ -29,21 +29,25 @@ def _target_month(market_date: date | None) -> int | None:
 async def generate_market_advisor_run(db: AsyncSession, payload: MarketAdvisorRequest) -> MarketAdvisorRunResponse:
     month = _target_month(payload.market_date)
     summaries = (
-        await db.execute(
-            select(ProductSalesSummary).order_by(
-                ProductSalesSummary.total_units.desc(),
-                ProductSalesSummary.total_net_sales_cents.desc(),
+        (
+            await db.execute(
+                select(ProductSalesSummary).order_by(
+                    ProductSalesSummary.total_units.desc(),
+                    ProductSalesSummary.total_net_sales_cents.desc(),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     seasonal_by_product: dict[str, SeasonalProductPerformance] = {}
     if month is not None:
         seasonal_rows = (
-            await db.execute(
-                select(SeasonalProductPerformance).where(SeasonalProductPerformance.sale_month == month)
-            )
-        ).scalars().all()
+            (await db.execute(select(SeasonalProductPerformance).where(SeasonalProductPerformance.sale_month == month)))
+            .scalars()
+            .all()
+        )
         seasonal_by_product = {row.product_key: row for row in seasonal_rows}
 
     run = MarketAdvisorRun(

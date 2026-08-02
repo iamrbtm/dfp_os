@@ -13,11 +13,7 @@ from app.services.hashing import build_hash_fields, compute_hash
 
 async def get_previous_hash(session, tenant_id: str | None) -> str | None:
     """Get the most recent audit event hash for chaining."""
-    stmt = (
-        select(AuditEvent.hash)
-        .order_by(AuditEvent.occurred_at.desc(), AuditEvent.received_at.desc())
-        .limit(1)
-    )
+    stmt = select(AuditEvent.hash).order_by(AuditEvent.occurred_at.desc(), AuditEvent.received_at.desc()).limit(1)
     if tenant_id:
         stmt = stmt.where(AuditEvent.tenant_id == tenant_id)
     result = await session.execute(stmt)

@@ -29,7 +29,7 @@ def get_user_timezone() -> str:
         try:
             ZoneInfo(tz_from_cookie)
             return tz_from_cookie
-        except (KeyError, TypeError):
+        except KeyError, TypeError:
             pass
     try:
         if current_user.is_authenticated and current_user.business_id:
@@ -64,7 +64,7 @@ def to_local(dt: Dt | None, tz_name: str = "") -> Dt | None:
         dt = dt.replace(tzinfo=UTC)
     try:
         return dt.astimezone(ZoneInfo(tz_name))
-    except (KeyError, TypeError):
+    except KeyError, TypeError:
         return dt.astimezone(ZoneInfo("America/Chicago"))
 
 

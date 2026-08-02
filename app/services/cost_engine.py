@@ -227,9 +227,7 @@ def resolve_material_cost(
     # (b) same business + same material_type (color optional refinement).
     material_query = base_query
     if material_type is not None:
-        material_query = material_query.filter(
-            FilamentSpool.material_type.ilike(material_type)
-        )
+        material_query = material_query.filter(FilamentSpool.material_type.ilike(material_type))
     if color is not None:
         material_query = material_query.filter(FilamentSpool.color_name.ilike(color))
     matched = material_query.all()
@@ -304,7 +302,9 @@ def _count_jobs(
     if product_id is not None:
         query = query.filter(PrintJob.product_id == product_id)
     if printer_model:
-        query = query.join(Printer, PrintJob.printer_id == Printer.id).filter(Printer.model == printer_model)
+        query = query.join(Printer, PrintJob.printer_id == Printer.id).filter(
+            Printer.model == printer_model
+        )
     return query.filter(PrintJob.status.in_(statuses)).count()
 
 
@@ -362,7 +362,9 @@ def calculate_product_cost(
     # not supply one, mirroring the market/payment override pattern below.
     if packaging_cost is None:
         packaging_cost = getattr(product, "packaging_cost_override", None)
-    packaging_cost = money(packaging_cost if packaging_cost is not None else settings["packaging_cost"])
+    packaging_cost = money(
+        packaging_cost if packaging_cost is not None else settings["packaging_cost"]
+    )
     machine_hour_rate = Decimal(
         str(machine_hour_rate if machine_hour_rate is not None else settings["machine_hour_rate"])
     )
@@ -371,7 +373,11 @@ def calculate_product_cost(
     if target_margin_percent is None:
         target_margin_percent = getattr(product, "target_margin_percent_override", None)
     target_margin_percent = Decimal(
-        str(target_margin_percent if target_margin_percent is not None else settings["target_margin_percent"])
+        str(
+            target_margin_percent
+            if target_margin_percent is not None
+            else settings["target_margin_percent"]
+        )
     )
 
     # Issue 38 — product-level overrides. The caller may pass None to mean "use
@@ -437,7 +443,9 @@ def calculate_product_cost(
         )
 
     labor_cost = money((labor_minutes / Decimal("60")) * labor_rate)
-    base_cost = money(material_cost + labor_cost + machine_cost + packaging_cost + market_allocation)
+    base_cost = money(
+        material_cost + labor_cost + machine_cost + packaging_cost + market_allocation
+    )
     if model_data is None:
         failure_adjustment = Decimal("0.00")
     else:
@@ -622,7 +630,7 @@ def _record_snapshot_audit(
                 if prior.outputs_json:
                     try:
                         prior_outputs = json.loads(prior.outputs_json)
-                    except (ValueError, TypeError):
+                    except ValueError, TypeError:
                         prior_outputs = {}
                 before_state = {
                     "snapshot_id": prior.id,
@@ -648,7 +656,9 @@ def _record_snapshot_audit(
         current_app.logger.warning("cost_snapshot audit event failed for snapshot %s", snapshot.id)
 
 
-def recalculate_snapshot(snapshot_id: int, *, snapshot_reason: str = "recalculate") -> CostSnapshot | None:
+def recalculate_snapshot(
+    snapshot_id: int, *, snapshot_reason: str = "recalculate"
+) -> CostSnapshot | None:
     """Re-run the current cost formula against an old snapshot (Issue 43).
 
     The old snapshot's identity/evidence is preserved; a fresh snapshot is
@@ -763,7 +773,12 @@ def estimate_order_profit(order_id: int) -> dict[str, Decimal]:
     margin = Decimal("0.00")
     if order.total:
         margin = ((profit / order.total) * Decimal("100")).quantize(CENT)
-    return {"revenue": money(order.total), "cost": money(total_cost), "profit": profit, "margin_percent": margin}
+    return {
+        "revenue": money(order.total),
+        "cost": money(total_cost),
+        "profit": profit,
+        "margin_percent": margin,
+    }
 
 
 def estimate_pos_sale_profit(sale_id: int) -> dict[str, Decimal]:
@@ -787,21 +802,13 @@ def estimate_pos_sale_profit(sale_id: int) -> dict[str, Decimal]:
 
 
 def estimate_market_profit(market_id: int) -> dict[str, Decimal]:
-    revenue = (
-        db.session.query(func.coalesce(func.sum(Order.total), 0))
-        .filter(
-            Order.market_id == market_id,
-            Order.deleted_at.is_(None),
-        )
-        .scalar()
-        or Decimal("0.00")
-    )
-    expenses = (
-        db.session.query(func.coalesce(func.sum(Expense.amount), 0))
-        .filter(Expense.related_market_id == market_id)
-        .scalar()
-        or Decimal("0.00")
-    )
+    revenue = db.session.query(func.coalesce(func.sum(Order.total), 0)).filter(
+        Order.market_id == market_id,
+        Order.deleted_at.is_(None),
+    ).scalar() or Decimal("0.00")
+    expenses = db.session.query(func.coalesce(func.sum(Expense.amount), 0)).filter(
+        Expense.related_market_id == market_id
+    ).scalar() or Decimal("0.00")
     item_cost = Decimal("0.00")
     orders = Order.query.filter(Order.market_id == market_id, Order.deleted_at.is_(None)).all()
     for order in orders:

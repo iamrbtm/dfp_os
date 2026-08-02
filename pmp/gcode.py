@@ -29,19 +29,40 @@ _TEMP_TOOL_RE = re.compile(r"(?<![A-Za-z])T(\d+)")
 # carry several RGB anchors — warm neutrals especially need more than one
 # reference point to avoid absurd matches (e.g. warm beige reading as silver).
 _COLOR_NAMES: list[tuple[str, tuple[int, int, int]]] = [
-    ("black", (0, 0, 0)), ("white", (255, 255, 255)), ("gray", (128, 128, 128)),
-    ("silver", (192, 192, 192)), ("red", (255, 0, 0)), ("dark red", (139, 0, 0)),
-    ("orange", (255, 165, 0)), ("brown", (139, 69, 19)), ("brown", (133, 94, 66)),
-    ("yellow", (255, 255, 0)), ("gold", (255, 215, 0)),
-    ("green", (0, 128, 0)), ("dark green", (0, 100, 0)), ("lime", (0, 255, 0)),
-    ("olive", (128, 128, 0)), ("teal", (0, 128, 128)), ("cyan", (0, 255, 255)),
-    ("sky blue", (135, 206, 235)), ("blue", (0, 0, 255)), ("navy", (0, 0, 128)),
-    ("purple", (128, 0, 128)), ("violet", (138, 43, 226)),
-    ("magenta", (255, 0, 255)), ("pink", (255, 192, 203)),
-    ("beige", (245, 245, 220)), ("beige", (234, 221, 202)), ("beige", (222, 196, 176)),
-    ("tan", (210, 180, 140)), ("tan", (222, 184, 135)),
-    ("rose", (255, 102, 153)), ("cream", (255, 253, 208)),
-    ("mint", (152, 255, 152)), ("lavender", (181, 126, 220)), ("maroon", (128, 0, 0)),
+    ("black", (0, 0, 0)),
+    ("white", (255, 255, 255)),
+    ("gray", (128, 128, 128)),
+    ("silver", (192, 192, 192)),
+    ("red", (255, 0, 0)),
+    ("dark red", (139, 0, 0)),
+    ("orange", (255, 165, 0)),
+    ("brown", (139, 69, 19)),
+    ("brown", (133, 94, 66)),
+    ("yellow", (255, 255, 0)),
+    ("gold", (255, 215, 0)),
+    ("green", (0, 128, 0)),
+    ("dark green", (0, 100, 0)),
+    ("lime", (0, 255, 0)),
+    ("olive", (128, 128, 0)),
+    ("teal", (0, 128, 128)),
+    ("cyan", (0, 255, 255)),
+    ("sky blue", (135, 206, 235)),
+    ("blue", (0, 0, 255)),
+    ("navy", (0, 0, 128)),
+    ("purple", (128, 0, 128)),
+    ("violet", (138, 43, 226)),
+    ("magenta", (255, 0, 255)),
+    ("pink", (255, 192, 203)),
+    ("beige", (245, 245, 220)),
+    ("beige", (234, 221, 202)),
+    ("beige", (222, 196, 176)),
+    ("tan", (210, 180, 140)),
+    ("tan", (222, 184, 135)),
+    ("rose", (255, 102, 153)),
+    ("cream", (255, 253, 208)),
+    ("mint", (152, 255, 152)),
+    ("lavender", (181, 126, 220)),
+    ("maroon", (128, 0, 0)),
 ]
 
 
@@ -208,9 +229,7 @@ class _Layer:
 def _is_boundary(line: str) -> bool:
     s = line.strip()
     return (
-        s.startswith(";LAYER_CHANGE")
-        or s.startswith("; CHANGE_LAYER")
-        or s.startswith(";LAYER:")
+        s.startswith(";LAYER_CHANGE") or s.startswith("; CHANGE_LAYER") or s.startswith(";LAYER:")
     )
 
 
@@ -371,11 +390,7 @@ def _scan_zfallback(
                     current = _Layer(index=0, z=cur_z)
                     layers.append(current)
                     boundary_lines.append(None)
-                elif (
-                    cur_z is not None
-                    and current.z is not None
-                    and cur_z > current.z + eps
-                ):
+                elif cur_z is not None and current.z is not None and cur_z > current.z + eps:
                     current = _Layer(index=len(layers), z=cur_z)
                     layers.append(current)
                     boundary_lines.append(None)
@@ -430,9 +445,7 @@ def _compute_segments(
     return segments
 
 
-def analyze(
-    lines: Iterable[str], max_tools: int = 4, min_gap_layers: int = 15
-) -> GcodeReport:
+def analyze(lines: Iterable[str], max_tools: int = 4, min_gap_layers: int = 15) -> GcodeReport:
     lines = list(lines)
     layers, _boundary_lines, diameter = _scan(lines)
 
@@ -512,8 +525,13 @@ def plan_swaps(report: GcodeReport, max_tools: int = 4) -> SwapPlan:
     distinct = sorted(report.segments.keys())
 
     empty = SwapPlan(
-        feasible=True, blocking=None, initial_loadout={}, swaps=[],
-        head_timeline=[], tool_to_head=[], pause_layers=[],
+        feasible=True,
+        blocking=None,
+        initial_loadout={},
+        swaps=[],
+        head_timeline=[],
+        tool_to_head=[],
+        pause_layers=[],
     )
     if not segs:
         return empty
@@ -536,8 +554,13 @@ def plan_swaps(report: GcodeReport, max_tools: int = 4) -> SwapPlan:
                 f"colors or increase --max-tools."
             )
             return SwapPlan(
-                feasible=False, blocking=msg, initial_loadout={}, swaps=[],
-                head_timeline=[], tool_to_head=[], pause_layers=[],
+                feasible=False,
+                blocking=msg,
+                initial_loadout={},
+                swaps=[],
+                head_timeline=[],
+                tool_to_head=[],
+                pause_layers=[],
             )
 
     initial: dict[int, int] = {}
@@ -554,20 +577,24 @@ def plan_swaps(report: GcodeReport, max_tools: int = 4) -> SwapPlan:
             head_timeline.append((head, tool, start, end))
             tool_to_head.append((tool, head, start, end))
         return SwapPlan(
-            feasible=True, blocking=None, initial_loadout=initial, swaps=[],
-            head_timeline=head_timeline, tool_to_head=tool_to_head,
+            feasible=True,
+            blocking=None,
+            initial_loadout=initial,
+            swaps=[],
+            head_timeline=head_timeline,
+            tool_to_head=tool_to_head,
             pause_layers=[],
         )
 
-    head_end: dict[int, int] = {}    # head -> layer it frees after
-    head_tool: dict[int, int] = {}   # head -> tool currently on it
+    head_end: dict[int, int] = {}  # head -> layer it frees after
+    head_tool: dict[int, int] = {}  # head -> tool currently on it
     tool_prev_head: dict[int, int] = {}
     used = 0
 
     for s, e, tool in sorted(segs, key=lambda x: (x[0], x[2])):
         prev = tool_prev_head.get(tool)
         if prev is not None and head_end[prev] < s:
-            chosen = prev            # stability: reuse this tool's own head
+            chosen = prev  # stability: reuse this tool's own head
         else:
             best: int | None = None  # tightest fit among free used heads
             for h in range(used):
@@ -604,15 +631,17 @@ def plan_swaps(report: GcodeReport, max_tools: int = 4) -> SwapPlan:
     tool_to_head.sort(key=lambda x: (x[0], x[2]))
     pause_layers = sorted({w.pause_after_layer for w in swaps})
     return SwapPlan(
-        feasible=True, blocking=None, initial_loadout=initial, swaps=swaps,
-        head_timeline=head_timeline, tool_to_head=tool_to_head,
+        feasible=True,
+        blocking=None,
+        initial_loadout=initial,
+        swaps=swaps,
+        head_timeline=head_timeline,
+        tool_to_head=tool_to_head,
         pause_layers=pause_layers,
     )
 
 
-def _merged_plan(
-    report: GcodeReport, merges: list[tuple[int, int]], max_tools: int
-) -> SwapPlan:
+def _merged_plan(report: GcodeReport, merges: list[tuple[int, int]], max_tools: int) -> SwapPlan:
     """Plan for the report with each loser tool's extrusion given to its survivor."""
     mapping = {loser: survivor for loser, survivor in merges}
     layers: list[LayerInfo] = []
@@ -625,10 +654,16 @@ def _merged_plan(
             LayerInfo(index=layer.index, z=layer.z, tools=set(ext), extrusion_by_tool=ext)
         )
     stub = GcodeReport(
-        layers=layers, first_use={}, last_use={}, conflicts=[],
-        pause_suggestions=[], elimination_hints=[],
-        total_layers=report.total_layers, tool_totals={},
-        filament_diameter=None, filament_colors=report.filament_colors,
+        layers=layers,
+        first_use={},
+        last_use={},
+        conflicts=[],
+        pause_suggestions=[],
+        elimination_hints=[],
+        total_layers=report.total_layers,
+        tool_totals={},
+        filament_diameter=None,
+        filament_colors=report.filament_colors,
         segments=_compute_segments(layers, 15),
     )
     return plan_swaps(stub, max_tools=max_tools)
@@ -647,9 +682,7 @@ def _merge_label(
         hexv = report.filament_colors.get(t, "")
         return f"T{t} ({hexv})" if hexv else f"T{t}"
 
-    parts = [
-        f"merge {tool_desc(loser)} into {tool_desc(survivor)}" for loser, survivor in merges
-    ]
+    parts = [f"merge {tool_desc(loser)} into {tool_desc(survivor)}" for loser, survivor in merges]
     phrase = _shade_phrase(max(delta_es))
     before = f"{pauses_before} pauses" if base_feasible else "infeasible"
     after = f"{pauses_after} pause{'s' if pauses_after != 1 else ''}"
@@ -672,7 +705,7 @@ def suggest_merges(report: GcodeReport, max_tools: int = 4) -> list[MergeOption]
     tools = sorted(t for t in report.tool_totals if t in colors)
     pairs: list[tuple[float, int, int]] = []
     for i, a in enumerate(tools):
-        for b in tools[i + 1:]:
+        for b in tools[i + 1 :]:
             de = delta_e(colors[a], colors[b])
             if de <= 40:
                 pairs.append((de, a, b))
@@ -720,8 +753,12 @@ def suggest_merges(report: GcodeReport, max_tools: int = 4) -> list[MergeOption]
                 pauses_after=pauses_after,
                 filament_saved_swaps=max(0, len(base.swaps) - len(plan.swaps)),
                 label=_merge_label(
-                    report, merges, delta_es, base.feasible,
-                    pauses_before, pauses_after,
+                    report,
+                    merges,
+                    delta_es,
+                    base.feasible,
+                    pauses_before,
+                    pauses_after,
                 ),
             )
         )
@@ -730,9 +767,7 @@ def suggest_merges(report: GcodeReport, max_tools: int = 4) -> list[MergeOption]
     return options[:5]
 
 
-def apply_merges(
-    lines: Iterable[str], merges: list[tuple[int, int]]
-) -> list[str]:
+def apply_merges(lines: Iterable[str], merges: list[tuple[int, int]]) -> list[str]:
     """Rewrite every loser-tool reference to its survivor, whole file.
 
     Chains resolve transitively ((2,0) then (0,1) sends T2 to T1). Rewrites
@@ -764,6 +799,7 @@ def apply_merges(
 
         code = raw.lstrip()
         if code.startswith(("M104", "M109")):
+
             def repl(mo: "re.Match[str]") -> str:
                 n = int(mo.group(1))
                 if n == 255 or n >= 1000 or n not in resolved:
@@ -827,6 +863,7 @@ def remap_tools(lines: Iterable[str], plan: SwapPlan) -> list[str]:
 
         code = raw.lstrip()
         if code.startswith(("M104", "M109")):
+
             def repl(mo: "re.Match[str]") -> str:
                 n = int(mo.group(1))
                 if n == 255 or n >= 1000:

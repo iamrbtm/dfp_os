@@ -25,13 +25,18 @@ class OCRProvider(BaseReceiptProvider):
         if not result.success:
             fallback = kwargs.get("fallback_provider")
             if fallback:
-                return self.process(enhanced_path, provider=fallback, **{k: v for k, v in kwargs.items() if k != "provider"})
+                return self.process(
+                    enhanced_path,
+                    provider=fallback,
+                    **{k: v for k, v in kwargs.items() if k != "provider"},
+                )
 
         return result
 
     def _run_paddle_ocr(self, file_path: str) -> ProviderResult:
         try:
             from paddleocr import PaddleOCR
+
             ocr = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
             raw = ocr.ocr(file_path, cls=True)
             if raw and raw[0]:
@@ -39,17 +44,21 @@ class OCRProvider(BaseReceiptProvider):
                 full_text = []
                 for line in raw[0]:
                     bbox, (text, confidence) = line
-                    lines.append({
-                        "text": text,
-                        "confidence": float(confidence),
-                        "bbox": [[float(c) for c in coord] for coord in bbox],
-                    })
+                    lines.append(
+                        {
+                            "text": text,
+                            "confidence": float(confidence),
+                            "bbox": [[float(c) for c in coord] for coord in bbox],
+                        }
+                    )
                     full_text.append(text)
                 return ProviderResult(
                     success=True,
                     raw_text="\n".join(full_text),
                     raw_json=str({"lines": lines}),
-                    confidence=float(sum(ln["confidence"] for ln in lines)) / len(lines) if lines else 0.0,
+                    confidence=float(sum(ln["confidence"] for ln in lines)) / len(lines)
+                    if lines
+                    else 0.0,
                     data={"lines": lines, "page_count": 1},
                     diagnostics={"provider": "paddleocr", "line_count": len(lines)},
                 )
@@ -63,10 +72,13 @@ class OCRProvider(BaseReceiptProvider):
     def _run_tesseract(self, file_path: str) -> ProviderResult:
         import subprocess
         import json
+
         try:
             result = subprocess.run(
                 ["tesseract", file_path, "stdout", "-l", "eng", "--psm", "4", "tsv"],
-                capture_output=True, text=True, timeout=60,
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
             if result.returncode == 0:
                 lines = []
@@ -76,10 +88,12 @@ class OCRProvider(BaseReceiptProvider):
                     if len(parts) >= 12 and parts[11].strip():
                         text = parts[11].strip()
                         conf = float(parts[10]) if parts[10] and parts[10] != "-1" else 0.0
-                        lines.append({
-                            "text": text,
-                            "confidence": conf / 100.0,
-                        })
+                        lines.append(
+                            {
+                                "text": text,
+                                "confidence": conf / 100.0,
+                            }
+                        )
                         full_text.append(text)
                 return ProviderResult(
                     success=True,
@@ -99,23 +113,28 @@ class OCRProvider(BaseReceiptProvider):
     def _run_easyocr(self, file_path: str) -> ProviderResult:
         try:
             import easyocr
+
             reader = easyocr.Reader(["en"])
             raw = reader.readtext(file_path)
             if raw:
                 lines = []
                 full_text = []
                 for bbox, text, confidence in raw:
-                    lines.append({
-                        "text": text,
-                        "confidence": float(confidence),
-                        "bbox": [[float(c) for c in coord] for coord in bbox],
-                    })
+                    lines.append(
+                        {
+                            "text": text,
+                            "confidence": float(confidence),
+                            "bbox": [[float(c) for c in coord] for coord in bbox],
+                        }
+                    )
                     full_text.append(text)
                 return ProviderResult(
                     success=True,
                     raw_text="\n".join(full_text),
                     raw_json=str({"lines": lines}),
-                    confidence=float(sum(ln["confidence"] for ln in lines)) / len(lines) if lines else 0.0,
+                    confidence=float(sum(ln["confidence"] for ln in lines)) / len(lines)
+                    if lines
+                    else 0.0,
                     data={"lines": lines},
                     diagnostics={"provider": "easyocr", "line_count": len(lines)},
                 )

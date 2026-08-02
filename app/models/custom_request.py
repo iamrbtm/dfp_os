@@ -31,9 +31,7 @@ class CustomRequest(PrimaryKeyMixin, TimestampMixin, db.Model):
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     reference_image_paths: Mapped[str | None] = mapped_column(Text, nullable=True)
-    estimated_budget: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
+    estimated_budget: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[CustomRequestStatus] = mapped_column(
         Enum(CustomRequestStatus, native_enum=False, length=40),
@@ -52,7 +50,9 @@ class CustomRequest(PrimaryKeyMixin, TimestampMixin, db.Model):
     pickup_status: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     pickup_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     picked_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    pickup_no_show_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pickup_no_show_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     pickup_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     customer_id: Mapped[int | None] = mapped_column(
         ForeignKey("customers.id"), nullable=True, index=True
@@ -65,9 +65,13 @@ class CustomRequest(PrimaryKeyMixin, TimestampMixin, db.Model):
     business: Mapped[Business | None] = relationship(back_populates="custom_requests")
     subtotal: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     tax: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))
-    discount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))
+    discount: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, default=Decimal(0)
+    )
     total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
-    amount_paid: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=Decimal(0))
+    amount_paid: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, default=Decimal(0)
+    )
 
     converted_to_order = relationship("Order", foreign_keys=[converted_to_order_id])
     customer = relationship("Customer", back_populates="custom_requests")

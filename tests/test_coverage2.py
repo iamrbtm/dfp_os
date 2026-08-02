@@ -33,7 +33,13 @@ from app.utils.urls import is_safe_local_url
 
 def test_authenticate_user_failure_paths(app):
     with app.app_context():
-        user = User(email="auth-fail@example.com", first_name="Fail", last_name="T", role=UserRole.ADMIN, is_active=True)
+        user = User(
+            email="auth-fail@example.com",
+            first_name="Fail",
+            last_name="T",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
         user.set_password("good")
         db.session.add(user)
         db.session.commit()
@@ -45,7 +51,13 @@ def test_api_token_revocation(app):
     from datetime import datetime, timezone
 
     with app.app_context():
-        user = User(email="token-deact@example.com", first_name="Token", last_name="Deact", role=UserRole.ADMIN, is_active=True)
+        user = User(
+            email="token-deact@example.com",
+            first_name="Token",
+            last_name="Deact",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
         user.set_password("secret")
         db.session.add(user)
         db.session.commit()
@@ -64,7 +76,13 @@ def test_safe_local_url(app):
 
 def _api_token(client):
     with client.application.app_context():
-        user = User(email="api-put-all@example.com", first_name="API", last_name="PutAll", role=UserRole.ADMIN, is_active=True)
+        user = User(
+            email="api-put-all@example.com",
+            first_name="API",
+            last_name="PutAll",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
         user.set_password("secret")
         db.session.add(user)
         db.session.commit()
@@ -94,8 +112,22 @@ def test_api_put_category_collection_and_product(client):
         collection_id = collection.id
         product_id = product.id
 
-    assert client.put(f"/api/v1/categories/{category_id}", json={"name": "Updated Cat", "slug": "put-cat-old"}, headers={"Authorization": f"Bearer {token}"}).status_code == 200
-    assert client.put(f"/api/v1/collections/{collection_id}", json={"name": "Updated Coll", "slug": "old-coll"}, headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    assert (
+        client.put(
+            f"/api/v1/categories/{category_id}",
+            json={"name": "Updated Cat", "slug": "put-cat-old"},
+            headers={"Authorization": f"Bearer {token}"},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.put(
+            f"/api/v1/collections/{collection_id}",
+            json={"name": "Updated Coll", "slug": "old-coll"},
+            headers={"Authorization": f"Bearer {token}"},
+        ).status_code
+        == 200
+    )
     product_response = client.put(
         f"/api/v1/products/{product_id}",
         json={
@@ -118,9 +150,23 @@ def test_api_put_category_collection_and_product(client):
 def test_admin_detail_pages_and_basic_model_persistence(client, login_admin, app):
     with app.app_context():
         customer = Customer(first_name="Detail", last_name="View", email="detail-view@example.com")
-        printer = Printer(name="Form Printer", model="Test", status=PrinterStatus.ACTIVE, location="Upstairs", has_ams=True)
-        ams = AMSUnit(name="Form AMS", type=AMSUnitType.AMS_LITE, status=AMSUnitStatus.ACTIVE, slot_count=4)
-        spool = FilamentSpool(brand="Test", material_type="PLA", color_name="Blue", status=FilamentStatus.ACTIVE, remaining_weight_grams=500)
+        printer = Printer(
+            name="Form Printer",
+            model="Test",
+            status=PrinterStatus.ACTIVE,
+            location="Upstairs",
+            has_ams=True,
+        )
+        ams = AMSUnit(
+            name="Form AMS", type=AMSUnitType.AMS_LITE, status=AMSUnitStatus.ACTIVE, slot_count=4
+        )
+        spool = FilamentSpool(
+            brand="Test",
+            material_type="PLA",
+            color_name="Blue",
+            status=FilamentStatus.ACTIVE,
+            remaining_weight_grams=500,
+        )
         inventory_location = InventoryLocation(name="Form Location", type="Shelf", active=True)
         order = Order(status=OrderStatus.PENDING, source=OrderSource.POS)
         job = PrintJob(status=PrintJobStatus.QUEUED, label="Detail Job")
@@ -135,7 +181,9 @@ def test_admin_detail_pages_and_basic_model_persistence(client, login_admin, app
         order_id = order.id
         job_id = job.id
 
-    assert client.get(f"/customers/customers/{customer_id}", follow_redirects=False).status_code == 200
+    assert (
+        client.get(f"/customers/customers/{customer_id}", follow_redirects=False).status_code == 200
+    )
     assert client.get(f"/orders/orders/{order_id}", follow_redirects=False).status_code == 200
     assert client.get(f"/print-jobs/print-jobs/{job_id}", follow_redirects=False).status_code == 200
 

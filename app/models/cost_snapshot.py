@@ -26,9 +26,7 @@ class CostSnapshotDensitySource(StrEnum):
 class CostSnapshot(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "cost_snapshots"
 
-    product_id: Mapped[int] = mapped_column(
-        ForeignKey("products.id"), nullable=False, index=True
-    )
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
     filament_spool_id: Mapped[int | None] = mapped_column(
         ForeignKey("filament_spools.id"), nullable=True, index=True
     )
@@ -64,6 +62,4 @@ class CostSnapshot(PrimaryKeyMixin, TimestampMixin, db.Model):
     model_asset = relationship("ProductModelAsset")
     analysis_run = relationship("ProductAnalysisRun")
 
-    __table_args__ = (
-        Index("ix_cost_snapshots_product_stale", "product_id", "stale"),
-    )
+    __table_args__ = (Index("ix_cost_snapshots_product_stale", "product_id", "stale"),)

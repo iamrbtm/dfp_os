@@ -11,7 +11,9 @@ from app.models import Market, PickupLocation, PickupLocationType, PickupSlot, P
 
 class PickupLocationForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired(), Length(max=160)])
-    location_type = SelectField("Type", choices=enum_choices(PickupLocationType), validators=[DataRequired()])
+    location_type = SelectField(
+        "Type", choices=enum_choices(PickupLocationType), validators=[DataRequired()]
+    )
     address = StringField("Address", validators=[Optional(), Length(max=255)])
     instructions = TextAreaField("Instructions", validators=[Optional()])
     active = BooleanField("Active", default=True)
@@ -29,10 +31,14 @@ class PickupLocationForm(FlaskForm):
 class PickupSlotForm(FlaskForm):
     location_id = SelectField("Location", coerce=int, validators=[DataRequired()])
     market_id = OptionalSelectField("Market", coerce=int, validators=[Optional()])
-    starts_at = DateTimeLocalField("Starts at", format="%Y-%m-%dT%H:%M", validators=[DataRequired()])
+    starts_at = DateTimeLocalField(
+        "Starts at", format="%Y-%m-%dT%H:%M", validators=[DataRequired()]
+    )
     ends_at = DateTimeLocalField("Ends at", format="%Y-%m-%dT%H:%M", validators=[DataRequired()])
     capacity = IntegerField("Capacity", validators=[DataRequired(), NumberRange(min=1)], default=6)
-    status = SelectField("Status", choices=enum_choices(PickupSlotStatus), validators=[DataRequired()])
+    status = SelectField(
+        "Status", choices=enum_choices(PickupSlotStatus), validators=[DataRequired()]
+    )
     public_label = StringField("Public label", validators=[Optional(), Length(max=200)])
     instructions = TextAreaField("Slot instructions", validators=[Optional()])
     submit = SubmitField("Save pickup slot")
@@ -40,10 +46,12 @@ class PickupSlotForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.location_id.choices = [
-            (item.id, item.name) for item in PickupLocation.query.filter_by(active=True).order_by(PickupLocation.name)
+            (item.id, item.name)
+            for item in PickupLocation.query.filter_by(active=True).order_by(PickupLocation.name)
         ]
         self.market_id.choices = [(0, "No market")] + [
-            (item.id, item.name) for item in Market.query.order_by(Market.event_date.desc(), Market.name)
+            (item.id, item.name)
+            for item in Market.query.order_by(Market.event_date.desc(), Market.name)
         ]
 
     def validate(self, extra_validators=None):

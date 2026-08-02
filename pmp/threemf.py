@@ -68,16 +68,14 @@ def _fmt_bed(v: float) -> str:
     return f"{float(v):g}"
 
 
-def patch_project_settings_bed(
-    data: bytes, bed_w: float, bed_d: float
-) -> bytes | None:
+def patch_project_settings_bed(data: bytes, bed_w: float, bed_d: float) -> bytes | None:
     """Return ``project_settings.config`` bytes with ``printable_area`` set to the
     packed bed's corners (``["0x0", "Wx0", "WxD", "0xD"]``), or ``None`` if the
     payload is not JSON we can parse. ``printable_height`` is left untouched.
     """
     try:
         obj = json.loads(data.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError):
+    except ValueError, UnicodeDecodeError:
         return None
     if not isinstance(obj, dict):
         return None
@@ -150,7 +148,7 @@ def u1_project_settings(
     if source_settings_bytes is not None:
         try:
             parsed = json.loads(source_settings_bytes.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
+        except ValueError, UnicodeDecodeError:
             parsed = None
         if isinstance(parsed, dict):
             source = parsed
@@ -266,18 +264,24 @@ class _RawComponents:
 IDENTITY: Transform = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
 
 
-def compose_transform(
-    scale: float, rot_z_deg: float, tx: float, ty: float, tz: float
-) -> Transform:
+def compose_transform(scale: float, rot_z_deg: float, tx: float, ty: float, tz: float) -> Transform:
     """Uniform scale + rotation about Z + translation as a 12-float transform."""
     theta = math.radians(rot_z_deg)
     c = math.cos(theta) * scale
     s = math.sin(theta) * scale
     return (
-        c, s, 0.0,      # X axis row
-        -s, c, 0.0,     # Y axis row
-        0.0, 0.0, scale,  # Z axis row
-        float(tx), float(ty), float(tz),  # translation
+        c,
+        s,
+        0.0,  # X axis row
+        -s,
+        c,
+        0.0,  # Y axis row
+        0.0,
+        0.0,
+        scale,  # Z axis row
+        float(tx),
+        float(ty),
+        float(tz),  # translation
     )
 
 
@@ -325,7 +329,7 @@ def apply_transform(
 
 
 def bounding_box(
-    vertices: list[tuple[float, float, float]]
+    vertices: list[tuple[float, float, float]],
 ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     if not vertices:
         raise ValueError("bounding_box of empty vertex list")
@@ -360,9 +364,7 @@ def _tag_open_re(tag: str) -> re.Pattern:
     """Quoted-span-aware regex matching a ``<tag ...>`` (or ``<tag/>``) open tag.
 
     Group 1 captures the self-closing ``/`` (empty otherwise)."""
-    return re.compile(
-        rf"<{tag}\b(?:\"[^\"]*\"|'[^']*'|[^>\"'])*?(/?)>", re.DOTALL
-    )
+    return re.compile(rf"<{tag}\b(?:\"[^\"]*\"|'[^']*'|[^>\"'])*?(/?)>", re.DOTALL)
 
 
 def _first_block(text: str, tag: str) -> tuple[int, int, str] | None:
@@ -377,7 +379,7 @@ def _first_block(text: str, tag: str) -> tuple[int, int, str] | None:
     if close == -1:
         return m.start(), m.end(), m.group(0)
     end = close + len(f"</{tag}>")
-    return m.start(), end, text[m.start():end]
+    return m.start(), end, text[m.start() : end]
 
 
 def _build_open_attrs(open_tag: str) -> tuple[str, bool]:
@@ -386,7 +388,7 @@ def _build_open_attrs(open_tag: str) -> tuple[str, bool]:
     ``attrs`` is spliced straight back after ``<build`` so the packed build keeps
     the source's attributes verbatim (notably the production ``p:UUID`` that
     Bambu-lineage loaders key instances on). ``has_uuid`` gates per-item UUIDs."""
-    inner = open_tag[len("<build"):-1]  # strip '<build' and trailing '>'
+    inner = open_tag[len("<build") : -1]  # strip '<build' and trailing '>'
     if inner.endswith("/"):  # self-closing <build/>
         inner = inner[:-1]
     attrs = (" " + inner.strip()) if inner.strip() else ""
@@ -446,9 +448,7 @@ _DROP_PLATE_KEYS = (
     "pick_file",
 )
 _META_TAG = re.compile(r'<metadata\b(?:"[^"]*"|\'[^\']*\'|[^>"\'])*?/>', re.DOTALL)
-_MODEL_INSTANCE_BLOCK = re.compile(
-    r"<model_instance\b.*?</model_instance>", re.DOTALL
-)
+_MODEL_INSTANCE_BLOCK = re.compile(r"<model_instance\b.*?</model_instance>", re.DOTALL)
 
 
 def _tag_attr_value(tag: str, name: str) -> str | None:
@@ -481,11 +481,7 @@ def _build_assemble(items: list[BuildItem]) -> str:
     carrying that instance's final transform."""
     lines = ["  <assemble>"]
     for idx, it in enumerate(items):
-        ts = (
-            " ".join(_fmt_float(v) for v in it.transform)
-            if it.transform is not None
-            else ""
-        )
+        ts = " ".join(_fmt_float(v) for v in it.transform) if it.transform is not None else ""
         lines.append(
             f'   <assemble_item object_id="{it.object_id}" instance_id="{idx}" '
             f'transform="{ts}" offset="0 0 0"/>'
@@ -522,9 +518,7 @@ class ThreeMF:
     # internal
     _source_path: str = ""
     _model_name: str = PRIMARY_MODEL
-    _raw: dict[str, dict[str, _RawMesh | _RawComponents]] = field(
-        default_factory=dict
-    )
+    _raw: dict[str, dict[str, _RawMesh | _RawComponents]] = field(default_factory=dict)
 
     # -- loading ----------------------------------------------------------- #
 
@@ -541,9 +535,7 @@ class ThreeMF:
                     self._raw[name] = _parse_model_resources(data)
             main = self._raw.get(self._model_name, {})
             for oid in main:
-                verts, tri_count, has_paint = self._resolve(
-                    self._model_name, oid, set()
-                )
+                verts, tri_count, has_paint = self._resolve(self._model_name, oid, set())
                 self.objects[oid] = ModelObject(
                     object_id=oid,
                     vertices=verts,
@@ -602,9 +594,7 @@ class ThreeMF:
         """
         unknown = sorted({it.object_id for it in items} - set(self.objects))
         if unknown:
-            raise ValueError(
-                f"build items reference unknown object ids: {', '.join(unknown)}"
-            )
+            raise ValueError(f"build items reference unknown object ids: {', '.join(unknown)}")
         try:
             with zipfile.ZipFile(self._source_path, "r") as zf:
                 entries = [(info, zf.read(info.filename)) for info in zf.infolist()]
@@ -637,7 +627,7 @@ class ThreeMF:
         try:
             with zipfile.ZipFile(self._source_path, "r") as zf:
                 return zf.read(name)
-        except (FileNotFoundError, KeyError):
+        except FileNotFoundError, KeyError:
             return None
 
     def surgical_save_kwargs(
@@ -668,9 +658,7 @@ class ThreeMF:
         replace: dict[str, bytes] = {}
         data = self._read_source_entry(PROJECT_SETTINGS_ENTRY)
         if printer == "u1":
-            replace[PROJECT_SETTINGS_ENTRY] = u1_project_settings(
-                data, bed_w, bed_d
-            )
+            replace[PROJECT_SETTINGS_ENTRY] = u1_project_settings(data, bed_w, bed_d)
         elif data is not None:
             patched = patch_project_settings_bed(data, bed_w, bed_d)
             if patched is not None:
@@ -682,9 +670,7 @@ class ThreeMF:
             except UnicodeDecodeError:
                 text = None
             if text is not None:
-                replace[MODEL_SETTINGS_ENTRY] = _rewrite_model_settings(
-                    text, items
-                ).encode("utf-8")
+                replace[MODEL_SETTINGS_ENTRY] = _rewrite_model_settings(text, items).encode("utf-8")
         return {
             "drop_entries": STALE_ENTRY_PREDICATE,
             "replace_entries": replace or None,
@@ -706,7 +692,7 @@ class ThreeMF:
                 for name in zf.namelist():
                     if name.lower().endswith(".model"):
                         values.update(_PAINT_VALUE_RE.findall(zf.read(name)))
-        except (FileNotFoundError, KeyError):
+        except FileNotFoundError, KeyError:
             return 0
         return len(values)
 
@@ -820,7 +806,5 @@ def _parse_build(data: bytes) -> list[BuildItem]:
         oid = _attr(item, "objectid")
         if oid is None:
             continue
-        items.append(
-            BuildItem(object_id=oid, transform=_parse_transform(_attr(item, "transform")))
-        )
+        items.append(BuildItem(object_id=oid, transform=_parse_transform(_attr(item, "transform"))))
     return items

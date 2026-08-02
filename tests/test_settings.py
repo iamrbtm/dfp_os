@@ -108,13 +108,17 @@ def test_api_v1_settings_list(api_token, client):
 def test_api_v1_settings_get(api_token, client):
     with client.application.app_context():
         set_setting("test_api_key", "api_value")
-    response = client.get("/api/v1/settings/test_api_key", headers={"Authorization": f"Bearer {api_token}"})
+    response = client.get(
+        "/api/v1/settings/test_api_key", headers={"Authorization": f"Bearer {api_token}"}
+    )
     assert response.status_code == 200
     assert response.get_json()["data"]["value"] == "api_value"
 
 
 def test_api_v1_settings_get_not_found(api_token, client):
-    response = client.get("/api/v1/settings/does-not-exist", headers={"Authorization": f"Bearer {api_token}"})
+    response = client.get(
+        "/api/v1/settings/does-not-exist", headers={"Authorization": f"Bearer {api_token}"}
+    )
     assert response.status_code == 404
 
 

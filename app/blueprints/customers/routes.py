@@ -15,7 +15,12 @@ from app.services.crud import (
     get_by_id,
     paginate_query,
 )
-from app.services.customers import archive_customer, create_customer, snapshot_customer, update_customer
+from app.services.customers import (
+    archive_customer,
+    create_customer,
+    snapshot_customer,
+    update_customer,
+)
 from app.utils.auth import roles_required
 
 
@@ -122,6 +127,7 @@ def create_resource(resource_key: str = "customers"):
             create_customer(instance, actor_id=current_user.id)
         except IntegrityError:
             from app.extensions import db
+
             db.session.rollback()
             flash(f"Unable to save that {config.singular.lower()}.", "danger")
             return (
@@ -176,6 +182,7 @@ def edit_resource(resource_id: int, resource_key: str = "customers"):
             update_customer(instance, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
             from app.extensions import db
+
             db.session.rollback()
             flash(f"Unable to update that {config.singular.lower()}.", "danger")
             return (

@@ -86,7 +86,9 @@ class DeadStockRecommendation(PrimaryKeyMixin, TimestampMixin, db.Model):
     suggested_action: Mapped[str] = mapped_column(String(80), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[DeadStockRecommendationStatus] = mapped_column(
-        Enum(DeadStockRecommendationStatus, values_callable=lambda e: [m.value for m in e], length=40),
+        Enum(
+            DeadStockRecommendationStatus, values_callable=lambda e: [m.value for m in e], length=40
+        ),
         default=DeadStockRecommendationStatus.OPEN,
         nullable=False,
         index=True,

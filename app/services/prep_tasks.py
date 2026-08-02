@@ -65,7 +65,9 @@ def suggested_quantities_for_market(market_id: int) -> list[dict[str, object]]:
         .all()
     )
     historic = {row.product_id: int(row.units or 0) for row in sold if row.product_id}
-    products = Product.query.filter(Product.deleted_at.is_(None), Product.is_pos_visible.is_(True)).all()
+    products = Product.query.filter(
+        Product.deleted_at.is_(None), Product.is_pos_visible.is_(True)
+    ).all()
 
     suggestions = []
     for product in products:
@@ -87,7 +89,9 @@ def suggested_quantities_for_market(market_id: int) -> list[dict[str, object]]:
                 "gap": gap,
             }
         )
-    return sorted(suggestions, key=lambda row: (row["gap"], row["suggested_quantity"]), reverse=True)
+    return sorted(
+        suggestions, key=lambda row: (row["gap"], row["suggested_quantity"]), reverse=True
+    )
 
 
 def generate_market_prep_tasks(market_id: int, actor_id: int | None = None) -> list[PrepTask]:
@@ -192,7 +196,12 @@ def reopen_prep_task(task: PrepTask, *, actor_id: int | None = None) -> PrepTask
 def market_readiness_score(market_id: int) -> dict[str, object]:
     tasks = PrepTask.query.filter_by(market_id=market_id).all()
     if not tasks:
-        return {"score": Decimal("0.00"), "completed": 0, "total": 0, "summary": "No prep tasks generated."}
+        return {
+            "score": Decimal("0.00"),
+            "completed": 0,
+            "total": 0,
+            "summary": "No prep tasks generated.",
+        }
     completed = sum(1 for task in tasks if task.status == PrepTaskStatus.COMPLETED)
     score = (Decimal(completed) / Decimal(len(tasks)) * Decimal("100")).quantize(Decimal("0.01"))
     return {

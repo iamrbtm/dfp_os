@@ -17,7 +17,13 @@ from app.forms import (
     InventoryReservationForm,
     InventoryTransferForm,
 )
-from app.models import FilamentSpool, InventoryLocation, InventoryMovement, InventoryRecord, UserRole
+from app.models import (
+    FilamentSpool,
+    InventoryLocation,
+    InventoryMovement,
+    InventoryRecord,
+    UserRole,
+)
 from app.services.admin_mutations import (
     archive_resource as archive_admin_resource,
     create_resource as create_admin_resource,
@@ -209,9 +215,12 @@ def detail_resource(resource_id: int, resource_key: str = "records"):
         for label, getter in config.columns
     ]
     if resource_key == "records":
-        movements = InventoryMovement.query.filter(
-            InventoryMovement.inventory_record_id == instance.id
-        ).order_by(InventoryMovement.created_at.desc()).limit(25).all()
+        movements = (
+            InventoryMovement.query.filter(InventoryMovement.inventory_record_id == instance.id)
+            .order_by(InventoryMovement.created_at.desc())
+            .limit(25)
+            .all()
+        )
         return render_template(
             "inventory/record_detail.html",
             resource=config,
@@ -288,7 +297,9 @@ def adjust_record(resource_id: int):
     form = InventoryAdjustmentForm()
     if not form.validate_on_submit():
         flash("Review the adjustment quantity before saving.", "danger")
-        return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+        return redirect(
+            url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id)
+        )
     try:
         adjust_inventory(
             record_id=record.id,
@@ -301,7 +312,9 @@ def adjust_record(resource_id: int):
         flash(str(exc), "danger")
     else:
         flash("Inventory adjusted.", "success")
-    return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+    return redirect(
+        url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id)
+    )
 
 
 @bp.post("/records/<int:resource_id>/transfer")
@@ -313,7 +326,9 @@ def transfer_record(resource_id: int):
     form = InventoryTransferForm(source_location_id=record.location_id)
     if not form.validate_on_submit():
         flash("Review the destination and quantity before transferring.", "danger")
-        return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+        return redirect(
+            url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id)
+        )
     try:
         transfer_inventory(
             record_id=record.id,
@@ -328,7 +343,9 @@ def transfer_record(resource_id: int):
         flash(str(exc), "danger")
     else:
         flash("Inventory transferred.", "success")
-    return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+    return redirect(
+        url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id)
+    )
 
 
 @bp.post("/records/<int:resource_id>/reserve")
@@ -340,7 +357,9 @@ def reserve_record(resource_id: int):
     form = InventoryReservationForm()
     if not form.validate_on_submit():
         flash("Reservation quantity is required.", "danger")
-        return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+        return redirect(
+            url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id)
+        )
     try:
         reserve_inventory(
             record_id=record.id,
@@ -353,7 +372,9 @@ def reserve_record(resource_id: int):
         flash(str(exc), "danger")
     else:
         flash("Inventory reserved.", "success")
-    return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+    return redirect(
+        url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id)
+    )
 
 
 @bp.post("/records/<int:resource_id>/release")
@@ -365,7 +386,9 @@ def release_record(resource_id: int):
     form = InventoryReservationForm()
     if not form.validate_on_submit():
         flash("Release quantity is required.", "danger")
-        return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+        return redirect(
+            url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id)
+        )
     try:
         release_inventory(
             record_id=record.id,
@@ -378,4 +401,6 @@ def release_record(resource_id: int):
         flash(str(exc), "danger")
     else:
         flash("Reserved inventory released.", "success")
-    return redirect(url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id))
+    return redirect(
+        url_for("inventory.detail_resource", resource_key="records", resource_id=resource_id)
+    )

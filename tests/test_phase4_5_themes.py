@@ -56,6 +56,7 @@ def test_apply_theme_persists(client, login_admin):
     assert data["theme_slug"] == "dfp-dracula"
 
     from app.models import User
+
     with client.application.app_context():
         admin = User.query.filter_by(email="owner@example.com").first()
         assert admin.theme_slug == "dfp-dracula"
@@ -150,7 +151,7 @@ def test_theme_switcher_js_exists():
 def test_theme_switcher_updates_header(client, login_admin):
     response = client.get("/settings/themes", follow_redirects=True)
     assert response.status_code == 200
-    assert b'__applyTheme' in response.data or b'theme' in response.data.lower()
+    assert b"__applyTheme" in response.data or b"theme" in response.data.lower()
 
 
 def test_pos_page_has_theme_root(client, login_admin):
@@ -158,6 +159,7 @@ def test_pos_page_has_theme_root(client, login_admin):
         from app.models import User
         from app.services.pos import open_session
         from decimal import Decimal
+
         admin = User.query.filter_by(email="owner@example.com").first()
         s = open_session(user_id=admin.id, opening_cash=Decimal("0"))
         sid = s.id

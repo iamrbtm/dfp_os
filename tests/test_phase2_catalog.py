@@ -10,7 +10,9 @@ from app.services.admin_mutations import create_resource
 from app.services.business import ensure_default_business
 
 
-def _studio_payload(category_id: int, *, slug: str = "dragon-large", sku_base: str = "DRG-LARGE") -> dict[str, str]:
+def _studio_payload(
+    category_id: int, *, slug: str = "dragon-large", sku_base: str = "DRG-LARGE"
+) -> dict[str, str]:
     return {
         "name": "Dragon - Large",
         "slug": slug,
@@ -100,7 +102,9 @@ def test_product_studio_create_uses_existing_default_business(client, login_admi
     assert product.business_id == default_business.id
 
 
-def test_product_studio_create_integrity_error_renders_create_form(client, login_admin, monkeypatch):
+def test_product_studio_create_integrity_error_renders_create_form(
+    client, login_admin, monkeypatch
+):
     category = Category(name="Studio Error Dragons", slug="studio-error-dragons")
     db.session.add(category)
     db.session.commit()

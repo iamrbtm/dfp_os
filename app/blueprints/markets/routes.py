@@ -236,7 +236,14 @@ def markets_root():
     return redirect(url_for("markets.list_resource", resource_key="markets"))
 
 
-APPLICATION_STATUSES = {MarketStatus.INTERESTED, MarketStatus.APPLIED, MarketStatus.ACCEPTED, MarketStatus.WAITLISTED, MarketStatus.REJECTED}
+APPLICATION_STATUSES = {
+    MarketStatus.INTERESTED,
+    MarketStatus.APPLIED,
+    MarketStatus.ACCEPTED,
+    MarketStatus.WAITLISTED,
+    MarketStatus.REJECTED,
+}
+
 
 @bp.route("/<resource_key>/")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
@@ -319,12 +326,18 @@ def create_resource(resource_key: str = "markets"):
                 "dashboard/resource_form.html", resource=config, form=form, mode="create"
             ), 400
         flash(f"{config.singular} created successfully.", "success")
-        return redirect(url_for(
-            "markets.detail_resource" if resource_key == "markets" else "markets.packing_list_detail",
-            resource_key=resource_key,
-            resource_id=instance.id,
-        ))
-    return render_template("dashboard/resource_form.html", resource=config, form=form, mode="create")
+        return redirect(
+            url_for(
+                "markets.detail_resource"
+                if resource_key == "markets"
+                else "markets.packing_list_detail",
+                resource_key=resource_key,
+                resource_id=instance.id,
+            )
+        )
+    return render_template(
+        "dashboard/resource_form.html", resource=config, form=form, mode="create"
+    )
 
 
 @bp.get("/<int:resource_id>")
@@ -389,11 +402,13 @@ def edit_resource(resource_id: int, resource_key: str = "markets"):
                 "dashboard/resource_form.html", resource=config, form=form, mode="edit"
             ), 400
         flash(f"{config.singular} updated successfully.", "success")
-        return redirect(url_for(
-            "markets.detail_resource",
-            resource_key=resource_key,
-            resource_id=instance.id,
-        ))
+        return redirect(
+            url_for(
+                "markets.detail_resource",
+                resource_key=resource_key,
+                resource_id=instance.id,
+            )
+        )
     return render_template("dashboard/resource_form.html", resource=config, form=form, mode="edit")
 
 
@@ -490,7 +505,11 @@ def create_task(market_id: int):
             "prep_task",
             task.id,
             actor=current_user,
-            after_state={"market_id": market.id, "title": task.title, "category": task.category.value},
+            after_state={
+                "market_id": market.id,
+                "title": task.title,
+                "category": task.category.value,
+            },
         )
         return _after_market_action(market, "tasks_marketing", "Task added.")
     return _after_market_action(market, "tasks_marketing", "Task title is required.", "danger")
@@ -514,6 +533,7 @@ def generate_prep_tasks(market_id: int):
     if market is None:
         return render_template("errors/404.html"), 404
     from app.services.prep_tasks import generate_market_prep_tasks
+
     generated = generate_market_prep_tasks(market_id, actor_id=current_user.id)
     if generated:
         flash(f"Generated {len(generated)} prep tasks from templates.", "success")
@@ -529,6 +549,7 @@ def generate_follow_ups(market_id: int):
     if market is None:
         return render_template("errors/404.html"), 404
     from app.services.follow_ups import generate_market_follow_ups
+
     generated = generate_market_follow_ups(market, actor=current_user)
     if generated:
         flash(f"Generated {len(generated)} follow-up tasks from market data.", "success")
@@ -554,10 +575,16 @@ def create_timeline_event(market_id: int):
             "market_timeline_event",
             event.id,
             actor=current_user,
-            after_state={"market_id": market.id, "title": event.title, "event_type": event.event_type.value},
+            after_state={
+                "market_id": market.id,
+                "title": event.title,
+                "event_type": event.event_type.value,
+            },
         )
         return _after_market_action(market, "schedule_timeline", "Timeline event added.")
-    return _after_market_action(market, "schedule_timeline", "Timeline event title is required.", "danger")
+    return _after_market_action(
+        market, "schedule_timeline", "Timeline event title is required.", "danger"
+    )
 
 
 @bp.post("/<int:market_id>/timeline/<int:event_id>/complete")
@@ -634,7 +661,9 @@ def upload_document(market_id: int):
         except ValueError as exc:
             return _after_market_action(market, "documents", str(exc), "danger")
         return _after_market_action(market, "documents", "Document uploaded.")
-    return _after_market_action(market, "documents", "Document upload could not be validated.", "danger")
+    return _after_market_action(
+        market, "documents", "Document upload could not be validated.", "danger"
+    )
 
 
 @bp.post("/<int:market_id>/documents/<int:document_id>/delete")
@@ -699,8 +728,12 @@ def packing_quick_add(market_id: int):
             market_id=market.id, product_id=form.product_id.data
         ).first()
         if existing:
-            existing.planned_quantity = (existing.planned_quantity or 0) + (form.planned_quantity.data or 0)
-            existing.packed_quantity = (existing.packed_quantity or 0) + (form.packed_quantity.data or 0)
+            existing.planned_quantity = (existing.planned_quantity or 0) + (
+                form.planned_quantity.data or 0
+            )
+            existing.packed_quantity = (existing.packed_quantity or 0) + (
+                form.packed_quantity.data or 0
+            )
             item = existing
             action = "updated"
             verb = "Updated (merged)"
@@ -716,10 +749,16 @@ def packing_quick_add(market_id: int):
             "market_packing_list",
             item.id,
             actor=current_user,
-            after_state={"market_id": market.id, "product_id": item.product_id, "planned_quantity": item.planned_quantity},
+            after_state={
+                "market_id": market.id,
+                "product_id": item.product_id,
+                "planned_quantity": item.planned_quantity,
+            },
         )
         return _after_market_action(market, "products_inventory", f"Packing item {verb}.")
-    return _after_market_action(market, "products_inventory", "Choose a product before adding a packing item.", "danger")
+    return _after_market_action(
+        market, "products_inventory", "Choose a product before adding a packing item.", "danger"
+    )
 
 
 @bp.get("/<int:market_id>/packing-list/reconciliation-form")
@@ -729,9 +768,12 @@ def reconciliation_form(market_id: int):
     if market is None:
         return render_template("errors/404.html"), 404
     from app.services.markets import _calc_reconciliation
-    packing_list = MarketPackingList.query.filter_by(market_id=market.id).order_by(
-        MarketPackingList.product_id
-    ).all()
+
+    packing_list = (
+        MarketPackingList.query.filter_by(market_id=market.id)
+        .order_by(MarketPackingList.product_id)
+        .all()
+    )
     rc = _calc_reconciliation(packing_list)
     return render_template(
         "markets/partials/_reconciliation.html",
@@ -814,12 +856,13 @@ def recommendation_add(market_id: int):
         flash("Product name is required.", "danger")
         return redirect(url_for("markets.detail_resource", resource_id=market.id))
 
-    product = Product.query.filter(
-        db.func.lower(Product.name) == product_name.lower()
-    ).first()
+    product = Product.query.filter(db.func.lower(Product.name) == product_name.lower()).first()
 
     if product is None:
-        flash(f"Could not find product matching \"{product_name}\". Add it to the catalog first.", "warning")
+        flash(
+            f'Could not find product matching "{product_name}". Add it to the catalog first.',
+            "warning",
+        )
         return redirect(url_for("markets.detail_resource", resource_id=market.id))
 
     existing = MarketPackingList.query.filter_by(market_id=market.id, product_id=product.id).first()
@@ -831,11 +874,17 @@ def recommendation_add(market_id: int):
             "market_packing_list",
             existing.id,
             actor=current_user,
-            after_state={"market_id": market.id, "product_id": product.id, "planned_quantity": existing.planned_quantity},
+            after_state={
+                "market_id": market.id,
+                "product_id": product.id,
+                "planned_quantity": existing.planned_quantity,
+            },
         )
-        flash(f"Added {suggested_qty} more of \"{product.name}\" to the packing list.", "success")
+        flash(f'Added {suggested_qty} more of "{product.name}" to the packing list.', "success")
     else:
-        item = MarketPackingList(market_id=market.id, product_id=product.id, planned_quantity=suggested_qty)
+        item = MarketPackingList(
+            market_id=market.id, product_id=product.id, planned_quantity=suggested_qty
+        )
         db.session.add(item)
         db.session.commit()
         record_market_audit(
@@ -843,8 +892,12 @@ def recommendation_add(market_id: int):
             "market_packing_list",
             item.id,
             actor=current_user,
-            after_state={"market_id": market.id, "product_id": product.id, "planned_quantity": suggested_qty},
+            after_state={
+                "market_id": market.id,
+                "product_id": product.id,
+                "planned_quantity": suggested_qty,
+            },
         )
-        flash(f"Added \"{product.name}\" to packing list (planned: {suggested_qty}).", "success")
+        flash(f'Added "{product.name}" to packing list (planned: {suggested_qty}).', "success")
 
     return redirect(url_for("markets.detail_resource", resource_id=market.id))

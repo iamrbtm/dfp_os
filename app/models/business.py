@@ -43,5 +43,7 @@ class FeatureFlag(PrimaryKeyMixin, TimestampMixin, db.Model):
     key: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    business_id: Mapped[int | None] = mapped_column(db.ForeignKey("businesses.id"), nullable=True, index=True)
+    business_id: Mapped[int | None] = mapped_column(
+        db.ForeignKey("businesses.id"), nullable=True, index=True
+    )
     business = relationship("Business")

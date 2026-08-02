@@ -12,14 +12,22 @@ from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, Si
 
 class ContentDraftForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired(), Length(max=200)])
-    content_type = StringField("Content Type", default="social_post", validators=[Optional(), Length(max=60)])
-    channel = SelectField("Channel", choices=enum_choices(ContentChannel), validators=[DataRequired()])
+    content_type = StringField(
+        "Content Type", default="social_post", validators=[Optional(), Length(max=60)]
+    )
+    channel = SelectField(
+        "Channel", choices=enum_choices(ContentChannel), validators=[DataRequired()]
+    )
     caption = TextAreaField("Caption", validators=[Optional()])
-    media_reference = StringField("Media Reference (URL or filename)", validators=[Optional(), Length(max=500)])
+    media_reference = StringField(
+        "Media Reference (URL or filename)", validators=[Optional(), Length(max=500)]
+    )
     product_id = SelectField("Product", coerce=int, validators=[Optional()])
     market_id = SelectField("Market", coerce=int, validators=[Optional()])
     custom_request_id = SelectField("Custom Request", coerce=int, validators=[Optional()])
-    planned_publish_date = DateTimeLocalField("Planned Publish Date", format="%Y-%m-%dT%H:%M", validators=[Optional()])
+    planned_publish_date = DateTimeLocalField(
+        "Planned Publish Date", format="%Y-%m-%dT%H:%M", validators=[Optional()]
+    )
     status = SelectField("Status", choices=enum_choices(ContentStatus), validators=[DataRequired()])
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Save Draft")
@@ -55,7 +63,11 @@ class SignAssetForm(FlaskForm):
     short_description = TextAreaField("Short Description", validators=[Optional()])
     care_note = TextAreaField("Care Note", validators=[Optional()])
     qr_target_url = StringField("QR Target URL", validators=[Optional(), Length(max=500)])
-    layout = SelectField("Layout", choices=[("text", "Text Sign"), ("graphical", "Graphical Sign")], validators=[DataRequired()])
+    layout = SelectField(
+        "Layout",
+        choices=[("text", "Text Sign"), ("graphical", "Graphical Sign")],
+        validators=[DataRequired()],
+    )
     product_id = SelectField("Product", coerce=int, validators=[Optional()])
     collection_id = SelectField("Collection", coerce=int, validators=[Optional()])
     is_active = BooleanField("Active")

@@ -324,16 +324,12 @@ MODULES: dict[str, ModuleDefinition] = {
 
 
 BLUEPRINT_TO_MODULE: dict[str, str] = {
-    blueprint: module.key
-    for module in MODULES.values()
-    for blueprint in module.blueprint_names
+    blueprint: module.key for module in MODULES.values() for blueprint in module.blueprint_names
 }
 
 
 API_RESOURCE_TO_MODULE: dict[str, str] = {
-    resource: module.key
-    for module in MODULES.values()
-    for resource in module.api_resources
+    resource: module.key for module in MODULES.values() for resource in module.api_resources
 }
 
 

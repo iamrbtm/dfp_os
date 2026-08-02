@@ -17,6 +17,7 @@ FALLBACK_PATH = Path("./openapi/openapi.json")
 
 def _get_url() -> str:
     import os
+
     return os.getenv("DFPOS_OPENAPI_URL", DEFAULT_OPENAPI_URL)
 
 
@@ -73,14 +74,16 @@ def validate_spec():
     else:
         info = spec.get("info", {})
         paths = spec.get("paths", {})
-        console.print(Panel.fit(
-            f"[green]✓[/] OpenAPI spec is valid\n"
-            f"  Title:   {info.get('title', '(untitled)')}\n"
-            f"  Version: {info.get('version', '(none)')}\n"
-            f"  Paths:   {len(paths)}\n"
-            f"  File:    {spec_path.resolve()}",
-            title="Spec Validation Passed",
-        ))
+        console.print(
+            Panel.fit(
+                f"[green]✓[/] OpenAPI spec is valid\n"
+                f"  Title:   {info.get('title', '(untitled)')}\n"
+                f"  Version: {info.get('version', '(none)')}\n"
+                f"  Paths:   {len(paths)}\n"
+                f"  File:    {spec_path.resolve()}",
+                title="Spec Validation Passed",
+            )
+        )
     return 0
 
 

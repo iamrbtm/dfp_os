@@ -63,9 +63,7 @@ async def search_audit_events(
 
 async def get_audit_event_by_id(event_id: str) -> AuditEvent | None:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(AuditEvent).where(AuditEvent.id == event_id)
-        )
+        result = await session.execute(select(AuditEvent).where(AuditEvent.id == event_id))
         return result.scalar_one_or_none()
 
 
@@ -126,10 +124,7 @@ async def get_actor_timeline(
 
 async def verify_chain(req: VerifyChainRequest) -> dict[str, Any]:
     """Verify hash chain integrity for the given scope."""
-    stmt: Select = (
-        select(AuditEvent)
-        .order_by(AuditEvent.occurred_at.asc(), AuditEvent.received_at.asc())
-    )
+    stmt: Select = select(AuditEvent).order_by(AuditEvent.occurred_at.asc(), AuditEvent.received_at.asc())
     if req.tenant_id is not None:
         stmt = stmt.where(AuditEvent.tenant_id == req.tenant_id)
     if req.occurred_from is not None:

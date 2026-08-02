@@ -15,7 +15,11 @@ from app.utils.auth import roles_required
 @login_required
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def list_tokens():
-    statement = select(ApiToken).where(ApiToken.user_id == current_user.id).order_by(ApiToken.created_at.desc())
+    statement = (
+        select(ApiToken)
+        .where(ApiToken.user_id == current_user.id)
+        .order_by(ApiToken.created_at.desc())
+    )
     tokens = db.session.scalars(statement).all()
     return render_template("api_tokens/list.html", tokens=tokens)
 
@@ -35,15 +39,21 @@ def create_token():
 
         if not name:
             flash("Token name is required.", "danger")
-            return render_template("api_tokens/create.html", available_scopes=AVAILABLE_API_TOKEN_SCOPES)
+            return render_template(
+                "api_tokens/create.html", available_scopes=AVAILABLE_API_TOKEN_SCOPES
+            )
 
         expires_at = None
         if expires_at_str:
             try:
-                expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc
+                )
             except ValueError:
                 flash("Invalid expiration date format.", "danger")
-                return render_template("api_tokens/create.html", available_scopes=AVAILABLE_API_TOKEN_SCOPES)
+                return render_template(
+                    "api_tokens/create.html", available_scopes=AVAILABLE_API_TOKEN_SCOPES
+                )
 
         token, raw_token = create_api_token(
             user=current_user,

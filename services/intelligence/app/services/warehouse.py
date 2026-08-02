@@ -100,8 +100,10 @@ async def rebuild_square_sales_warehouse(db: AsyncSession) -> WarehouseBuild:
 
         aliases = await _reviewed_product_aliases(db)
         raw_rows = (
-            await db.execute(select(SquareItemRaw).order_by(SquareItemRaw.date, SquareItemRaw.row_number))
-        ).scalars().all()
+            (await db.execute(select(SquareItemRaw).order_by(SquareItemRaw.date, SquareItemRaw.row_number)))
+            .scalars()
+            .all()
+        )
 
         fact_count = 0
         for row in raw_rows:

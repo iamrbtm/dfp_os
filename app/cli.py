@@ -202,7 +202,9 @@ def trend_scout_group() -> None:
 
 @trend_scout_group.command("run")
 @click.option("--openai-key", envvar="OPENAI_API_KEY", default="", help="OpenAI API key")
-@click.option("--openai-model", envvar="OPENAI_MODEL_TREND_SCOUT", default="gpt-4o-mini", help="OpenAI model")
+@click.option(
+    "--openai-model", envvar="OPENAI_MODEL_TREND_SCOUT", default="gpt-4o-mini", help="OpenAI model"
+)
 def trend_scout_run(openai_key: str, openai_model: str) -> None:
     """Run the full Trend Scout pipeline synchronously."""
     from app.services.ai.trend_scout import run_full_pipeline
@@ -223,9 +225,12 @@ def trend_scout_run(openai_key: str, openai_model: str) -> None:
             for src in result["failed_sources"]:
                 click.echo(f"    - {src}")
         from app.services.trend_scout_prune import prune_old_data
+
         prune_result = prune_old_data(dry_run=False)
         if prune_result.get("status") == "pruned":
-            click.echo(f"  Auto-prune: removed {prune_result['pruned_reports']} old reports, {prune_result['pruned_snapshots']} snapshots")
+            click.echo(
+                f"  Auto-prune: removed {prune_result['pruned_reports']} old reports, {prune_result['pruned_snapshots']} snapshots"
+            )
     else:
         click.echo(f"\nPipeline failed: {result.get('error', 'unknown error')}", err=True)
         sys.exit(1)
@@ -235,11 +240,7 @@ def trend_scout_run(openai_key: str, openai_model: str) -> None:
 def trend_scout_status() -> None:
     """Show the latest Trend Scout report summary."""
     with current_app.app_context():
-        report = (
-            db.session.query(TrendReport)
-            .order_by(TrendReport.report_date.desc())
-            .first()
-        )
+        report = db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).first()
         if not report:
             click.echo("No Trend Reports found. Run `flask trend-scout run` first.")
             return
@@ -257,16 +258,15 @@ def trend_scout_status() -> None:
 
         from app.models.trend import SourceHealthRecord as SHR
 
-        health_records = (
-            db.session.query(SHR)
-            .filter(SHR.report_id == report.id)
-            .all()
-        )
+        health_records = db.session.query(SHR).filter(SHR.report_id == report.id).all()
         if health_records:
             click.echo("  Source health:")
             for h in health_records:
                 status_char = "✓" if h.status == "success" else "✗"
-                click.echo(f"    {status_char} {h.source}: {h.status} ({h.item_count} items)" + (f" - {h.error_message}" if h.error_message else ""))
+                click.echo(
+                    f"    {status_char} {h.source}: {h.status} ({h.item_count} items)"
+                    + (f" - {h.error_message}" if h.error_message else "")
+                )
         else:
             click.echo("  Source health: no records")
 
@@ -305,7 +305,9 @@ def trend_scout_backtest(reports: int, sales_window: int) -> None:
         click.echo("No TrendReport records found. Run `flask trend-scout run` first.")
         return
 
-    click.echo(f"Backtest Results ({result['report_count']} reports, {result.get('score_count', 0)} scores)")
+    click.echo(
+        f"Backtest Results ({result['report_count']} reports, {result.get('score_count', 0)} scores)"
+    )
     click.echo(f"  Sales window: {sales_window} days")
     click.echo("")
     click.echo("  Prediction Quality:")
@@ -317,7 +319,9 @@ def trend_scout_backtest(reports: int, sales_window: int) -> None:
     click.echo("")
     click.echo("  Component Analysis:")
     for comp in result.get("component_analysis", []):
-        click.echo(f"    {comp['component']}: corr={comp.get('correlation', 'N/A')}, predictive_ratio={comp.get('predictive_ratio', 'N/A')}")
+        click.echo(
+            f"    {comp['component']}: corr={comp.get('correlation', 'N/A')}, predictive_ratio={comp.get('predictive_ratio', 'N/A')}"
+        )
     click.echo("")
     click.echo("  Tuning Hints:")
     for hint in result.get("tuning_hints", []):
@@ -326,13 +330,17 @@ def trend_scout_backtest(reports: int, sales_window: int) -> None:
     if result.get("action_analysis"):
         click.echo("  Action Analysis:")
         for action, data in result["action_analysis"].items():
-            click.echo(f"    {action}: count={data.get('count', 0)}, precision={data.get('precision', 'N/A')}")
+            click.echo(
+                f"    {action}: count={data.get('count', 0)}, precision={data.get('precision', 'N/A')}"
+            )
 
 
 @trend_scout_group.command("prune")
 @click.option("--keep-reports", default=52, help="Number of reports to retain")
 @click.option("--keep-days", default=365, help="Max age in days for snapshots")
-@click.option("--dry-run", is_flag=True, default=False, help="Show what would be pruned without deleting")
+@click.option(
+    "--dry-run", is_flag=True, default=False, help="Show what would be pruned without deleting"
+)
 def trend_scout_prune(keep_reports: int, keep_days: int, dry_run: bool) -> None:
     """Prune old Trend Scout data (reports, snapshots, scores, health records)."""
     from app.services.trend_scout_prune import prune_old_data
@@ -349,9 +357,11 @@ def trend_scout_prune(keep_reports: int, keep_days: int, dry_run: bool) -> None:
         return
 
     label = "Would prune" if dry_run else "Pruned"
-    click.echo(f"{label} {result['pruned_reports']} reports, "
-               f"{result['pruned_scores']} scores, "
-               f"{result['pruned_health_records']} health records, "
-               f"{result['pruned_snapshots']} snapshots")
+    click.echo(
+        f"{label} {result['pruned_reports']} reports, "
+        f"{result['pruned_scores']} scores, "
+        f"{result['pruned_health_records']} health records, "
+        f"{result['pruned_snapshots']} snapshots"
+    )
     if dry_run:
         click.echo("(dry run — no data deleted)")

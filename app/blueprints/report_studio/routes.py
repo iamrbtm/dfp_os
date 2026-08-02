@@ -28,7 +28,8 @@ def home():
         catalog = [
             r
             for r in catalog
-            if search.lower() in (r.get("title", "") + r.get("description", "") + r.get("category", "")).lower()
+            if search.lower()
+            in (r.get("title", "") + r.get("description", "") + r.get("category", "")).lower()
         ]
 
     return render_template(

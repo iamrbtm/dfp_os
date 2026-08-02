@@ -90,7 +90,11 @@ def _normalize_sale_item(item_data: dict) -> dict:
         if unit_price > MAX_CUSTOM_ITEM_PRICE:
             raise ValueError("Custom item price exceeds the allowed maximum")
         if not description:
-            description = "Custom item" if item_type == PosSaleItemType.CUSTOM_ITEM else "Custom order deposit"
+            description = (
+                "Custom item"
+                if item_type == PosSaleItemType.CUSTOM_ITEM
+                else "Custom order deposit"
+            )
         product_id = None
     else:
         raise ValueError("Cart item type is not supported")
@@ -279,7 +283,9 @@ def create_sale(
             line_total=pos_item.line_total,
             is_custom_item=item_data["item_type"] != PosSaleItemType.PRODUCT,
             custom_description=(
-                item_data["description"] if item_data["item_type"] != PosSaleItemType.PRODUCT else None
+                item_data["description"]
+                if item_data["item_type"] != PosSaleItemType.PRODUCT
+                else None
             ),
         )
         db.session.add(order_item)
@@ -361,6 +367,7 @@ def _update_market_packing_sold(sale: PosSale, session: PosSession) -> None:
     if not session.market_id:
         return
     from app.models.market import MarketPackingList
+
     for item in sale.items:
         if item.item_type != PosSaleItemType.PRODUCT or item.product_id is None:
             continue

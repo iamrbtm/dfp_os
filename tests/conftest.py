@@ -8,7 +8,11 @@ from app import create_app
 from app.extensions import db
 from app.models import Category, Collection, Product, ProductStatus, ProductType, User, UserRole
 from app.services.api_tokens import create_api_token
-from tests.db_support import base_test_app_config, configured_test_database_url, ensure_database_exists
+from tests.db_support import (
+    base_test_app_config,
+    configured_test_database_url,
+    ensure_database_exists,
+)
 
 
 @pytest.fixture()

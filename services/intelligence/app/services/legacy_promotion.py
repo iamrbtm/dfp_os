@@ -97,13 +97,15 @@ async def promote_kept_tables(db: AsyncSession) -> dict[str, object]:
             continue
 
         rows = await db.execute(
-            select(LegacyImportRowStage).where(
+            select(LegacyImportRowStage)
+            .where(
                 and_(
                     LegacyImportRowStage.source_table_name == review.table_name,
                     LegacyImportRowStage.import_batch_id == manifest.import_batch_id,
                     LegacyImportRowStage.import_error.is_(None),
                 )
-            ).order_by(LegacyImportRowStage.row_number)
+            )
+            .order_by(LegacyImportRowStage.row_number)
         )
         rows = rows.scalars().all()
 
@@ -131,12 +133,14 @@ async def promote_kept_tables(db: AsyncSession) -> dict[str, object]:
         )
         db.add(promoted)
         promoted_count += 1
-        results.append({
-            "table_name": review.table_name,
-            "status": "promoted",
-            "entity_type": entity_type,
-            "row_count": len(normalized_rows),
-        })
+        results.append(
+            {
+                "table_name": review.table_name,
+                "status": "promoted",
+                "entity_type": entity_type,
+                "row_count": len(normalized_rows),
+            }
+        )
 
     await db.commit()
     return {
@@ -147,9 +151,7 @@ async def promote_kept_tables(db: AsyncSession) -> dict[str, object]:
 
 
 async def list_promoted_tables(db: AsyncSession) -> list[dict[str, object]]:
-    ptables = await db.execute(
-        select(PromotedLegacyTable).order_by(PromotedLegacyTable.table_name)
-    )
+    ptables = await db.execute(select(PromotedLegacyTable).order_by(PromotedLegacyTable.table_name))
     ptables = ptables.scalars().all()
     return [
         {

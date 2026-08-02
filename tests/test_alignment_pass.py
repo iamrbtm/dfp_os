@@ -62,7 +62,12 @@ def test_business_settings_update(client, login_admin):
 def test_feature_flag_and_prep_task_template_creation(client, login_admin):
     feature_response = client.post(
         "/settings/feature-flags/new",
-        data={"key": "module.test.enabled", "enabled": "y", "description": "Test flag", "business_id": "0"},
+        data={
+            "key": "module.test.enabled",
+            "enabled": "y",
+            "description": "Test flag",
+            "business_id": "0",
+        },
         follow_redirects=False,
     )
     assert feature_response.status_code == 302
@@ -87,7 +92,13 @@ def test_feature_flag_and_prep_task_template_creation(client, login_admin):
 
 def test_inventory_operation_apis_work(client, app):
     with app.app_context():
-        user = User(email="inventory-api@example.com", first_name="Inventory", last_name="API", role=UserRole.ADMIN, is_active=True)
+        user = User(
+            email="inventory-api@example.com",
+            first_name="Inventory",
+            last_name="API",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
         user.set_password("secret")
         category = Category(name="Ops", slug="ops", is_public=False, is_pos_visible=False)
         product = Product(
@@ -103,7 +114,9 @@ def test_inventory_operation_apis_work(client, app):
         db.session.add_all([user, category, product, source, destination])
         db.session.flush()
         _token, raw_token = create_api_token(user, "Inventory Ops", scopes=["inventory"])
-        record = InventoryRecord(product_id=product.id, location_id=source.id, quantity_on_hand=6, quantity_reserved=0)
+        record = InventoryRecord(
+            product_id=product.id, location_id=source.id, quantity_on_hand=6, quantity_reserved=0
+        )
         db.session.add(record)
         db.session.commit()
         record_id = record.id
@@ -134,9 +147,17 @@ def test_inventory_operation_apis_work(client, app):
 
 def test_pos_refund_api_works(client, app):
     with app.app_context():
-        user = User(email="refund-api@example.com", first_name="Refund", last_name="API", role=UserRole.ADMIN, is_active=True)
+        user = User(
+            email="refund-api@example.com",
+            first_name="Refund",
+            last_name="API",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
         user.set_password("secret")
-        category = Category(name="Refund Ops", slug="refund-ops", is_public=False, is_pos_visible=True)
+        category = Category(
+            name="Refund Ops", slug="refund-ops", is_public=False, is_pos_visible=True
+        )
         product = Product(
             name="Refund Product",
             slug="refund-product",
@@ -150,15 +171,32 @@ def test_pos_refund_api_works(client, app):
         db.session.add_all([user, category, product, location])
         db.session.flush()
         _token, raw_token = create_api_token(user, "POS Refund", scopes=["pos"])
-        db.session.add(InventoryRecord(product_id=product.id, location_id=location.id, quantity_on_hand=5, quantity_reserved=0))
+        db.session.add(
+            InventoryRecord(
+                product_id=product.id,
+                location_id=location.id,
+                quantity_on_hand=5,
+                quantity_reserved=0,
+            )
+        )
         db.session.commit()
 
-        session = open_session(user_id=user.id, opening_cash=Decimal("20.00"), inventory_location_id=location.id)
+        session = open_session(
+            user_id=user.id, opening_cash=Decimal("20.00"), inventory_location_id=location.id
+        )
         sale, _order = create_sale(
             session_id=session.id,
             payment_method="cash",
             amount_received=Decimal("12.00"),
-            items=[{"product_id": product.id, "quantity": 1, "unit_price": "12.00", "description": "Refund Product", "item_type": "product"}],
+            items=[
+                {
+                    "product_id": product.id,
+                    "quantity": 1,
+                    "unit_price": "12.00",
+                    "description": "Refund Product",
+                    "item_type": "product",
+                }
+            ],
         )
         sale_id = sale.id
 
@@ -181,7 +219,9 @@ def test_admin_mutation_audits_for_inventory_and_prep_templates(app, monkeypatch
     monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
 
     with app.app_context():
-        create_resource(InventoryLocation(name="Audit Shelf", type="Shelf", active=True), actor_id=123)
+        create_resource(
+            InventoryLocation(name="Audit Shelf", type="Shelf", active=True), actor_id=123
+        )
         create_resource(
             PrepTaskTemplate(
                 title="Audit Prep Template",
@@ -191,7 +231,14 @@ def test_admin_mutation_audits_for_inventory_and_prep_templates(app, monkeypatch
             ),
             actor_id=123,
         )
-        db.session.add(PrepTask(title="Task", category=PrepTaskCategory.GENERAL, status=PrepTaskStatus.OPEN, source="manual"))
+        db.session.add(
+            PrepTask(
+                title="Task",
+                category=PrepTaskCategory.GENERAL,
+                status=PrepTaskStatus.OPEN,
+                source="manual",
+            )
+        )
         db.session.commit()
 
     actions = {call["action"] for call in calls}

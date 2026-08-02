@@ -51,10 +51,12 @@ def _scoped_token(client, *scopes: str) -> str:
         _token, raw = create_api_token(user, "Scoped API Token", scopes=list(scopes))
         return raw
 
+
 @pytest.fixture()
 def admin_headers(app, client):
     """Create an admin user and return Bearer token auth headers."""
     from app.models import User, UserRole
+
     with app.app_context():
         user = User(
             email="admin-headers@example.com",
@@ -66,7 +68,9 @@ def admin_headers(app, client):
         user.set_password("secret")
         db.session.add(user)
         db.session.commit()
-        _token, raw = create_api_token(user, "Admin Headers Token", scopes=["admin", "markets", "receipts"])
+        _token, raw = create_api_token(
+            user, "Admin Headers Token", scopes=["admin", "markets", "receipts"]
+        )
         return {"Authorization": f"Bearer {raw}"}
 
 
@@ -135,7 +139,9 @@ def test_market_packing_list_can_be_created(app):
     with app.app_context():
         cat = Category.query.filter_by(slug="mkt-test-cat").first()
         if not cat:
-            cat = Category(name="Mkt Test", slug="mkt-test-cat", is_public=True, is_pos_visible=True)
+            cat = Category(
+                name="Mkt Test", slug="mkt-test-cat", is_public=True, is_pos_visible=True
+            )
             db.session.add(cat)
             db.session.flush()
 
@@ -181,7 +187,9 @@ def test_market_packing_list_can_be_created(app):
 
 def test_market_command_center_models_can_be_created(app):
     with app.app_context():
-        market = Market(name="Ops Market", event_date=date(2026, 8, 1), status=MarketStatus.SCHEDULED)
+        market = Market(
+            name="Ops Market", event_date=date(2026, 8, 1), status=MarketStatus.SCHEDULED
+        )
         db.session.add(market)
         db.session.flush()
         task = PrepTask(
@@ -258,15 +266,19 @@ def test_market_create_page_loads_for_admin(login_admin, client):
 
 def test_admin_can_create_market(login_admin, client):
     _ensure_csrf_cookie(client)
-    resp = client.post("/markets/markets/new", data={
-        "name": "Admin Created Market",
-        "location_name": "Downtown",
-        "city": "Clarksville",
-        "state": "TN",
-        "event_date": "2026-08-15",
-        "status": "scheduled",
-        "booth_fee": "75.00",
-    }, follow_redirects=True)
+    resp = client.post(
+        "/markets/markets/new",
+        data={
+            "name": "Admin Created Market",
+            "location_name": "Downtown",
+            "city": "Clarksville",
+            "state": "TN",
+            "event_date": "2026-08-15",
+            "status": "scheduled",
+            "booth_fee": "75.00",
+        },
+        follow_redirects=True,
+    )
     assert resp.status_code == 200
     assert "Admin Created Market" in resp.text
 
@@ -278,14 +290,18 @@ def test_expense_list_page_loads_for_admin(login_admin, client):
 
 def test_admin_can_create_expense(login_admin, client):
     _ensure_csrf_cookie(client)
-    resp = client.post("/expenses/expenses/new", data={
-        "date": "2026-06-15",
-        "vendor": "Test Vendor Inc",
-        "category": "filament",
-        "description": "Test expense via form",
-        "amount": "50.00",
-        "tax_deductible": "y",
-    }, follow_redirects=True)
+    resp = client.post(
+        "/expenses/expenses/new",
+        data={
+            "date": "2026-06-15",
+            "vendor": "Test Vendor Inc",
+            "category": "filament",
+            "description": "Test expense via form",
+            "amount": "50.00",
+            "tax_deductible": "y",
+        },
+        follow_redirects=True,
+    )
     assert resp.status_code == 200
     assert "Test Vendor Inc" in resp.text
 
@@ -435,7 +451,9 @@ def test_market_task_create_and_complete_htmx(login_admin, client, app):
         assert db.session.get(PrepTask, task_id).status == PrepTaskStatus.COMPLETED
 
 
-def test_market_timeline_hotel_and_packing_quick_add_htmx(login_admin, client, app, catalog_product):
+def test_market_timeline_hotel_and_packing_quick_add_htmx(
+    login_admin, client, app, catalog_product
+):
     with app.app_context():
         market = Market(name="HTMX Market", status=MarketStatus.SCHEDULED)
         db.session.add(market)
@@ -525,7 +543,9 @@ def test_weather_fetch_stores_matching_forecast(app, monkeypatch):
 
         def get(self, url):
             if "points" in url:
-                return FakeResponse({"properties": {"forecast": "https://api.weather.gov/gridpoints/test"}})
+                return FakeResponse(
+                    {"properties": {"forecast": "https://api.weather.gov/gridpoints/test"}}
+                )
             return FakeResponse(
                 {
                     "properties": {
@@ -700,7 +720,12 @@ def test_follow_up_queue_loads(app, client, admin_headers):
     with app.app_context():
         market = Market.query.filter_by(status=MarketStatus.COMPLETED).first()
         if not market:
-            market = Market(name="Follow-Up Test Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+            market = Market(
+                name="Follow-Up Test Market",
+                status=MarketStatus.COMPLETED,
+                city="Clarksville",
+                state="TN",
+            )
             db.session.add(market)
             db.session.commit()
 
@@ -725,7 +750,9 @@ def test_follow_up_queue_loads(app, client, admin_headers):
 def test_follow_up_complete(app, client, admin_headers):
     _ensure_csrf_cookie(client)
     with app.app_context():
-        market = Market(name="Complete FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+        market = Market(
+            name="Complete FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN"
+        )
         db.session.add(market)
         db.session.commit()
         task = PrepTask(
@@ -752,7 +779,9 @@ def test_follow_up_complete(app, client, admin_headers):
 def test_follow_up_reopen(app, client, admin_headers):
     _ensure_csrf_cookie(client)
     with app.app_context():
-        market = Market(name="Reopen FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+        market = Market(
+            name="Reopen FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN"
+        )
         db.session.add(market)
         db.session.commit()
         task = PrepTask(
@@ -781,7 +810,9 @@ def test_follow_up_reopen(app, client, admin_headers):
 def test_follow_up_archive(app, client, admin_headers):
     _ensure_csrf_cookie(client)
     with app.app_context():
-        market = Market(name="Archive FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+        market = Market(
+            name="Archive FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN"
+        )
         db.session.add(market)
         db.session.commit()
         task = PrepTask(
@@ -810,7 +841,9 @@ def test_follow_up_generate_for_completed_market(app, client, admin_headers):
     with app.app_context():
         from app.services.follow_ups import generate_market_follow_ups
 
-        market = Market(name="Gen FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN")
+        market = Market(
+            name="Gen FU Market", status=MarketStatus.COMPLETED, city="Clarksville", state="TN"
+        )
         db.session.add(market)
         db.session.commit()
 
@@ -823,8 +856,16 @@ def test_follow_up_generate_for_completed_market(app, client, admin_headers):
 
 def test_table_layout_model_creation(app):
     with app.app_context():
-        from app.models.table_layout import MarketTableLayout, MarketTableSection, MarketTablePlacement, TableSectionType
-        market = Market(name="Layout Test Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+        from app.models.table_layout import (
+            MarketTableLayout,
+            MarketTableSection,
+            MarketTablePlacement,
+            TableSectionType,
+        )
+
+        market = Market(
+            name="Layout Test Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN"
+        )
         db.session.add(market)
         db.session.flush()
 
@@ -843,14 +884,20 @@ def test_table_layout_model_creation(app):
 
         cat = Category.query.filter_by(slug="layout-test-cat").first()
         if not cat:
-            cat = Category(name="Layout Test Cat", slug="layout-test-cat", is_public=True, is_pos_visible=True)
+            cat = Category(
+                name="Layout Test Cat", slug="layout-test-cat", is_public=True, is_pos_visible=True
+            )
             db.session.add(cat)
             db.session.flush()
         product = Product(
-            name="Layout Test Product", slug="layout-test-prod",
-            category_id=cat.id, product_type=ProductType.FINISHED_GOOD,
-            status=ProductStatus.ACTIVE, base_price=Decimal("10.00"),
-            is_public=True, is_pos_visible=True,
+            name="Layout Test Product",
+            slug="layout-test-prod",
+            category_id=cat.id,
+            product_type=ProductType.FINISHED_GOOD,
+            status=ProductStatus.ACTIVE,
+            base_price=Decimal("10.00"),
+            is_public=True,
+            is_pos_visible=True,
         )
         db.session.add(product)
         db.session.flush()
@@ -876,7 +923,10 @@ def test_table_layout_list_loads(app, client, admin_headers):
     _ensure_csrf_cookie(client)
     with app.app_context():
         from app.models.table_layout import MarketTableLayout
-        market = Market(name="List Layout Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+
+        market = Market(
+            name="List Layout Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN"
+        )
         db.session.add(market)
         db.session.flush()
         layout = MarketTableLayout(market_id=market.id, name="List Test Layout")
@@ -892,7 +942,13 @@ def test_table_layout_detail_loads(app, client, admin_headers):
     _ensure_csrf_cookie(client)
     with app.app_context():
         from app.models.table_layout import MarketTableLayout
-        market = Market(name="Detail Layout Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+
+        market = Market(
+            name="Detail Layout Market",
+            status=MarketStatus.SCHEDULED,
+            city="Clarksville",
+            state="TN",
+        )
         db.session.add(market)
         db.session.flush()
         layout = MarketTableLayout(market_id=market.id, name="Detail Test Layout")
@@ -907,6 +963,7 @@ def test_table_layout_detail_loads(app, client, admin_headers):
 
 def test_table_section_type_enum():
     from app.models.table_layout import TableSectionType
+
     assert TableSectionType.FRONT_LEFT.value == "front_left"
     assert TableSectionType.FRONT_CENTER.value == "front_center"
     assert TableSectionType.BACK_CENTER.value == "back_center"
@@ -916,7 +973,12 @@ def test_table_section_type_enum():
 def test_table_layout_generates_default_sections(app, client, admin_headers):
     _ensure_csrf_cookie(client)
     with app.app_context():
-        market = Market(name="Default Sections Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+        market = Market(
+            name="Default Sections Market",
+            status=MarketStatus.SCHEDULED,
+            city="Clarksville",
+            state="TN",
+        )
         db.session.add(market)
         db.session.flush()
         market_id = market.id
@@ -924,16 +986,22 @@ def test_table_layout_generates_default_sections(app, client, admin_headers):
     resp = client.get(f"/table_layouts/new?market_id={market_id}", headers=admin_headers)
     assert resp.status_code == 200
 
-    resp = client.post(f"/table_layouts/new?market_id={market_id}", data={
-        "name": "Default Layout Test",
-        "csrf_token": _csrf_token_from_response(resp),
-    }, follow_redirects=True, headers=admin_headers)
+    resp = client.post(
+        f"/table_layouts/new?market_id={market_id}",
+        data={
+            "name": "Default Layout Test",
+            "csrf_token": _csrf_token_from_response(resp),
+        },
+        follow_redirects=True,
+        headers=admin_headers,
+    )
     assert resp.status_code == 200
     assert "Default Layout Test" in resp.data.decode("utf-8") or "Default Layout Test" in resp.text
 
 
 def _csrf_token_from_response(resp):
     import re
+
     match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', resp.text)
     return match.group(1) if match else ""
 
@@ -942,23 +1010,36 @@ def test_table_layout_requires_product_for_placement(app, client, admin_headers)
     _ensure_csrf_cookie(client)
     with app.app_context():
         from app.models.table_layout import MarketTableLayout, MarketTableSection, TableSectionType
-        market = Market(name="Placement Test Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+
+        market = Market(
+            name="Placement Test Market",
+            status=MarketStatus.SCHEDULED,
+            city="Clarksville",
+            state="TN",
+        )
         db.session.add(market)
         db.session.flush()
         layout = MarketTableLayout(market_id=market.id, name="Placement Test")
         db.session.add(layout)
         db.session.flush()
-        section = MarketTableSection(layout_id=layout.id, section_type=TableSectionType.FRONT_LEFT, label="FL", sort_order=1)
+        section = MarketTableSection(
+            layout_id=layout.id, section_type=TableSectionType.FRONT_LEFT, label="FL", sort_order=1
+        )
         db.session.add(section)
         db.session.commit()
         section_id = section.id
         layout_id = layout.id
 
-    resp = client.post(f"/table_layouts/{layout_id}/placements/new?section_id={section_id}", data={
-        "product_id": "0",
-        "quantity": "1",
-        "csrf_token": _csrf_token_from_response(client.get(f"/table_layouts/{layout_id}")),
-    }, follow_redirects=True, headers=admin_headers)
+    resp = client.post(
+        f"/table_layouts/{layout_id}/placements/new?section_id={section_id}",
+        data={
+            "product_id": "0",
+            "quantity": "1",
+            "csrf_token": _csrf_token_from_response(client.get(f"/table_layouts/{layout_id}")),
+        },
+        follow_redirects=True,
+        headers=admin_headers,
+    )
     assert resp.status_code in (200, 302)
 
 
@@ -966,7 +1047,13 @@ def test_table_layout_archive(app, client, admin_headers):
     _ensure_csrf_cookie(client)
     with app.app_context():
         from app.models.table_layout import MarketTableLayout
-        market = Market(name="Archive Layout Market", status=MarketStatus.SCHEDULED, city="Clarksville", state="TN")
+
+        market = Market(
+            name="Archive Layout Market",
+            status=MarketStatus.SCHEDULED,
+            city="Clarksville",
+            state="TN",
+        )
         db.session.add(market)
         db.session.flush()
         layout = MarketTableLayout(market_id=market.id, name="Archive Test")
@@ -979,6 +1066,7 @@ def test_table_layout_archive(app, client, admin_headers):
 
     with app.app_context():
         from app.models.table_layout import MarketTableLayout
+
         assert db.session.get(MarketTableLayout, layout_id) is None
 
 
@@ -999,6 +1087,7 @@ def test_impulse_tray_loads(app, client, admin_headers):
 def test_impulse_tray_service_no_data(app):
     with app.app_context():
         from app.services.impulse_tray import get_impulse_tray_recommendations
+
         result = get_impulse_tray_recommendations()
         assert isinstance(result, dict)
         assert result["total_products"] == 0
@@ -1006,6 +1095,7 @@ def test_impulse_tray_service_no_data(app):
 
 def test_impulse_tray_enums():
     from app.models.table_layout import TableSectionType
+
     assert TableSectionType.IMPULSE_TRAY.value == "impulse_tray"
 
 
@@ -1013,7 +1103,9 @@ def test_follow_up_generate_wont_run_for_pending_market(app):
     with app.app_context():
         from app.services.follow_ups import generate_market_follow_ups
 
-        market = Market(name="Pending FU Market", status=MarketStatus.INTERESTED, city="Clarksville", state="TN")
+        market = Market(
+            name="Pending FU Market", status=MarketStatus.INTERESTED, city="Clarksville", state="TN"
+        )
         db.session.add(market)
         db.session.commit()
 

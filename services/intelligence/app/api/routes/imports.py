@@ -139,9 +139,7 @@ async def get_table_review(
     table_name: str,
     db: AsyncSession = Depends(get_db),
 ):
-    review = await db.execute(
-        select(LegacyTableReviewState).where(LegacyTableReviewState.table_name == table_name)
-    )
+    review = await db.execute(select(LegacyTableReviewState).where(LegacyTableReviewState.table_name == table_name))
     review = review.scalar_one_or_none()
     if review is None:
         raise HTTPException(

@@ -33,8 +33,7 @@ def test_gcode_parser_finds_stats_before_long_configuration_footer(tmp_path):
 def test_gcode_parser_uses_selected_material_density_for_volume_fallback(tmp_path):
     path = tmp_path / "quote.gcode"
     path.write_text(
-        "; filament used [cm3] = 10.00\n"
-        "; estimated print time = 10m\n",
+        "; filament used [cm3] = 10.00\n; estimated print time = 10m\n",
         encoding="utf-8",
     )
 

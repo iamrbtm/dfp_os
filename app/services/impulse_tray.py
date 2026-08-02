@@ -45,16 +45,18 @@ def get_impulse_tray_products(market_id: int | None = None) -> list[dict]:
     results: list[dict] = []
     for placement, section, layout, market in rows:
         sell_through = _calc_sell_through(market.id, placement.product_id)
-        results.append({
-            "placement": placement,
-            "section": section,
-            "layout": layout,
-            "market": market,
-            "product": placement.product,
-            "sell_through_qty": sell_through["sold"],
-            "sell_through_revenue": sell_through["revenue"],
-            "sell_through_rate": sell_through["rate"],
-        })
+        results.append(
+            {
+                "placement": placement,
+                "section": section,
+                "layout": layout,
+                "market": market,
+                "product": placement.product,
+                "sell_through_qty": sell_through["sold"],
+                "sell_through_revenue": sell_through["revenue"],
+                "sell_through_rate": sell_through["rate"],
+            }
+        )
     return results
 
 
@@ -75,7 +77,9 @@ def get_impulse_tray_recommendations(market_id: int | None = None) -> dict:
     total_revenue = sum((p["sell_through_revenue"] or Decimal("0")) for p in placements)
     total_sold = sum((p["sell_through_qty"] or 0) for p in placements)
 
-    sorted_by_revenue = sorted(placements, key=lambda p: p["sell_through_revenue"] or Decimal("0"), reverse=True)
+    sorted_by_revenue = sorted(
+        placements, key=lambda p: p["sell_through_revenue"] or Decimal("0"), reverse=True
+    )
     top_performers = sorted_by_revenue[:5]
     bottom_performers = sorted_by_revenue[-5:] if len(sorted_by_revenue) >= 5 else sorted_by_revenue
 
@@ -86,13 +90,15 @@ def get_impulse_tray_recommendations(market_id: int | None = None) -> dict:
                 qty = p.get("placement", {}).get("quantity")
                 if hasattr(p["placement"], "quantity"):
                     qty = p["placement"].quantity
-                recommendations.append({
-                    "type": "rotate_out",
-                    "product_name": p["product"].name,
-                    "product_id": p["product"].id,
-                    "reason": f"Low impulse sell-through (${float(p['sell_through_revenue'] or 0):.2f} in {p.get('sell_through_qty', 0)} units)",
-                    "suggested_replacement": None,
-                })
+                recommendations.append(
+                    {
+                        "type": "rotate_out",
+                        "product_name": p["product"].name,
+                        "product_id": p["product"].id,
+                        "reason": f"Low impulse sell-through (${float(p['sell_through_revenue'] or 0):.2f} in {p.get('sell_through_qty', 0)} units)",
+                        "suggested_replacement": None,
+                    }
+                )
 
     names_in_impulse = {p["product"].name for p in placements if p["product"]}
     high_performers = (
@@ -120,13 +126,15 @@ def get_impulse_tray_recommendations(market_id: int | None = None) -> dict:
     for product, qty, revenue in high_performers:
         if len(recommendations) >= len(bottom_performers):
             break
-        recommendations.append({
-            "type": "rotate_in",
-            "product_name": product.name,
-            "product_id": product.id,
-            "reason": f"Strong seller not yet in impulse tray (${float(revenue):.2f} in {int(qty)} units)",
-            "suggested_replacement": None,
-        })
+        recommendations.append(
+            {
+                "type": "rotate_in",
+                "product_name": product.name,
+                "product_id": product.id,
+                "reason": f"Strong seller not yet in impulse tray (${float(revenue):.2f} in {int(qty)} units)",
+                "suggested_replacement": None,
+            }
+        )
 
     return {
         "placements": placements,
@@ -194,8 +202,7 @@ def optimize_impulse_tray(
     """Generate optimized impulse tray product suggestions for a market
     based on historical impulse sell-through data."""
     layout = (
-        MarketTableLayout.query
-        .filter_by(market_id=market_id)
+        MarketTableLayout.query.filter_by(market_id=market_id)
         .order_by(MarketTableLayout.created_at.desc())
         .first()
     )

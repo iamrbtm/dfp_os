@@ -33,7 +33,9 @@ class User(UserMixin, PrimaryKeyMixin, TimestampMixin, db.Model):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    theme_slug: Mapped[str] = mapped_column(String(80), default="dfp-dudefish-light", nullable=False)
+    theme_slug: Mapped[str] = mapped_column(
+        String(80), default="dfp-dudefish-light", nullable=False
+    )
     business_id: Mapped[int | None] = mapped_column(
         ForeignKey("businesses.id"), nullable=True, index=True
     )

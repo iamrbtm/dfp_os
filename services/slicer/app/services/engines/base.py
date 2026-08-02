@@ -48,7 +48,7 @@ class SliceOptions:
 
         try:
             nozzle_diameter = Decimal(str(options.get("nozzle_diameter", "0.4")))
-        except (InvalidOperation, ValueError):
+        except InvalidOperation, ValueError:
             raise RequestValidationError("invalid_nozzle", "The nozzle diameter must be a decimal value.") from None
         if nozzle_diameter != Decimal("0.4"):
             raise RequestValidationError("unsupported_nozzle", "Only a 0.4 mm nozzle is supported.")

@@ -20,8 +20,12 @@ class BoothHintStatus(StrEnum):
 class BoothModeHint(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "booth_mode_hints"
 
-    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
-    pos_session_id: Mapped[int | None] = mapped_column(ForeignKey("pos_sessions.id"), nullable=True, index=True)
+    market_id: Mapped[int | None] = mapped_column(
+        ForeignKey("markets.id"), nullable=True, index=True
+    )
+    pos_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pos_sessions.id"), nullable=True, index=True
+    )
     key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)

@@ -35,7 +35,9 @@ def test_customer_model_and_service(app, monkeypatch):
     monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
 
     with app.app_context():
-        customer = Customer(first_name="Jane", last_name="Doe", email="jane@example.com", is_active=True)
+        customer = Customer(
+            first_name="Jane", last_name="Doe", email="jane@example.com", is_active=True
+        )
         create_customer(customer, actor_id=123)
         stored = Customer.query.filter_by(email="jane@example.com").first()
         assert stored is not None
@@ -47,7 +49,11 @@ def test_customer_model_and_service(app, monkeypatch):
 def test_public_custom_order_form_submission(client):
     response = client.post(
         "/custom-orders",
-        data={"name": "Public User", "email": "public@example.com", "description": "Please make a custom fidget toy."},
+        data={
+            "name": "Public User",
+            "email": "public@example.com",
+            "description": "Please make a custom fidget toy.",
+        },
     )
     assert response.status_code == 200
     assert b"Request received" in response.data
@@ -85,7 +91,9 @@ def test_order_with_items_payment_and_print_job(app, monkeypatch):
     monkeypatch.setattr("app.services.audit_client.AuditClient.record", fake_record)
 
     with app.app_context():
-        customer = Customer(first_name="Order", last_name="Customer", email="order@example.com", is_active=True)
+        customer = Customer(
+            first_name="Order", last_name="Customer", email="order@example.com", is_active=True
+        )
         category = Category(name="Orders", slug="orders")
         product = Product(
             name="Order Product",
@@ -113,7 +121,13 @@ def test_order_with_items_payment_and_print_job(app, monkeypatch):
             line_total=Decimal("20.00"),
         )
         payment = Payment(order=order, amount=Decimal("20.00"), method=PaymentMethod.CASH)
-        job = PrintJob(order_item=item, product=product, status=PrintJobStatus.QUEUED, estimated_minutes=120, label="Test print job")
+        job = PrintJob(
+            order_item=item,
+            product=product,
+            status=PrintJobStatus.QUEUED,
+            estimated_minutes=120,
+            label="Test print job",
+        )
         db.session.add_all([item, payment, job])
         db.session.commit()
 
@@ -129,6 +143,8 @@ def test_order_with_items_payment_and_print_job(app, monkeypatch):
         assert order.balance_due == Decimal("0.00")
         assert len(order.items) == 1
         assert len(order.payments) == 1
-        assert PrintJob.query.filter_by(label="Test print job").one().status == PrintJobStatus.QUEUED
+        assert (
+            PrintJob.query.filter_by(label="Test print job").one().status == PrintJobStatus.QUEUED
+        )
 
     assert any(call["action"] == "order.created" for call in calls)

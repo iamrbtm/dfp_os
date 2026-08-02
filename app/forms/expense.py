@@ -16,7 +16,14 @@ from wtforms.validators import DataRequired, Length, Optional
 
 from app.extensions import db
 from app.forms.common import enum_choices
-from app.models import CustomRequest, CustomRequestStatus, Expense, ExpenseCategory, Market, MarketStatus
+from app.models import (
+    CustomRequest,
+    CustomRequestStatus,
+    Expense,
+    ExpenseCategory,
+    Market,
+    MarketStatus,
+)
 
 
 class ExpenseForm(FlaskForm):
@@ -39,7 +46,13 @@ class ExpenseForm(FlaskForm):
         super().__init__(*args, **kwargs)
         markets = (
             Market.query.filter(
-                ~Market.status.in_([MarketStatus.COMPLETED, MarketStatus.CANCELED, MarketStatus.NOT_WORTH_REPEATING])
+                ~Market.status.in_(
+                    [
+                        MarketStatus.COMPLETED,
+                        MarketStatus.CANCELED,
+                        MarketStatus.NOT_WORTH_REPEATING,
+                    ]
+                )
             )
             .order_by(Market.event_date.asc())
             .all()
@@ -58,7 +71,13 @@ class ExpenseForm(FlaskForm):
 
         open_orders = (
             CustomRequest.query.filter(
-                ~CustomRequest.status.in_([CustomRequestStatus.COMPLETED, CustomRequestStatus.CANCELLED, CustomRequestStatus.ARCHIVED])
+                ~CustomRequest.status.in_(
+                    [
+                        CustomRequestStatus.COMPLETED,
+                        CustomRequestStatus.CANCELLED,
+                        CustomRequestStatus.ARCHIVED,
+                    ]
+                )
             )
             .order_by(CustomRequest.created_at.desc())
             .all()
@@ -81,10 +100,13 @@ class ExpenseForm(FlaskForm):
         expense.description = self.description.data
         expense.amount = self.amount.data
         expense.payment_method = self.payment_method.data or None
-        expense.related_market_id = self.related_market_id.data or None if self.related_market_id.data else None
-        expense.related_order_id = self.related_order_id.data or None if self.related_order_id.data else None
+        expense.related_market_id = (
+            self.related_market_id.data or None if self.related_market_id.data else None
+        )
+        expense.related_order_id = (
+            self.related_order_id.data or None if self.related_order_id.data else None
+        )
         expense.receipt_file_path = self.receipt_file_path.data or None
         expense.tax_deductible = bool(self.tax_deductible.data)
         expense.notes = self.notes.data
         return expense
-

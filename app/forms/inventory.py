@@ -149,7 +149,9 @@ class InventoryTransferForm(FlaskForm):
 
     def __init__(self, *args, source_location_id: int | None = None, **kwargs):
         super().__init__(*args, **kwargs)
-        query = InventoryLocation.query.filter(InventoryLocation.active.is_(True)).order_by(InventoryLocation.name)
+        query = InventoryLocation.query.filter(InventoryLocation.active.is_(True)).order_by(
+            InventoryLocation.name
+        )
         if source_location_id is not None:
             query = query.filter(InventoryLocation.id != source_location_id)
         self.to_location_id.choices = [(item.id, item.name) for item in query]

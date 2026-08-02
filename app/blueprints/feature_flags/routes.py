@@ -20,12 +20,13 @@ def index():
     query = select(FeatureFlag).order_by(FeatureFlag.key)
     if search:
         query = query.where(
-            FeatureFlag.key.ilike(f"%{search}%")
-            | FeatureFlag.description.ilike(f"%{search}%")
+            FeatureFlag.key.ilike(f"%{search}%") | FeatureFlag.description.ilike(f"%{search}%")
         )
     flags = db.session.scalars(query).all()
     modules = module_statuses()
-    return render_template("admin/feature_flags/index.html", flags=flags, search=search, modules=modules)
+    return render_template(
+        "admin/feature_flags/index.html", flags=flags, search=search, modules=modules
+    )
 
 
 @bp.route("/<int:flag_id>/toggle", methods=["POST"])

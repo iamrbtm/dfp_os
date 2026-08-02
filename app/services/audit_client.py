@@ -45,7 +45,9 @@ class AuditClient:
     ) -> dict[str, Any] | None:
         if not self._is_configured():
             if critical and self.enabled and current_app.config.get("AUDIT_LOG_FAIL_CLOSED", False):
-                raise AuditDispatchError("Critical audit event could not be dispatched: audit-log is not configured")
+                raise AuditDispatchError(
+                    "Critical audit event could not be dispatched: audit-log is not configured"
+                )
             return None
 
         payload = {

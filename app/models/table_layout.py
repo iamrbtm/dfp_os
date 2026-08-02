@@ -27,7 +27,9 @@ class TableSectionType(StrEnum):
 class MarketTableLayout(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "market_table_layouts"
 
-    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
+    market_id: Mapped[int | None] = mapped_column(
+        ForeignKey("markets.id"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -37,7 +39,11 @@ class MarketTableLayout(PrimaryKeyMixin, TimestampMixin, db.Model):
     )
 
     market = relationship("Market", foreign_keys=[market_id])
-    copied_from = relationship("MarketTableLayout", remote_side="MarketTableLayout.id", foreign_keys=[copied_from_layout_id])
+    copied_from = relationship(
+        "MarketTableLayout",
+        remote_side="MarketTableLayout.id",
+        foreign_keys=[copied_from_layout_id],
+    )
     sections = relationship(
         "MarketTableSection",
         back_populates="layout",

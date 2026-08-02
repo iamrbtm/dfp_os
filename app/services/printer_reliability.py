@@ -98,7 +98,11 @@ def get_printer_reliability_summary(printer: Printer) -> PrinterReliabilitySumma
     jobs = PrintJob.query.filter(PrintJob.printer_id == printer.id).all()
     completed = sum(1 for job in jobs if job.status == PrintJobStatus.COMPLETED)
     failed = sum(1 for job in jobs if job.status == PrintJobStatus.FAILED)
-    active = sum(1 for job in jobs if job.status in {PrintJobStatus.QUEUED, PrintJobStatus.PRINTING, PrintJobStatus.PAUSED})
+    active = sum(
+        1
+        for job in jobs
+        if job.status in {PrintJobStatus.QUEUED, PrintJobStatus.PRINTING, PrintJobStatus.PAUSED}
+    )
     total_finished = completed + failed
     failure_rate = _rate(failed, total_finished)
     autopsies = PrintFailureAutopsy.query.filter(PrintFailureAutopsy.printer_id == printer.id).all()
@@ -126,7 +130,9 @@ def get_all_printer_reliability_summaries() -> list[PrinterReliabilitySummary]:
 def get_failure_rate_for_cost_engine(*, printer_model: str | None = None) -> Decimal | None:
     query = PrintJob.query
     if printer_model:
-        query = query.join(Printer, PrintJob.printer_id == Printer.id).filter(Printer.model == printer_model)
+        query = query.join(Printer, PrintJob.printer_id == Printer.id).filter(
+            Printer.model == printer_model
+        )
     completed = query.filter(PrintJob.status == PrintJobStatus.COMPLETED).count()
     failed = query.filter(PrintJob.status == PrintJobStatus.FAILED).count()
     total = completed + failed
@@ -195,7 +201,11 @@ def _rate(numerator: int, denominator: int) -> Decimal:
 def _common_causes(autopsies: Iterable[PrintFailureAutopsy]) -> list[dict[str, object]]:
     counts = Counter(autopsy.category for autopsy in autopsies)
     return [
-        {"category": category.value, "label": category.value.replace("_", " ").title(), "count": count}
+        {
+            "category": category.value,
+            "label": category.value.replace("_", " ").title(),
+            "count": count,
+        }
         for category, count in counts.most_common(5)
         if category != PrintFailureCategory.UNKNOWN or count
     ]

@@ -15,12 +15,10 @@ DEFAULT_CONFIG: dict[str, dict[str, str]] = {
     # ── Font Families ──────────────────────────────────────────────
     "font_family": {
         "body": (
-            "'Inter', system-ui, -apple-system, BlinkMacSystemFont, "
-            "'Segoe UI', Roboto, sans-serif"
+            "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
         ),
         "headings": (
-            "'Inter', system-ui, -apple-system, BlinkMacSystemFont, "
-            "'Segoe UI', Roboto, sans-serif"
+            "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
         ),
         "code": "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
     },
@@ -171,15 +169,11 @@ def build_config_css(overrides: dict[str, Any] | None = None) -> str:
     lines.append(
         f"  line-height: {cfg.get('code_block_line_height', DEFAULT_CONFIG['code_block_line_height'])};"
     )
-    lines.append(
-        f"  font-family: {ff.get('code', DEFAULT_CONFIG['font_family']['code'])};"
-    )
+    lines.append(f"  font-family: {ff.get('code', DEFAULT_CONFIG['font_family']['code'])};")
     lines.append("  overflow-x: auto;")
     lines.append("}")
     lines.append(".md-render code {")
-    lines.append(
-        f"  font-family: {ff.get('code', DEFAULT_CONFIG['font_family']['code'])};"
-    )
+    lines.append(f"  font-family: {ff.get('code', DEFAULT_CONFIG['font_family']['code'])};")
     lines.append(
         f"  font-size: {cfg.get('inline_code_font_size', DEFAULT_CONFIG['inline_code_font_size'])};"
     )
@@ -206,47 +200,33 @@ def build_config_css(overrides: dict[str, Any] | None = None) -> str:
     lines.append(
         f"  padding: {cfg.get('blockquote_padding', DEFAULT_CONFIG['blockquote_padding'])};"
     )
-    lines.append(
-        f"  margin: {cfg.get('blockquote_margin', DEFAULT_CONFIG['blockquote_margin'])};"
-    )
+    lines.append(f"  margin: {cfg.get('blockquote_margin', DEFAULT_CONFIG['blockquote_margin'])};")
     lines.append(
         f"  font-style: {cfg.get('blockquote_font_style', DEFAULT_CONFIG['blockquote_font_style'])};"
     )
     lines.append("}")
 
     lines.append(".md-render hr {")
-    lines.append(
-        f"  margin: {cfg.get('hr_margin', DEFAULT_CONFIG['hr_margin'])};"
-    )
-    lines.append(
-        f"  border: {cfg.get('hr_border', DEFAULT_CONFIG['hr_border'])};"
-    )
+    lines.append(f"  margin: {cfg.get('hr_margin', DEFAULT_CONFIG['hr_margin'])};")
+    lines.append(f"  border: {cfg.get('hr_border', DEFAULT_CONFIG['hr_border'])};")
     lines.append("}")
 
     lines.append(".md-render a {")
-    lines.append(
-        f"  color: {cfg.get('link_color', DEFAULT_CONFIG['link_color'])};"
-    )
+    lines.append(f"  color: {cfg.get('link_color', DEFAULT_CONFIG['link_color'])};")
     lines.append(
         f"  text-decoration: {cfg.get('link_decoration', DEFAULT_CONFIG['link_decoration'])};"
     )
     lines.append("}")
     lines.append(".md-render a:hover {")
-    lines.append(
-        f"  color: {cfg.get('link_hover_color', DEFAULT_CONFIG['link_hover_color'])};"
-    )
+    lines.append(f"  color: {cfg.get('link_hover_color', DEFAULT_CONFIG['link_hover_color'])};")
     lines.append("}")
 
     lines.append(".md-render table {")
-    lines.append(
-        f"  width: {cfg.get('table_width', DEFAULT_CONFIG['table_width'])};"
-    )
+    lines.append(f"  width: {cfg.get('table_width', DEFAULT_CONFIG['table_width'])};")
     lines.append(
         f"  border-collapse: {cfg.get('table_border_collapse', DEFAULT_CONFIG['table_border_collapse'])};"
     )
-    lines.append(
-        f"  margin: {cfg.get('table_margin', DEFAULT_CONFIG['table_margin'])};"
-    )
+    lines.append(f"  margin: {cfg.get('table_margin', DEFAULT_CONFIG['table_margin'])};")
     lines.append("}")
     lines.append(".md-render th {")
     lines.append(
@@ -258,17 +238,13 @@ def build_config_css(overrides: dict[str, Any] | None = None) -> str:
     lines.append(
         f"  padding: {cfg.get('table_cell_padding', DEFAULT_CONFIG['table_cell_padding'])};"
     )
-    lines.append(
-        f"  border: {cfg.get('table_cell_border', DEFAULT_CONFIG['table_cell_border'])};"
-    )
+    lines.append(f"  border: {cfg.get('table_cell_border', DEFAULT_CONFIG['table_cell_border'])};")
     lines.append("}")
     lines.append(".md-render td {")
     lines.append(
         f"  padding: {cfg.get('table_cell_padding', DEFAULT_CONFIG['table_cell_padding'])};"
     )
-    lines.append(
-        f"  border: {cfg.get('table_cell_border', DEFAULT_CONFIG['table_cell_border'])};"
-    )
+    lines.append(f"  border: {cfg.get('table_cell_border', DEFAULT_CONFIG['table_cell_border'])};")
     lines.append("}")
     lines.append(".md-render tr:nth-child(even) {")
     lines.append(
@@ -296,9 +272,4 @@ def render_markdown(text: str, css_overrides: dict[str, Any] | None = None) -> s
         },
     )
     css = build_config_css(css_overrides)
-    return (
-        "<style>\n"
-        f"{css}\n"
-        "</style>\n"
-        f'<div class="md-render">\n{html_body}\n</div>'
-    )
+    return f'<style>\n{css}\n</style>\n<div class="md-render">\n{html_body}\n</div>'

@@ -109,6 +109,7 @@ def trend_scout_pipeline(self) -> dict:
 
         try:
             from app.services.trend_scout_prune import prune_old_data
+
             db.session.commit()
             prune_result = prune_old_data(dry_run=False)
             if prune_result.get("status") == "pruned":

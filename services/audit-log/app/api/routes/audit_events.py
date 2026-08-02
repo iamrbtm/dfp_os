@@ -72,6 +72,7 @@ async def post_audit_event(body: AuditEventCreate) -> AuditEventCreateResponse:
         val = getattr(body, field)
         if val is not None:
             import json
+
             total_bytes += len(json.dumps(val))
     if total_bytes > 1_000_000:
         raise HTTPException(

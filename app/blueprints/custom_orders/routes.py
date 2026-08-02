@@ -17,7 +17,12 @@ from app.services.crud import (
     get_by_id,
     paginate_query,
 )
-from app.services.custom_requests import archive_custom_request, create_custom_request, snapshot_custom_request, update_custom_request
+from app.services.custom_requests import (
+    archive_custom_request,
+    create_custom_request,
+    snapshot_custom_request,
+    update_custom_request,
+)
 from app.utils.auth import roles_required
 
 
@@ -57,7 +62,16 @@ def _payment_tags(instance: CustomRequest):
     else:
         tags.append(("pricing_pending", "Pricing Pending", "var(--color-text-muted)"))
 
-    if instance.deadline and instance.deadline < datetime.now(timezone.utc) and instance.status not in (CustomRequestStatus.COMPLETED, CustomRequestStatus.CANCELLED, CustomRequestStatus.ARCHIVED):
+    if (
+        instance.deadline
+        and instance.deadline < datetime.now(timezone.utc)
+        and instance.status
+        not in (
+            CustomRequestStatus.COMPLETED,
+            CustomRequestStatus.CANCELLED,
+            CustomRequestStatus.ARCHIVED,
+        )
+    ):
         tags.append(("overdue", "Overdue", "var(--color-danger)"))
 
     return tags
@@ -78,7 +92,10 @@ CUSTOM_REQUEST_RESOURCES: dict[str, ResourceConfig] = {
             ("Budget", lambda item: item.estimated_budget),
             ("Total", lambda item: f"${item.total:,.2f}" if item.total else "\u2014"),
             ("Paid", lambda item: f"${item.amount_paid:,.2f}" if item.amount_paid else "\u2014"),
-            ("Deadline", lambda item: item.deadline.strftime("%Y-%m-%d") if item.deadline else "\u2014"),
+            (
+                "Deadline",
+                lambda item: item.deadline.strftime("%Y-%m-%d") if item.deadline else "\u2014",
+            ),
         ],
     ),
 }
@@ -163,9 +180,7 @@ def create_resource(resource_key: str = "requests"):
                 resource_id=instance.id,
             )
         )
-    return render_template(
-        "custom_orders/form.html", resource=config, form=form, mode="create"
-    )
+    return render_template("custom_orders/form.html", resource=config, form=form, mode="create")
 
 
 @bp.get("/<int:resource_id>")
@@ -218,9 +233,7 @@ def edit_resource(resource_id: int, resource_key: str = "requests"):
             db.session.rollback()
             flash(f"Unable to update that {config.singular.lower()}.", "danger")
             return (
-                render_template(
-                    "custom_orders/form.html", resource=config, form=form, mode="edit"
-                ),
+                render_template("custom_orders/form.html", resource=config, form=form, mode="edit"),
                 400,
             )
         flash(f"{config.singular} updated successfully.", "success")

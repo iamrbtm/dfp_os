@@ -84,8 +84,12 @@ def update_print_job_status(
     return instance
 
 
-def update_print_job(instance: PrintJob, *, before_state: dict, actor_id: int | None = None) -> PrintJob:
-    return update_resource(instance, before_state=before_state, actor_id=actor_id, entity_type="print_job")
+def update_print_job(
+    instance: PrintJob, *, before_state: dict, actor_id: int | None = None
+) -> PrintJob:
+    return update_resource(
+        instance, before_state=before_state, actor_id=actor_id, entity_type="print_job"
+    )
 
 
 def archive_print_job(instance: PrintJob, *, actor_id: int | None = None) -> PrintJob:

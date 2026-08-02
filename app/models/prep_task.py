@@ -72,7 +72,9 @@ class PrepTask(PrimaryKeyMixin, TimestampMixin, db.Model):
     business_id: Mapped[int | None] = mapped_column(
         ForeignKey("businesses.id"), nullable=True, index=True
     )
-    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
+    market_id: Mapped[int | None] = mapped_column(
+        ForeignKey("markets.id"), nullable=True, index=True
+    )
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("prep_task_templates.id"), nullable=True, index=True
     )
@@ -89,14 +91,22 @@ class PrepTask(PrimaryKeyMixin, TimestampMixin, db.Model):
         nullable=False,
         index=True,
     )
-    assigned_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
-    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    assigned_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    due_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source: Mapped[str] = mapped_column(String(80), default="manual", nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     follow_up_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
-    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), nullable=True, index=True)
-    related_order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), nullable=True, index=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id"), nullable=True, index=True
+    )
+    related_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id"), nullable=True, index=True
+    )
     related_custom_request_id: Mapped[int | None] = mapped_column(
         ForeignKey("custom_requests.id"), nullable=True, index=True
     )

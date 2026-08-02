@@ -161,6 +161,7 @@ def create_resource(resource_key: str = "products"):
             create_admin_resource(instance, actor_id=current_user.id)
         except IntegrityError:
             from app.extensions import db
+
             db.session.rollback()
             flash(
                 f"Unable to save that {config.singular.lower()}. Please check for duplicates.",
@@ -226,6 +227,7 @@ def edit_resource(resource_id: int, resource_key: str = "products"):
             update_admin_resource(instance, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
             from app.extensions import db
+
             db.session.rollback()
             flash(
                 f"Unable to save that {config.singular.lower()}. Please check for duplicates.",

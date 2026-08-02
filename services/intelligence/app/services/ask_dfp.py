@@ -17,12 +17,16 @@ async def answer_question(db: AsyncSession, payload: AskDfpRequest) -> AskDfpRes
 
     if "product_summary" in tools:
         products = (
-            await db.execute(
-                select(ProductSalesSummary)
-                .order_by(ProductSalesSummary.total_units.desc(), ProductSalesSummary.total_net_sales_cents.desc())
-                .limit(payload.limit)
+            (
+                await db.execute(
+                    select(ProductSalesSummary)
+                    .order_by(ProductSalesSummary.total_units.desc(), ProductSalesSummary.total_net_sales_cents.desc())
+                    .limit(payload.limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if products:
             evidence.append(
                 {
@@ -47,12 +51,16 @@ async def answer_question(db: AsyncSession, payload: AskDfpRequest) -> AskDfpRes
 
     if "seasonal_summary" in tools:
         seasonal = (
-            await db.execute(
-                select(SeasonalProductPerformance)
-                .order_by(SeasonalProductPerformance.total_units.desc())
-                .limit(payload.limit)
+            (
+                await db.execute(
+                    select(SeasonalProductPerformance)
+                    .order_by(SeasonalProductPerformance.total_units.desc())
+                    .limit(payload.limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if seasonal:
             evidence.append(
                 {
@@ -71,12 +79,16 @@ async def answer_question(db: AsyncSession, payload: AskDfpRequest) -> AskDfpRes
 
     if "channel_summary" in tools:
         channels = (
-            await db.execute(
-                select(ChannelPerformanceSummary)
-                .order_by(ChannelPerformanceSummary.total_net_sales_cents.desc())
-                .limit(payload.limit)
+            (
+                await db.execute(
+                    select(ChannelPerformanceSummary)
+                    .order_by(ChannelPerformanceSummary.total_net_sales_cents.desc())
+                    .limit(payload.limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if channels:
             evidence.append(
                 {

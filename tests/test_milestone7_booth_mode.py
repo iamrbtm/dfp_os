@@ -38,8 +38,12 @@ def _market() -> Market:
     return market
 
 
-def _product(*, name: str = "High Margin Dragon", profit: Decimal = Decimal("18.00"), quantity: int = 5) -> Product:
-    category = Category(name="Booth Products", slug=f"booth-products-{name.lower().replace(' ', '-')}")
+def _product(
+    *, name: str = "High Margin Dragon", profit: Decimal = Decimal("18.00"), quantity: int = 5
+) -> Product:
+    category = Category(
+        name="Booth Products", slug=f"booth-products-{name.lower().replace(' ', '-')}"
+    )
     product = Product(
         name=name,
         slug=name.lower().replace(" ", "-"),
@@ -92,7 +96,13 @@ def test_booth_mode_requires_auth(client):
 
 def test_booth_mode_feature_flag_blocks_route(client, app):
     with app.app_context():
-        user = User(email="booth-flag@example.com", first_name="Booth", last_name="Flag", role=UserRole.ADMIN, is_active=True)
+        user = User(
+            email="booth-flag@example.com",
+            first_name="Booth",
+            last_name="Flag",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
         user.set_password("super-secret")
         db.session.add(user)
         db.session.add(FeatureFlag(key="module.booth_mode.enabled", enabled=False))
@@ -115,7 +125,9 @@ def test_booth_break_even_and_profit_tracking(app, admin_user):
             items=[{"product_id": product.id, "quantity": 4, "item_type": "product"}],
         )
 
-        state = calculate_break_even(session=session, market=market, summary=get_session_summary(session.id))
+        state = calculate_break_even(
+            session=session, market=market, summary=get_session_summary(session.id)
+        )
         assert state.revenue == Decimal("80.00")
         assert state.costs == Decimal("60.00")
         assert state.reached is True
@@ -127,7 +139,9 @@ def test_booth_mode_generates_and_suppresses_hints(client, login_admin, app):
         market = _market()
         low_stock_product = _product(name="Low Stock Turtle", quantity=1)
         _product(name="Slow High Margin Item", profit=Decimal("30.00"), quantity=4)
-        session = _session(login_admin["id"], market.id, low_stock_product.inventory_records[0].location_id)
+        session = _session(
+            login_admin["id"], market.id, low_stock_product.inventory_records[0].location_id
+        )
         session_id = session.id
 
     response = client.get(f"/booth-mode/?session_id={session_id}")

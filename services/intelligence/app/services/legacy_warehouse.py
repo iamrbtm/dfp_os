@@ -26,7 +26,7 @@ def _parse_date(val: Any) -> date | None:
         return val
     try:
         return datetime.strptime(str(val)[:10], "%Y-%m-%d").date()
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -35,7 +35,7 @@ def _int_cents(val: Any) -> int:
         return 0
     try:
         return int((Decimal(str(val)) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    except (ValueError, TypeError, InvalidOperation):
+    except ValueError, TypeError, InvalidOperation:
         return 0
 
 
@@ -44,7 +44,7 @@ def _decimal(val: Any) -> Decimal:
         return Decimal("0")
     try:
         return Decimal(str(val))
-    except (ValueError, TypeError, InvalidOperation):
+    except ValueError, TypeError, InvalidOperation:
         return Decimal("0")
 
 
@@ -161,9 +161,7 @@ async def rebuild_legacy_warehouse(db: AsyncSession) -> dict[str, Any]:
         dated = [row.sale_date for row in rows if row.sale_date]
         avg_units = total_units / Decimal(max(len(active_months), 1)) if active_months else Decimal("0")
         avg_cents = (
-            int((Decimal(total_net) / total_units).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-            if total_units
-            else 0
+            int((Decimal(total_net) / total_units).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) if total_units else 0
         )
         db.add(
             ProductSalesSummary(

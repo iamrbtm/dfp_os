@@ -38,9 +38,16 @@ def _make_token(client, name="Test Token", user_id=None):
     with client.application.app_context():
         if user_id is None:
             users = User.query.all()
-            user = users[0] if users else User(
-                email="fallback@example.com", first_name="F", last_name="B",
-                role=UserRole.STAFF, is_active=True,
+            user = (
+                users[0]
+                if users
+                else User(
+                    email="fallback@example.com",
+                    first_name="F",
+                    last_name="B",
+                    role=UserRole.STAFF,
+                    is_active=True,
+                )
             )
         else:
             user = db.session.get(User, user_id)
@@ -81,8 +88,11 @@ def _auth_header(raw_token):
 def test_create_api_token_via_service(app):
     with app.app_context():
         user = User(
-            email="svc@example.com", first_name="Svc", last_name="User",
-            role=UserRole.STAFF, is_active=True,
+            email="svc@example.com",
+            first_name="Svc",
+            last_name="User",
+            role=UserRole.STAFF,
+            is_active=True,
         )
         user.set_password("pw")
         db.session.add(user)
@@ -98,13 +108,17 @@ def test_create_api_token_via_service(app):
 def test_create_api_token_with_expiry(app):
     with app.app_context():
         user = User(
-            email="exp@example.com", first_name="Exp", last_name="User",
-            role=UserRole.STAFF, is_active=True,
+            email="exp@example.com",
+            first_name="Exp",
+            last_name="User",
+            role=UserRole.STAFF,
+            is_active=True,
         )
         user.set_password("pw")
         db.session.add(user)
         db.session.commit()
         from datetime import datetime, timezone, timedelta
+
         expires = datetime.now(timezone.utc) + timedelta(days=30)
         token, raw = create_api_token(user=user, name="Expiring", expires_at=expires)
         assert token.is_active
@@ -113,8 +127,11 @@ def test_create_api_token_with_expiry(app):
 def test_create_api_token_with_scopes(app):
     with app.app_context():
         user = User(
-            email="scope@example.com", first_name="S", last_name="U",
-            role=UserRole.STAFF, is_active=True,
+            email="scope@example.com",
+            first_name="S",
+            last_name="U",
+            role=UserRole.STAFF,
+            is_active=True,
         )
         user.set_password("pw")
         db.session.add(user)
@@ -126,8 +143,11 @@ def test_create_api_token_with_scopes(app):
 def test_revoke_api_token(app):
     with app.app_context():
         user = User(
-            email="rev@example.com", first_name="R", last_name="U",
-            role=UserRole.STAFF, is_active=True,
+            email="rev@example.com",
+            first_name="R",
+            last_name="U",
+            role=UserRole.STAFF,
+            is_active=True,
         )
         user.set_password("pw")
         db.session.add(user)

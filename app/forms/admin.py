@@ -6,7 +6,15 @@ from wtforms.fields.datetime import DateTimeLocalField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional, URL, ValidationError
 
 from app.forms.common import enum_choices
-from app.models import Business, FeatureFlag, PrepTask, PrepTaskCategory, PrepTaskStatus, PrepTaskTemplate, User
+from app.models import (
+    Business,
+    FeatureFlag,
+    PrepTask,
+    PrepTaskCategory,
+    PrepTaskStatus,
+    PrepTaskTemplate,
+    User,
+)
 from app.utils import slugify
 
 
@@ -72,7 +80,9 @@ class FeatureFlagForm(FlaskForm):
         ]
 
     def validate_key(self, field):
-        existing = FeatureFlag.query.filter_by(key=field.data.strip(), business_id=self.business_id.data or None).first()
+        existing = FeatureFlag.query.filter_by(
+            key=field.data.strip(), business_id=self.business_id.data or None
+        ).first()
         if existing and getattr(self, "instance_id", None) != existing.id:
             raise ValidationError("A feature flag with that key already exists for this scope.")
 
@@ -86,9 +96,13 @@ class FeatureFlagForm(FlaskForm):
 
 class PrepTaskTemplateForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired(), Length(max=200)])
-    category = SelectField("Category", choices=enum_choices(PrepTaskCategory), validators=[DataRequired()])
+    category = SelectField(
+        "Category", choices=enum_choices(PrepTaskCategory), validators=[DataRequired()]
+    )
     description = TextAreaField("Description", validators=[Optional()])
-    default_due_days_before = IntegerField("Days Before Event", validators=[DataRequired(), NumberRange(min=0)], default=7)
+    default_due_days_before = IntegerField(
+        "Days Before Event", validators=[DataRequired(), NumberRange(min=0)], default=7
+    )
     default_enabled = BooleanField("Enabled By Default", default=True)
     submit = SubmitField("Save template")
 
@@ -105,8 +119,12 @@ class PrepTaskAdminForm(FlaskForm):
     market_id = SelectField("Market", coerce=int, validators=[Optional()], default=0)
     template_id = SelectField("Template", coerce=int, validators=[Optional()], default=0)
     title = StringField("Title", validators=[DataRequired(), Length(max=200)])
-    category = SelectField("Category", choices=enum_choices(PrepTaskCategory), validators=[DataRequired()])
-    status = SelectField("Status", choices=enum_choices(PrepTaskStatus), validators=[DataRequired()])
+    category = SelectField(
+        "Category", choices=enum_choices(PrepTaskCategory), validators=[DataRequired()]
+    )
+    status = SelectField(
+        "Status", choices=enum_choices(PrepTaskStatus), validators=[DataRequired()]
+    )
     assigned_user_id = SelectField("Assigned User", coerce=int, validators=[Optional()], default=0)
     due_at = DateTimeLocalField("Due At", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     source = StringField("Source", validators=[DataRequired(), Length(max=80)], default="manual")
@@ -117,9 +135,18 @@ class PrepTaskAdminForm(FlaskForm):
         super().__init__(*args, **kwargs)
         from app.models import Market
 
-        self.market_id.choices = [(0, "No market")] + [(item.id, item.name) for item in Market.query.order_by(Market.event_date.desc(), Market.name)]
-        self.template_id.choices = [(0, "No template")] + [(item.id, item.title) for item in PrepTaskTemplate.query.order_by(PrepTaskTemplate.title)]
-        self.assigned_user_id.choices = [(0, "Unassigned")] + [(item.id, item.full_name) for item in User.query.order_by(User.first_name, User.last_name)]
+        self.market_id.choices = [(0, "No market")] + [
+            (item.id, item.name)
+            for item in Market.query.order_by(Market.event_date.desc(), Market.name)
+        ]
+        self.template_id.choices = [(0, "No template")] + [
+            (item.id, item.title)
+            for item in PrepTaskTemplate.query.order_by(PrepTaskTemplate.title)
+        ]
+        self.assigned_user_id.choices = [(0, "Unassigned")] + [
+            (item.id, item.full_name)
+            for item in User.query.order_by(User.first_name, User.last_name)
+        ]
 
     def apply(self, task: PrepTask) -> PrepTask:
         task.market_id = self.market_id.data or None

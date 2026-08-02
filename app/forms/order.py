@@ -13,18 +13,24 @@ from wtforms import (
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
 from app.forms.common import OptionalSelectField, decimal_or_zero, enum_choices
-from app.models import Customer, Order, OrderItem, OrderSource, OrderStatus, Payment, PaymentMethod, PickupSlot, Product
+from app.models import (
+    Customer,
+    Order,
+    OrderItem,
+    OrderSource,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+    PickupSlot,
+    Product,
+)
 
 
 class OrderForm(FlaskForm):
     customer_id = OptionalSelectField("Customer", coerce=int, validators=[Optional()])
     pickup_slot_id = OptionalSelectField("Pickup Slot", coerce=int, validators=[Optional()])
-    status = SelectField(
-        "Status", choices=enum_choices(OrderStatus), validators=[DataRequired()]
-    )
-    source = SelectField(
-        "Source", choices=enum_choices(OrderSource), validators=[DataRequired()]
-    )
+    status = SelectField("Status", choices=enum_choices(OrderStatus), validators=[DataRequired()])
+    source = SelectField("Source", choices=enum_choices(OrderSource), validators=[DataRequired()])
     notes = TextAreaField("Notes", validators=[Optional()])
     internal_notes = TextAreaField("Internal Notes", validators=[Optional()])
     subtotal = DecimalField("Subtotal", places=2, validators=[Optional()])
@@ -89,9 +95,7 @@ class OrderItemForm(FlaskForm):
 
 class PaymentForm(FlaskForm):
     amount = DecimalField("Amount", places=2, validators=[DataRequired(), NumberRange(min=0)])
-    method = SelectField(
-        "Method", choices=enum_choices(PaymentMethod), validators=[DataRequired()]
-    )
+    method = SelectField("Method", choices=enum_choices(PaymentMethod), validators=[DataRequired()])
     reference = StringField("Reference", validators=[Optional(), Length(max=255)])
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Record payment")

@@ -59,20 +59,24 @@ class ImagePreprocessorProvider(BaseReceiptProvider):
         try:
             subprocess.run(
                 ["magick", file_path, output],
-                capture_output=True, timeout=30, check=False,
+                capture_output=True,
+                timeout=30,
+                check=False,
             )
             if Path(output).exists():
                 return output
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except FileNotFoundError, subprocess.TimeoutExpired:
             pass
         try:
             subprocess.run(
                 ["convert", file_path, output],
-                capture_output=True, timeout=30, check=False,
+                capture_output=True,
+                timeout=30,
+                check=False,
             )
             if Path(output).exists():
                 return output
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except FileNotFoundError, subprocess.TimeoutExpired:
             pass
         return None
 
@@ -102,18 +106,26 @@ class ImagePreprocessorProvider(BaseReceiptProvider):
                     pages.append(str(f))
                 if pages:
                     return pages
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except FileNotFoundError, subprocess.TimeoutExpired:
             pass
 
         try:
             result = subprocess.run(
-                ["magick", "-density", "200", file_path, str(Path(output_dir) / f"{Path(file_path).stem}_page_%d.jpg")],
-                capture_output=True, timeout=60, check=False,
+                [
+                    "magick",
+                    "-density",
+                    "200",
+                    file_path,
+                    str(Path(output_dir) / f"{Path(file_path).stem}_page_%d.jpg"),
+                ],
+                capture_output=True,
+                timeout=60,
+                check=False,
             )
             if result.returncode == 0:
                 for f in sorted(Path(output_dir).glob(f"{Path(file_path).stem}_page_*.jpg")):
                     pages.append(str(f))
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except FileNotFoundError, subprocess.TimeoutExpired:
             pass
         return pages
 
@@ -141,10 +153,12 @@ class ImagePreprocessorProvider(BaseReceiptProvider):
         try:
             subprocess.run(
                 ["magick", image_path, "-resize", "300x300>", output],
-                capture_output=True, timeout=15, check=False,
+                capture_output=True,
+                timeout=15,
+                check=False,
             )
             if Path(output).exists():
                 return output
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except FileNotFoundError, subprocess.TimeoutExpired:
             pass
         return None

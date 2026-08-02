@@ -48,8 +48,12 @@ class ContentDraft(PrimaryKeyMixin, TimestampMixin, db.Model):
     )
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
     media_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True, index=True)
-    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
+    product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id"), nullable=True, index=True
+    )
+    market_id: Mapped[int | None] = mapped_column(
+        ForeignKey("markets.id"), nullable=True, index=True
+    )
     custom_request_id: Mapped[int | None] = mapped_column(
         ForeignKey("custom_requests.id"), nullable=True, index=True
     )
@@ -89,11 +93,15 @@ class SignAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
     qr_target_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     generated_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     preview_html: Mapped[str | None] = mapped_column(Text, nullable=True)
-    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True, index=True)
+    product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id"), nullable=True, index=True
+    )
     collection_id: Mapped[int | None] = mapped_column(
         ForeignKey("collections.id"), nullable=True, index=True
     )
-    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
+    market_id: Mapped[int | None] = mapped_column(
+        ForeignKey("markets.id"), nullable=True, index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     layout: Mapped[str] = mapped_column(String(20), default="text", nullable=False)
     ai_image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)

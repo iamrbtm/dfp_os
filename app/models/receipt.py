@@ -69,9 +69,7 @@ class AllocationMethod(StrEnum):
 class Receipt(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "receipts"
 
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False, index=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     business_id: Mapped[int | None] = mapped_column(
         ForeignKey("businesses.id"), nullable=True, index=True
     )
@@ -125,36 +123,20 @@ class Receipt(PrimaryKeyMixin, TimestampMixin, db.Model):
     discount_total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     tip_total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     deposit_total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
-    rounding_adjustment: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
-    grand_total: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True, index=True
-    )
+    rounding_adjustment: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    grand_total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, index=True)
     payment_method: Mapped[str | None] = mapped_column(String(60), nullable=True)
     payment_card_brand: Mapped[str | None] = mapped_column(String(40), nullable=True)
     payment_card_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="USD")
-    duplicate_group_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, index=True
-    )
+    duplicate_group_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     duplicate_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
-    approved_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    approved_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
-    rejected_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    rejected_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejected_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     line_items = relationship(
         "ReceiptLineItem",
@@ -174,15 +156,11 @@ class Receipt(PrimaryKeyMixin, TimestampMixin, db.Model):
 class ReceiptLineItem(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "receipt_line_items"
 
-    receipt_id: Mapped[int] = mapped_column(
-        ForeignKey("receipts.id"), nullable=False, index=True
-    )
+    receipt_id: Mapped[int] = mapped_column(ForeignKey("receipts.id"), nullable=False, index=True)
     row_order: Mapped[int] = mapped_column(Integer, default=0)
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    normalized_description: Mapped[str | None] = mapped_column(
-        String(500), nullable=True
-    )
+    normalized_description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     sku: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     upc: Mapped[str | None] = mapped_column(String(40), nullable=True)
     quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
@@ -193,19 +171,13 @@ class ReceiptLineItem(PrimaryKeyMixin, TimestampMixin, db.Model):
     line_tax: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     line_fee: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     line_deposit: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
-    line_tip_allocation: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
+    line_tip_allocation: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     line_total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     taxable_status: Mapped[str] = mapped_column(String(20), default="unknown")
     category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    confidence_description: Mapped[Decimal | None] = mapped_column(
-        Numeric(5, 4), nullable=True
-    )
+    confidence_description: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     confidence_price: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
-    confidence_quantity: Mapped[Decimal | None] = mapped_column(
-        Numeric(5, 4), nullable=True
-    )
+    confidence_quantity: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     confidence_tax: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
     is_inventory_candidate: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -231,18 +203,12 @@ class ReceiptLineAllocation(PrimaryKeyMixin, TimestampMixin, db.Model):
         nullable=False,
     )
     market_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    custom_job_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, index=True
-    )
-    inventory_item_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, index=True
-    )
+    custom_job_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    inventory_item_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     expense_category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
-    quantity_allocated: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 3), nullable=True
-    )
+    quantity_allocated: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     line_item = relationship("ReceiptLineItem", back_populates="allocations")
@@ -251,9 +217,7 @@ class ReceiptLineAllocation(PrimaryKeyMixin, TimestampMixin, db.Model):
 class ReceiptAdjustmentAllocation(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "receipt_adjustment_allocations"
 
-    receipt_id: Mapped[int] = mapped_column(
-        ForeignKey("receipts.id"), nullable=False, index=True
-    )
+    receipt_id: Mapped[int] = mapped_column(ForeignKey("receipts.id"), nullable=False, index=True)
     adjustment_type: Mapped[AdjustmentType] = mapped_column(
         Enum(AdjustmentType, native_enum=False, length=40),
         nullable=False,
@@ -263,12 +227,8 @@ class ReceiptAdjustmentAllocation(PrimaryKeyMixin, TimestampMixin, db.Model):
         nullable=False,
     )
     source_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
-    allocated_amount: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
-    unallocated_amount: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
+    allocated_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    unallocated_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     calculation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     receipt = relationship("Receipt", back_populates="adjustments")
@@ -281,13 +241,9 @@ def utc_now() -> datetime:
 class ReceiptAuditEvent(PrimaryKeyMixin, db.Model):
     __tablename__ = "receipt_audit_events"
 
-    receipt_id: Mapped[int] = mapped_column(
-        ForeignKey("receipts.id"), nullable=False, index=True
-    )
+    receipt_id: Mapped[int] = mapped_column(ForeignKey("receipts.id"), nullable=False, index=True)
     action: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id"), nullable=True, index=True
-    )
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

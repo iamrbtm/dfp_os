@@ -11,22 +11,19 @@ def get_score_history(
     keyword: str | None = None,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    query = (
-        db.session.query(
-            TrendOpportunityScore.keyword,
-            TrendOpportunityScore.opportunity_score,
-            TrendOpportunityScore.purchase_intent,
-            TrendOpportunityScore.trend_velocity,
-            TrendOpportunityScore.price_resilience,
-            TrendOpportunityScore.low_saturation,
-            TrendOpportunityScore.local_fit,
-            TrendOpportunityScore.production_fit,
-            TrendOpportunityScore.license_risk,
-            TrendReport.report_date,
-            TrendReport.id.label("report_id"),
-        )
-        .join(TrendReport, TrendOpportunityScore.report_id == TrendReport.id)
-    )
+    query = db.session.query(
+        TrendOpportunityScore.keyword,
+        TrendOpportunityScore.opportunity_score,
+        TrendOpportunityScore.purchase_intent,
+        TrendOpportunityScore.trend_velocity,
+        TrendOpportunityScore.price_resilience,
+        TrendOpportunityScore.low_saturation,
+        TrendOpportunityScore.local_fit,
+        TrendOpportunityScore.production_fit,
+        TrendOpportunityScore.license_risk,
+        TrendReport.report_date,
+        TrendReport.id.label("report_id"),
+    ).join(TrendReport, TrendOpportunityScore.report_id == TrendReport.id)
     if keyword:
         query = query.filter(TrendOpportunityScore.keyword == keyword)
     query = query.order_by(TrendReport.report_date.asc()).limit(limit)
@@ -102,13 +99,15 @@ def get_biggest_movers(
     for keyword, (current_score, report_date) in current_map.items():
         prev = prev_map.get(keyword, current_score)
         delta = current_score - prev
-        movers.append({
-            "keyword": keyword,
-            "current_score": current_score,
-            "previous_score": prev,
-            "delta": delta,
-            "report_date": report_date,
-        })
+        movers.append(
+            {
+                "keyword": keyword,
+                "current_score": current_score,
+                "previous_score": prev,
+                "delta": delta,
+                "report_date": report_date,
+            }
+        )
 
     movers.sort(key=lambda m: abs(m["delta"]), reverse=True)
     return movers[:top_n]

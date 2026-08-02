@@ -26,8 +26,12 @@ class CustomerForm(FlaskForm):
         customer.last_name = self.last_name.data.strip()
         customer.email = self.email.data.strip() if self.email.data else None
         customer.phone = self.phone.data.strip() if self.phone.data else None
-        customer.address_line_1 = self.address_line_1.data.strip() if self.address_line_1.data else None
-        customer.address_line_2 = self.address_line_2.data.strip() if self.address_line_2.data else None
+        customer.address_line_1 = (
+            self.address_line_1.data.strip() if self.address_line_1.data else None
+        )
+        customer.address_line_2 = (
+            self.address_line_2.data.strip() if self.address_line_2.data else None
+        )
         customer.city = self.city.data.strip() if self.city.data else None
         customer.state = self.state.data.strip() if self.state.data else None
         customer.zip_code = self.zip_code.data.strip() if self.zip_code.data else None

@@ -64,6 +64,3 @@ class CollectionForm(FlaskForm):
         collection.sort_order = self.sort_order.data or 0
         collection.is_public = bool(self.is_public.data)
         return collection
-
-
-

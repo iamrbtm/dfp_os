@@ -52,8 +52,12 @@ class PickupLocation(PrimaryKeyMixin, TimestampMixin, db.Model):
 class PickupSlot(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "pickup_slots"
 
-    location_id: Mapped[int] = mapped_column(ForeignKey("pickup_locations.id"), nullable=False, index=True)
-    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
+    location_id: Mapped[int] = mapped_column(
+        ForeignKey("pickup_locations.id"), nullable=False, index=True
+    )
+    market_id: Mapped[int | None] = mapped_column(
+        ForeignKey("markets.id"), nullable=True, index=True
+    )
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     capacity: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
@@ -73,9 +77,15 @@ class PickupSlot(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     @property
     def scheduled_count(self) -> int:
-        order_count = len([order for order in self.orders if order.pickup_status != PickupStatus.CANCELED])
+        order_count = len(
+            [order for order in self.orders if order.pickup_status != PickupStatus.CANCELED]
+        )
         request_count = len(
-            [request for request in self.custom_requests if request.pickup_status != PickupStatus.CANCELED]
+            [
+                request
+                for request in self.custom_requests
+                if request.pickup_status != PickupStatus.CANCELED
+            ]
         )
         return order_count + request_count
 

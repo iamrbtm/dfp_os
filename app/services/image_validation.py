@@ -33,14 +33,14 @@ def validate_image_file(path: str | Path) -> tuple[str | None, str | None]:
     try:
         with Image.open(path) as img:
             img.verify()
-    except (UnidentifiedImageError, OSError, ValueError):
+    except UnidentifiedImageError, OSError, ValueError:
         return "The uploaded file is not a valid image or is corrupt.", None
 
     # verify() invalidates the image object, so reopen to read the format.
     try:
         with Image.open(path) as img:
             fmt = (img.format or "").upper()
-    except (UnidentifiedImageError, OSError, ValueError):
+    except UnidentifiedImageError, OSError, ValueError:
         return "The uploaded file is not a valid image or is corrupt.", None
 
     if fmt not in ALLOWED_IMAGE_FORMATS:

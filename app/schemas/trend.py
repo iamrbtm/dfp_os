@@ -17,7 +17,9 @@ class TrendReportSchema(Schema):
         fields.Nested("TrendOpportunityScoreSchema"), dump_only=True, attribute="opportunity_scores"
     )
     source_health_records = fields.List(
-        fields.Nested("TrendSourceHealthRecordSchema"), dump_only=True, attribute="source_health_records"
+        fields.Nested("TrendSourceHealthRecordSchema"),
+        dump_only=True,
+        attribute="source_health_records",
     )
 
 

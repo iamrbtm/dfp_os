@@ -81,6 +81,3 @@ class ReceiptLineItemSchema(Schema):
     notes = fields.String(allow_none=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
-
-
-

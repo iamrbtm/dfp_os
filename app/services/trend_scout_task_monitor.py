@@ -95,10 +95,7 @@ def cancel_task_run(task_id: str) -> TrendTaskRun | None:
 
 def get_recent_task_runs(limit: int = 50) -> list[TrendTaskRun]:
     return (
-        db.session.query(TrendTaskRun)
-        .order_by(TrendTaskRun.created_at.desc())
-        .limit(limit)
-        .all()
+        db.session.query(TrendTaskRun).order_by(TrendTaskRun.created_at.desc()).limit(limit).all()
     )
 
 

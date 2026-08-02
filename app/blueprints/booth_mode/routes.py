@@ -53,4 +53,6 @@ def hint_status(hint_id: int, status: str):
         return redirect(url_for("booth_mode.index"))
     update_hint_status(hint, new_status, actor_id=current_user.id)
     flash("Booth hint updated.", "success")
-    return redirect(url_for("booth_mode.index", session_id=hint.pos_session_id, market_id=hint.market_id))
+    return redirect(
+        url_for("booth_mode.index", session_id=hint.pos_session_id, market_id=hint.market_id)
+    )

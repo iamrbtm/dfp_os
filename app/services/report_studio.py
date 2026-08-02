@@ -125,10 +125,18 @@ def get_data_quality_summary() -> dict[str, Any]:
     )
 
     if total_markets == 0:
-        warnings.append({"type": "warning", "message": "No markets created yet. Add markets to enable market reports."})
+        warnings.append(
+            {
+                "type": "warning",
+                "message": "No markets created yet. Add markets to enable market reports.",
+            }
+        )
     elif completed_markets == 0:
         warnings.append(
-            {"type": "info", "message": "No completed markets yet. Market profitability reports will populate after the first market is completed."}
+            {
+                "type": "info",
+                "message": "No completed markets yet. Market profitability reports will populate after the first market is completed.",
+            }
         )
 
     if markets_with_coords < total_markets:
@@ -157,7 +165,11 @@ def get_data_quality_summary() -> dict[str, Any]:
             }
         )
 
-    return {"warnings": warnings, "total_markets": total_markets, "completed_markets": completed_markets}
+    return {
+        "warnings": warnings,
+        "total_markets": total_markets,
+        "completed_markets": completed_markets,
+    }
 
 
 def get_vendor_market_heat_map(params: dict[str, str]) -> list[dict[str, Any]]:
@@ -182,7 +194,7 @@ def get_vendor_market_heat_map(params: dict[str, str]) -> list[dict[str, Any]]:
         try:
             from_date = date.fromisoformat(date_from)
             stmt = stmt.where(Market.event_date >= from_date)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
 
     date_to = params.get("date_to", "").strip()
@@ -190,7 +202,7 @@ def get_vendor_market_heat_map(params: dict[str, str]) -> list[dict[str, Any]]:
         try:
             to_date = date.fromisoformat(date_to)
             stmt = stmt.where(Market.event_date <= to_date)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
 
     min_profit_str = params.get("min_profit", "").strip()
@@ -198,7 +210,7 @@ def get_vendor_market_heat_map(params: dict[str, str]) -> list[dict[str, Any]]:
     if min_profit_str:
         try:
             min_profit = Decimal(min_profit_str)
-        except (ValueError, ArithmeticError):
+        except ValueError, ArithmeticError:
             min_profit = None
 
     results = db.session.execute(stmt).scalars().all()
@@ -259,10 +271,18 @@ def get_market_application_pipeline_report(params: dict[str, str]) -> dict[str, 
         status_counts[m.status.value] = status_counts.get(m.status.value, 0) + 1
 
     now = date.today()
-    upcoming_deadlines = [m for m in markets if m.application_deadline and m.application_deadline >= now]
-    fees_at_risk = sum((m.application_fee or Decimal(0)) + (m.booth_fee or Decimal(0)) for m in markets if m.status in (MarketStatus.INTERESTED, MarketStatus.APPLIED))
+    upcoming_deadlines = [
+        m for m in markets if m.application_deadline and m.application_deadline >= now
+    ]
+    fees_at_risk = sum(
+        (m.application_fee or Decimal(0)) + (m.booth_fee or Decimal(0))
+        for m in markets
+        if m.status in (MarketStatus.INTERESTED, MarketStatus.APPLIED)
+    )
 
-    missing_docs = [m for m in markets if not m.required_documents or m.required_documents.strip() == ""]
+    missing_docs = [
+        m for m in markets if not m.required_documents or m.required_documents.strip() == ""
+    ]
 
     needs_follow_up = [m for m in markets if m.follow_up_date and m.follow_up_date <= now]
 
@@ -275,7 +295,9 @@ def get_market_application_pipeline_report(params: dict[str, str]) -> dict[str, 
                 "city": m.city,
                 "state": m.state,
                 "status": m.status.value if m.status else None,
-                "application_deadline": m.application_deadline.isoformat() if m.application_deadline else None,
+                "application_deadline": m.application_deadline.isoformat()
+                if m.application_deadline
+                else None,
                 "application_fee": float(m.application_fee) if m.application_fee else 0,
                 "booth_fee": float(m.booth_fee) if m.booth_fee else 0,
                 "total_fee": float((m.application_fee or Decimal(0)) + (m.booth_fee or Decimal(0))),
@@ -302,8 +324,11 @@ def get_market_application_pipeline_report(params: dict[str, str]) -> dict[str, 
 
 def get_printer_reliability_report() -> dict[str, Any]:
     from app.services.printer_reliability import get_reliability_report_rows
+
     rows = get_reliability_report_rows()
-    highest_risk = sorted(rows, key=lambda row: (row["failure_rate"], row["failed_count"]), reverse=True)
+    highest_risk = sorted(
+        rows, key=lambda row: (row["failure_rate"], row["failed_count"]), reverse=True
+    )
     return {
         "printers": rows,
         "printer_count": len(rows),

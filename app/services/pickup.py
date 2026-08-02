@@ -67,7 +67,9 @@ def validate_pickup_slot(slot: PickupSlot, now: datetime | None = None) -> None:
         raise PickupError("That pickup window is full.")
 
 
-def assign_order_pickup(order: Order, slot: PickupSlot | None, *, notes: str | None = None, actor_id: int | None = None) -> Order:
+def assign_order_pickup(
+    order: Order, slot: PickupSlot | None, *, notes: str | None = None, actor_id: int | None = None
+) -> Order:
     before_state = snapshot_instance(order)
     if slot is None:
         order.pickup_slot_id = None
@@ -80,7 +82,14 @@ def assign_order_pickup(order: Order, slot: PickupSlot | None, *, notes: str | N
         order.pickup_notes = notes
     db.session.add(order)
     db.session.commit()
-    _audit("order.pickup_scheduled", "order", order.id, before_state, snapshot_instance(order), actor_id)
+    _audit(
+        "order.pickup_scheduled",
+        "order",
+        order.id,
+        before_state,
+        snapshot_instance(order),
+        actor_id,
+    )
     return order
 
 
@@ -114,7 +123,9 @@ def assign_custom_request_pickup(
     return custom_request
 
 
-def transition_pickup(entity: Order | CustomRequest, status: PickupStatus, *, actor_id: int | None = None) -> Order | CustomRequest:
+def transition_pickup(
+    entity: Order | CustomRequest, status: PickupStatus, *, actor_id: int | None = None
+) -> Order | CustomRequest:
     before_state = snapshot_instance(entity)
     now = datetime.now(timezone.utc)
     entity.pickup_status = status.value
@@ -127,7 +138,14 @@ def transition_pickup(entity: Order | CustomRequest, status: PickupStatus, *, ac
     db.session.add(entity)
     db.session.commit()
     entity_type = "order" if isinstance(entity, Order) else "custom_request"
-    _audit(f"{entity_type}.pickup_{status.value}", entity_type, entity.id, before_state, snapshot_instance(entity), actor_id)
+    _audit(
+        f"{entity_type}.pickup_{status.value}",
+        entity_type,
+        entity.id,
+        before_state,
+        snapshot_instance(entity),
+        actor_id,
+    )
     return entity
 
 
@@ -135,16 +153,24 @@ def pickup_board_groups() -> list[PickupBoardGroup]:
     slots = list(
         db.session.scalars(
             select(PickupSlot)
-            .where(PickupSlot.status.in_([PickupSlotStatus.OPEN, PickupSlotStatus.FULL, PickupSlotStatus.CLOSED]))
+            .where(
+                PickupSlot.status.in_(
+                    [PickupSlotStatus.OPEN, PickupSlotStatus.FULL, PickupSlotStatus.CLOSED]
+                )
+            )
             .order_by(PickupSlot.starts_at.asc())
         )
     )
     return [
         PickupBoardGroup(
             slot=slot,
-            orders=[order for order in slot.orders if order.pickup_status != PickupStatus.CANCELED.value],
+            orders=[
+                order for order in slot.orders if order.pickup_status != PickupStatus.CANCELED.value
+            ],
             custom_requests=[
-                request for request in slot.custom_requests if request.pickup_status != PickupStatus.CANCELED.value
+                request
+                for request in slot.custom_requests
+                if request.pickup_status != PickupStatus.CANCELED.value
             ],
         )
         for slot in slots
@@ -152,7 +178,9 @@ def pickup_board_groups() -> list[PickupBoardGroup]:
     ]
 
 
-def generate_pickup_batch_prep_tasks(groups: Iterable[PickupBoardGroup], *, actor_id: int | None = None) -> int:
+def generate_pickup_batch_prep_tasks(
+    groups: Iterable[PickupBoardGroup], *, actor_id: int | None = None
+) -> int:
     count = 0
     for group in groups:
         title = f"Prep pickup batch: {group.slot.public_label or group.slot.location.name}"
@@ -193,12 +221,21 @@ def pickup_board_summary() -> dict[str, int]:
     counts: dict[str, int] = defaultdict(int)
     for order in Order.query.filter(Order.pickup_slot_id.is_not(None)).all():
         counts[order.pickup_status or "unscheduled"] += 1
-    for custom_request in CustomRequest.query.filter(CustomRequest.pickup_slot_id.is_not(None)).all():
+    for custom_request in CustomRequest.query.filter(
+        CustomRequest.pickup_slot_id.is_not(None)
+    ).all():
         counts[custom_request.pickup_status or "unscheduled"] += 1
     return dict(counts)
 
 
-def _audit(action: str, entity_type: str, entity_id: int, before_state: dict | None, after_state: dict | None, actor_id: int | None) -> None:
+def _audit(
+    action: str,
+    entity_type: str,
+    entity_id: int,
+    before_state: dict | None,
+    after_state: dict | None,
+    actor_id: int | None,
+) -> None:
     record_audit_event(
         action=action,
         entity_type=entity_type,

@@ -21,14 +21,13 @@ def check_duplicates(receipt_id: int) -> dict:
     if not receipt:
         return {"score": 0, "possible_duplicates": []}
 
-    candidates = (
-        Receipt.query.filter(
-            Receipt.id != receipt_id,
-            Receipt.deleted_at.is_(None),
-            Receipt.status.in_([ReceiptStatus.APPROVED, ReceiptStatus.NEEDS_REVIEW, ReceiptStatus.POSSIBLE_DUPLICATE]),
-        )
-        .all()
-    )
+    candidates = Receipt.query.filter(
+        Receipt.id != receipt_id,
+        Receipt.deleted_at.is_(None),
+        Receipt.status.in_(
+            [ReceiptStatus.APPROVED, ReceiptStatus.NEEDS_REVIEW, ReceiptStatus.POSSIBLE_DUPLICATE]
+        ),
+    ).all()
 
     results = []
     for candidate in candidates:
@@ -39,7 +38,11 @@ def check_duplicates(receipt_id: int) -> dict:
             score += DUPLICATE_WEIGHTS["hash_exact"]
             reasons.append("exact file hash match")
 
-        if receipt.merchant_name and candidate.merchant_name and receipt.merchant_name.lower() == candidate.merchant_name.lower():
+        if (
+            receipt.merchant_name
+            and candidate.merchant_name
+            and receipt.merchant_name.lower() == candidate.merchant_name.lower()
+        ):
             score += DUPLICATE_WEIGHTS["merchant_match"]
             reasons.append("merchant name match")
 
@@ -49,23 +52,33 @@ def check_duplicates(receipt_id: int) -> dict:
                 score += DUPLICATE_WEIGHTS["date_close"]
                 reasons.append("date/time within 1 hour")
 
-        if receipt.grand_total and candidate.grand_total and receipt.grand_total == candidate.grand_total:
+        if (
+            receipt.grand_total
+            and candidate.grand_total
+            and receipt.grand_total == candidate.grand_total
+        ):
             score += DUPLICATE_WEIGHTS["total_match"]
             reasons.append("grand total match")
 
-        if receipt.receipt_number and candidate.receipt_number and receipt.receipt_number == candidate.receipt_number:
+        if (
+            receipt.receipt_number
+            and candidate.receipt_number
+            and receipt.receipt_number == candidate.receipt_number
+        ):
             score += DUPLICATE_WEIGHTS["receipt_number_match"]
             reasons.append("receipt number match")
 
         if score > 0:
-            results.append({
-                "id": candidate.id,
-                "score": score,
-                "reasons": reasons,
-                "merchant_name": candidate.merchant_name,
-                "grand_total": candidate.grand_total,
-                "date_time": candidate.date_time.isoformat() if candidate.date_time else None,
-            })
+            results.append(
+                {
+                    "id": candidate.id,
+                    "score": score,
+                    "reasons": reasons,
+                    "merchant_name": candidate.merchant_name,
+                    "grand_total": candidate.grand_total,
+                    "date_time": candidate.date_time.isoformat() if candidate.date_time else None,
+                }
+            )
 
     results.sort(key=lambda r: r["score"], reverse=True)
 

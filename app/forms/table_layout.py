@@ -11,10 +11,15 @@ from app.models import Product
 class MarketTableLayoutForm(FlaskForm):
     name = StringField("Layout Name", validators=[DataRequired(), Length(max=200)])
     notes = TextAreaField("Notes", validators=[Optional()])
-    photo = FileField("Layout Photo", validators=[Optional(), FileAllowed(["jpg", "jpeg", "png", "webp"], "Images only (jpg, png, webp).")])
+    photo = FileField(
+        "Layout Photo",
+        validators=[
+            Optional(),
+            FileAllowed(["jpg", "jpeg", "png", "webp"], "Images only (jpg, png, webp)."),
+        ],
+    )
     is_template = BooleanField("Save as Template")
     submit = SubmitField("Save Layout")
-
 
 
 class MarketTablePlacementForm(FlaskForm):

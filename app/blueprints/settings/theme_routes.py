@@ -55,6 +55,7 @@ def set_default_theme():
     if not is_valid_theme(slug):
         return jsonify({"error": "Invalid theme slug"}), 400
     from flask import current_app
+
     before_state = {"default_theme": current_app.config.get("DEFAULT_THEME", DEFAULT_THEME)}
     current_app.config["DEFAULT_THEME"] = slug
     set_setting("default_theme", slug)
@@ -74,23 +75,31 @@ def set_default_theme():
 def api_list_themes():
     result = []
     for t in ALL_THEMES:
-        result.append({
-            "slug": t.slug,
-            "name": t.name,
-            "mode": t.mode,
-            "description": t.description,
-        })
+        result.append(
+            {
+                "slug": t.slug,
+                "name": t.name,
+                "mode": t.mode,
+                "description": t.description,
+            }
+        )
     return jsonify(result)
 
 
 @bp.route("/api/themes/current")
 @login_required
 def api_current_theme():
-    return jsonify({
-        "slug": current_user.theme_slug,
-        "name": THEME_MAP[current_user.theme_slug].name if current_user.theme_slug in THEME_MAP else DEFAULT_THEME,
-        "mode": THEME_MAP[current_user.theme_slug].mode if current_user.theme_slug in THEME_MAP else "light",
-    })
+    return jsonify(
+        {
+            "slug": current_user.theme_slug,
+            "name": THEME_MAP[current_user.theme_slug].name
+            if current_user.theme_slug in THEME_MAP
+            else DEFAULT_THEME,
+            "mode": THEME_MAP[current_user.theme_slug].mode
+            if current_user.theme_slug in THEME_MAP
+            else "light",
+        }
+    )
 
 
 @bp.route("/api/users/me/theme", methods=["PATCH"])

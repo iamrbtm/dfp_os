@@ -58,7 +58,8 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
         result = ScoutResult(source="etsy", keyword_or_category=query)
         try:
             resp = request_with_retry(
-                session, "GET",
+                session,
+                "GET",
                 f"{BASE_URL}/application/listings/active",
                 params={
                     "keywords": query,
@@ -81,7 +82,7 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
                             try:
                                 divisor_value = float(divisor or 1)
                                 price = float(amount) / divisor_value if divisor_value else None
-                            except (TypeError, ValueError):
+                            except TypeError, ValueError:
                                 price = None
                         currency = item["price"].get("currency_code", "")
 
@@ -112,7 +113,7 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
                 result.metadata["query"] = query
             elif resp.status_code == 401:
                 result.errors.append(
-                    "HTTP 401 - Invalid or missing Etsy API key. " "Verify ETSY_API_KEY is correct."
+                    "HTTP 401 - Invalid or missing Etsy API key. Verify ETSY_API_KEY is correct."
                 )
             else:
                 result.errors.append(f"HTTP {resp.status_code}")

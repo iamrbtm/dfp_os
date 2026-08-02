@@ -37,7 +37,11 @@ class BreakEvenState:
 
 def booth_mode_context(market_id: int | None = None, session_id: int | None = None) -> dict:
     session = _resolve_session(session_id=session_id, market_id=market_id)
-    market = db.session.get(Market, market_id or session.market_id) if (market_id or session.market_id) else None
+    market = (
+        db.session.get(Market, market_id or session.market_id)
+        if (market_id or session.market_id)
+        else None
+    )
     summary = get_session_summary(session.id)
     break_even = calculate_break_even(session=session, market=market, summary=summary)
     hints = generate_hints(session=session, market=market, summary=summary, break_even=break_even)
@@ -50,7 +54,9 @@ def booth_mode_context(market_id: int | None = None, session_id: int | None = No
     }
 
 
-def calculate_break_even(*, session: PosSession, market: Market | None, summary: dict) -> BreakEvenState:
+def calculate_break_even(
+    *, session: PosSession, market: Market | None, summary: dict
+) -> BreakEvenState:
     revenue = Decimal(str(summary["net_sales_total"] or 0))
     costs = _market_costs(market)
     remaining = max(Decimal("0.00"), costs - revenue)
@@ -80,7 +86,9 @@ def calculate_break_even(*, session: PosSession, market: Market | None, summary:
     )
 
 
-def generate_hints(*, session: PosSession, market: Market | None, summary: dict, break_even: BreakEvenState) -> list[BoothModeHint]:
+def generate_hints(
+    *, session: PosSession, market: Market | None, summary: dict, break_even: BreakEvenState
+) -> list[BoothModeHint]:
     candidates = []
     if break_even.pace_warning:
         candidates.append(
@@ -120,10 +128,16 @@ def generate_hints(*, session: PosSession, market: Market | None, summary: dict,
                 "severity": "info",
             }
         )
-    return [_upsert_hint(session, market, candidate) for candidate in candidates if not _suppressed(session, candidate["key"])]
+    return [
+        _upsert_hint(session, market, candidate)
+        for candidate in candidates
+        if not _suppressed(session, candidate["key"])
+    ]
 
 
-def update_hint_status(hint: BoothModeHint, status: BoothHintStatus, *, actor_id: int | None = None) -> BoothModeHint:
+def update_hint_status(
+    hint: BoothModeHint, status: BoothHintStatus, *, actor_id: int | None = None
+) -> BoothModeHint:
     before = {"status": hint.status.value}
     hint.status = status
     hint.acted_at = datetime.now(timezone.utc)
@@ -159,7 +173,11 @@ def _resolve_session(*, session_id: int | None, market_id: int | None) -> PosSes
 def _market_costs(market: Market | None) -> Decimal:
     if market is None:
         return Decimal("0.00")
-    expenses = db.session.query(func.coalesce(func.sum(Expense.amount), 0)).filter(Expense.related_market_id == market.id).scalar()
+    expenses = (
+        db.session.query(func.coalesce(func.sum(Expense.amount), 0))
+        .filter(Expense.related_market_id == market.id)
+        .scalar()
+    )
     return Decimal(str(market.total_booth_cost or 0)) + Decimal(str(expenses or 0))
 
 
@@ -168,7 +186,9 @@ def _slow_high_margin_product(session: PosSession) -> Product | None:
         product_id
         for (product_id,) in db.session.query(PosSaleItem.product_id)
         .join(PosSaleItem.sale)
-        .filter(PosSaleItem.product_id.is_not(None), PosSaleItem.sale.has(pos_session_id=session.id))
+        .filter(
+            PosSaleItem.product_id.is_not(None), PosSaleItem.sale.has(pos_session_id=session.id)
+        )
         .all()
     }
     query = Product.query.filter(Product.is_pos_visible.is_(True), Product.estimated_profit > 0)
@@ -203,7 +223,11 @@ def _upsert_hint(session: PosSession, market: Market | None, candidate: dict) ->
         hint.title = candidate["title"]
         hint.message = candidate["message"]
         hint.severity = candidate["severity"]
-        if hint.status == BoothHintStatus.SNOOZED and hint.snoozed_until and _aware(hint.snoozed_until) <= datetime.now(timezone.utc):
+        if (
+            hint.status == BoothHintStatus.SNOOZED
+            and hint.snoozed_until
+            and _aware(hint.snoozed_until) <= datetime.now(timezone.utc)
+        ):
             hint.status = BoothHintStatus.OPEN
             hint.snoozed_until = None
     db.session.commit()
@@ -216,7 +240,11 @@ def _suppressed(session: PosSession, key: str) -> bool:
         return False
     if hint.status in {BoothHintStatus.DISMISSED, BoothHintStatus.ACCEPTED}:
         return True
-    if hint.status == BoothHintStatus.SNOOZED and hint.snoozed_until and _aware(hint.snoozed_until) > datetime.now(timezone.utc):
+    if (
+        hint.status == BoothHintStatus.SNOOZED
+        and hint.snoozed_until
+        and _aware(hint.snoozed_until) > datetime.now(timezone.utc)
+    ):
         return True
     return False
 

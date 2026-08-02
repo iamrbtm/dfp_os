@@ -97,8 +97,15 @@ def request_with_retry(
         resp = session.request(method, url, **kwargs)
         if resp.status_code != 429:
             return resp
-        delay = RETRY_429_BASE_DELAY * (2 ** attempt)
-        logger.warning("HTTP 429 on %s %s — retrying in %.0fs (attempt %d/%d)", method.upper(), url, delay, attempt + 1, MAX_429_RETRIES)
+        delay = RETRY_429_BASE_DELAY * (2**attempt)
+        logger.warning(
+            "HTTP 429 on %s %s — retrying in %.0fs (attempt %d/%d)",
+            method.upper(),
+            url,
+            delay,
+            attempt + 1,
+            MAX_429_RETRIES,
+        )
         time.sleep(delay)
     logger.error("HTTP 429 on %s %s — exhausted %d retries", method.upper(), url, MAX_429_RETRIES)
     return resp

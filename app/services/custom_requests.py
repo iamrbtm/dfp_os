@@ -19,7 +19,9 @@ def snapshot_custom_request(instance: CustomRequest) -> dict:
     return data
 
 
-def create_custom_request(instance: CustomRequest, *, actor_id: int | None = None, actor_type: str | None = None) -> CustomRequest:
+def create_custom_request(
+    instance: CustomRequest, *, actor_id: int | None = None, actor_type: str | None = None
+) -> CustomRequest:
     db.session.add(instance)
     db.session.commit()
     record_audit_event(

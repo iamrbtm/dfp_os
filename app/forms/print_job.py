@@ -24,9 +24,7 @@ class PrintJobForm(FlaskForm):
     product_id = OptionalSelectField("Product", coerce=int, validators=[Optional()])
     printer_id = OptionalSelectField("Printer", coerce=int, validators=[Optional()])
     assigned_to_id = OptionalSelectField("Assigned To", coerce=int, validators=[Optional()])
-    status = SelectField(
-        "Status", choices=enum_choices(PrintJobStatus), validators=[Optional()]
-    )
+    status = SelectField("Status", choices=enum_choices(PrintJobStatus), validators=[Optional()])
     priority = IntegerField("Priority", validators=[Optional(), NumberRange(min=0)], default=0)
     estimated_minutes = IntegerField(
         "Estimated Minutes", validators=[Optional(), NumberRange(min=0)], default=0
@@ -38,9 +36,7 @@ class PrintJobForm(FlaskForm):
     failure_reason = TextAreaField("Failure Reason", validators=[Optional()])
     notes = TextAreaField("Notes", validators=[Optional()])
     label = StringField("Label", validators=[Optional()])
-    started_at = DateTimeLocalField(
-        "Started At", format="%Y-%m-%dT%H:%M", validators=[Optional()]
-    )
+    started_at = DateTimeLocalField("Started At", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     completed_at = DateTimeLocalField(
         "Completed At", format="%Y-%m-%dT%H:%M", validators=[Optional()]
     )

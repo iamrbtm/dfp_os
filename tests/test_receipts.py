@@ -21,10 +21,24 @@ from app.models import (
 from app.models.receipt import (
     AllocationType,
 )
-from app.services.receipts import approve_receipt, reject_receipt, get_receipt_dashboard, upload_receipt
-from app.services.receipt_allocations import allocate_taxes_and_fees, set_line_allocation, bulk_assign_line_items, get_reconciliation_summary
+from app.services.receipts import (
+    approve_receipt,
+    reject_receipt,
+    get_receipt_dashboard,
+    upload_receipt,
+)
+from app.services.receipt_allocations import (
+    allocate_taxes_and_fees,
+    set_line_allocation,
+    bulk_assign_line_items,
+    get_reconciliation_summary,
+)
 from app.services.receipt_duplicates import check_duplicates, resolve_duplicate
-from tests.db_support import base_test_app_config, configured_test_database_url, ensure_database_exists
+from tests.db_support import (
+    base_test_app_config,
+    configured_test_database_url,
+    ensure_database_exists,
+)
 
 
 @pytest.fixture()
@@ -286,14 +300,20 @@ class TestAllocationEngine:
             db.session.flush()
 
             item1 = ReceiptLineItem(
-                receipt_id=receipt.id, row_order=0,
-                description="Item 1", line_subtotal=Decimal("30.00"),
-                line_total=Decimal("30.00"), taxable_status="taxable",
+                receipt_id=receipt.id,
+                row_order=0,
+                description="Item 1",
+                line_subtotal=Decimal("30.00"),
+                line_total=Decimal("30.00"),
+                taxable_status="taxable",
             )
             item2 = ReceiptLineItem(
-                receipt_id=receipt.id, row_order=1,
-                description="Item 2", line_subtotal=Decimal("20.00"),
-                line_total=Decimal("20.00"), taxable_status="taxable",
+                receipt_id=receipt.id,
+                row_order=1,
+                description="Item 2",
+                line_subtotal=Decimal("20.00"),
+                line_total=Decimal("20.00"),
+                taxable_status="taxable",
             )
             db.session.add_all([item1, item2])
             db.session.commit()
@@ -319,9 +339,12 @@ class TestAllocationEngine:
             items = []
             for i in range(10):
                 item = ReceiptLineItem(
-                    receipt_id=receipt.id, row_order=i,
-                    description=f"Item {i}", line_subtotal=Decimal("10.00"),
-                    line_total=Decimal("10.00"), taxable_status="taxable",
+                    receipt_id=receipt.id,
+                    row_order=i,
+                    description=f"Item {i}",
+                    line_subtotal=Decimal("10.00"),
+                    line_total=Decimal("10.00"),
+                    taxable_status="taxable",
                 )
                 db.session.add(item)
                 items.append(item)
@@ -340,14 +363,23 @@ class TestAllocationEngine:
             db.session.flush()
 
             item = ReceiptLineItem(
-                receipt_id=receipt.id, row_order=0,
-                description="Split Item", line_total=Decimal("100.00"),
+                receipt_id=receipt.id,
+                row_order=0,
+                description="Split Item",
+                line_total=Decimal("100.00"),
             )
             db.session.add(item)
             db.session.flush()
 
-            set_line_allocation(item.id, AllocationType.MARKET, amount=Decimal("60.00"), percent=Decimal("60"))
-            set_line_allocation(item.id, AllocationType.GENERAL_EXPENSE, amount=Decimal("40.00"), percent=Decimal("40"))
+            set_line_allocation(
+                item.id, AllocationType.MARKET, amount=Decimal("60.00"), percent=Decimal("60")
+            )
+            set_line_allocation(
+                item.id,
+                AllocationType.GENERAL_EXPENSE,
+                amount=Decimal("40.00"),
+                percent=Decimal("40"),
+            )
 
             allocations = ReceiptLineAllocation.query.filter_by(receipt_line_item_id=item.id).all()
             total = sum(a.amount or Decimal("0") for a in allocations)
@@ -449,9 +481,7 @@ class TestAuthZ:
         assert response.status_code == 200
         assert response.data == b"fake-image-bytes"
 
-    def test_review_page_embeds_pdf_receipts(
-        self, app_with_receipts, admin_user, client
-    ):
+    def test_review_page_embeds_pdf_receipts(self, app_with_receipts, admin_user, client):
         receipt_dir = app_with_receipts.config["RECEIPT_STORAGE_PATH"]
         file_path = f"{receipt_dir}/review-test.pdf"
         with open(file_path, "wb") as handle:
@@ -476,6 +506,7 @@ class TestAuthZ:
 class TestProviderInterface:
     def test_ocr_provider_interface(self):
         from app.services.receipt_providers.base import BaseReceiptProvider, ProviderResult
+
         assert hasattr(BaseReceiptProvider, "process")
         pr = ProviderResult(success=True, data={"test": "value"})
         assert pr.success is True
@@ -483,6 +514,7 @@ class TestProviderInterface:
 
     def test_ai_provider_mock_mode(self):
         from app.services.receipt_providers.ai_provider import AIExtractionProvider
+
         provider = AIExtractionProvider()
         result = provider.process("/fake/path.jpg", raw_ocr_text="test receipt", mock_key="test")
         assert result.success is True

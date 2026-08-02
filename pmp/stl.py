@@ -88,17 +88,27 @@ def to_3mf(mesh: STLMesh) -> bytes:
     mesh_node = ET.SubElement(obj, f"{{{namespace}}}mesh")
     vertices = ET.SubElement(mesh_node, f"{{{namespace}}}vertices")
     for x, y, z in mesh.vertices:
-        ET.SubElement(vertices, f"{{{namespace}}}vertex", {"x": f"{x:.9g}", "y": f"{y:.9g}", "z": f"{z:.9g}"})
+        ET.SubElement(
+            vertices, f"{{{namespace}}}vertex", {"x": f"{x:.9g}", "y": f"{y:.9g}", "z": f"{z:.9g}"}
+        )
     triangles = ET.SubElement(mesh_node, f"{{{namespace}}}triangles")
     for v1, v2, v3 in mesh.triangles:
-        ET.SubElement(triangles, f"{{{namespace}}}triangle", {"v1": str(v1), "v2": str(v2), "v3": str(v3)})
+        ET.SubElement(
+            triangles, f"{{{namespace}}}triangle", {"v1": str(v1), "v2": str(v2), "v3": str(v3)}
+        )
     build = ET.SubElement(model, f"{{{namespace}}}build")
     ET.SubElement(build, f"{{{namespace}}}item", {"objectid": "1"})
     model_bytes = ET.tostring(model, encoding="utf-8", xml_declaration=True)
 
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>')
-        archive.writestr("_rels/.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>')
+        archive.writestr(
+            "[Content_Types].xml",
+            '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>',
+        )
+        archive.writestr(
+            "_rels/.rels",
+            '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>',
+        )
         archive.writestr("3D/3dmodel.model", model_bytes)
     return output.getvalue()

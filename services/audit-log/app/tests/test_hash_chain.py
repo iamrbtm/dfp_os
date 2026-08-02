@@ -37,6 +37,7 @@ async def test_verify_chain_detects_tampering(client, auth_headers, sample_event
     await client.post("/api/v1/audit-events", json=sample_event, headers=auth_headers)
 
     from app.models import AuditEvent
+
     result = await async_session.get(AuditEvent, event_id)
     result.action = "tampered.action"
     await async_session.commit()

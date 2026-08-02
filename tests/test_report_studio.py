@@ -117,7 +117,12 @@ def test_vendor_market_heat_map_empty(app):
 
 def test_vendor_market_heat_map_with_data(app):
     with app.app_context():
-        _create_market("Heat Map Market", MarketStatus.COMPLETED, booth_fee=Decimal("75"), application_fee=Decimal("25"))
+        _create_market(
+            "Heat Map Market",
+            MarketStatus.COMPLETED,
+            booth_fee=Decimal("75"),
+            application_fee=Decimal("25"),
+        )
         data = get_vendor_market_heat_map({})
         assert len(data) >= 1
         assert any(m["name"] == "Heat Map Market" for m in data)
@@ -166,7 +171,9 @@ def test_market_application_pipeline_report_with_data(app):
 
 def test_market_application_pipeline_report_metrics(app):
     with app.app_context():
-        _create_market("Interested Market", MarketStatus.INTERESTED, application_deadline=date(2026, 8, 1))
+        _create_market(
+            "Interested Market", MarketStatus.INTERESTED, application_deadline=date(2026, 8, 1)
+        )
         report = get_market_application_pipeline_report({})
         assert report["upcoming_deadlines"] >= 1
         assert report["total_applications"] >= 1

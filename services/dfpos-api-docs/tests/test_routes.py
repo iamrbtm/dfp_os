@@ -9,6 +9,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def reset_spec_cache():
     import app.routes
+
     app.routes._spec_cache["data"] = None
     app.routes._spec_cache["fetched_at"] = 0
     app.routes._spec_cache["source"] = None
@@ -22,13 +23,16 @@ def spec_file(tmp_path):
 @pytest.fixture
 def app(spec_file, monkeypatch):
     from app import create_app
+
     monkeypatch.setenv("FLASK_ENV", "development")
     app = create_app()
-    app.config.update({
-        "TESTING": True,
-        "DFPOS_OPENAPI_URL": "",
-        "DFPOS_OPENAPI_FALLBACK_PATH": str(spec_file),
-    })
+    app.config.update(
+        {
+            "TESTING": True,
+            "DFPOS_OPENAPI_URL": "",
+            "DFPOS_OPENAPI_FALLBACK_PATH": str(spec_file),
+        }
+    )
     return app
 
 
@@ -53,11 +57,14 @@ def test_health_no_spec(client):
 
 
 def test_health_with_local_spec(app, client):
-    _write_spec(app, {
-        "openapi": "3.0.3",
-        "info": {"title": "Test API", "version": "1.0.0"},
-        "paths": {"/test": {"get": {"responses": {"200": {"description": "OK"}}}}},
-    })
+    _write_spec(
+        app,
+        {
+            "openapi": "3.0.3",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {"/test": {"get": {"responses": {"200": {"description": "OK"}}}}},
+        },
+    )
     resp = client.get("/health")
     assert resp.status_code == 200
     data = resp.get_json()
@@ -70,11 +77,14 @@ def test_index_no_spec(client):
 
 
 def test_index_with_spec(app, client):
-    _write_spec(app, {
-        "openapi": "3.0.3",
-        "info": {"title": "Test API", "version": "1.0.0"},
-        "paths": {},
-    })
+    _write_spec(
+        app,
+        {
+            "openapi": "3.0.3",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {},
+        },
+    )
     resp = client.get("/")
     assert resp.status_code == 200
     assert b"Redoc" in resp.data or b"redoc" in resp.data
@@ -86,11 +96,14 @@ def test_openapi_json_no_spec(client):
 
 
 def test_openapi_json_with_spec(app, client):
-    _write_spec(app, {
-        "openapi": "3.0.3",
-        "info": {"title": "Test API", "version": "1.0.0"},
-        "paths": {},
-    })
+    _write_spec(
+        app,
+        {
+            "openapi": "3.0.3",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {},
+        },
+    )
     resp = client.get("/openapi.json")
     assert resp.status_code == 200
     data = resp.get_json()
@@ -114,18 +127,22 @@ def test_validate_cli():
     assert any("openapi" in m.lower() for _, m in errors)
     assert any("info" in m.lower() for _, m in errors)
 
-    errors = _validate_openapi({
-        "openapi": "3.0.3",
-        "info": {"title": "T", "version": "1"},
-        "paths": {"/x": {"get": {"responses": {"200": {"description": "OK"}}}}},
-    })
+    errors = _validate_openapi(
+        {
+            "openapi": "3.0.3",
+            "info": {"title": "T", "version": "1"},
+            "paths": {"/x": {"get": {"responses": {"200": {"description": "OK"}}}}},
+        }
+    )
     assert len(errors) == 0
 
-    errors = _validate_openapi({
-        "openapi": "3.0.3",
-        "info": {"title": "T", "version": "1"},
-        "paths": {"/x": {"get": {}}},
-    })
+    errors = _validate_openapi(
+        {
+            "openapi": "3.0.3",
+            "info": {"title": "T", "version": "1"},
+            "paths": {"/x": {"get": {}}},
+        }
+    )
     assert any("responses" in m.lower() for _, m in errors)
 
 

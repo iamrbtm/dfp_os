@@ -147,7 +147,10 @@ def require_api_scopes(*required_scopes: str):
         source_module=__name__,
         actor_id=getattr(token, "id", None),
         actor_type="api_token",
-        metadata={"required_scopes": list(required_scopes), "token_scopes": sorted(token.scope_set)},
+        metadata={
+            "required_scopes": list(required_scopes),
+            "token_scopes": sorted(token.scope_set),
+        },
     )
     return (
         jsonify(

@@ -59,7 +59,10 @@ PRINT_JOB_RESOURCES: dict[str, ResourceConfig] = {
             ("Label", lambda item: item.label or "\u2014"),
             ("Status", lambda item: item.status),
             ("Printer", lambda item: item.printer.name if item.printer else "\u2014"),
-            ("Assigned To", lambda item: item.assigned_to.full_name if item.assigned_to else "\u2014"),
+            (
+                "Assigned To",
+                lambda item: item.assigned_to.full_name if item.assigned_to else "\u2014",
+            ),
             ("Priority", lambda item: item.priority),
         ],
     ),
@@ -130,6 +133,7 @@ def create_resource(resource_key: str = "print-jobs"):
             create_print_job(instance, actor_id=current_user.id)
         except IntegrityError:
             from app.extensions import db
+
             db.session.rollback()
             flash(f"Unable to save that {config.singular.lower()}.", "danger")
             return (
@@ -192,6 +196,7 @@ def edit_resource(resource_id: int, resource_key: str = "print-jobs"):
             update_print_job(instance, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
             from app.extensions import db
+
             db.session.rollback()
             flash(f"Unable to update that {config.singular.lower()}.", "danger")
             return (
@@ -239,7 +244,9 @@ def create_autopsy(print_job_id: int):
         create_autopsy_for_failed_job(print_job, autopsy, actor_id=current_user.id)
         flash("Failure autopsy saved.", "success")
         return redirect(url_for("print_jobs.detail_resource", resource_id=print_job.id))
-    return render_template("print_jobs/autopsy_form.html", print_job=print_job, form=form, mode="create")
+    return render_template(
+        "print_jobs/autopsy_form.html", print_job=print_job, form=form, mode="create"
+    )
 
 
 @bp.route("/autopsies/<int:autopsy_id>/edit", methods=["GET", "POST"])
@@ -255,7 +262,13 @@ def edit_autopsy(autopsy_id: int):
         update_autopsy(autopsy, before_state=before_state, actor_id=current_user.id)
         flash("Failure autopsy updated.", "success")
         return redirect(url_for("print_jobs.detail_resource", resource_id=autopsy.print_job_id))
-    return render_template("print_jobs/autopsy_form.html", print_job=autopsy.print_job, form=form, mode="edit", autopsy=autopsy)
+    return render_template(
+        "print_jobs/autopsy_form.html",
+        print_job=autopsy.print_job,
+        form=form,
+        mode="edit",
+        autopsy=autopsy,
+    )
 
 
 @bp.post("/autopsies/<int:autopsy_id>/resolve")

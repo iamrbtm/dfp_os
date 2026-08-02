@@ -9,6 +9,7 @@ evidence columns (Issue 15), an index on products.analysis_status (Issue 39),
 prunes the unbounded model_analysis_config JSON column (Issue 40), and stores
 the semantic cost formula version (Issue 43).
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -85,10 +86,18 @@ def upgrade():
         sa.ForeignKeyConstraint(["product_id"], ["products.id"]),
         sa.ForeignKeyConstraint(["business_id"], ["businesses.id"]),
     )
-    op.create_index(op.f("ix_product_model_assets_product_id"), "product_model_assets", ["product_id"])
-    op.create_index(op.f("ix_product_model_assets_business_id"), "product_model_assets", ["business_id"])
-    op.create_index(op.f("ix_product_model_assets_asset_kind"), "product_model_assets", ["asset_kind"])
-    op.create_index(op.f("ix_product_model_assets_is_current"), "product_model_assets", ["is_current"])
+    op.create_index(
+        op.f("ix_product_model_assets_product_id"), "product_model_assets", ["product_id"]
+    )
+    op.create_index(
+        op.f("ix_product_model_assets_business_id"), "product_model_assets", ["business_id"]
+    )
+    op.create_index(
+        op.f("ix_product_model_assets_asset_kind"), "product_model_assets", ["asset_kind"]
+    )
+    op.create_index(
+        op.f("ix_product_model_assets_is_current"), "product_model_assets", ["is_current"]
+    )
 
     # --- Issue 6: product_analysis_runs -----------------------------------
     op.create_table(
@@ -146,12 +155,24 @@ def upgrade():
         sa.ForeignKeyConstraint(["preview_asset_id"], ["product_model_assets.id"]),
         sa.ForeignKeyConstraint(["metadata_asset_id"], ["product_model_assets.id"]),
     )
-    op.create_index(op.f("ix_product_analysis_runs_product_id"), "product_analysis_runs", ["product_id"])
-    op.create_index(op.f("ix_product_analysis_runs_business_id"), "product_analysis_runs", ["business_id"])
-    op.create_index(op.f("ix_product_analysis_runs_source_asset_id"), "product_analysis_runs", ["source_asset_id"])
+    op.create_index(
+        op.f("ix_product_analysis_runs_product_id"), "product_analysis_runs", ["product_id"]
+    )
+    op.create_index(
+        op.f("ix_product_analysis_runs_business_id"), "product_analysis_runs", ["business_id"]
+    )
+    op.create_index(
+        op.f("ix_product_analysis_runs_source_asset_id"),
+        "product_analysis_runs",
+        ["source_asset_id"],
+    )
     op.create_index(op.f("ix_product_analysis_runs_status"), "product_analysis_runs", ["status"])
-    op.create_index(op.f("ix_product_analysis_runs_is_current"), "product_analysis_runs", ["is_current"])
-    op.create_index("ix_analysis_runs_product_current", "product_analysis_runs", ["product_id", "is_current"])
+    op.create_index(
+        op.f("ix_product_analysis_runs_is_current"), "product_analysis_runs", ["is_current"]
+    )
+    op.create_index(
+        "ix_analysis_runs_product_current", "product_analysis_runs", ["product_id", "is_current"]
+    )
 
     # --- Issue 39: index on products.analysis_status ----------------------
     op.create_index(op.f("ix_products_analysis_status"), "products", ["analysis_status"])
@@ -160,24 +181,45 @@ def upgrade():
     op.add_column("cost_snapshots", sa.Column("model_asset_id", sa.Integer(), nullable=True))
     op.add_column("cost_snapshots", sa.Column("analysis_run_id", sa.Integer(), nullable=True))
     op.add_column("cost_snapshots", sa.Column("file_sha256", sa.String(length=64), nullable=True))
-    op.add_column("cost_snapshots", sa.Column("slicer_settings_hash", sa.String(length=64), nullable=True))
+    op.add_column(
+        "cost_snapshots", sa.Column("slicer_settings_hash", sa.String(length=64), nullable=True)
+    )
     op.add_column("cost_snapshots", sa.Column("material", sa.String(length=40), nullable=True))
-    op.add_column("cost_snapshots", sa.Column("density", sa.Numeric(length=6, scale=4), nullable=True))
+    op.add_column(
+        "cost_snapshots", sa.Column("density", sa.Numeric(length=6, scale=4), nullable=True)
+    )
     op.add_column(
         "cost_snapshots",
         sa.Column(
             "density_source",
-            sa.Enum("default", "embedded", "manual", name="costsnapshotdensitysource", native_enum=False, length=20),
+            sa.Enum(
+                "default",
+                "embedded",
+                "manual",
+                name="costsnapshotdensitysource",
+                native_enum=False,
+                length=20,
+            ),
             nullable=True,
         ),
     )
     op.add_column("cost_snapshots", sa.Column("scale_percent", sa.Integer(), nullable=True))
     op.add_column("cost_snapshots", sa.Column("copies", sa.Integer(), nullable=True))
-    op.add_column("cost_snapshots", sa.Column("parsed_filament_grams", sa.Numeric(length=10, scale=2), nullable=True))
-    op.add_column("cost_snapshots", sa.Column("parsed_print_minutes", sa.Numeric(length=10, scale=2), nullable=True))
-    op.add_column("cost_snapshots", sa.Column("cost_resolver_evidence_json", sa.Text(), nullable=True))
+    op.add_column(
+        "cost_snapshots",
+        sa.Column("parsed_filament_grams", sa.Numeric(length=10, scale=2), nullable=True),
+    )
+    op.add_column(
+        "cost_snapshots",
+        sa.Column("parsed_print_minutes", sa.Numeric(length=10, scale=2), nullable=True),
+    )
+    op.add_column(
+        "cost_snapshots", sa.Column("cost_resolver_evidence_json", sa.Text(), nullable=True)
+    )
     op.create_index(op.f("ix_cost_snapshots_model_asset_id"), "cost_snapshots", ["model_asset_id"])
-    op.create_index(op.f("ix_cost_snapshots_analysis_run_id"), "cost_snapshots", ["analysis_run_id"])
+    op.create_index(
+        op.f("ix_cost_snapshots_analysis_run_id"), "cost_snapshots", ["analysis_run_id"]
+    )
     op.create_index("ix_cost_snapshots_product_stale", "cost_snapshots", ["product_id", "stale"])
     op.create_foreign_key(
         op.f("fk_cost_snapshots_model_asset_id_product_model_assets"),
@@ -262,7 +304,11 @@ def upgrade():
             run_status = "started"
         else:
             run_status = "queued"
-        is_current = 1 if status in {"complete", "failed", "pending", "analyzing", "slicing", "validating"} else 0
+        is_current = (
+            1
+            if status in {"complete", "failed", "pending", "analyzing", "slicing", "validating"}
+            else 0
+        )
         bind.execute(
             sa.text(
                 "INSERT INTO product_analysis_runs "
@@ -294,8 +340,16 @@ def downgrade():
     op.drop_index("ix_cost_snapshots_product_stale", table_name="cost_snapshots")
     op.drop_index(op.f("ix_cost_snapshots_analysis_run_id"), table_name="cost_snapshots")
     op.drop_index(op.f("ix_cost_snapshots_model_asset_id"), table_name="cost_snapshots")
-    op.drop_constraint(op.f("fk_cost_snapshots_analysis_run_id_product_analysis_runs"), "cost_snapshots", type_="foreignkey")
-    op.drop_constraint(op.f("fk_cost_snapshots_model_asset_id_product_model_assets"), "cost_snapshots", type_="foreignkey")
+    op.drop_constraint(
+        op.f("fk_cost_snapshots_analysis_run_id_product_analysis_runs"),
+        "cost_snapshots",
+        type_="foreignkey",
+    )
+    op.drop_constraint(
+        op.f("fk_cost_snapshots_model_asset_id_product_model_assets"),
+        "cost_snapshots",
+        type_="foreignkey",
+    )
     for col in (
         "cost_resolver_evidence_json",
         "parsed_print_minutes",
@@ -315,7 +369,9 @@ def downgrade():
     op.drop_index("ix_analysis_runs_product_current", table_name="product_analysis_runs")
     op.drop_index(op.f("ix_product_analysis_runs_is_current"), table_name="product_analysis_runs")
     op.drop_index(op.f("ix_product_analysis_runs_status"), table_name="product_analysis_runs")
-    op.drop_index(op.f("ix_product_analysis_runs_source_asset_id"), table_name="product_analysis_runs")
+    op.drop_index(
+        op.f("ix_product_analysis_runs_source_asset_id"), table_name="product_analysis_runs"
+    )
     op.drop_index(op.f("ix_product_analysis_runs_business_id"), table_name="product_analysis_runs")
     op.drop_index(op.f("ix_product_analysis_runs_product_id"), table_name="product_analysis_runs")
     op.drop_table("product_analysis_runs")

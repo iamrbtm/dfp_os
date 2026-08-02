@@ -443,6 +443,7 @@ def printing_basics():
 def materials():
     return render_template("public/materials.html")
 
+
 @bp.get("/returns")
 def returns():
     return render_template("public/returns.html")

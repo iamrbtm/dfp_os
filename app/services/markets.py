@@ -100,17 +100,19 @@ def _calc_reconciliation(packing_list: list[MarketPackingList]) -> dict:
         total_sold += sold
         total_returned += returned
         total_shrinkage += shrinkage
-        items.append({
-            "product_name": pl.product.name if pl.product else f"Product #{pl.product_id}",
-            "packing_id": pl.id,
-            "planned": planned,
-            "packed": packed,
-            "sold": sold,
-            "returned": returned,
-            "took": took,
-            "expected_back": expected_back,
-            "shrinkage": shrinkage,
-        })
+        items.append(
+            {
+                "product_name": pl.product.name if pl.product else f"Product #{pl.product_id}",
+                "packing_id": pl.id,
+                "planned": planned,
+                "packed": packed,
+                "sold": sold,
+                "returned": returned,
+                "took": took,
+                "expected_back": expected_back,
+                "shrinkage": shrinkage,
+            }
+        )
     shrinkage_pct = round((total_shrinkage / total_took) * 100, 1) if total_took > 0 else None
     return {
         "item_list": items,
@@ -146,27 +148,53 @@ def _merge_reconciliation_items(items: list[dict]) -> list[dict]:
 
 def get_market_command_center(market: Market) -> dict:
     performance = get_market_performance(market)
-    packing_list = MarketPackingList.query.filter_by(market_id=market.id).order_by(
-        MarketPackingList.product_id
-    ).all()
-    tasks = PrepTask.query.filter_by(market_id=market.id).order_by(
-        PrepTask.status.asc(), PrepTask.due_at.is_(None).asc(), PrepTask.due_at.asc(), PrepTask.created_at.desc()
-    ).all()
-    timeline_events = MarketTimelineEvent.query.filter_by(market_id=market.id).order_by(
-        MarketTimelineEvent.starts_at.is_(None).asc(), MarketTimelineEvent.starts_at.asc(), MarketTimelineEvent.created_at.desc()
-    ).all()
-    weather = MarketWeatherSnapshot.query.filter_by(market_id=market.id).order_by(
-        MarketWeatherSnapshot.fetched_at.desc()
-    ).first()
-    hotels = MarketHotelBooking.query.filter_by(market_id=market.id).order_by(
-        MarketHotelBooking.check_in_date.is_(None).asc(), MarketHotelBooking.check_in_date.asc(), MarketHotelBooking.created_at.desc()
-    ).all()
-    documents = MarketDocument.query.filter_by(market_id=market.id).order_by(
-        MarketDocument.created_at.desc()
-    ).all()
+    packing_list = (
+        MarketPackingList.query.filter_by(market_id=market.id)
+        .order_by(MarketPackingList.product_id)
+        .all()
+    )
+    tasks = (
+        PrepTask.query.filter_by(market_id=market.id)
+        .order_by(
+            PrepTask.status.asc(),
+            PrepTask.due_at.is_(None).asc(),
+            PrepTask.due_at.asc(),
+            PrepTask.created_at.desc(),
+        )
+        .all()
+    )
+    timeline_events = (
+        MarketTimelineEvent.query.filter_by(market_id=market.id)
+        .order_by(
+            MarketTimelineEvent.starts_at.is_(None).asc(),
+            MarketTimelineEvent.starts_at.asc(),
+            MarketTimelineEvent.created_at.desc(),
+        )
+        .all()
+    )
+    weather = (
+        MarketWeatherSnapshot.query.filter_by(market_id=market.id)
+        .order_by(MarketWeatherSnapshot.fetched_at.desc())
+        .first()
+    )
+    hotels = (
+        MarketHotelBooking.query.filter_by(market_id=market.id)
+        .order_by(
+            MarketHotelBooking.check_in_date.is_(None).asc(),
+            MarketHotelBooking.check_in_date.asc(),
+            MarketHotelBooking.created_at.desc(),
+        )
+        .all()
+    )
+    documents = (
+        MarketDocument.query.filter_by(market_id=market.id)
+        .order_by(MarketDocument.created_at.desc())
+        .all()
+    )
     marketing_tasks = [task for task in tasks if task.category == PrepTaskCategory.MARKETING]
     todo_tasks = [task for task in tasks if task.category != PrepTaskCategory.MARKETING]
     from app.services.prep_tasks import market_readiness_score
+
     readiness = market_readiness_score(market.id)
     reconciliation = _calc_reconciliation(packing_list)
     reconciliation["item_list"] = _merge_reconciliation_items(reconciliation["item_list"])
@@ -183,7 +211,9 @@ def get_market_command_center(market: Market) -> dict:
         "recommendations": get_market_advisor_recommendations(market),
         "readiness": readiness,
         "stats": _quick_stats(market, packing_list, tasks, timeline_events, documents, performance),
-        "recent_activity": _recent_activity(market, tasks, timeline_events, hotels, documents, packing_list),
+        "recent_activity": _recent_activity(
+            market, tasks, timeline_events, hotels, documents, packing_list
+        ),
         "reconciliation": reconciliation,
     }
 
@@ -220,7 +250,7 @@ def _parse_traffic(value: str | None) -> int | None:
         if len(parts) == 2:
             return (int(parts[0].strip()) + int(parts[1].strip())) // 2
         return int(parts[0].strip())
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         return None
 
 
@@ -300,7 +330,9 @@ def complete_timeline_event(event: MarketTimelineEvent, actor=None) -> MarketTim
 def fetch_weather_snapshot(market: Market, actor=None) -> MarketWeatherSnapshot:
     if market.latitude is None or market.longitude is None:
         if not geocode_market_address(market, actor=actor):
-            raise ValueError("Add a complete address and ZIP code before fetching Weather.gov data.")
+            raise ValueError(
+                "Add a complete address and ZIP code before fetching Weather.gov data."
+            )
 
     user_agent = current_app.config.get("WEATHER_USER_AGENT")
     headers = {"User-Agent": user_agent, "Accept": "application/geo+json"}
@@ -320,7 +352,9 @@ def fetch_weather_snapshot(market: Market, actor=None) -> MarketWeatherSnapshot:
             fallback_resp.raise_for_status()
             forecast_payload = fallback_resp.json()
 
-    period = _select_weather_period(market, forecast_payload.get("properties", {}).get("periods", []))
+    period = _select_weather_period(
+        market, forecast_payload.get("properties", {}).get("periods", [])
+    )
     if period is None:
         periods = forecast_payload.get("properties", {}).get("periods", [])
         period = periods[0] if periods else {}
@@ -410,7 +444,11 @@ def market_document_path(document: MarketDocument) -> Path:
     stored = Path(document.stored_filename)
     if stored.is_absolute():
         return stored
-    return Path(current_app.config["MARKET_DOCUMENTS_PATH"]) / str(document.market_id) / document.stored_filename
+    return (
+        Path(current_app.config["MARKET_DOCUMENTS_PATH"])
+        / str(document.market_id)
+        / document.stored_filename
+    )
 
 
 def record_market_audit(
@@ -438,10 +476,14 @@ def record_market_audit(
 
 
 def _get_market_sales_total(market: Market) -> Decimal:
-    result = db.session.query(func.sum(Order.total)).filter(
-        Order.market_id == market.id,
-        Order.deleted_at.is_(None),
-    ).scalar()
+    result = (
+        db.session.query(func.sum(Order.total))
+        .filter(
+            Order.market_id == market.id,
+            Order.deleted_at.is_(None),
+        )
+        .scalar()
+    )
     return result or Decimal(0)
 
 
@@ -483,7 +525,9 @@ def _quick_stats(
         "marketing_total": len(marketing),
         "marketing_done": marketing_done,
         "marketing_pct": _count_pct(marketing_done, len(marketing)),
-        "application_pct": _count_pct(len([step for step in application_steps if step]), len(application_steps)),
+        "application_pct": _count_pct(
+            len([step for step in application_steps if step]), len(application_steps)
+        ),
         "payment_pct": 100 if market.fee_paid_at else 0,
         "packing_pct": _count_pct(packed, planned),
         "planned_units": planned,
@@ -504,10 +548,26 @@ def _recent_activity(
     packing_list: list[MarketPackingList],
 ) -> list[dict]:
     rows = [{"label": "Market updated", "timestamp": market.updated_at, "detail": market.name}]
-    rows.extend({"label": "Task updated", "timestamp": task.updated_at, "detail": task.title} for task in tasks)
-    rows.extend({"label": "Timeline updated", "timestamp": item.updated_at, "detail": item.title} for item in timeline_events)
-    rows.extend({"label": "Hotel updated", "timestamp": item.updated_at, "detail": item.hotel_name} for item in hotels)
-    rows.extend({"label": "Document uploaded", "timestamp": item.created_at, "detail": item.original_filename} for item in documents)
+    rows.extend(
+        {"label": "Task updated", "timestamp": task.updated_at, "detail": task.title}
+        for task in tasks
+    )
+    rows.extend(
+        {"label": "Timeline updated", "timestamp": item.updated_at, "detail": item.title}
+        for item in timeline_events
+    )
+    rows.extend(
+        {"label": "Hotel updated", "timestamp": item.updated_at, "detail": item.hotel_name}
+        for item in hotels
+    )
+    rows.extend(
+        {
+            "label": "Document uploaded",
+            "timestamp": item.created_at,
+            "detail": item.original_filename,
+        }
+        for item in documents
+    )
     rows.extend(
         {
             "label": "Packing item updated",
@@ -516,18 +576,25 @@ def _recent_activity(
         }
         for item in packing_list
     )
-    return sorted(rows, key=lambda item: item["timestamp"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)[:8]
+    return sorted(
+        rows,
+        key=lambda item: item["timestamp"] or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )[:8]
 
 
 def _get_market_expenses_total(market: Market) -> Decimal:
-    result = db.session.query(func.sum(Expense.amount)).filter(
-        Expense.related_market_id == market.id
-    ).scalar()
+    result = (
+        db.session.query(func.sum(Expense.amount))
+        .filter(Expense.related_market_id == market.id)
+        .scalar()
+    )
     return result or Decimal(0)
 
 
 def _get_top_products(market: Market, limit: int = 5) -> list[dict]:
     from app.models import PosSaleItem, PosSaleItemType
+
     results = (
         db.session.query(
             PosSaleItem.description,
@@ -568,22 +635,29 @@ def _get_payment_methods(market: Market) -> list[dict]:
         .all()
     )
     return [
-        {"method": r[0] or "unknown", "count": int(r[1]), "total": Decimal(str(r[2])) if r[2] else Decimal(0)}
+        {
+            "method": r[0] or "unknown",
+            "count": int(r[1]),
+            "total": Decimal(str(r[2])) if r[2] else Decimal(0),
+        }
         for r in results
     ]
 
 
 def _get_units_sold(market: Market) -> int:
     from app.models import PosSaleItem, PosSaleItemType
-    result = db.session.query(func.sum(PosSaleItem.quantity)).join(
-        PosSale, PosSale.id == PosSaleItem.pos_sale_id
-    ).join(
-        PosSession, PosSession.id == PosSale.pos_session_id
-    ).filter(
-        PosSession.market_id == market.id,
-        PosSession.status != PosSessionStatus.VOIDED,
-        PosSaleItem.item_type == PosSaleItemType.PRODUCT,
-    ).scalar()
+
+    result = (
+        db.session.query(func.sum(PosSaleItem.quantity))
+        .join(PosSale, PosSale.id == PosSaleItem.pos_sale_id)
+        .join(PosSession, PosSession.id == PosSale.pos_session_id)
+        .filter(
+            PosSession.market_id == market.id,
+            PosSession.status != PosSessionStatus.VOIDED,
+            PosSaleItem.item_type == PosSaleItemType.PRODUCT,
+        )
+        .scalar()
+    )
     return int(result or 0)
 
 
@@ -656,6 +730,9 @@ def _select_weather_period(market: Market, periods: list[dict]) -> dict | None:
 
 
 def get_upcoming_markets(limit: int = 5) -> list[Market]:
-    return Market.query.filter(
-        Market.status.in_([MarketStatus.SCHEDULED])
-    ).order_by(Market.event_date.asc()).limit(limit).all()
+    return (
+        Market.query.filter(Market.status.in_([MarketStatus.SCHEDULED]))
+        .order_by(Market.event_date.asc())
+        .limit(limit)
+        .all()
+    )

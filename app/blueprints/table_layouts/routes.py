@@ -25,7 +25,17 @@ from app.services.audit import record_audit_event
 from app.services.crud import get_by_id, paginate_query
 from app.utils.auth import roles_required
 
-def _audit(action, entity_type, entity_id, *, actor=None, before_state=None, after_state=None, metadata=None):
+
+def _audit(
+    action,
+    entity_type,
+    entity_id,
+    *,
+    actor=None,
+    before_state=None,
+    after_state=None,
+    metadata=None,
+):
     record_audit_event(
         action=action,
         entity_type=entity_type,
@@ -60,7 +70,9 @@ def list_layouts():
     if market_id:
         query = query.where(MarketTableLayout.market_id == market_id)
     pagination = paginate_query(query, page, 20)
-    templates = MarketTableLayout.query.filter_by(is_template=True).order_by(MarketTableLayout.name).all()
+    templates = (
+        MarketTableLayout.query.filter_by(is_template=True).order_by(MarketTableLayout.name).all()
+    )
     return render_template(
         "dashboard/table_layouts/list.html",
         layouts=pagination.items,
@@ -111,12 +123,14 @@ def create_layout():
 
         if not copy_from:
             for sec_type, label, sort in DEFAULT_SECTIONS:
-                db.session.add(MarketTableSection(
-                    layout_id=layout.id,
-                    section_type=sec_type,
-                    label=label,
-                    sort_order=sort,
-                ))
+                db.session.add(
+                    MarketTableSection(
+                        layout_id=layout.id,
+                        section_type=sec_type,
+                        label=label,
+                        sort_order=sort,
+                    )
+                )
             db.session.commit()
 
         _audit("table_layout.created", "market_table_layout", layout.id, actor=current_user)
@@ -137,9 +151,11 @@ def detail_layout(layout_id: int):
     layout = get_by_id(MarketTableLayout, layout_id)
     if layout is None:
         return render_template("errors/404.html"), 404
-    sections = MarketTableSection.query.filter_by(layout_id=layout.id).order_by(
-        MarketTableSection.sort_order
-    ).all()
+    sections = (
+        MarketTableSection.query.filter_by(layout_id=layout.id)
+        .order_by(MarketTableSection.sort_order)
+        .all()
+    )
     placement_form = MarketTablePlacementForm()
     markets = Market.query.order_by(Market.event_date.desc()).all()
     return render_template(
@@ -191,9 +207,12 @@ def add_section(layout_id: int):
     if not label or not section_type:
         flash("Section type and label are required.", "danger")
         return redirect(url_for("table_layouts.detail_layout", layout_id=layout.id))
-    max_sort = db.session.query(db.func.max(MarketTableSection.sort_order)).filter(
-        MarketTableSection.layout_id == layout.id
-    ).scalar() or 0
+    max_sort = (
+        db.session.query(db.func.max(MarketTableSection.sort_order))
+        .filter(MarketTableSection.layout_id == layout.id)
+        .scalar()
+        or 0
+    )
     section = MarketTableSection(
         layout_id=layout.id,
         section_type=TableSectionType(section_type),
@@ -213,7 +232,13 @@ def delete_section(layout_id: int, section_id: int):
     section = get_by_id(MarketTableSection, section_id)
     if section is None or section.layout_id != layout_id:
         return render_template("errors/404.html"), 404
-    _audit("table_layout.section_deleted", "market_table_section", section.id, actor=current_user, before_state={"label": section.label})
+    _audit(
+        "table_layout.section_deleted",
+        "market_table_section",
+        section.id,
+        actor=current_user,
+        before_state={"label": section.label},
+    )
     db.session.delete(section)
     db.session.commit()
     flash("Section deleted.", "success")
@@ -237,9 +262,12 @@ def add_placement(layout_id: int):
         section = get_by_id(MarketTableSection, section_id)
         if section is None or section.layout_id != layout.id:
             return render_template("errors/404.html"), 404
-        max_sort = db.session.query(db.func.max(MarketTablePlacement.sort_order)).filter(
-            MarketTablePlacement.section_id == section.id
-        ).scalar() or 0
+        max_sort = (
+            db.session.query(db.func.max(MarketTablePlacement.sort_order))
+            .filter(MarketTablePlacement.section_id == section.id)
+            .scalar()
+            or 0
+        )
         placement = MarketTablePlacement(
             section_id=section.id,
             product_id=form.product_id.data,
@@ -249,8 +277,15 @@ def add_placement(layout_id: int):
         )
         db.session.add(placement)
         db.session.commit()
-        _audit("table_layout.placement_added", "market_table_placement", placement.id, actor=current_user)
-        flash(f"Added {form.quantity.data} x {placement.product.name} to {section.label}.", "success")
+        _audit(
+            "table_layout.placement_added",
+            "market_table_placement",
+            placement.id,
+            actor=current_user,
+        )
+        flash(
+            f"Added {form.quantity.data} x {placement.product.name} to {section.label}.", "success"
+        )
     return redirect(url_for("table_layouts.detail_layout", layout_id=layout.id))
 
 
@@ -260,7 +295,13 @@ def delete_placement(layout_id: int, placement_id: int):
     placement = get_by_id(MarketTablePlacement, placement_id)
     if placement is None or placement.section.layout_id != layout_id:
         return render_template("errors/404.html"), 404
-    _audit("table_layout.placement_deleted", "market_table_placement", placement.id, actor=current_user, before_state={"product": placement.product.name if placement.product else None})
+    _audit(
+        "table_layout.placement_deleted",
+        "market_table_placement",
+        placement.id,
+        actor=current_user,
+        before_state={"product": placement.product.name if placement.product else None},
+    )
     db.session.delete(placement)
     db.session.commit()
     flash("Placement removed.", "success")
@@ -279,14 +320,23 @@ def apply_template_to_market(layout_id: int):
         flash("Select a market to apply this template to.", "danger")
         return redirect(url_for("table_layouts.detail_layout", layout_id=layout_id))
     name = request.form.get("name", "").strip() or f"{template.name} — {market.name}"
-    layout = MarketTableLayout(market_id=market.id, name=name, notes=template.notes, is_template=False)
+    layout = MarketTableLayout(
+        market_id=market.id, name=name, notes=template.notes, is_template=False
+    )
     db.session.add(layout)
     db.session.flush()
     _copy_sections(template, layout)
-    _audit("table_layout.created_from_template", "market_table_layout", layout.id, actor=current_user,
-           before_state=None, after_state={"template_id": str(template.id), "market_id": str(market.id)})
+    _audit(
+        "table_layout.created_from_template",
+        "market_table_layout",
+        layout.id,
+        actor=current_user,
+        before_state=None,
+        after_state={"template_id": str(template.id), "market_id": str(market.id)},
+    )
     flash(f"Template applied to {market.name}.", "success")
     return redirect(url_for("table_layouts.detail_layout", layout_id=layout.id))
+
 
 @bp.post("/<int:layout_id>/archive")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
@@ -308,6 +358,7 @@ def _save_photo(file, layout) -> str | None:
     upload_dir = Path(current_app.config.get("UPLOAD_FOLDER", "uploads")) / "table_layouts"
     upload_dir.mkdir(parents=True, exist_ok=True)
     import uuid
+
     stored = f"{uuid.uuid4().hex}_{filename}"
     path = upload_dir / stored
     file.save(path)
@@ -325,11 +376,13 @@ def _copy_sections(source: MarketTableLayout, target: MarketTableLayout):
         db.session.add(section)
         db.session.flush()
         for src_placement in src_section.placements:
-            db.session.add(MarketTablePlacement(
-                section_id=section.id,
-                product_id=src_placement.product_id,
-                quantity=src_placement.quantity,
-                sort_order=src_placement.sort_order,
-                notes=src_placement.notes,
-            ))
+            db.session.add(
+                MarketTablePlacement(
+                    section_id=section.id,
+                    product_id=src_placement.product_id,
+                    quantity=src_placement.quantity,
+                    sort_order=src_placement.sort_order,
+                    notes=src_placement.notes,
+                )
+            )
     db.session.commit()

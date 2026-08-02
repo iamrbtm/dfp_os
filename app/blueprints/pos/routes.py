@@ -37,7 +37,11 @@ from app.utils.auth import roles_required
 @bp.route("/")
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def index():
-    active = PosSession.query.filter_by(status=PosSessionStatus.OPEN).order_by(PosSession.id.desc()).first()
+    active = (
+        PosSession.query.filter_by(status=PosSessionStatus.OPEN)
+        .order_by(PosSession.id.desc())
+        .first()
+    )
     if active:
         return redirect(url_for("pos.pos_screen", session_id=active.id))
     return redirect(url_for("pos.session_list"))
@@ -72,8 +76,12 @@ def session_new():
         session = open_session(
             user_id=current_user.id,
             opening_cash=form.opening_cash.data or Decimal("0"),
-            market_id=form.market_id.data if form.market_id.data and form.market_id.data > 0 else None,
-            inventory_location_id=form.inventory_location_id.data if form.inventory_location_id.data and form.inventory_location_id.data > 0 else None,
+            market_id=form.market_id.data
+            if form.market_id.data and form.market_id.data > 0
+            else None,
+            inventory_location_id=form.inventory_location_id.data
+            if form.inventory_location_id.data and form.inventory_location_id.data > 0
+            else None,
             notes=form.notes.data,
         )
         flash(f"POS session {session.session_number} opened.")
@@ -160,7 +168,11 @@ def pos_screen(session_id):
         .order_by(Product.name)
         .all()
     )
-    customers = Customer.query.filter(Customer.deleted_at.is_(None)).order_by(Customer.first_name, Customer.last_name).all()
+    customers = (
+        Customer.query.filter(Customer.deleted_at.is_(None))
+        .order_by(Customer.first_name, Customer.last_name)
+        .all()
+    )
     return render_template(
         "pos/index.html",
         session=session,

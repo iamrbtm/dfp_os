@@ -83,7 +83,11 @@ def legacy_management():
         "intelligence/legacy.html",
         tables=tables.get("tables", tables.get("items", [])) if not _has_error(tables) else [],
         promoted=promoted if isinstance(promoted, list) and not _has_error(promoted) else [],
-        error=promoted.get("error") if _has_error(promoted) else tables.get("error") if _has_error(tables) else None,
+        error=promoted.get("error")
+        if _has_error(promoted)
+        else tables.get("error")
+        if _has_error(tables)
+        else None,
     )
 
 
@@ -248,7 +252,9 @@ def decision_outcomes():
         "decision_type": request.form.get("decision_type") or "market_advisor",
         "user_action": request.form.get("user_action") or "accepted",
         "outcome_status": request.form.get("outcome_status") or "unknown",
-        "actual_units": int(request.form.get("actual_units") or 0) if request.form.get("actual_units") else None,
+        "actual_units": int(request.form.get("actual_units") or 0)
+        if request.form.get("actual_units")
+        else None,
         "actual_revenue_cents": int(float(request.form.get("actual_revenue") or 0) * 100)
         if request.form.get("actual_revenue")
         else None,

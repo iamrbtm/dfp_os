@@ -17,7 +17,9 @@ from app.models.promotion import (
 from app.services.audit import record_audit_event
 
 
-def generate_draft_from_product(product_id: int, actor_id: int | None = None) -> ContentDraft | None:
+def generate_draft_from_product(
+    product_id: int, actor_id: int | None = None
+) -> ContentDraft | None:
     product = db.session.get(Product, product_id)
     if product is None:
         return None
@@ -71,7 +73,9 @@ def generate_draft_from_market(market_id: int, actor_id: int | None = None) -> C
     return draft
 
 
-def generate_draft_from_custom_request(cr_id: int, actor_id: int | None = None) -> ContentDraft | None:
+def generate_draft_from_custom_request(
+    cr_id: int, actor_id: int | None = None
+) -> ContentDraft | None:
     cr = db.session.get(CustomRequest, cr_id)
     if cr is None:
         return None
@@ -130,8 +134,10 @@ def generate_ai_assisted_draft(
 ) -> ContentDraft | None:
     from flask import current_app
 
-    ai_enabled = bool(current_app.config.get("AI_RECEIPT_PARSING_ENABLED", False) or
-                      current_app.config.get("AI_ANALYTICS_INSIGHTS_ENABLED", False))
+    ai_enabled = bool(
+        current_app.config.get("AI_RECEIPT_PARSING_ENABLED", False)
+        or current_app.config.get("AI_ANALYTICS_INSIGHTS_ENABLED", False)
+    )
     openai_key = current_app.config.get("OPENAI_API_KEY", "")
 
     if ai_enabled and openai_key:
@@ -143,7 +149,9 @@ def generate_ai_assisted_draft(
     return _generate_deterministic(source_type, source_id, actor_id)
 
 
-def _generate_with_openai(source_type: str, source_id: int, actor_id: int | None = None) -> ContentDraft | None:
+def _generate_with_openai(
+    source_type: str, source_id: int, actor_id: int | None = None
+) -> ContentDraft | None:
     from flask import current_app
     import json
 
@@ -154,19 +162,24 @@ def _generate_with_openai(source_type: str, source_id: int, actor_id: int | None
     prompt = (
         "You are a social media content assistant for Dude Fish Printing, a family-run 3D printing business. "
         "Generate a social media post draft based on the following context. "
-        "Respond with JSON: {\"title\": \"...\", \"caption\": \"...\", \"channel\": \"facebook|instagram|tiktok\", \"content_type\": \"social_post\"}. "
+        'Respond with JSON: {"title": "...", "caption": "...", "channel": "facebook|instagram|tiktok", "content_type": "social_post"}. '
         "Keep the caption under 300 characters. Do not invent fake reviews, fake testimonials, or unsupported claims. "
         f"Context: {json.dumps(context)}"
     )
 
     try:
         import httpx
+
         api_key = current_app.config["OPENAI_API_KEY"]
         model = current_app.config.get("OPENAI_MODEL", "gpt-4o-mini")
         resp = httpx.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.7},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.7,
+            },
             timeout=15,
         )
         resp.raise_for_status()
@@ -203,7 +216,9 @@ def _generate_with_openai(source_type: str, source_id: int, actor_id: int | None
     return draft
 
 
-def _generate_deterministic(source_type: str, source_id: int, actor_id: int | None = None) -> ContentDraft | None:
+def _generate_deterministic(
+    source_type: str, source_id: int, actor_id: int | None = None
+) -> ContentDraft | None:
     if source_type == "product":
         return generate_draft_from_product(source_id, actor_id)
     elif source_type == "market":
@@ -218,12 +233,23 @@ def _build_source_context(source_type: str, source_id: int) -> dict | None:
         product = db.session.get(Product, source_id)
         if product is None:
             return None
-        return {"type": "product", "name": product.name, "description": product.short_description or "", "price": float(product.base_price) if product.base_price else None}
+        return {
+            "type": "product",
+            "name": product.name,
+            "description": product.short_description or "",
+            "price": float(product.base_price) if product.base_price else None,
+        }
     elif source_type == "market":
         market = db.session.get(Market, source_id)
         if market is None:
             return None
-        return {"type": "market", "name": market.name, "city": market.city, "state": market.state, "date": str(market.event_date) if market.event_date else None}
+        return {
+            "type": "market",
+            "name": market.name,
+            "city": market.city,
+            "state": market.state,
+            "date": str(market.event_date) if market.event_date else None,
+        }
     elif source_type in ("custom_request", "custom-order"):
         cr = db.session.get(CustomRequest, source_id)
         if cr is None:
@@ -233,7 +259,12 @@ def _build_source_context(source_type: str, source_id: int) -> dict | None:
 
 
 def _apply_source_field(draft: ContentDraft, source_type: str, source_id: int) -> None:
-    field_map = {"product": "product_id", "market": "market_id", "custom_request": "custom_request_id", "custom-order": "custom_request_id"}
+    field_map = {
+        "product": "product_id",
+        "market": "market_id",
+        "custom_request": "custom_request_id",
+        "custom-order": "custom_request_id",
+    }
     field = field_map.get(source_type)
     if field:
         setattr(draft, field, source_id)
@@ -277,7 +308,9 @@ def archive_draft(draft: ContentDraft, actor: Any | None = None) -> ContentDraft
         action="content_draft.archived",
         entity_type="content_draft",
         entity_id=draft.id,
-        before_state={"status": draft.status.value if hasattr(draft.status, "value") else str(draft.status)},
+        before_state={
+            "status": draft.status.value if hasattr(draft.status, "value") else str(draft.status)
+        },
         after_state={"status": ContentStatus.ARCHIVED.value},
         source_module=__name__,
         actor_id=getattr(actor, "id", None),
@@ -305,8 +338,10 @@ def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
     import httpx
     from PIL import Image
 
-    ai_enabled = bool(current_app.config.get("AI_RECEIPT_PARSING_ENABLED", False) or
-                      current_app.config.get("AI_ANALYTICS_INSIGHTS_ENABLED", False))
+    ai_enabled = bool(
+        current_app.config.get("AI_RECEIPT_PARSING_ENABLED", False)
+        or current_app.config.get("AI_ANALYTICS_INSIGHTS_ENABLED", False)
+    )
     api_key = current_app.config.get("OPENAI_API_KEY", "")
     if not ai_enabled or not api_key:
         return sign
@@ -320,7 +355,10 @@ def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
         prompt_parts.append(f"Subtitle: {sign.subtitle}")
     if sign.price_display:
         prompt_parts.append(f"Price: {sign.price_display}")
-    prompt = ". ".join(prompt_parts) + ". Clean product photography style, warm inviting colors, solid background, no logos, no text rendering."
+    prompt = (
+        ". ".join(prompt_parts)
+        + ". Clean product photography style, warm inviting colors, solid background, no logos, no text rendering."
+    )
 
     image_url = None
     models_to_try = [
@@ -341,7 +379,9 @@ def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
             )
             if not resp.is_success:
                 body = resp.text
-                current_app.logger.warning("OpenAI %s error (status %s): %s", model, resp.status_code, body[:300])
+                current_app.logger.warning(
+                    "OpenAI %s error (status %s): %s", model, resp.status_code, body[:300]
+                )
                 continue
             resp.raise_for_status()
             data = resp.json()
@@ -365,6 +405,7 @@ def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
 
         if sign.qr_target_url:
             import qrcode as qrcode_lib
+
             qr_img = qrcode_lib.make(sign.qr_target_url, box_size=12, border=2).convert("RGB")
             qr_size = int(img.width * 0.2)
             qr_img = qr_img.resize((qr_size, qr_size), Image.LANCZOS)
@@ -378,10 +419,13 @@ def generate_ai_sign_image(sign: SignAsset) -> SignAsset:
         png_bytes = buf.getvalue()
 
         from app.services.storage import upload_bytes_to_storage, image_storage_key
+
         bucket = current_app.config.get("SIGN_STORAGE_BUCKET", "signs")
         key = image_storage_key(sign.id, f"ai_sign_{uuid.uuid4().hex[:8]}.png")
         local_root = current_app.config.get("UPLOAD_FOLDER", "uploads")
-        ref = upload_bytes_to_storage(png_bytes, bucket=bucket, key=key, local_root=local_root, content_type="image/png")
+        ref = upload_bytes_to_storage(
+            png_bytes, bucket=bucket, key=key, local_root=local_root, content_type="image/png"
+        )
 
         sign.layout = "graphical"
         sign.ai_image_path = ref
@@ -417,10 +461,14 @@ def _product_image_html(sign: SignAsset) -> str:
 
 
 def generate_sign_html(sign: SignAsset) -> str:
-    price_html = f"<p class=\"sign-price\">{sign.price_display}</p>" if sign.price_display else ""
-    subtitle_html = f"<p class=\"sign-subtitle\">{sign.subtitle}</p>" if sign.subtitle else ""
-    desc_html = f"<p class=\"sign-description\">{sign.short_description}</p>" if sign.short_description else ""
-    care_html = f"<p class=\"sign-care\">{sign.care_note}</p>" if sign.care_note else ""
+    price_html = f'<p class="sign-price">{sign.price_display}</p>' if sign.price_display else ""
+    subtitle_html = f'<p class="sign-subtitle">{sign.subtitle}</p>' if sign.subtitle else ""
+    desc_html = (
+        f'<p class="sign-description">{sign.short_description}</p>'
+        if sign.short_description
+        else ""
+    )
+    care_html = f'<p class="sign-care">{sign.care_note}</p>' if sign.care_note else ""
     qr_html = _generate_qr_svg(sign.qr_target_url)
     img_html = _product_image_html(sign)
     qr_section = f'<div class="sign-qr">{qr_html}</div>' if qr_html else ""
@@ -459,13 +507,17 @@ def generate_signs_for_market(market_id: int, actor_id: int | None = None) -> li
         product = db.session.get(Product, pid)
         if product is None:
             continue
-        existing = SignAsset.query.filter_by(product_id=pid, market_id=market_id, status=SignStatus.DRAFT).first()
+        existing = SignAsset.query.filter_by(
+            product_id=pid, market_id=market_id, status=SignStatus.DRAFT
+        ).first()
         if existing:
             continue
         sign = SignAsset(
             title=f"{product.name}",
             subtitle=f"At {market.name}",
-            price_display=f"${float(product.base_price):.2f}" if product.base_price and product.base_price > 0 else None,
+            price_display=f"${float(product.base_price):.2f}"
+            if product.base_price and product.base_price > 0
+            else None,
             short_description=product.short_description or "",
             status=SignStatus.DRAFT,
             product_id=product.id,

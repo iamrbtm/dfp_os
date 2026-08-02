@@ -49,7 +49,9 @@ def run_backtest(
             .all()
         )
         for score in scores:
-            actual = _measure_actual_sales(db_session, score.product_id, report.report_date, sales_window_days)
+            actual = _measure_actual_sales(
+                db_session, score.product_id, report.report_date, sales_window_days
+            )
             entry = {
                 "report_id": report.id,
                 "report_date": report.report_date.isoformat(),
@@ -73,12 +75,14 @@ def run_backtest(
                 "actual_order_count": actual["order_count"],
             }
             all_scores.append(entry)
-            predictions.append({
-                "predicted_score": score.opportunity_score,
-                "actual_quantity": actual["quantity"],
-                "product_id": score.product_id,
-                "keyword": score.keyword,
-            })
+            predictions.append(
+                {
+                    "predicted_score": score.opportunity_score,
+                    "actual_quantity": actual["quantity"],
+                    "product_id": score.product_id,
+                    "keyword": score.keyword,
+                }
+            )
 
     if not all_scores:
         return {
@@ -196,8 +200,12 @@ def _compute_prediction_stats(predictions: list[dict[str, Any]]) -> dict[str, An
     normalized_actuals = [p["actual_quantity"] / max_qty * 100 for p in predictions]
     predicted_scores = [p["predicted_score"] for p in predictions]
 
-    mae = sum(abs(pa - ps) for pa, ps in zip(normalized_actuals, predicted_scores)) / len(predictions)
-    mse = sum((pa - ps) ** 2 for pa, ps in zip(normalized_actuals, predicted_scores)) / len(predictions)
+    mae = sum(abs(pa - ps) for pa, ps in zip(normalized_actuals, predicted_scores)) / len(
+        predictions
+    )
+    mse = sum((pa - ps) ** 2 for pa, ps in zip(normalized_actuals, predicted_scores)) / len(
+        predictions
+    )
     rmse = math.sqrt(mse)
 
     high_scorers = [p for p in predictions if p["predicted_score"] >= 60]
@@ -222,8 +230,12 @@ def _compute_prediction_stats(predictions: list[dict[str, Any]]) -> dict[str, An
         "total_units_sold": total_sold,
         "zero_seller_count": zero_sellers,
         "zero_seller_rate": round(zero_seller_rate, 4),
-        "avg_predicted_score": round(sum(p["predicted_score"] for p in predictions) / len(predictions), 2),
-        "median_predicted_score": sorted(p["predicted_score"] for p in predictions)[len(predictions) // 2],
+        "avg_predicted_score": round(
+            sum(p["predicted_score"] for p in predictions) / len(predictions), 2
+        ),
+        "median_predicted_score": sorted(p["predicted_score"] for p in predictions)[
+            len(predictions) // 2
+        ],
         "max_predicted_score": max(p["predicted_score"] for p in predictions),
         "min_predicted_score": min(p["predicted_score"] for p in predictions),
     }
@@ -251,8 +263,14 @@ def _analyze_components(scores: list[dict[str, Any]]) -> list[dict[str, Any]]:
         top_half = scores_sorted[: len(scores_sorted) // 2]
         bottom_half = scores_sorted[len(scores_sorted) // 2 :]
 
-        top_avg_sales = sum(s["actual_quantity_sold"] for s in top_half) / len(top_half) if top_half else 0
-        bottom_avg_sales = sum(s["actual_quantity_sold"] for s in bottom_half) / len(bottom_half) if bottom_half else 0
+        top_avg_sales = (
+            sum(s["actual_quantity_sold"] for s in top_half) / len(top_half) if top_half else 0
+        )
+        bottom_avg_sales = (
+            sum(s["actual_quantity_sold"] for s in bottom_half) / len(bottom_half)
+            if bottom_half
+            else 0
+        )
 
         predictive_ratio = top_avg_sales / (bottom_avg_sales + 0.001)
         values = [s.get(comp, 0) for s in scores]
@@ -260,14 +278,16 @@ def _analyze_components(scores: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
         correlation = _pearson(values, actuals)
 
-        results.append({
-            "component": comp,
-            "correlation": round(correlation, 4),
-            "predictive_ratio": round(predictive_ratio, 2),
-            "top_half_avg_sales": round(top_avg_sales, 2),
-            "bottom_half_avg_sales": round(bottom_avg_sales, 2),
-            "avg_value": round(sum(values) / len(values), 2),
-        })
+        results.append(
+            {
+                "component": comp,
+                "correlation": round(correlation, 4),
+                "predictive_ratio": round(predictive_ratio, 2),
+                "top_half_avg_sales": round(top_avg_sales, 2),
+                "bottom_half_avg_sales": round(bottom_avg_sales, 2),
+                "avg_value": round(sum(values) / len(values), 2),
+            }
+        )
 
     results.sort(key=lambda r: abs(r["correlation"]), reverse=True)
     return results
@@ -324,56 +344,66 @@ def _generate_tuning_hints(
 
         if cname == "license_risk":
             if correlation > 0.1:
-                hints.append({
-                    "component": cname,
-                    "hint": (
-                        "license_risk has a positive correlation with sales, "
-                        "meaning it may not be correctly penalizing risky products. "
-                        "Consider reducing the weight."
-                    ),
-                })
+                hints.append(
+                    {
+                        "component": cname,
+                        "hint": (
+                            "license_risk has a positive correlation with sales, "
+                            "meaning it may not be correctly penalizing risky products. "
+                            "Consider reducing the weight."
+                        ),
+                    }
+                )
             continue
 
         if cname == "opportunity_score":
             if correlation < 0.1:
-                hints.append({
-                    "component": cname,
-                    "hint": (
-                        "Overall opportunity_score has weak correlation with actual sales. "
-                        "Individual component weights may need adjustment."
-                    ),
-                })
+                hints.append(
+                    {
+                        "component": cname,
+                        "hint": (
+                            "Overall opportunity_score has weak correlation with actual sales. "
+                            "Individual component weights may need adjustment."
+                        ),
+                    }
+                )
             continue
 
         weight_key = cname
         current_w = current_weights.get(weight_key, 0)
 
         if correlation < -0.1:
-            hints.append({
-                "component": cname,
-                "hint": (
-                    f"{cname} has a negative correlation ({correlation}) with sales. "
-                    f"Current weight is {current_w}. Consider reducing or zeroing this component."
-                ),
-            })
+            hints.append(
+                {
+                    "component": cname,
+                    "hint": (
+                        f"{cname} has a negative correlation ({correlation}) with sales. "
+                        f"Current weight is {current_w}. Consider reducing or zeroing this component."
+                    ),
+                }
+            )
         elif 0.1 <= correlation < 0.3 and predictive_ratio < 1.5:
-            hints.append({
-                "component": cname,
-                "hint": (
-                    f"{cname} has weak predictive power (correlation={correlation}, "
-                    f"predictive_ratio={predictive_ratio}). "
-                    f"Consider increasing weight if business logic supports it."
-                ),
-            })
+            hints.append(
+                {
+                    "component": cname,
+                    "hint": (
+                        f"{cname} has weak predictive power (correlation={correlation}, "
+                        f"predictive_ratio={predictive_ratio}). "
+                        f"Consider increasing weight if business logic supports it."
+                    ),
+                }
+            )
         elif correlation >= 0.3 and predictive_ratio >= 2.0:
-            hints.append({
-                "component": cname,
-                "hint": (
-                    f"{cname} has strong predictive power (correlation={correlation}, "
-                    f"predictive_ratio={predictive_ratio}). "
-                    f"Current weight is {current_w}. Consider holding or slightly increasing."
-                ),
-            })
+            hints.append(
+                {
+                    "component": cname,
+                    "hint": (
+                        f"{cname} has strong predictive power (correlation={correlation}, "
+                        f"predictive_ratio={predictive_ratio}). "
+                        f"Current weight is {current_w}. Consider holding or slightly increasing."
+                    ),
+                }
+            )
 
     return hints
 

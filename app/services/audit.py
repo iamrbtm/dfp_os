@@ -41,7 +41,8 @@ def actor_context(
         return {
             "actor_id": str(current_user.id),
             "actor_type": "user",
-            "actor_display_name": getattr(current_user, "full_name", None) or getattr(current_user, "email", None),
+            "actor_display_name": getattr(current_user, "full_name", None)
+            or getattr(current_user, "email", None),
         }
     if has_request_context() and getattr(g, "api_token", None) is not None:
         token = g.api_token

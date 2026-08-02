@@ -21,7 +21,12 @@ from app.models import (
     ProductType,
 )
 from app.services.cost_engine import calculate_product_cost
-from app.services.inventory import deduct_finished_goods, release_inventory, reserve_inventory, transfer_inventory
+from app.services.inventory import (
+    deduct_finished_goods,
+    release_inventory,
+    reserve_inventory,
+    transfer_inventory,
+)
 from app.services.prep_tasks import generate_market_prep_tasks, market_readiness_score
 from app.tasks.model_analysis import _apply_initial_cost_snapshot
 
@@ -44,7 +49,9 @@ def _product():
     return product
 
 
-def _add_spool(material_type: str = "PLA", cost_per_gram: Decimal = Decimal("0.0250")) -> FilamentSpool:
+def _add_spool(
+    material_type: str = "PLA", cost_per_gram: Decimal = Decimal("0.0250")
+) -> FilamentSpool:
     spool = FilamentSpool(
         brand="Test Brand",
         material_type=material_type,
@@ -109,13 +116,17 @@ def test_inventory_transfer_and_reservation_flow(app):
         destination = InventoryLocation(name="Destination Bin", type="Bin", active=True)
         db.session.add_all([source, destination])
         db.session.flush()
-        record = InventoryRecord(product_id=product.id, location_id=source.id, quantity_on_hand=8, quantity_reserved=0)
+        record = InventoryRecord(
+            product_id=product.id, location_id=source.id, quantity_on_hand=8, quantity_reserved=0
+        )
         db.session.add(record)
         db.session.commit()
 
         reserve_inventory(record_id=record.id, quantity=3)
         release_inventory(record_id=record.id, quantity=1)
-        source_record, destination_record = transfer_inventory(record_id=record.id, to_location_id=destination.id, quantity=4)
+        source_record, destination_record = transfer_inventory(
+            record_id=record.id, to_location_id=destination.id, quantity=4
+        )
         db.session.commit()
 
         assert source_record.quantity_on_hand == 4
@@ -152,8 +163,12 @@ def test_market_prep_generation(app):
         location = InventoryLocation(name="Prep Bin", type="Bin", active=True)
         db.session.add(location)
         db.session.flush()
-        db.session.add(InventoryRecord(product_id=product.id, location_id=location.id, quantity_on_hand=0))
-        market = Market(name="Foundation Market", event_date=date(2026, 7, 1), status=MarketStatus.SCHEDULED)
+        db.session.add(
+            InventoryRecord(product_id=product.id, location_id=location.id, quantity_on_hand=0)
+        )
+        market = Market(
+            name="Foundation Market", event_date=date(2026, 7, 1), status=MarketStatus.SCHEDULED
+        )
         db.session.add(market)
         db.session.commit()
 
@@ -171,7 +186,9 @@ def test_inventory_deduction_blocks_negative(app):
         location = InventoryLocation(name="No Negative Bin", type="Bin", active=True)
         db.session.add(location)
         db.session.flush()
-        db.session.add(InventoryRecord(product_id=product.id, location_id=location.id, quantity_on_hand=1))
+        db.session.add(
+            InventoryRecord(product_id=product.id, location_id=location.id, quantity_on_hand=1)
+        )
         db.session.commit()
 
         with pytest.raises(ValueError, match="Insufficient inventory"):

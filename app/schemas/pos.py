@@ -41,7 +41,6 @@ class PosSaleItemSchema(Schema):
     custom_notes = fields.String(allow_none=True)
 
 
-
 class PosSaleSchema(Schema):
     pos_session_id = fields.Integer(dump_only=True)
     order_id = fields.Integer(dump_only=True, allow_none=True)

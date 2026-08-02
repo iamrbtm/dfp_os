@@ -17,9 +17,7 @@ class CustomRequestForm(FlaskForm):
     phone = StringField("Phone", validators=[Optional(), Length(max=50)])
     description = TextAreaField("Description", validators=[DataRequired()])
     estimated_budget = StringField("Estimated Budget", validators=[Optional()])
-    deadline = DateTimeLocalField(
-        "Deadline", format="%Y-%m-%dT%H:%M", validators=[Optional()]
-    )
+    deadline = DateTimeLocalField("Deadline", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     status = SelectField(
         "Status", choices=enum_choices(CustomRequestStatus), validators=[DataRequired()]
     )
@@ -69,5 +67,7 @@ class PublicCustomRequestForm(FlaskForm):
         description="Describe your idea: what it is, approximate size, colors, any reference images or links.",
     )
     estimated_budget = StringField("Approximate Budget (optional)", validators=[Optional()])
-    pickup_slot_id = OptionalSelectField("Preferred Pickup Window (optional)", coerce=int, validators=[Optional()])
+    pickup_slot_id = OptionalSelectField(
+        "Preferred Pickup Window (optional)", coerce=int, validators=[Optional()]
+    )
     submit = SubmitField("Send Request")

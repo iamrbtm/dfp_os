@@ -34,7 +34,7 @@ def _int_val(val: Any) -> int | None:
         return None
     try:
         return int(Decimal(str(val)))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -43,7 +43,7 @@ def _cents(val: Any) -> int | None:
         return None
     try:
         return int(Decimal(str(val)) * 100)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -54,7 +54,7 @@ def _date_val(val: Any) -> date | None:
         return val
     try:
         return datetime.strptime(str(val)[:10], "%Y-%m-%d").date()
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -283,8 +283,8 @@ async def run_pipeline(db: AsyncSession) -> dict[str, Any]:
     await db.flush()
 
     promoted_tables = (
-        await db.execute(select(PromotedLegacyTable).order_by(PromotedLegacyTable.table_name))
-    ).scalars().all()
+        (await db.execute(select(PromotedLegacyTable).order_by(PromotedLegacyTable.table_name))).scalars().all()
+    )
 
     results: dict[str, dict[str, int]] = {}
     total_created = 0
@@ -367,9 +367,7 @@ async def get_pipeline_status(db: AsyncSession) -> dict[str, Any]:
         "id": latest.id,
         "status": latest.status,
         "last_run_at": latest.started_at.isoformat() if latest.started_at else None,
-        "entities_created": (
-            sum(v.get("created", 0) for v in (latest.entity_counts or {}).values())
-        ),
+        "entities_created": (sum(v.get("created", 0) for v in (latest.entity_counts or {}).values())),
         "results": [
             {"entity_type": k, "created": v.get("created", 0), "errors": v.get("errors", 0)}
             for k, v in (latest.entity_counts or {}).items()

@@ -173,13 +173,22 @@ def review(receipt_id: int):
             receipt.currency = form.currency.data or "USD"
             receipt.notes = form.notes.data
 
-            for field in ["subtotal", "tax_total", "fee_total", "discount_total", "tip_total", "deposit_total", "grand_total"]:
+            for field in [
+                "subtotal",
+                "tax_total",
+                "fee_total",
+                "discount_total",
+                "tip_total",
+                "deposit_total",
+                "grand_total",
+            ]:
                 val = getattr(form, field).data
                 if val:
                     try:
                         from decimal import Decimal
+
                         setattr(receipt, field, Decimal(str(val)))
-                    except (ValueError, TypeError):
+                    except ValueError, TypeError:
                         pass
 
             if form.date_time.data:
@@ -196,7 +205,11 @@ def review(receipt_id: int):
             flash("Receipt saved.", "success")
             return redirect(url_for("receipts.review", receipt_id=receipt_id))
 
-    line_items = ReceiptLineItem.query.filter_by(receipt_id=receipt_id).order_by(ReceiptLineItem.row_order).all()
+    line_items = (
+        ReceiptLineItem.query.filter_by(receipt_id=receipt_id)
+        .order_by(ReceiptLineItem.row_order)
+        .all()
+    )
     reconciliation = get_reconciliation_summary(receipt_id)
     duplicate_analysis = check_duplicates(receipt_id)
     original_extension = storage_reference_extension(receipt.original_file_id)
@@ -206,12 +219,16 @@ def review(receipt_id: int):
         else receipt.preview_file_id or receipt.original_file_id
     )
     receipt_display_path = resolve_receipt_file_path(receipt_reference)
-    receipt_display_available = bool(receipt_reference and (receipt_reference.startswith("s3://") or receipt_display_path))
+    receipt_display_available = bool(
+        receipt_reference and (receipt_reference.startswith("s3://") or receipt_display_path)
+    )
     receipt_extension = storage_reference_extension(receipt_reference) or (
         Path(receipt_display_path).suffix.lower() if receipt_display_path else ""
     )
     receipt_asset_kind = "pdf" if receipt_extension == ".pdf" else "image"
-    receipt_display_file = "original" if receipt_reference == receipt.original_file_id else "preview"
+    receipt_display_file = (
+        "original" if receipt_reference == receipt.original_file_id else "preview"
+    )
     diagnostics = {
         "parser_provider": receipt.parser_provider,
         "parser_model": receipt.parser_model,
@@ -234,7 +251,9 @@ def review(receipt_id: int):
         receipt_asset_kind=receipt_asset_kind,
         receipt_display_file=receipt_display_file,
         ReceiptStatus=ReceiptStatus,
-        low_confidence_threshold=float(current_app.config.get("RECEIPT_LOW_CONFIDENCE_THRESHOLD", 0.8)),
+        low_confidence_threshold=float(
+            current_app.config.get("RECEIPT_LOW_CONFIDENCE_THRESHOLD", 0.8)
+        ),
     )
 
 
@@ -273,6 +292,7 @@ def inline_edit_line_item(receipt_id: int, item_id: int):
 
     # PATCH — save the value
     from flask_wtf.csrf import validate_csrf
+
     csrf_token = request.form.get("csrf_token", "")
     try:
         validate_csrf(csrf_token)
@@ -287,12 +307,16 @@ def inline_edit_line_item(receipt_id: int, item_id: int):
     elif field in ("quantity", "unit_price", "line_total", "line_tax"):
         try:
             setattr(item, field, Decimal(value) if value else None)
-        except (InvalidOperation, ValueError, TypeError):
+        except InvalidOperation, ValueError, TypeError:
             pass
 
     # Recalculate line_total if quantity or unit_price changed
     recalculated = False
-    if field in ("quantity", "unit_price") and item.quantity is not None and item.unit_price is not None:
+    if (
+        field in ("quantity", "unit_price")
+        and item.quantity is not None
+        and item.unit_price is not None
+    ):
         new_total = item.quantity * item.unit_price
         item.line_total = new_total
         item.line_subtotal = new_total
@@ -300,6 +324,7 @@ def inline_edit_line_item(receipt_id: int, item_id: int):
 
     # Re-allocate taxes if this item has business allocations (market, custom_job, inventory)
     from app.models.receipt import ReceiptAdjustmentAllocation
+
     had_business_alloc = any(
         a.allocation_type.value in ("market", "custom_job", "inventory", "general_expense")
         for a in (item.allocations or [])
@@ -369,20 +394,23 @@ def edit_line_item(receipt_id: int, item_id: int):
     if data.get("quantity") is not None:
         try:
             from decimal import Decimal
+
             item.quantity = Decimal(str(data["quantity"]))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
     if data.get("unit_price") is not None:
         try:
             from decimal import Decimal
+
             item.unit_price = Decimal(str(data["unit_price"]))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
     if data.get("line_total") is not None:
         try:
             from decimal import Decimal
+
             item.line_total = Decimal(str(data["line_total"]))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
     if data.get("needs_review") is not None:
         item.needs_review = bool(data["needs_review"])
@@ -413,23 +441,44 @@ def assign(receipt_id: int):
         abort(404)
 
     form = ReceiptAllocationForm()
-    line_items = ReceiptLineItem.query.filter_by(receipt_id=receipt_id).order_by(ReceiptLineItem.row_order).all()
+    line_items = (
+        ReceiptLineItem.query.filter_by(receipt_id=receipt_id)
+        .order_by(ReceiptLineItem.row_order)
+        .all()
+    )
     form.line_item_ids.choices = [(i.id, i.description or f"Item #{i.id}") for i in line_items]
 
     markets = Market.query.filter_by().order_by(Market.event_date.desc()).all()
-    form.market_id.choices = [(0, "\u2014 None \u2014")] + [(m.id, f"{m.name} ({m.event_date})") for m in markets if m.event_date]
+    form.market_id.choices = [(0, "\u2014 None \u2014")] + [
+        (m.id, f"{m.name} ({m.event_date})") for m in markets if m.event_date
+    ]
 
     custom_jobs = CustomRequest.query.order_by(CustomRequest.created_at.desc()).all()
-    form.custom_job_id.choices = [(0, "\u2014 None \u2014")] + [(j.id, f"#{j.id} {j.name or ''}") for j in custom_jobs]
+    form.custom_job_id.choices = [(0, "\u2014 None \u2014")] + [
+        (j.id, f"#{j.id} {j.name or ''}") for j in custom_jobs
+    ]
 
     if form.validate_on_submit():
         item_ids = form.line_item_ids.data
         atype = form.allocation_type.data
-        market_id = form.market_id.data if form.market_id.data and form.market_id.data != 0 else None
-        custom_job_id = form.custom_job_id.data if form.custom_job_id.data and form.custom_job_id.data != 0 else None
+        market_id = (
+            form.market_id.data if form.market_id.data and form.market_id.data != 0 else None
+        )
+        custom_job_id = (
+            form.custom_job_id.data
+            if form.custom_job_id.data and form.custom_job_id.data != 0
+            else None
+        )
 
-        count = bulk_assign_line_items(item_ids, atype, market_id=market_id, custom_job_id=custom_job_id)
-        record_audit(receipt_id, "line_items_assigned", current_user.id, json.dumps({"count": count, "type": atype}))
+        count = bulk_assign_line_items(
+            item_ids, atype, market_id=market_id, custom_job_id=custom_job_id
+        )
+        record_audit(
+            receipt_id,
+            "line_items_assigned",
+            current_user.id,
+            json.dumps({"count": count, "type": atype}),
+        )
         flash(f"{count} line item(s) assigned.", "success")
         return redirect(url_for("receipts.review", receipt_id=receipt_id))
 
@@ -537,12 +586,20 @@ def archive(receipt_id: int):
 @login_required
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def duplicates():
-    receipts = Receipt.query.filter(
-        Receipt.status == ReceiptStatus.POSSIBLE_DUPLICATE,
-        Receipt.deleted_at.is_(None),
-    ).order_by(Receipt.created_at.desc()).all()
-    receipt_rows = [{"receipt": receipt, "analysis": check_duplicates(receipt.id)} for receipt in receipts]
-    return render_template("receipts/duplicates.html", receipt_rows=receipt_rows, ReceiptStatus=ReceiptStatus)
+    receipts = (
+        Receipt.query.filter(
+            Receipt.status == ReceiptStatus.POSSIBLE_DUPLICATE,
+            Receipt.deleted_at.is_(None),
+        )
+        .order_by(Receipt.created_at.desc())
+        .all()
+    )
+    receipt_rows = [
+        {"receipt": receipt, "analysis": check_duplicates(receipt.id)} for receipt in receipts
+    ]
+    return render_template(
+        "receipts/duplicates.html", receipt_rows=receipt_rows, ReceiptStatus=ReceiptStatus
+    )
 
 
 @bp.route("/settings")
@@ -563,6 +620,7 @@ def help_page():
 def help_download():
     from flask import Response
     from pathlib import Path
+
     help_path = Path(current_app.root_path).parent / "docs" / "receipt-expense-workflow.md"
     if help_path.exists():
         content = help_path.read_text()
@@ -603,13 +661,15 @@ def receipt_image(receipt_id: int):
 @login_required
 def api_dashboard():
     data = get_receipt_dashboard()
-    return jsonify({
-        "total_this_month": data["total_this_month"],
-        "needs_review": data["needs_review"],
-        "possible_duplicates": data["possible_duplicates"],
-        "approved_total": str(data["approved_total"]),
-        "unallocated": data["unallocated"],
-    })
+    return jsonify(
+        {
+            "total_this_month": data["total_this_month"],
+            "needs_review": data["needs_review"],
+            "possible_duplicates": data["possible_duplicates"],
+            "approved_total": str(data["approved_total"]),
+            "unallocated": data["unallocated"],
+        }
+    )
 
 
 @bp.route("/api/process", methods=["POST"])
@@ -628,10 +688,7 @@ def api_process():
 @login_required
 def api_reconciliation(receipt_id: int):
     summary = get_reconciliation_summary(receipt_id)
-    return jsonify({
-        k: str(v) if hasattr(v, "quantize") else v
-        for k, v in summary.items()
-    })
+    return jsonify({k: str(v) if hasattr(v, "quantize") else v for k, v in summary.items()})
 
 
 @bp.teardown_request

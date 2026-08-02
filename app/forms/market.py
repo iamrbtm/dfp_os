@@ -45,11 +45,19 @@ class MarketForm(FlaskForm):
     event_date = DateField("Event Date", format="%Y-%m-%d", validators=[Optional()])
     start_time = TimeField("Start Time", format="%H:%M", validators=[Optional()])
     end_time = TimeField("End Time", format="%H:%M", validators=[Optional()])
-    application_deadline = DateField("Application Deadline", format="%Y-%m-%d", validators=[Optional()])
-    application_submitted_at = DateTimeLocalField("Application Submitted", format="%Y-%m-%dT%H:%M", validators=[Optional()])
-    application_approved_at = DateTimeLocalField("Application Approved", format="%Y-%m-%dT%H:%M", validators=[Optional()])
+    application_deadline = DateField(
+        "Application Deadline", format="%Y-%m-%d", validators=[Optional()]
+    )
+    application_submitted_at = DateTimeLocalField(
+        "Application Submitted", format="%Y-%m-%dT%H:%M", validators=[Optional()]
+    )
+    application_approved_at = DateTimeLocalField(
+        "Application Approved", format="%Y-%m-%dT%H:%M", validators=[Optional()]
+    )
     application_url = StringField("Application URL", validators=[Optional(), Length(max=500)])
-    application_contact = StringField("Application Contact", validators=[Optional(), Length(max=200)])
+    application_contact = StringField(
+        "Application Contact", validators=[Optional(), Length(max=200)]
+    )
     fee_paid_at = DateTimeLocalField("Fee Paid", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     booth_location = StringField("Booth Location", validators=[Optional(), Length(max=160)])
     booth_size = StringField("Booth Size", validators=[Optional(), Length(max=80)])
@@ -62,14 +70,42 @@ class MarketForm(FlaskForm):
     load_out_at = DateTimeLocalField("Load Out", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     load_in_notes = TextAreaField("Load-In Notes", validators=[Optional()])
     load_out_notes = TextAreaField("Load-Out Notes", validators=[Optional()])
-    booth_fee = DecimalField("Booth Fee", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    application_fee = DecimalField("Application Fee", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
+    booth_fee = DecimalField(
+        "Booth Fee",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
+    application_fee = DecimalField(
+        "Application Fee",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
     status = SelectField("Status", choices=enum_choices(MarketStatus), validators=[DataRequired()])
     expected_traffic = StringField("Expected Traffic", validators=[Optional(), Length(max=100)])
-    actual_revenue = DecimalField("Actual Revenue", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    actual_profit = DecimalField("Actual Profit", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
+    actual_revenue = DecimalField(
+        "Actual Revenue",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
+    actual_profit = DecimalField(
+        "Actual Profit",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
     follow_up_date = DateField("Follow-Up Date", format="%Y-%m-%d", validators=[Optional()])
-    worth_repeating = SelectField("Worth Repeating", choices=[("", "---"), ("true", "Yes"), ("false", "No")], validators=[Optional()])
+    worth_repeating = SelectField(
+        "Worth Repeating",
+        choices=[("", "---"), ("true", "Yes"), ("false", "No")],
+        validators=[Optional()],
+    )
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Save market")
 
@@ -118,13 +154,20 @@ class MarketForm(FlaskForm):
         return market
 
 
-
 class MarketPackingListForm(FlaskForm):
     product_id = SelectField("Product", coerce=int, validators=[DataRequired()])
-    planned_quantity = IntegerField("Planned Quantity", validators=[Optional(), NumberRange(min=0)], default=0)
-    packed_quantity = IntegerField("Packed Quantity", validators=[Optional(), NumberRange(min=0)], default=0)
-    sold_quantity = IntegerField("Sold Quantity", validators=[Optional(), NumberRange(min=0)], default=0)
-    returned_quantity = IntegerField("Returned Quantity", validators=[Optional(), NumberRange(min=0)], default=0)
+    planned_quantity = IntegerField(
+        "Planned Quantity", validators=[Optional(), NumberRange(min=0)], default=0
+    )
+    packed_quantity = IntegerField(
+        "Packed Quantity", validators=[Optional(), NumberRange(min=0)], default=0
+    )
+    sold_quantity = IntegerField(
+        "Sold Quantity", validators=[Optional(), NumberRange(min=0)], default=0
+    )
+    returned_quantity = IntegerField(
+        "Returned Quantity", validators=[Optional(), NumberRange(min=0)], default=0
+    )
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Save packing list item")
 
@@ -142,8 +185,7 @@ class MarketPackingListForm(FlaskForm):
             .all()
         )
         self.product_id.choices = [
-            (p.id, f"{p.name}   [{stock_counts.get(p.id, 0)} in stock]")
-            for p in products
+            (p.id, f"{p.name}   [{stock_counts.get(p.id, 0)} in stock]") for p in products
         ]
 
     def apply(self, item: MarketPackingList) -> MarketPackingList:
@@ -167,11 +209,19 @@ class MarketLogisticsForm(FlaskForm):
     power_available = BooleanField("Power")
     wifi_available = BooleanField("Wi-Fi")
     food_available = BooleanField("Food")
-    application_deadline = DateField("Application Deadline", format="%Y-%m-%d", validators=[Optional()])
-    application_submitted_at = DateTimeLocalField("Application Submitted", format="%Y-%m-%dT%H:%M", validators=[Optional()])
-    application_approved_at = DateTimeLocalField("Application Approved", format="%Y-%m-%dT%H:%M", validators=[Optional()])
+    application_deadline = DateField(
+        "Application Deadline", format="%Y-%m-%d", validators=[Optional()]
+    )
+    application_submitted_at = DateTimeLocalField(
+        "Application Submitted", format="%Y-%m-%dT%H:%M", validators=[Optional()]
+    )
+    application_approved_at = DateTimeLocalField(
+        "Application Approved", format="%Y-%m-%dT%H:%M", validators=[Optional()]
+    )
     application_url = StringField("Application URL", validators=[Optional(), Length(max=500)])
-    application_contact = StringField("Application Contact", validators=[Optional(), Length(max=200)])
+    application_contact = StringField(
+        "Application Contact", validators=[Optional(), Length(max=200)]
+    )
     fee_paid_at = DateTimeLocalField("Fee Paid", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     booth_rules = TextAreaField("Booth Rules", validators=[Optional()])
     required_documents = TextAreaField("Required Documents", validators=[Optional()])
@@ -180,7 +230,11 @@ class MarketLogisticsForm(FlaskForm):
     load_in_notes = TextAreaField("Load-In Notes", validators=[Optional()])
     load_out_notes = TextAreaField("Load-Out Notes", validators=[Optional()])
     follow_up_date = DateField("Follow-Up Date", format="%Y-%m-%d", validators=[Optional()])
-    worth_repeating = SelectField("Worth Repeating", choices=[("", "---"), ("true", "Yes"), ("false", "No")], validators=[Optional()])
+    worth_repeating = SelectField(
+        "Worth Repeating",
+        choices=[("", "---"), ("true", "Yes"), ("false", "No")],
+        validators=[Optional()],
+    )
     submit = SubmitField("Save logistics")
 
     def apply(self, market: Market) -> Market:
@@ -219,8 +273,15 @@ class MarketLogisticsForm(FlaskForm):
 
 class MarketPrepTaskForm(FlaskForm):
     title = StringField("Task", validators=[DataRequired(), Length(max=200)])
-    category = SelectField("Category", choices=enum_choices(PrepTaskCategory), validators=[DataRequired()])
-    status = SelectField("Status", choices=enum_choices(PrepTaskStatus), validators=[DataRequired()], default=PrepTaskStatus.OPEN.value)
+    category = SelectField(
+        "Category", choices=enum_choices(PrepTaskCategory), validators=[DataRequired()]
+    )
+    status = SelectField(
+        "Status",
+        choices=enum_choices(PrepTaskStatus),
+        validators=[DataRequired()],
+        default=PrepTaskStatus.OPEN.value,
+    )
     due_at = DateTimeLocalField("Due", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Save task")
@@ -239,7 +300,12 @@ class MarketTimelineEventForm(FlaskForm):
     starts_at = DateTimeLocalField("Starts", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     ends_at = DateTimeLocalField("Ends", format="%Y-%m-%dT%H:%M", validators=[Optional()])
     location = StringField("Location", validators=[Optional(), Length(max=200)])
-    event_type = SelectField("Type", choices=enum_choices(MarketTimelineEventType), validators=[DataRequired()], default=MarketTimelineEventType.OTHER.value)
+    event_type = SelectField(
+        "Type",
+        choices=enum_choices(MarketTimelineEventType),
+        validators=[DataRequired()],
+        default=MarketTimelineEventType.OTHER.value,
+    )
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Save timeline event")
 
@@ -260,7 +326,12 @@ class MarketHotelBookingForm(FlaskForm):
     check_out_date = DateField("Check Out", format="%Y-%m-%d", validators=[Optional()])
     confirmation_number = StringField("Confirmation", validators=[Optional(), Length(max=120)])
     cost = DecimalField("Cost", places=2, validators=[Optional()])
-    status = SelectField("Status", choices=enum_choices(MarketHotelBookingStatus), validators=[DataRequired()], default=MarketHotelBookingStatus.PLANNED.value)
+    status = SelectField(
+        "Status",
+        choices=enum_choices(MarketHotelBookingStatus),
+        validators=[DataRequired()],
+        default=MarketHotelBookingStatus.PLANNED.value,
+    )
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Save hotel")
 
@@ -277,6 +348,11 @@ class MarketHotelBookingForm(FlaskForm):
 
 
 class MarketDocumentForm(FlaskForm):
-    document_type = SelectField("Document Type", choices=enum_choices(MarketDocumentType), validators=[DataRequired()], default=MarketDocumentType.OTHER.value)
+    document_type = SelectField(
+        "Document Type",
+        choices=enum_choices(MarketDocumentType),
+        validators=[DataRequired()],
+        default=MarketDocumentType.OTHER.value,
+    )
     notes = TextAreaField("Notes", validators=[Optional()])
     submit = SubmitField("Upload document")

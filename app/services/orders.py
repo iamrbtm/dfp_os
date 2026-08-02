@@ -71,7 +71,11 @@ def convert_custom_request_to_order(
         )
         db.session.add(payment)
 
-    before_cr = {"status": custom_request.status.value if hasattr(custom_request.status, "value") else custom_request.status}
+    before_cr = {
+        "status": custom_request.status.value
+        if hasattr(custom_request.status, "value")
+        else custom_request.status
+    }
     custom_request.converted_to_order_id = order.id
     custom_request.customer_id = customer.id
     custom_request.status = CustomRequestStatus.DEPOSIT_COLLECTED

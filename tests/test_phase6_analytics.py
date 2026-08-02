@@ -106,7 +106,11 @@ def test_analytics_page_loads_for_admin(app: Flask, client: FlaskClient):
         db.session.add(admin)
         db.session.commit()
 
-    client.post("/auth/login", data={"email": "analytics-test@example.com", "password": "super-secret"}, follow_redirects=True)
+    client.post(
+        "/auth/login",
+        data={"email": "analytics-test@example.com", "password": "super-secret"},
+        follow_redirects=True,
+    )
     response = client.get("/analytics/")
     assert response.status_code == 200
     assert "Analytics" in response.text
@@ -116,7 +120,13 @@ def test_analytics_api_summary_with_token(app: Flask, client: FlaskClient):
     import hashlib
 
     with app.app_context():
-        admin = User(email="api-analytics@example.com", first_name="API", last_name="Analytics", role=UserRole.ADMIN, is_active=True)
+        admin = User(
+            email="api-analytics@example.com",
+            first_name="API",
+            last_name="Analytics",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
         admin.set_password("pw")
         db.session.add(admin)
         db.session.flush()

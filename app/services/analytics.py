@@ -29,23 +29,15 @@ def executive_summary() -> dict:
     today = datetime.now(timezone.utc).date()
     month_start = today.replace(day=1)
 
-    today_revenue = (
-        db.session.query(func.sum(Order.total))
-        .filter(
-            func.date(Order.completed_at) == today,
-            Order.deleted_at.is_(None),
-        )
-        .scalar() or Decimal(0)
-    )
+    today_revenue = db.session.query(func.sum(Order.total)).filter(
+        func.date(Order.completed_at) == today,
+        Order.deleted_at.is_(None),
+    ).scalar() or Decimal(0)
 
-    month_revenue = (
-        db.session.query(func.sum(Order.total))
-        .filter(
-            func.date(Order.completed_at) >= month_start,
-            Order.deleted_at.is_(None),
-        )
-        .scalar() or Decimal(0)
-    )
+    month_revenue = db.session.query(func.sum(Order.total)).filter(
+        func.date(Order.completed_at) >= month_start,
+        Order.deleted_at.is_(None),
+    ).scalar() or Decimal(0)
 
     open_orders_count = Order.query.filter(
         Order.status.in_([OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PRINTING]),
@@ -53,43 +45,45 @@ def executive_summary() -> dict:
     ).count()
 
     from app.models import CustomRequest, CustomRequestStatus
+
     custom_count = CustomRequest.query.filter(
-        ~CustomRequest.status.in_([CustomRequestStatus.COMPLETED, CustomRequestStatus.CANCELLED, CustomRequestStatus.ARCHIVED])
+        ~CustomRequest.status.in_(
+            [
+                CustomRequestStatus.COMPLETED,
+                CustomRequestStatus.CANCELLED,
+                CustomRequestStatus.ARCHIVED,
+            ]
+        )
     ).count()
 
-    print_jobs_queued = PrintJob.query.filter(
-        PrintJob.status.in_([PrintJobStatus.QUEUED])
-    ).count()
+    print_jobs_queued = PrintJob.query.filter(PrintJob.status.in_([PrintJobStatus.QUEUED])).count()
 
     from app.models import InventoryRecord
+
     low_inv = InventoryRecord.query.filter(
         InventoryRecord.quantity_on_hand <= InventoryRecord.reorder_threshold,
         InventoryRecord.reorder_threshold > 0,
     ).count()
 
     from app.models import FilamentSpool, FilamentStatus
-    low_filament = FilamentSpool.query.filter(
-        FilamentSpool.status == FilamentStatus.LOW
-    ).count()
 
-    upcoming_markets = Market.query.filter(
-        Market.status.in_([MarketStatus.SCHEDULED, MarketStatus.ACCEPTED])
-    ).order_by(Market.event_date.asc()).limit(5).all()
+    low_filament = FilamentSpool.query.filter(FilamentSpool.status == FilamentStatus.LOW).count()
 
-    month_pos = (
-        db.session.query(func.sum(PosSale.total))
-        .filter(
-            func.date(PosSale.created_at) >= month_start,
-            PosSale.status == PosSaleStatus.COMPLETED,
-        )
-        .scalar() or Decimal(0)
+    upcoming_markets = (
+        Market.query.filter(Market.status.in_([MarketStatus.SCHEDULED, MarketStatus.ACCEPTED]))
+        .order_by(Market.event_date.asc())
+        .limit(5)
+        .all()
     )
 
-    month_expenses = (
-        db.session.query(func.sum(Expense.amount))
-        .filter(func.date(Expense.date) >= month_start)
-        .scalar() or Decimal(0)
-    )
+    month_pos = db.session.query(func.sum(PosSale.total)).filter(
+        func.date(PosSale.created_at) >= month_start,
+        PosSale.status == PosSaleStatus.COMPLETED,
+    ).scalar() or Decimal(0)
+
+    month_expenses = db.session.query(func.sum(Expense.amount)).filter(
+        func.date(Expense.date) >= month_start
+    ).scalar() or Decimal(0)
 
     paid_requests = (
         db.session.query(func.count(CustomRequest.id))
@@ -99,7 +93,8 @@ def executive_summary() -> dict:
             CustomRequest.total.isnot(None),
             CustomRequest.amount_paid >= CustomRequest.total,
         )
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
     return {
@@ -149,6 +144,7 @@ def product_analytics(limit: int = 20) -> list[dict]:
         inv_count = 0
         if product:
             from app.models import InventoryRecord
+
             inv = (
                 db.session.query(func.sum(InventoryRecord.quantity_on_hand))
                 .filter(InventoryRecord.product_id == product.id)
@@ -165,43 +161,49 @@ def product_analytics(limit: int = 20) -> list[dict]:
 
         breakdown = calculate_product_cost(product=product) if product is not None else None
 
-        products.append({
-            "id": r[0],
-            "name": r[1],
-            "sku": r[2],
-            "units_sold": int(r[3]),
-            "revenue": Decimal(str(r[4])),
-            "avg_price": Decimal(str(r[5])) if r[5] else Decimal(0),
-            "inventory_on_hand": inv_count,
-            "failure_count": failure_count,
-            "profit_per_unit": breakdown.profit_per_unit if breakdown is not None else Decimal("0.00"),
-            "profit_per_print_hour": breakdown.profit_per_print_hour if breakdown is not None else Decimal("0.00"),
-            "profit_per_market_bin_cm3": (
-                breakdown.profit_per_market_bin_cm3 if breakdown is not None else Decimal("0.00")
-            ),
-            "cost_confidence": breakdown.confidence if breakdown is not None else "none",
-        })
+        products.append(
+            {
+                "id": r[0],
+                "name": r[1],
+                "sku": r[2],
+                "units_sold": int(r[3]),
+                "revenue": Decimal(str(r[4])),
+                "avg_price": Decimal(str(r[5])) if r[5] else Decimal(0),
+                "inventory_on_hand": inv_count,
+                "failure_count": failure_count,
+                "profit_per_unit": breakdown.profit_per_unit
+                if breakdown is not None
+                else Decimal("0.00"),
+                "profit_per_print_hour": breakdown.profit_per_print_hour
+                if breakdown is not None
+                else Decimal("0.00"),
+                "profit_per_market_bin_cm3": (
+                    breakdown.profit_per_market_bin_cm3
+                    if breakdown is not None
+                    else Decimal("0.00")
+                ),
+                "cost_confidence": breakdown.confidence if breakdown is not None else "none",
+            }
+        )
 
     return products
 
 
 def market_analytics() -> list[dict]:
-    markets = Market.query.filter(
-        Market.status.in_([MarketStatus.COMPLETED, MarketStatus.REPEAT])
-    ).order_by(Market.event_date.desc()).all()
+    markets = (
+        Market.query.filter(Market.status.in_([MarketStatus.COMPLETED, MarketStatus.REPEAT]))
+        .order_by(Market.event_date.desc())
+        .all()
+    )
 
     results = []
     for m in markets:
-        total_sales = (
-            db.session.query(func.sum(Order.total))
-            .filter(Order.market_id == m.id, Order.deleted_at.is_(None))
-            .scalar() or Decimal(0)
-        )
-        expenses = (
-            db.session.query(func.sum(Expense.amount))
-            .filter(Expense.related_market_id == m.id)
-            .scalar() or Decimal(0)
-        )
+        total_sales = db.session.query(func.sum(Order.total)).filter(
+            Order.market_id == m.id, Order.deleted_at.is_(None)
+        ).scalar() or Decimal(0)
+        expenses = db.session.query(func.sum(Expense.amount)).filter(
+            Expense.related_market_id == m.id
+        ).scalar() or Decimal(0)
         booth_cost = (m.booth_fee or Decimal(0)) + (m.application_fee or Decimal(0))
         profit = total_sales - expenses - booth_cost
 
@@ -209,20 +211,23 @@ def market_analytics() -> list[dict]:
             db.session.query(func.sum(OrderItem.quantity))
             .join(Order, OrderItem.order_id == Order.id)
             .filter(Order.market_id == m.id, Order.deleted_at.is_(None))
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
-        results.append({
-            "id": m.id,
-            "name": m.name,
-            "date": m.event_date,
-            "total_sales": total_sales,
-            "total_expenses": expenses,
-            "booth_cost": booth_cost,
-            "profit": profit,
-            "units_sold": int(units),
-            "status": m.status.value,
-        })
+        results.append(
+            {
+                "id": m.id,
+                "name": m.name,
+                "date": m.event_date,
+                "total_sales": total_sales,
+                "total_expenses": expenses,
+                "booth_cost": booth_cost,
+                "profit": profit,
+                "units_sold": int(units),
+                "status": m.status.value,
+            }
+        )
 
     return results
 
@@ -230,12 +235,17 @@ def market_analytics() -> list[dict]:
 def pos_analytics(days: int = 30) -> dict:
     cutoff = datetime.now(timezone.utc).date()
     from datetime import timedelta
+
     start = cutoff - timedelta(days=days)
 
-    sales = PosSale.query.filter(
-        func.date(PosSale.created_at) >= start,
-        PosSale.status == PosSaleStatus.COMPLETED,
-    ).order_by(PosSale.created_at.desc()).all()
+    sales = (
+        PosSale.query.filter(
+            func.date(PosSale.created_at) >= start,
+            PosSale.status == PosSaleStatus.COMPLETED,
+        )
+        .order_by(PosSale.created_at.desc())
+        .all()
+    )
 
     total_revenue = sum(s.total for s in sales) if sales else Decimal(0)
     total_count = len(sales)
@@ -289,7 +299,8 @@ def printing_analytics() -> dict:
         total_hours = (
             db.session.query(func.sum(PrintJob.actual_minutes))
             .filter(PrintJob.printer_id == p.id)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         total_failures += failed
@@ -297,20 +308,20 @@ def printing_analytics() -> dict:
 
         fail_rate = (failed / (completed + failed) * 100) if (completed + failed) > 0 else 0
 
-        printer_stats.append({
-            "id": p.id,
-            "name": p.name,
-            "status": p.status.value if hasattr(p.status, "value") else str(p.status),
-            "completed": completed,
-            "failed": failed,
-            "queued": queued,
-            "total_hours": float(total_hours) / 60,
-            "failure_rate": round(fail_rate, 1),
-        })
+        printer_stats.append(
+            {
+                "id": p.id,
+                "name": p.name,
+                "status": p.status.value if hasattr(p.status, "value") else str(p.status),
+                "completed": completed,
+                "failed": failed,
+                "queued": queued,
+                "total_hours": float(total_hours) / 60,
+                "failure_rate": round(fail_rate, 1),
+            }
+        )
 
-    total_queued = PrintJob.query.filter(
-        PrintJob.status.in_([PrintJobStatus.QUEUED])
-    ).count()
+    total_queued = PrintJob.query.filter(PrintJob.status.in_([PrintJobStatus.QUEUED])).count()
 
     return {
         "printers": printer_stats,
@@ -319,7 +330,9 @@ def printing_analytics() -> dict:
         "total_queued": total_queued,
         "overall_failure_rate": round(
             (total_failures / (total_completed + total_failures) * 100)
-            if (total_completed + total_failures) > 0 else 0, 1
+            if (total_completed + total_failures) > 0
+            else 0,
+            1,
         ),
     }
 
@@ -339,27 +352,24 @@ def inventory_analytics() -> dict:
 
     low_stock_count = len(low_stock)
 
-    locations = InventoryLocation.query.filter_by(active=True).order_by(InventoryLocation.name).all()
+    locations = (
+        InventoryLocation.query.filter_by(active=True).order_by(InventoryLocation.name).all()
+    )
     location_counts = []
     for loc in locations:
         qty = (
             db.session.query(func.coalesce(func.sum(InventoryRecord.quantity_on_hand), 0))
             .filter(InventoryRecord.location_id == loc.id)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         location_counts.append({"name": loc.name, "quantity": int(qty)})
 
-    total_inventory_value = (
-        db.session.query(
-            func.sum(InventoryRecord.quantity_on_hand * Product.base_price)
-        )
-        .join(Product, InventoryRecord.product_id == Product.id)
-        .scalar() or Decimal(0)
-    )
+    total_inventory_value = db.session.query(
+        func.sum(InventoryRecord.quantity_on_hand * Product.base_price)
+    ).join(Product, InventoryRecord.product_id == Product.id).scalar() or Decimal(0)
 
-    filament_low = FilamentSpool.query.filter(
-        FilamentSpool.status == FilamentStatus.LOW
-    ).count()
+    filament_low = FilamentSpool.query.filter(FilamentSpool.status == FilamentStatus.LOW).count()
     filament_empty = FilamentSpool.query.filter(
         FilamentSpool.status == FilamentStatus.EMPTY
     ).count()
@@ -375,6 +385,7 @@ def inventory_analytics() -> dict:
 
 def expense_analytics(months: int = 6) -> dict:
     from datetime import timedelta
+
     start = (datetime.now(timezone.utc).date().replace(day=1) - timedelta(days=180)).replace(day=1)
 
     by_category = (
@@ -404,10 +415,7 @@ def expense_analytics(months: int = 6) -> dict:
         key = f"{e.date.year}-{e.date.month:02d}"
         monthly_totals[key] = monthly_totals.get(key, Decimal("0")) + e.amount
 
-    monthly_data = [
-        {"month": k, "total": v}
-        for k, v in sorted(monthly_totals.items())
-    ]
+    monthly_data = [{"month": k, "total": v} for k, v in sorted(monthly_totals.items())]
 
     total_all = sum(d["total"] for d in category_data)
 
@@ -454,7 +462,11 @@ def analytics_numbers_snapshot() -> dict:
             ],
         },
         "markets": [
-            {"name": row["name"], "profit": str(row["profit"]), "total_sales": str(row["total_sales"])}
+            {
+                "name": row["name"],
+                "profit": str(row["profit"]),
+                "total_sales": str(row["total_sales"]),
+            }
             for row in markets
         ],
         "products": [

@@ -75,30 +75,36 @@ def _gen_from_pos_sales(market: Market, existing: list[PrepTask], actor=None) ->
 
         if sale.payment_method and sale.payment_method.lower() not in ("cash", "card"):
             if not _has_follow_up(existing, FollowUpType.UNPAID_DEPOSIT, customer_id, market.id):
-                tasks.append(_make_task(
-                    market=market,
-                    follow_up_type=FollowUpType.UNPAID_DEPOSIT,
-                    title=f"Follow up on pending payment: {sale.payment_method} sale for ${float(sale.total):.2f}",
-                    customer_id=customer_id,
-                    related_pos_sale_id=sale.id,
-                    due_days=3,
-                ))
+                tasks.append(
+                    _make_task(
+                        market=market,
+                        follow_up_type=FollowUpType.UNPAID_DEPOSIT,
+                        title=f"Follow up on pending payment: {sale.payment_method} sale for ${float(sale.total):.2f}",
+                        customer_id=customer_id,
+                        related_pos_sale_id=sale.id,
+                        due_days=3,
+                    )
+                )
 
         if customer_id:
             if not _has_follow_up(existing, FollowUpType.THANK_YOU, customer_id, market.id):
-                tasks.append(_make_task(
-                    market=market,
-                    follow_up_type=FollowUpType.THANK_YOU,
-                    title="Send thank-you to customer from market sale",
-                    customer_id=customer_id,
-                    related_pos_sale_id=sale.id,
-                    due_days=1,
-                ))
+                tasks.append(
+                    _make_task(
+                        market=market,
+                        follow_up_type=FollowUpType.THANK_YOU,
+                        title="Send thank-you to customer from market sale",
+                        customer_id=customer_id,
+                        related_pos_sale_id=sale.id,
+                        due_days=1,
+                    )
+                )
 
     return tasks
 
 
-def _gen_from_custom_requests(market: Market, existing: list[PrepTask], actor=None) -> list[PrepTask]:
+def _gen_from_custom_requests(
+    market: Market, existing: list[PrepTask], actor=None
+) -> list[PrepTask]:
     tasks: list[PrepTask] = []
     requests = CustomRequest.query.filter(
         CustomRequest.market_id == market.id,
@@ -109,35 +115,42 @@ def _gen_from_custom_requests(market: Market, existing: list[PrepTask], actor=No
 
         if req.status in (CustomRequestStatus.NEW, CustomRequestStatus.NEEDS_REVIEW):
             if not _has_follow_up(existing, FollowUpType.CUSTOM_LEAD, customer_id, market.id):
-                tasks.append(_make_task(
-                    market=market,
-                    follow_up_type=FollowUpType.CUSTOM_LEAD,
-                    title=f"Review custom request from {req.customer_name or 'unknown'}",
-                    customer_id=customer_id,
-                    related_custom_request_id=req.id,
-                    due_days=2,
-                ))
+                tasks.append(
+                    _make_task(
+                        market=market,
+                        follow_up_type=FollowUpType.CUSTOM_LEAD,
+                        title=f"Review custom request from {req.customer_name or 'unknown'}",
+                        customer_id=customer_id,
+                        related_custom_request_id=req.id,
+                        due_days=2,
+                    )
+                )
 
         elif req.status == CustomRequestStatus.QUOTE_SENT:
             if not _has_follow_up(existing, FollowUpType.QUOTE_FOLLOW_UP, customer_id, market.id):
-                tasks.append(_make_task(
-                    market=market,
-                    follow_up_type=FollowUpType.QUOTE_FOLLOW_UP,
-                    title=f"Follow up on quote sent to {req.customer_name or 'unknown'}",
-                    customer_id=customer_id,
-                    related_custom_request_id=req.id,
-                    due_days=5,
-                ))
+                tasks.append(
+                    _make_task(
+                        market=market,
+                        follow_up_type=FollowUpType.QUOTE_FOLLOW_UP,
+                        title=f"Follow up on quote sent to {req.customer_name or 'unknown'}",
+                        customer_id=customer_id,
+                        related_custom_request_id=req.id,
+                        due_days=5,
+                    )
+                )
 
     return tasks
 
 
 def _gen_unpaid_deposits(market: Market, existing: list[PrepTask], actor=None) -> list[PrepTask]:
     tasks: list[PrepTask] = []
-    session_ids = [s.id for s in PosSession.query.filter(
-        PosSession.market_id == market.id,
-        PosSession.status != PosSessionStatus.VOIDED,
-    ).all()]
+    session_ids = [
+        s.id
+        for s in PosSession.query.filter(
+            PosSession.market_id == market.id,
+            PosSession.status != PosSessionStatus.VOIDED,
+        ).all()
+    ]
     if not session_ids:
         return tasks
 
@@ -149,14 +162,16 @@ def _gen_unpaid_deposits(market: Market, existing: list[PrepTask], actor=None) -
     for deposit in deposits:
         customer_id = deposit.customer_id
         if not _has_follow_up(existing, FollowUpType.UNPAID_DEPOSIT, customer_id, market.id):
-            tasks.append(_make_task(
-                market=market,
-                follow_up_type=FollowUpType.UNPAID_DEPOSIT,
-                title=f"Collect unpaid deposit from market ({deposit.description or 'sale'} - ${float(deposit.total):.2f})",
-                customer_id=customer_id,
-                related_pos_sale_id=deposit.id,
-                due_days=3,
-            ))
+            tasks.append(
+                _make_task(
+                    market=market,
+                    follow_up_type=FollowUpType.UNPAID_DEPOSIT,
+                    title=f"Collect unpaid deposit from market ({deposit.description or 'sale'} - ${float(deposit.total):.2f})",
+                    customer_id=customer_id,
+                    related_pos_sale_id=deposit.id,
+                    due_days=3,
+                )
+            )
 
     return tasks
 
@@ -260,7 +275,9 @@ def archive_follow_up(task: PrepTask, actor=None) -> PrepTask:
 def get_follow_up_queue(market_id: int | None = None) -> list[PrepTask]:
     query = PrepTask.query.filter(
         PrepTask.category == PrepTaskCategory.FOLLOW_UP,
-        PrepTask.status.in_([PrepTaskStatus.OPEN, PrepTaskStatus.IN_PROGRESS, PrepTaskStatus.REOPENED]),
+        PrepTask.status.in_(
+            [PrepTaskStatus.OPEN, PrepTaskStatus.IN_PROGRESS, PrepTaskStatus.REOPENED]
+        ),
     )
     if market_id:
         query = query.filter(PrepTask.market_id == market_id)

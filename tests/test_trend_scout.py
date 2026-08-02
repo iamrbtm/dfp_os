@@ -35,6 +35,7 @@ class FakeSession:
 
     def query(self, model):
         from app.models import Product
+
         if model is TrendSnapshot:
             return FakeQuery(self._rows)
         if model is Product:
@@ -325,8 +326,10 @@ def test_etsy_price_uses_api_divisor(monkeypatch):
 
 # ── Phase 1: Fuzzy matching tests ──────────────────────────────────────────
 
+
 def test_trend_match_normalize_product_term():
     from app.services.trend_match import normalize_product_term
+
     assert normalize_product_term("3D Printed Dragon") == "dragon"
     assert normalize_product_term("Custom Teacher Keychain") == "teacher keychain"
     assert normalize_product_term("Personalized Name Tag") == "name tag"
@@ -335,6 +338,7 @@ def test_trend_match_normalize_product_term():
 
 def test_trend_match_find_synonyms():
     from app.services.trend_match import find_synonyms
+
     syns = find_synonyms("keychain")
     assert "key chain" in syns
     syns2 = find_synonyms("desk sign")
@@ -343,6 +347,7 @@ def test_trend_match_find_synonyms():
 
 def test_trend_match_fuzzy_keywords():
     from app.services.trend_match import fuzzy_match_keywords
+
     assert fuzzy_match_keywords("dragon", "articulated dragon")
     assert fuzzy_match_keywords("fidget", "fidget slider")
     assert fuzzy_match_keywords("keychain", "custom keychain")
@@ -385,6 +390,7 @@ def test_trend_match_synonym_matches_potential_product():
 
 # ── Phase 3: Persistence tests ─────────────────────────────────────────────
 
+
 def test_opportunity_score_model_creation():
     from app.models.trend import TrendOpportunityScore, TrendReport
     from datetime import datetime, timezone
@@ -421,6 +427,7 @@ def test_opportunity_score_model_creation():
 
 def test_source_health_model_creation():
     from app.models.trend import SourceHealthRecord
+
     record = SourceHealthRecord(
         report_id=1,
         source="google_trends",
@@ -482,6 +489,7 @@ def test_product_studio_trend_score_uses_existing_user_name(client, login_admin)
 
 # ── Phase 2: Score breakdown tests ─────────────────────────────────────────
 
+
 def test_score_breakdown_includes_raw_inputs():
     candidate = OpportunityCandidate(
         keyword="test dragon",
@@ -537,6 +545,7 @@ def test_score_breakdown_matched_local_terms():
 
 # ── Phase 7: Source health tests ───────────────────────────────────────────
 
+
 def test_source_health_from_results():
     from app.services.ai.trend_scout import _source_health_from_results
 
@@ -572,6 +581,7 @@ def test_source_health_from_results():
 
 
 # ── Score breakdown formatting in product-studio endpoint ──────────────────
+
 
 def test_score_breakdown_includes_match_confidence():
     candidate = OpportunityCandidate(
@@ -693,7 +703,12 @@ def test_stockout_recommends_print_now():
         inventory_available=0,
         stockout_detected=True,
     )
-    scores = {"purchase_intent": 55, "trend_velocity": 30, "opportunity_score": 60, "license_risk": 10}
+    scores = {
+        "purchase_intent": 55,
+        "trend_velocity": 30,
+        "opportunity_score": 60,
+        "license_risk": 10,
+    }
     action = _recommend_action(candidate, scores)
     assert action == "print_now"
 
@@ -710,7 +725,12 @@ def test_sell_through_low_inventory_clearance():
         inventory_available=50,
         sell_through_rate=0.02,
     )
-    scores = {"purchase_intent": 20, "trend_velocity": 5, "opportunity_score": 30, "license_risk": 5}
+    scores = {
+        "purchase_intent": 20,
+        "trend_velocity": 5,
+        "opportunity_score": 30,
+        "license_risk": 5,
+    }
     action = _recommend_action(candidate, scores)
     assert action == "clearance_candidate"
 
@@ -788,8 +808,18 @@ def test_validate_score_weights_catches_missing(app):
 def test_validate_score_weights_catches_out_of_range(app):
     from app.services.trend_scout_weights import validate_score_weights
 
-    bad = {k: 3.0 for k in ["purchase_intent", "trend_velocity", "price_resilience",
-                            "low_saturation", "local_fit", "production_fit", "license_risk"]}
+    bad = {
+        k: 3.0
+        for k in [
+            "purchase_intent",
+            "trend_velocity",
+            "price_resilience",
+            "low_saturation",
+            "local_fit",
+            "production_fit",
+            "license_risk",
+        ]
+    }
     errors = validate_score_weights(bad)
     assert any("outside allowed range" in e for e in errors)
 
@@ -842,7 +872,7 @@ def test_backtest_with_mock_report_and_orders(app):
         name="Test Product",
         slug="test-product",
         category_id=cat.id,
-            product_type=ProductType.FINISHED_GOOD,
+        product_type=ProductType.FINISHED_GOOD,
         status=ProductStatus.ACTIVE,
         base_price=Decimal("20.00"),
     )
@@ -937,6 +967,7 @@ def test_backtest_component_analysis_structure(app):
             assert "component" in comp
             assert "correlation" in comp
             assert "predictive_ratio" in comp
+
 
 def test_backtest_tuning_hints_generated(app):
     """Verify tuning_hints are generated when component data exists."""

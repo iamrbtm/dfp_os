@@ -38,30 +38,34 @@ def prune_old_data(
     )
 
     report_ids_to_prune = [
-        r.id for r in db.session.query(TrendReport.id)
+        r.id
+        for r in db.session.query(TrendReport.id)
         .filter(TrendReport.report_date < prune_before)
         .all()
     ]
 
     if not report_ids_to_prune:
-        return {"status": "none", "message": "No data to prune.", "pruned_reports": 0, "pruned_snapshots": 0}
+        return {
+            "status": "none",
+            "message": "No data to prune.",
+            "pruned_reports": 0,
+            "pruned_snapshots": 0,
+        }
 
     snapshot_count = db.session.query(TrendSnapshot).count()
     old_snapshots = (
-        db.session.query(TrendSnapshot)
-        .filter(TrendSnapshot.scraped_at < oldest_allowed)
-        .all()
+        db.session.query(TrendSnapshot).filter(TrendSnapshot.scraped_at < oldest_allowed).all()
     )
 
     counts = {
         "pruned_reports": len(report_ids_to_prune),
         "pruned_snapshots": len(old_snapshots),
         "pruned_scores": db.session.query(TrendOpportunityScore)
-            .filter(TrendOpportunityScore.report_id.in_(report_ids_to_prune))
-            .count(),
+        .filter(TrendOpportunityScore.report_id.in_(report_ids_to_prune))
+        .count(),
         "pruned_health_records": db.session.query(SourceHealthRecord)
-            .filter(SourceHealthRecord.report_id.in_(report_ids_to_prune))
-            .count(),
+        .filter(SourceHealthRecord.report_id.in_(report_ids_to_prune))
+        .count(),
         "snapshot_count_before": snapshot_count,
     }
 
@@ -76,9 +80,9 @@ def prune_old_data(
         TrendOpportunityScore.report_id.in_(report_ids_to_prune)
     ).delete(synchronize_session=False)
 
-    db.session.query(TrendReport).filter(
-        TrendReport.id.in_(report_ids_to_prune)
-    ).delete(synchronize_session=False)
+    db.session.query(TrendReport).filter(TrendReport.id.in_(report_ids_to_prune)).delete(
+        synchronize_session=False
+    )
 
     for snap in old_snapshots:
         db.session.delete(snap)

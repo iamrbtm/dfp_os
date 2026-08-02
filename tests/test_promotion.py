@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 
-
 from app.extensions import db
-from app.models import Category, CustomRequest, CustomRequestStatus, Market, MarketStatus, Product, ProductStatus, ProductType, UserRole
+from app.models import (
+    Category,
+    CustomRequest,
+    CustomRequestStatus,
+    Market,
+    MarketStatus,
+    Product,
+    ProductStatus,
+    ProductType,
+    UserRole,
+)
 from app.models.promotion import ContentChannel, ContentDraft, ContentStatus, SignAsset, SignStatus
 from app.services.admin_mutations import create_resource
 from app.services.api_tokens import create_api_token
@@ -45,7 +54,9 @@ def _scoped_token(client, *scopes: str) -> str:
 def _ensure_category():
     cat = Category.query.filter_by(slug="promo-test-cat").first()
     if not cat:
-        cat = Category(name="Promo Test", slug="promo-test-cat", is_public=True, is_pos_visible=True)
+        cat = Category(
+            name="Promo Test", slug="promo-test-cat", is_public=True, is_pos_visible=True
+        )
         db.session.add(cat)
         db.session.flush()
     return cat
@@ -71,6 +82,7 @@ def _ensure_product():
 
 
 # --- Model Tests ---
+
 
 def test_content_draft_model_can_be_created(app):
     with app.app_context():
@@ -137,6 +149,7 @@ def test_sign_asset_linked_to_product(app):
 
 
 # --- Service Tests ---
+
 
 def test_generate_draft_from_product(app):
     with app.app_context():
@@ -299,6 +312,7 @@ def test_sign_admin_routes_require_auth(client):
 def test_draft_admin_create_flow(app, client):
     with app.app_context():
         from app.models import User
+
         user = User.query.filter_by(role=UserRole.ADMIN).first()
         if user is None:
             user = User(
@@ -312,18 +326,26 @@ def test_draft_admin_create_flow(app, client):
             db.session.add(user)
             db.session.commit()
 
-    client.post("/auth/login", data={
-        "email": "promo-admin@example.com",
-        "password": "secret",
-    }, follow_redirects=True)
+    client.post(
+        "/auth/login",
+        data={
+            "email": "promo-admin@example.com",
+            "password": "secret",
+        },
+        follow_redirects=True,
+    )
 
-    resp = client.post("/promotion/drafts/new", data={
-        "title": "Test Draft from UI",
-        "channel": "facebook",
-        "content_type": "social_post",
-        "caption": "This is a test draft.",
-        "status": "draft",
-    }, follow_redirects=True)
+    resp = client.post(
+        "/promotion/drafts/new",
+        data={
+            "title": "Test Draft from UI",
+            "channel": "facebook",
+            "content_type": "social_post",
+            "caption": "This is a test draft.",
+            "status": "draft",
+        },
+        follow_redirects=True,
+    )
 
     assert resp.status_code in (200, 302)
 
@@ -361,6 +383,7 @@ def test_prep_task_model_create_audit_dispatched(app, monkeypatch):
 def test_ai_assisted_draft_falls_back_to_deterministic_when_ai_disabled(app):
     with app.app_context():
         from flask import current_app
+
         current_app.config["AI_RECEIPT_PARSING_ENABLED"] = False
         current_app.config["AI_ANALYTICS_INSIGHTS_ENABLED"] = False
         current_app.config["OPENAI_API_KEY"] = ""
@@ -377,6 +400,7 @@ def test_ai_assisted_draft_falls_back_to_deterministic_when_ai_disabled(app):
 def test_ai_assisted_draft_from_market_falls_back_when_disabled(app):
     with app.app_context():
         from flask import current_app
+
         current_app.config["AI_RECEIPT_PARSING_ENABLED"] = False
         current_app.config["OPENAI_API_KEY"] = ""
 
@@ -413,6 +437,7 @@ def test_ai_assisted_draft_dispatches_audit_event(app, monkeypatch):
 
     with app.app_context():
         from flask import current_app
+
         current_app.config["AI_RECEIPT_PARSING_ENABLED"] = False
         current_app.config["OPENAI_API_KEY"] = ""
 
@@ -426,6 +451,7 @@ def test_generate_signs_for_market_creates_signs(app):
     with app.app_context():
         product = _ensure_product()
         from app.models.market import MarketPackingList
+
         market = Market(
             name="Sign Test Market",
             city="Clarksville",
@@ -447,6 +473,7 @@ def test_generate_signs_for_market_skips_existing(app):
     with app.app_context():
         product = _ensure_product()
         from app.models.market import MarketPackingList
+
         market = Market(
             name="Skip Test Market",
             city="Clarksville",
@@ -499,6 +526,7 @@ def test_generate_sign_html_includes_product_image_when_available(app):
     with app.app_context():
         product = _ensure_product()
         from app.models.catalog import ProductImage
+
         img = ProductImage(product_id=product.id, file_path="uploads/test.jpg", is_default=True)
         db.session.add(img)
         db.session.flush()
@@ -518,15 +546,26 @@ def test_sign_print_route_loads(client, app):
         sid = sign.id
 
     from app.models import User
+
     with app.app_context():
         user = User.query.filter_by(role=UserRole.ADMIN).first()
         if user is None:
-            user = User(email="print-test@example.com", first_name="Print", last_name="Test", role=UserRole.ADMIN, is_active=True)
+            user = User(
+                email="print-test@example.com",
+                first_name="Print",
+                last_name="Test",
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
             user.set_password("secret")
             db.session.add(user)
             db.session.commit()
 
-    client.post("/auth/login", data={"email": "print-test@example.com", "password": "secret"}, follow_redirects=True)
+    client.post(
+        "/auth/login",
+        data={"email": "print-test@example.com", "password": "secret"},
+        follow_redirects=True,
+    )
     resp = client.get(f"/promotion/signs/{sid}/print")
     assert resp.status_code in (200, 302)
 
@@ -543,7 +582,10 @@ def test_generate_signs_for_market_dispatches_audit(app, monkeypatch):
     with app.app_context():
         product = _ensure_product()
         from app.models.market import MarketPackingList
-        market = Market(name="Audit Market Sign", city="Clarksville", state="TN", status=MarketStatus.SCHEDULED)
+
+        market = Market(
+            name="Audit Market Sign", city="Clarksville", state="TN", status=MarketStatus.SCHEDULED
+        )
         db.session.add(market)
         db.session.flush()
         packing = MarketPackingList(market_id=market.id, product_id=product.id)
@@ -558,6 +600,7 @@ def test_generate_signs_for_market_dispatches_audit(app, monkeypatch):
 def test_ai_sign_image_skipped_when_ai_disabled(app):
     with app.app_context():
         from flask import current_app
+
         current_app.config["AI_RECEIPT_PARSING_ENABLED"] = False
         current_app.config["OPENAI_API_KEY"] = ""
 

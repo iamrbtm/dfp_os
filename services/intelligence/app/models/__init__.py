@@ -82,9 +82,7 @@ class PromotedLegacyTable(Base):
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
 
-    __table_args__ = (
-        UniqueConstraint("import_batch_id", "table_name", name="uq_promoted_legacy_table_batch_table"),
-    )
+    __table_args__ = (UniqueConstraint("import_batch_id", "table_name", name="uq_promoted_legacy_table_batch_table"),)
 
 
 class LegacyImportRowStage(Base):
@@ -104,7 +102,9 @@ class LegacyImportRowStage(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "import_batch_id", "source_table_name", "row_number",
+            "import_batch_id",
+            "source_table_name",
+            "row_number",
             name="uq_legacy_row_stage_batch_table_row",
         ),
     )
@@ -258,9 +258,7 @@ class SeasonalProductPerformance(Base):
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
 
-    __table_args__ = (
-        UniqueConstraint("product_key", "sale_month", name="uq_seasonal_product_key_month"),
-    )
+    __table_args__ = (UniqueConstraint("product_key", "sale_month", name="uq_seasonal_product_key_month"),)
 
 
 class ChannelPerformanceSummary(Base):
@@ -340,9 +338,7 @@ class KnowledgeChunk(Base):
     token_set: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
-    __table_args__ = (
-        UniqueConstraint("document_id", "chunk_index", name="uq_knowledge_chunk_doc_index"),
-    )
+    __table_args__ = (UniqueConstraint("document_id", "chunk_index", name="uq_knowledge_chunk_doc_index"),)
 
 
 class DecisionOutcome(Base):

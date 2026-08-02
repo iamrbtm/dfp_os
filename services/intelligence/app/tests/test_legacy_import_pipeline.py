@@ -66,9 +66,7 @@ async def test_import_all_tables_persists_manifests_and_rows(async_session):
     )
 
     with _patch_legacy_fetch(payload):
-        response = await import_all_legacy_tables(
-            async_session, payload, schema_rows=MOCK_SCHEMA
-        )
+        response = await import_all_legacy_tables(async_session, payload, schema_rows=MOCK_SCHEMA)
 
     assert response.batch.status == "completed"
     assert response.batch.row_count == 5
@@ -109,9 +107,7 @@ async def test_import_preserves_raw_payloads(async_session):
     )
 
     with _patch_legacy_fetch(payload):
-        await import_all_legacy_tables(
-            async_session, payload, schema_rows=MOCK_SCHEMA
-        )
+        await import_all_legacy_tables(async_session, payload, schema_rows=MOCK_SCHEMA)
 
     rows = (await async_session.execute(select(LegacyImportRowStage))).scalars().all()
 
@@ -144,9 +140,7 @@ async def test_import_handles_empty_table(async_session):
     )
 
     with _patch_legacy_fetch(payload, extra_empty=["empty_table"]):
-        response = await import_all_legacy_tables(
-            async_session, payload, schema_rows=empty_schema
-        )
+        response = await import_all_legacy_tables(async_session, payload, schema_rows=empty_schema)
 
     assert response.batch.status == "completed"
     assert len(response.manifests) == 1
@@ -512,6 +506,7 @@ async def test_json_upload_rejects_non_json(async_session, auth_headers):
 
 # ---- helpers ----
 
+
 def _patch_legacy_fetch(payload, extra_empty=None):
     import unittest.mock as mock
 
@@ -531,6 +526,7 @@ def _patch_legacy_fetch(payload, extra_empty=None):
             raw = {col: row.get(col) for col in col_names}
             import hashlib
             import json
+
             joined = "\x1f".join(f"{k}={json.dumps(raw.get(k), default=str)}" for k in sorted(raw))
             h = hashlib.sha256(joined.encode("utf-8")).hexdigest()
             pk_value = "|".join(str(row.get(c, "NULL")) for c in pk_cols) if pk_cols else None

@@ -194,6 +194,7 @@ class AIExtractionProvider(BaseReceiptProvider):
 
     def _mock_response(self) -> ProviderResult:
         import json as json_module
+
         return ProviderResult(
             success=True,
             raw_text="MOCK TEXT ENFORCED",
@@ -203,7 +204,9 @@ class AIExtractionProvider(BaseReceiptProvider):
             diagnostics={"provider": "mock", "model": "test"},
         )
 
-    def _call_openai(self, ocr_text: str, api_key: str, model: str = OPENAI_DEFAULT_MODEL) -> ProviderResult:
+    def _call_openai(
+        self, ocr_text: str, api_key: str, model: str = OPENAI_DEFAULT_MODEL
+    ) -> ProviderResult:
         try:
             from openai import OpenAI
             import json as json_module
@@ -231,7 +234,9 @@ class AIExtractionProvider(BaseReceiptProvider):
                 )
                 content = response.choices[0].message.content
                 if not content or not content.strip():
-                    last_error = ProviderResult(success=False, errors=[f"Empty response (attempt {i+1})"])
+                    last_error = ProviderResult(
+                        success=False, errors=[f"Empty response (attempt {i + 1})"]
+                    )
                     continue
                 parsed = json_module.loads(content)
                 return ProviderResult(
@@ -243,14 +248,19 @@ class AIExtractionProvider(BaseReceiptProvider):
                     diagnostics={"provider": "openai", "model": model, "retry": i > 0},
                 )
             except json_module.JSONDecodeError:
-                last_error = ProviderResult(success=False, errors=[f"OpenAI returned invalid JSON (attempt {i+1})"])
+                last_error = ProviderResult(
+                    success=False, errors=[f"OpenAI returned invalid JSON (attempt {i + 1})"]
+                )
             except Exception as e:
-                last_error = ProviderResult(success=False, errors=[f"OpenAI error (attempt {i+1}): {e}"])
+                last_error = ProviderResult(
+                    success=False, errors=[f"OpenAI error (attempt {i + 1}): {e}"]
+                )
 
         return last_error or ProviderResult(success=False, errors=["All OpenAI attempts failed."])
 
     def _call_ollama(self, ocr_text: str, base_url: str, model: str) -> ProviderResult:
         import json as json_module
+
         prompts = [
             EXTRACTION_PROMPT % (json_module.dumps(AI_EXTRACTION_SCHEMA, indent=2), ocr_text),
             (
@@ -277,7 +287,9 @@ class AIExtractionProvider(BaseReceiptProvider):
                 body = response.json()
                 raw_text = body.get("response", "")
                 if not raw_text.strip():
-                    last_error = ProviderResult(success=False, errors=[f"Empty response (attempt {i+1})"])
+                    last_error = ProviderResult(
+                        success=False, errors=[f"Empty response (attempt {i + 1})"]
+                    )
                     continue
                 parsed = json_module.loads(raw_text)
                 return ProviderResult(
@@ -289,7 +301,11 @@ class AIExtractionProvider(BaseReceiptProvider):
                     diagnostics={"provider": "ollama", "model": model, "retry": i > 0},
                 )
             except json_module.JSONDecodeError:
-                last_error = ProviderResult(success=False, errors=[f"Invalid JSON from model (attempt {i+1})"])
+                last_error = ProviderResult(
+                    success=False, errors=[f"Invalid JSON from model (attempt {i + 1})"]
+                )
             except Exception as e:
-                last_error = ProviderResult(success=False, errors=[f"Ollama error (attempt {i+1}): {e}"])
+                last_error = ProviderResult(
+                    success=False, errors=[f"Ollama error (attempt {i + 1}): {e}"]
+                )
         return last_error or ProviderResult(success=False, errors=["All Ollama attempts failed."])

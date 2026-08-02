@@ -4,7 +4,21 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer, JSON, Numeric, String, Text, Time, func
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    Text,
+    Time,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
@@ -69,8 +83,12 @@ class Market(PrimaryKeyMixin, TimestampMixin, db.Model):
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     application_deadline: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
-    application_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    application_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    application_submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    application_approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     application_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     application_contact: Mapped[str | None] = mapped_column(String(200), nullable=True)
     fee_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -86,7 +104,9 @@ class Market(PrimaryKeyMixin, TimestampMixin, db.Model):
     load_in_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     load_out_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     booth_fee: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=0)
-    application_fee: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=0)
+    application_fee: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, default=0
+    )
     status: Mapped[MarketStatus] = mapped_column(
         Enum(MarketStatus, native_enum=False, length=40),
         default=MarketStatus.INTERESTED,
@@ -112,7 +132,9 @@ class Market(PrimaryKeyMixin, TimestampMixin, db.Model):
     hotel_bookings = relationship(
         "MarketHotelBooking", back_populates="market", cascade="all, delete-orphan"
     )
-    documents = relationship("MarketDocument", back_populates="market", cascade="all, delete-orphan")
+    documents = relationship(
+        "MarketDocument", back_populates="market", cascade="all, delete-orphan"
+    )
 
     @property
     def total_booth_cost(self) -> Decimal:
@@ -121,15 +143,21 @@ class Market(PrimaryKeyMixin, TimestampMixin, db.Model):
     @property
     def calculated_revenue(self) -> Decimal:
         from app.models import Order
-        result = db.session.query(func.sum(Order.total)).filter(
-            Order.market_id == self.id,
-            Order.deleted_at.is_(None),
-        ).scalar()
+
+        result = (
+            db.session.query(func.sum(Order.total))
+            .filter(
+                Order.market_id == self.id,
+                Order.deleted_at.is_(None),
+            )
+            .scalar()
+        )
         return result or Decimal(0)
 
     @property
     def calculated_profit(self) -> Decimal:
         from app.models import Expense
+
         expenses = db.session.query(func.sum(Expense.amount)).filter(
             Expense.related_market_id == self.id,
         ).scalar() or Decimal(0)
@@ -146,12 +174,8 @@ class Market(PrimaryKeyMixin, TimestampMixin, db.Model):
 class MarketPackingList(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "market_packing_lists"
 
-    market_id: Mapped[int] = mapped_column(
-        ForeignKey("markets.id"), nullable=False, index=True
-    )
-    product_id: Mapped[int] = mapped_column(
-        ForeignKey("products.id"), nullable=False, index=True
-    )
+    market_id: Mapped[int] = mapped_column(ForeignKey("markets.id"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
     planned_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     packed_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     sold_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
@@ -167,7 +191,9 @@ class MarketTimelineEvent(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     market_id: Mapped[int] = mapped_column(ForeignKey("markets.id"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    starts_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     event_type: Mapped[MarketTimelineEventType] = mapped_column(
@@ -177,7 +203,9 @@ class MarketTimelineEvent(PrimaryKeyMixin, TimestampMixin, db.Model):
         index=True,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
     market = relationship("Market", back_populates="timeline_events")
 
@@ -188,7 +216,9 @@ class MarketWeatherSnapshot(PrimaryKeyMixin, TimestampMixin, db.Model):
     market_id: Mapped[int] = mapped_column(ForeignKey("markets.id"), nullable=False, index=True)
     provider: Mapped[str] = mapped_column(String(80), default="weather.gov", nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    forecast_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    forecast_for: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     temperature: Mapped[int | None] = mapped_column(Integer, nullable=True)
     short_forecast: Mapped[str | None] = mapped_column(String(255), nullable=True)
     detailed_forecast: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -237,7 +267,9 @@ class MarketDocument(PrimaryKeyMixin, TimestampMixin, db.Model):
         index=True,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
 
     market = relationship("Market", back_populates="documents")
     uploaded_by = relationship("User")

@@ -19,7 +19,9 @@ def run_and_store_calibration(
     )
 
     try:
-        backtest = run_backtest(db.session, lookback_reports=lookback_reports, sales_window_days=sales_window_days)
+        backtest = run_backtest(
+            db.session, lookback_reports=lookback_reports, sales_window_days=sales_window_days
+        )
 
         result.report_count = backtest.get("report_count", 0)
         result.score_count = backtest.get("score_count", 0)

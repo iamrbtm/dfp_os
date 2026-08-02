@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8091
 
-    database_url: str = "postgresql+asyncpg://dfp_intelligence:dfp_intelligence_password@localhost:5433/dfp_intelligence"
+    database_url: str = (
+        "postgresql+asyncpg://dfp_intelligence:dfp_intelligence_password@localhost:5433/dfp_intelligence"
+    )
     internal_api_token: str = "change-me-local-token"
 
     audit_log_base_url: str = "http://localhost:8090"

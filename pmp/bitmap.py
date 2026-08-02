@@ -130,10 +130,7 @@ def dilate(cells: set[Cell], radius_cells: int) -> set[Cell]:
     r = int(radius_cells)
     r2 = r * r
     offsets = [
-        (dx, dy)
-        for dx in range(-r, r + 1)
-        for dy in range(-r, r + 1)
-        if dx * dx + dy * dy <= r2
+        (dx, dy) for dx in range(-r, r + 1) for dy in range(-r, r + 1) if dx * dx + dy * dy <= r2
     ]
     out: set[Cell] = set()
     for i, j in cells:
@@ -231,7 +228,7 @@ def masks_overlap(a: PartMask, b: PartMask, dx: int, dy: int) -> bool:
     if not a.rows or not b.rows:
         return False
     ax = max(0, -dx)  # a's absolute x shift
-    bx = max(0, dx)   # b's absolute x shift (bx - ax == dx)
+    bx = max(0, dx)  # b's absolute x shift (bx - ax == dx)
     r0 = max(0, dy)
     r1 = min(a.height, dy + b.height)
     for r in range(r0, r1):

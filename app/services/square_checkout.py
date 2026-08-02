@@ -65,7 +65,9 @@ def create_payment_link(order: Order, config: dict) -> SquarePaymentLink:
             payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         details = exc.read().decode("utf-8", errors="ignore")
-        raise SquareCheckoutError(f"Square checkout request failed: {details or exc.reason}") from exc
+        raise SquareCheckoutError(
+            f"Square checkout request failed: {details or exc.reason}"
+        ) from exc
     except URLError as exc:
         raise SquareCheckoutError(f"Square checkout request failed: {exc.reason}") from exc
 

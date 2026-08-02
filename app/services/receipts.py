@@ -16,7 +16,11 @@ from werkzeug.utils import secure_filename
 from app.extensions import db
 from app.models import Receipt, ReceiptLineItem, ReceiptLineAllocation, ReceiptStatus, Expense
 from app.models.base import utc_now
-from app.services.receipt_providers import ImagePreprocessorProvider, OCRProvider, AIExtractionProvider
+from app.services.receipt_providers import (
+    ImagePreprocessorProvider,
+    OCRProvider,
+    AIExtractionProvider,
+)
 from app.services.audit import record_audit_event
 from app.services.storage import (
     content_type_for_name,
@@ -89,7 +93,9 @@ def resolve_receipt_file_path(file_path: str | None) -> str | None:
 
 
 def _configured_receipt_mimes() -> set[str]:
-    allowed = current_app.config.get("RECEIPT_ALLOWED_TYPES", "image/jpeg,image/png,image/heic,image/heif,application/pdf")
+    allowed = current_app.config.get(
+        "RECEIPT_ALLOWED_TYPES", "image/jpeg,image/png,image/heic,image/heif,application/pdf"
+    )
     return {item.strip().lower() for item in allowed.split(",") if item.strip()}
 
 
@@ -105,7 +111,11 @@ def _detect_mime_from_head(head: bytes) -> str | None:
         return "image/jpeg"
     if head.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"
-    if len(head) >= 12 and head[4:8] == b"ftyp" and head[8:12] in {b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1"}:
+    if (
+        len(head) >= 12
+        and head[4:8] == b"ftyp"
+        and head[8:12] in {b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1"}
+    ):
         return "image/heic"
     return None
 
@@ -134,10 +144,10 @@ def _jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
             index += 1
             continue
         marker = data[index + 1]
-        block_len = int.from_bytes(data[index + 2:index + 4], "big")
+        block_len = int.from_bytes(data[index + 2 : index + 4], "big")
         if marker in {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}:
-            height = int.from_bytes(data[index + 5:index + 7], "big")
-            width = int.from_bytes(data[index + 7:index + 9], "big")
+            height = int.from_bytes(data[index + 5 : index + 7], "big")
+            width = int.from_bytes(data[index + 7 : index + 9], "big")
             return width, height
         if block_len < 2:
             return None
@@ -311,9 +321,10 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
         db.session.commit()
 
         ocr_provider = OCRProvider()
-        ocr_image = preprocess_result.data.get("enhanced_path") or preprocess_result.data.get(
-            "pages", [source_path]
-        )[0]
+        ocr_image = (
+            preprocess_result.data.get("enhanced_path")
+            or preprocess_result.data.get("pages", [source_path])[0]
+        )
         ocr_result = ocr_provider.process(
             ocr_image,
             provider=ocr_config.get("RECEIPT_OCR_PROVIDER", "paddleocr"),
@@ -346,8 +357,12 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
                 ai_kwargs["openai_api_key"] = ocr_config.get("OPENAI_API_KEY", "")
                 ai_kwargs["openai_model"] = ocr_config.get("OPENAI_MODEL_RECEIPTS", "gpt-4o-mini")
             else:
-                ai_kwargs["ollama_base_url"] = ocr_config.get("OLLAMA_BASE_URL", "http://localhost:11434")
-                ai_kwargs["ollama_fallback_url"] = ocr_config.get("OLLAMA_FALLBACK_URL", "http://localhost:11434")
+                ai_kwargs["ollama_base_url"] = ocr_config.get(
+                    "OLLAMA_BASE_URL", "http://localhost:11434"
+                )
+                ai_kwargs["ollama_fallback_url"] = ocr_config.get(
+                    "OLLAMA_FALLBACK_URL", "http://localhost:11434"
+                )
                 ai_kwargs["model"] = ocr_config.get("OLLAMA_RECEIPT_MODEL", "deepseek-r1:8b")
 
             ai_result = ai_provider.process(source_path, **ai_kwargs)
@@ -369,10 +384,15 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
                     action="receipt.ai_parsed",
                     entity_type="receipt",
                     entity_id=receipt.id,
-                    after_state={"parser_model": receipt.parser_model, "confidence": str(ai_result.confidence)},
+                    after_state={
+                        "parser_model": receipt.parser_model,
+                        "confidence": str(ai_result.confidence),
+                    },
                     source_module=__name__,
                 )
-            receipt.confidence_overall = Decimal(str(ai_result.confidence)) if ai_result.confidence is not None else None
+            receipt.confidence_overall = (
+                Decimal(str(ai_result.confidence)) if ai_result.confidence is not None else None
+            )
 
         receipt.status = ReceiptStatus.NEEDS_REVIEW
 
@@ -391,7 +411,14 @@ AI_FIELD_ALIASES = {
     "phone": ("phone", "telephone", "phone_number"),
     "receipt_number": ("receipt_number", "receipt_no", "receipt_num", "receipt_id", "receipt"),
     "transaction_number": ("transaction_number", "transaction_id", "txn_number", "trans_num"),
-    "date_time": ("date_time", "datetime", "date", "transaction_date", "purchase_date", "trans_date"),
+    "date_time": (
+        "date_time",
+        "datetime",
+        "date",
+        "transaction_date",
+        "purchase_date",
+        "trans_date",
+    ),
     "timezone": ("timezone", "tz", "time_zone"),
     "subtotal": ("subtotal", "sub_total", "sub-total"),
     "tax_total": ("tax_total", "total_tax", "tax", "tax_amount"),
@@ -400,7 +427,14 @@ AI_FIELD_ALIASES = {
     "tip_total": ("tip_total", "total_tip", "tip", "gratuity"),
     "deposit_total": ("deposit_total", "total_deposit", "deposit"),
     "rounding_adjustment": ("rounding_adjustment", "rounding", "round_diff"),
-    "grand_total": ("grand_total", "total", "total_dollars", "amount", "total_amount", "total_paid"),
+    "grand_total": (
+        "grand_total",
+        "total",
+        "total_dollars",
+        "amount",
+        "total_amount",
+        "total_paid",
+    ),
     "payment_method": ("payment_method", "method", "payment", "payment_type", "tender"),
     "payment_card_brand": ("payment_card_brand", "card_brand", "card_type", "cc_brand"),
     "payment_card_last4": ("payment_card_last4", "card_last4", "last4", "cc_last4"),
@@ -425,14 +459,22 @@ def _normalize_ai_data(data: dict) -> dict:
     for standard_field, aliases in AI_FIELD_ALIASES.items():
         normalized[standard_field] = _get_first(data, aliases)
 
-    line_items = data.get("line_items") or data.get("items") or data.get("products") or data.get("purchases") or []
+    line_items = (
+        data.get("line_items")
+        or data.get("items")
+        or data.get("products")
+        or data.get("purchases")
+        or []
+    )
     if isinstance(line_items, list) and len(line_items) > 0:
         normalized["line_items"] = []
         for item in line_items:
             if isinstance(item, dict):
                 normalized["line_items"].append(item)
 
-    low_conf = data.get("low_confidence_fields") or data.get("low_confidence") or data.get("flags") or []
+    low_conf = (
+        data.get("low_confidence_fields") or data.get("low_confidence") or data.get("flags") or []
+    )
     if low_conf:
         normalized["low_confidence_fields"] = low_conf if isinstance(low_conf, list) else [low_conf]
 
@@ -466,7 +508,7 @@ def _apply_ai_extraction(receipt: Receipt, data: dict):
     if data.get("date_time"):
         try:
             receipt.date_time = datetime.fromisoformat(data["date_time"])
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
 
     receipt.timezone = data.get("timezone") or receipt.timezone
@@ -493,16 +535,46 @@ def _apply_ai_extraction(receipt: Receipt, data: dict):
 
     line_items_data = data.get("line_items", [])
     for i, item_data in enumerate(line_items_data):
-        desc = (item_data.get("description") or item_data.get("name") or item_data.get("product") or item_data.get("item") or item_data.get("title") or "")
+        desc = (
+            item_data.get("description")
+            or item_data.get("name")
+            or item_data.get("product")
+            or item_data.get("item")
+            or item_data.get("title")
+            or ""
+        )
         sku = item_data.get("sku") or item_data.get("SKU") or item_data.get("product_code") or ""
         upc = item_data.get("upc") or item_data.get("UPC") or item_data.get("barcode") or ""
-        qty = _safe_decimal(item_data.get("quantity") or item_data.get("qty") or item_data.get("count") or 1)
-        unit_price = _safe_decimal(item_data.get("unit_price") or item_data.get("unitprice") or item_data.get("price") or item_data.get("unitPrice"))
-        line_total = _safe_decimal(item_data.get("line_total") or item_data.get("total") or item_data.get("amount") or item_data.get("lineTotal"))
-        line_discount = _safe_decimal(item_data.get("line_discount") or item_data.get("discount") or item_data.get("lineDiscount"))
-        line_tax = _safe_decimal(item_data.get("line_tax") or item_data.get("tax") or item_data.get("lineTax"))
+        qty = _safe_decimal(
+            item_data.get("quantity") or item_data.get("qty") or item_data.get("count") or 1
+        )
+        unit_price = _safe_decimal(
+            item_data.get("unit_price")
+            or item_data.get("unitprice")
+            or item_data.get("price")
+            or item_data.get("unitPrice")
+        )
+        line_total = _safe_decimal(
+            item_data.get("line_total")
+            or item_data.get("total")
+            or item_data.get("amount")
+            or item_data.get("lineTotal")
+        )
+        line_discount = _safe_decimal(
+            item_data.get("line_discount")
+            or item_data.get("discount")
+            or item_data.get("lineDiscount")
+        )
+        line_tax = _safe_decimal(
+            item_data.get("line_tax") or item_data.get("tax") or item_data.get("lineTax")
+        )
         taxable = item_data.get("taxable") or item_data.get("is_taxable") or False
-        confidence = item_data.get("confidence") or item_data.get("confidence_score") or item_data.get("conf") or 0.5
+        confidence = (
+            item_data.get("confidence")
+            or item_data.get("confidence_score")
+            or item_data.get("conf")
+            or 0.5
+        )
         line_item = ReceiptLineItem(
             receipt_id=receipt.id,
             row_order=i,
@@ -526,7 +598,7 @@ def _safe_decimal(value: Any) -> Decimal | None:
         return None
     try:
         return Decimal(str(value))
-    except (ValueError, TypeError, InvalidOperation):
+    except ValueError, TypeError, InvalidOperation:
         return None
 
 
@@ -629,6 +701,7 @@ def _create_expense_records(receipt: Receipt):
 
 def _map_allocation_to_category(allocation_type: str):
     from app.models import ExpenseCategory
+
     mapping = {
         "market": ExpenseCategory.BOOTH_FEES,
         "custom_job": ExpenseCategory.OTHER,
@@ -685,14 +758,10 @@ def get_receipt_dashboard() -> dict[str, Any]:
         Receipt.deleted_at.is_(None),
     ).count()
 
-    approved_total = (
-        db.session.query(func.sum(Receipt.grand_total))
-        .filter(
-            Receipt.status == ReceiptStatus.APPROVED,
-            Receipt.deleted_at.is_(None),
-        )
-        .scalar() or Decimal("0")
-    )
+    approved_total = db.session.query(func.sum(Receipt.grand_total)).filter(
+        Receipt.status == ReceiptStatus.APPROVED,
+        Receipt.deleted_at.is_(None),
+    ).scalar() or Decimal("0")
 
     unallocated = (
         db.session.query(func.count(ReceiptLineItem.id))
@@ -701,7 +770,8 @@ def get_receipt_dashboard() -> dict[str, Any]:
             ~ReceiptLineItem.allocations.any(),
             Receipt.deleted_at.is_(None),
         )
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
     recent = (
@@ -734,7 +804,5 @@ def get_receipt_dashboard() -> dict[str, Any]:
         "approved_total": approved_total,
         "unallocated": unallocated,
         "recent": recent,
-        "vendors": [
-            {"name": r[0], "count": r[1], "total": r[2]} for r in vendors
-        ],
+        "vendors": [{"name": r[0], "count": r[1], "total": r[2]} for r in vendors],
     }

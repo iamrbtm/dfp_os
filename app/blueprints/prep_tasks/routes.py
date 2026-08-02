@@ -115,7 +115,10 @@ def list_resource(resource_key: str):
     q = request.args.get("q", "").strip()
     statement = apply_search(select(config.model), config.model, q, config.search_fields)
     pagination = paginate_query(statement.order_by(config.model.created_at.desc()), page, 20)
-    rows = [{"id": item.id, "cells": [_display_value(getter(item)) for _, getter in config.columns]} for item in pagination.items]
+    rows = [
+        {"id": item.id, "cells": [_display_value(getter(item)) for _, getter in config.columns]}
+        for item in pagination.items
+    ]
     return render_template(
         "dashboard/resource_list.html",
         resource=config,
@@ -150,8 +153,14 @@ def create_resource(resource_key: str):
                 400,
             )
         flash(f"{config.singular} created successfully.", "success")
-        return redirect(url_for("prep_tasks.detail_resource", resource_key=resource_key, resource_id=instance.id))
-    return render_template("dashboard/resource_form.html", resource=config, form=form, mode="create")
+        return redirect(
+            url_for(
+                "prep_tasks.detail_resource", resource_key=resource_key, resource_id=instance.id
+            )
+        )
+    return render_template(
+        "dashboard/resource_form.html", resource=config, form=form, mode="create"
+    )
 
 
 @bp.get("/<resource_key>/<int:resource_id>")
@@ -163,8 +172,13 @@ def detail_resource(resource_key: str, resource_id: int):
     instance = get_by_id(config.model, resource_id)
     if instance is None:
         return render_template("errors/404.html"), 404
-    details = [{"label": label, "value": _display_value(getter(instance))} for label, getter in config.columns]
-    return render_template("dashboard/resource_detail.html", resource=config, instance=instance, details=details)
+    details = [
+        {"label": label, "value": _display_value(getter(instance))}
+        for label, getter in config.columns
+    ]
+    return render_template(
+        "dashboard/resource_detail.html", resource=config, instance=instance, details=details
+    )
 
 
 @bp.route("/<resource_key>/<int:resource_id>/edit", methods=["GET", "POST"])
@@ -194,7 +208,11 @@ def edit_resource(resource_key: str, resource_id: int):
                 400,
             )
         flash(f"{config.singular} updated successfully.", "success")
-        return redirect(url_for("prep_tasks.detail_resource", resource_key=resource_key, resource_id=instance.id))
+        return redirect(
+            url_for(
+                "prep_tasks.detail_resource", resource_key=resource_key, resource_id=instance.id
+            )
+        )
     return render_template("dashboard/resource_form.html", resource=config, form=form, mode="edit")
 
 
@@ -224,13 +242,18 @@ def follow_up_queue():
     q = request.args.get("q", "").strip()
     tasks = get_follow_up_queue(market_id=market_id)
     if q:
-        tasks = [t for t in tasks if q.lower() in (t.title or "").lower() or (t.follow_up_type or "").lower() == q.lower()]
+        tasks = [
+            t
+            for t in tasks
+            if q.lower() in (t.title or "").lower() or (t.follow_up_type or "").lower() == q.lower()
+        ]
     page = request.args.get("page", 1, type=int)
     per_page = 25
     total = len(tasks)
     start = (page - 1) * per_page
-    paged_tasks = tasks[start:start + per_page]
+    paged_tasks = tasks[start : start + per_page]
     from math import ceil
+
     total_pages = max(1, ceil(total / per_page))
     from dataclasses import dataclass
 
@@ -247,13 +270,19 @@ def follow_up_queue():
         next_num: int
 
     pagination = Pager(
-        page=page, per_page=per_page, total=total, pages=total_pages,
+        page=page,
+        per_page=per_page,
+        total=total,
+        pages=total_pages,
         items=paged_tasks,
-        has_prev=page > 1, has_next=page < total_pages,
-        prev_num=page - 1, next_num=page + 1,
+        has_prev=page > 1,
+        has_next=page < total_pages,
+        prev_num=page - 1,
+        next_num=page + 1,
     )
     from datetime import datetime, timezone
     from app.models import Market
+
     markets = Market.query.order_by(Market.event_date.desc(), Market.name).all()
     return render_template(
         "dashboard/prep_tasks/follow_up_queue.html",
@@ -303,9 +332,11 @@ def follow_up_archive(task_id: int):
 @roles_required(UserRole.ADMIN, UserRole.STAFF)
 def impulse_tray_optimizer():
     from app.services.impulse_tray import get_impulse_tray_recommendations
+
     market_id = request.args.get("market_id", type=int)
     result = get_impulse_tray_recommendations(market_id)
     from app.models import Market
+
     markets = Market.query.order_by(Market.event_date.desc(), Market.name).all()
     return render_template(
         "dashboard/prep_tasks/impulse_tray.html",

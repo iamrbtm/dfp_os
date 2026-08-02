@@ -99,12 +99,32 @@ def seed_demo_data(*, admin_email: str, admin_password: str) -> dict[str, int]:
         staff_user.role = UserRole.STAFF
         staff_user.is_active = True
 
-    dragons = _upsert(Category, slug="dragons", defaults={"name": "Dragons", "is_public": True, "is_pos_visible": True})
-    fidgets = _upsert(Category, slug="fidgets", defaults={"name": "Fidgets", "is_public": True, "is_pos_visible": True})
-    local = _upsert(Category, slug="clarksville", defaults={"name": "Clarksville", "is_public": True, "is_pos_visible": True})
+    dragons = _upsert(
+        Category,
+        slug="dragons",
+        defaults={"name": "Dragons", "is_public": True, "is_pos_visible": True},
+    )
+    fidgets = _upsert(
+        Category,
+        slug="fidgets",
+        defaults={"name": "Fidgets", "is_public": True, "is_pos_visible": True},
+    )
+    local = _upsert(
+        Category,
+        slug="clarksville",
+        defaults={"name": "Clarksville", "is_public": True, "is_pos_visible": True},
+    )
 
-    summer = _upsert(Collection, slug="summer-best-sellers", defaults={"name": "Summer Best Sellers", "is_public": True})
-    market = _upsert(Collection, slug="market-favorites", defaults={"name": "Market Favorites", "is_public": True})
+    summer = _upsert(
+        Collection,
+        slug="summer-best-sellers",
+        defaults={"name": "Summer Best Sellers", "is_public": True},
+    )
+    market = _upsert(
+        Collection,
+        slug="market-favorites",
+        defaults={"name": "Market Favorites", "is_public": True},
+    )
 
     demo_products = [
         {
@@ -256,7 +276,12 @@ def seed_demo_data(*, admin_email: str, admin_password: str) -> dict[str, int]:
             MarketPackingList,
             market_id=market_event.id,
             product_id=product.id,
-            defaults={"planned_quantity": planned, "packed_quantity": 0, "sold_quantity": 0, "returned_quantity": 0},
+            defaults={
+                "planned_quantity": planned,
+                "packed_quantity": 0,
+                "sold_quantity": 0,
+                "returned_quantity": 0,
+            },
         )
 
     pos_session = _upsert(
@@ -377,7 +402,11 @@ def seed_demo_data(*, admin_email: str, admin_password: str) -> dict[str, int]:
     _upsert(
         FeatureFlag,
         key="module.products.enabled",
-        defaults={"business_id": business.id, "enabled": True, "description": "Enable Product Studio"},
+        defaults={
+            "business_id": business.id,
+            "enabled": True,
+            "description": "Enable Product Studio",
+        },
     )
 
     _seed_trend_weights()

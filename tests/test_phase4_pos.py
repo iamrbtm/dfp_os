@@ -18,7 +18,14 @@ from app.models import (
     UserRole,
 )
 from app.services.audit_client import AuditClient, AuditDispatchError
-from app.services.pos import close_session, create_sale, get_session_summary, open_session, refund_sale, void_session
+from app.services.pos import (
+    close_session,
+    create_sale,
+    get_session_summary,
+    open_session,
+    refund_sale,
+    void_session,
+)
 
 
 def _ensure_admin_id(app):
@@ -41,7 +48,9 @@ def _ensure_admin_id(app):
 def _ensure_product():
     category = Category.query.filter_by(slug="pos-test-cat").first()
     if not category:
-        category = Category(name="POS Test", slug="pos-test-cat", is_public=True, is_pos_visible=True)
+        category = Category(
+            name="POS Test", slug="pos-test-cat", is_public=True, is_pos_visible=True
+        )
         db.session.add(category)
         db.session.flush()
     product = Product.query.filter_by(slug="pos-test-prod").first()
@@ -109,7 +118,9 @@ def test_pos_create_sale_deducts_product_inventory(app):
         )
         db.session.commit()
 
-        session = open_session(user_id=admin_id, opening_cash=Decimal("50.00"), inventory_location_id=location.id)
+        session = open_session(
+            user_id=admin_id, opening_cash=Decimal("50.00"), inventory_location_id=location.id
+        )
         sale, order = create_sale(
             session_id=session.id,
             payment_method="cash",
@@ -128,7 +139,9 @@ def test_pos_create_sale_deducts_product_inventory(app):
         assert sale.total == Decimal("10.00")
         assert sale.status == PosSaleStatus.COMPLETED
         assert order.total == Decimal("10.00")
-        inventory = InventoryRecord.query.filter_by(product_id=product.id, location_id=location.id).first()
+        inventory = InventoryRecord.query.filter_by(
+            product_id=product.id, location_id=location.id
+        ).first()
         assert inventory.quantity_on_hand == 2
 
 
@@ -147,7 +160,9 @@ def test_pos_uses_database_price_when_client_price_is_tampered(app):
         )
         db.session.commit()
 
-        session = open_session(user_id=admin_id, opening_cash=Decimal("0"), inventory_location_id=location.id)
+        session = open_session(
+            user_id=admin_id, opening_cash=Decimal("0"), inventory_location_id=location.id
+        )
         sale, order = create_sale(
             session_id=session.id,
             payment_method="cash",
@@ -309,7 +324,9 @@ def test_pos_refund_sale_restocks_inventory(app):
         )
         db.session.commit()
 
-        session = open_session(user_id=admin_id, opening_cash=Decimal("20.00"), inventory_location_id=location.id)
+        session = open_session(
+            user_id=admin_id, opening_cash=Decimal("20.00"), inventory_location_id=location.id
+        )
         sale, _order = create_sale(
             session_id=session.id,
             payment_method="cash",
@@ -327,7 +344,9 @@ def test_pos_refund_sale_restocks_inventory(app):
 
         refunded = refund_sale(sale_id=sale.id, actor_id=admin_id, restock=True)
         assert refunded.status == PosSaleStatus.REFUNDED
-        inventory = InventoryRecord.query.filter_by(product_id=product.id, location_id=location.id).first()
+        inventory = InventoryRecord.query.filter_by(
+            product_id=product.id, location_id=location.id
+        ).first()
         assert inventory.quantity_on_hand == 3
 
 
@@ -354,7 +373,9 @@ def test_pos_sale_fails_closed_when_critical_audit_fails(app, monkeypatch):
             )
         )
         db.session.commit()
-        session = open_session(user_id=admin_id, opening_cash=Decimal("0"), inventory_location_id=location.id)
+        session = open_session(
+            user_id=admin_id, opening_cash=Decimal("0"), inventory_location_id=location.id
+        )
 
         try:
             create_sale(
@@ -375,7 +396,9 @@ def test_pos_sale_fails_closed_when_critical_audit_fails(app, monkeypatch):
         else:
             raise AssertionError("Critical audit failure did not block POS sale")
 
-        inventory = InventoryRecord.query.filter_by(product_id=product.id, location_id=location.id).first()
+        inventory = InventoryRecord.query.filter_by(
+            product_id=product.id, location_id=location.id
+        ).first()
         assert inventory.quantity_on_hand == 3
 
 

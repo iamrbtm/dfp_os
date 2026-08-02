@@ -69,12 +69,17 @@ def is_product_purchasable(product: Product) -> bool:
 
 def product_stock(product: Product) -> int | None:
     query = select(
-        func.coalesce(func.sum(InventoryRecord.quantity_on_hand - InventoryRecord.quantity_reserved), 0)
+        func.coalesce(
+            func.sum(InventoryRecord.quantity_on_hand - InventoryRecord.quantity_reserved), 0
+        )
     ).where(InventoryRecord.product_id == product.id)
     available = db.session.scalar(query)
-    record_count = db.session.scalar(
-        select(func.count(InventoryRecord.id)).where(InventoryRecord.product_id == product.id)
-    ) or 0
+    record_count = (
+        db.session.scalar(
+            select(func.count(InventoryRecord.id)).where(InventoryRecord.product_id == product.id)
+        )
+        or 0
+    )
 
     if record_count == 0 or product.product_type in {
         ProductType.MADE_TO_ORDER_PRODUCT,
@@ -198,7 +203,9 @@ def cart_item_count() -> int:
     return sum(line.quantity for line in resolve_cart_lines())
 
 
-def upsert_customer(first_name: str, last_name: str, email: str, phone: str | None, shipping: dict) -> Customer:
+def upsert_customer(
+    first_name: str, last_name: str, email: str, phone: str | None, shipping: dict
+) -> Customer:
     customer = Customer.query.filter_by(email=email.strip().lower()).first()
     if customer is None:
         customer = Customer(
@@ -222,7 +229,14 @@ def upsert_customer(first_name: str, last_name: str, email: str, phone: str | No
     return customer
 
 
-def create_order_from_cart(*, customer: Customer, summary: CartSummary, fulfillment_method: str, notes: str | None = None, shipping: dict | None = None) -> Order:
+def create_order_from_cart(
+    *,
+    customer: Customer,
+    summary: CartSummary,
+    fulfillment_method: str,
+    notes: str | None = None,
+    shipping: dict | None = None,
+) -> Order:
     if not summary.lines:
         raise StorefrontError("Your cart is empty.")
 

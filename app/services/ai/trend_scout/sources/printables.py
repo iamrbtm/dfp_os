@@ -63,7 +63,9 @@ def _parse_model_card(card) -> dict[str, Any]:
     like_el = card.select_one("[data-testid='like-count'], .stats-bar .big-icon span")
     likes_text = like_el.get_text(strip=True) if like_el else ""
 
-    rating_el = card.select_one(".hide-when-small-card .small-icon span + span, .stats-bar .small-icon:nth-child(2) span")
+    rating_el = card.select_one(
+        ".hide-when-small-card .small-icon span + span, .stats-bar .small-icon:nth-child(2) span"
+    )
     rating = rating_el.get_text(strip=True) if rating_el else ""
 
     download_spans = card.select(".stats-bar .small-icon span")
@@ -101,7 +103,9 @@ def _search_models(
         )
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, "html.parser")
-            cards = soup.select("article.card, article[data-testid='model'], [class*='card'].svelte")
+            cards = soup.select(
+                "article.card, article[data-testid='model'], [class*='card'].svelte"
+            )
             for card in cards[:max_items]:
                 result.items.append(_parse_model_card(card))
             result.metadata["total_results"] = len(result.items)
@@ -140,7 +144,7 @@ def _try_rss_feeds(
                         return result
                 except ET.ParseError:
                     continue
-        except (requests.RequestException, ET.ParseError):
+        except requests.RequestException, ET.ParseError:
             continue
     return None
 
@@ -153,15 +157,9 @@ def _parse_rss_item(item_el: Any) -> dict[str, Any]:
         "atom": "http://www.w3.org/2005/Atom",
     }
     title_el = (
-        item_el.find("rss:title", ns)
-        or item_el.find("title")
-        or item_el.find("atom:title", ns)
+        item_el.find("rss:title", ns) or item_el.find("title") or item_el.find("atom:title", ns)
     )
-    link_el = (
-        item_el.find("rss:link", ns)
-        or item_el.find("link")
-        or item_el.find("atom:link", ns)
-    )
+    link_el = item_el.find("rss:link", ns) or item_el.find("link") or item_el.find("atom:link", ns)
     desc_el = (
         item_el.find("rss:description", ns)
         or item_el.find("description")

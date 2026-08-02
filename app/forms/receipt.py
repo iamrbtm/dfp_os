@@ -23,11 +23,12 @@ class ReceiptUploadForm(FlaskForm):
     files = FileField(
         "Receipt Images or PDFs",
         validators=[DataRequired()],
-        render_kw={"multiple": True, "accept": "image/jpeg,image/png,image/heic,image/heif,application/pdf"},
+        render_kw={
+            "multiple": True,
+            "accept": "image/jpeg,image/png,image/heic,image/heif,application/pdf",
+        },
     )
-    source_type = SelectField(
-        "Source", choices=enum_choices(ReceiptSourceType), default="upload"
-    )
+    source_type = SelectField("Source", choices=enum_choices(ReceiptSourceType), default="upload")
     submit = SubmitField("Upload Receipts")
 
 
@@ -44,20 +45,61 @@ class ReceiptReviewForm(FlaskForm):
     receipt_number = StringField("Receipt #", validators=[Optional(), Length(max=80)])
     transaction_number = StringField("Transaction #", validators=[Optional(), Length(max=80)])
     date_time = DateTimeField("Date/Time", format="%Y-%m-%dT%H:%M", validators=[Optional()])
-    subtotal = DecimalField("Subtotal", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    tax_total = DecimalField("Tax Total", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    fee_total = DecimalField("Fee Total", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    discount_total = DecimalField("Discount Total", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    tip_total = DecimalField("Tip Total", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    deposit_total = DecimalField("Deposit Total", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
-    grand_total = DecimalField("Grand Total", places=2, rounding=ROUND_HALF_UP, validators=[Optional()], filters=[lambda x: x or None])
+    subtotal = DecimalField(
+        "Subtotal",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
+    tax_total = DecimalField(
+        "Tax Total",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
+    fee_total = DecimalField(
+        "Fee Total",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
+    discount_total = DecimalField(
+        "Discount Total",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
+    tip_total = DecimalField(
+        "Tip Total",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
+    deposit_total = DecimalField(
+        "Deposit Total",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
+    grand_total = DecimalField(
+        "Grand Total",
+        places=2,
+        rounding=ROUND_HALF_UP,
+        validators=[Optional()],
+        filters=[lambda x: x or None],
+    )
     payment_method = StringField("Payment Method", validators=[Optional(), Length(max=60)])
     currency = StringField("Currency", validators=[Optional(), Length(max=3)], default="USD")
     notes = TextAreaField("Notes", validators=[Optional()])
     submit_approve = SubmitField("Approve Receipt")
     submit_reject = SubmitField("Reject Receipt")
     submit_draft = SubmitField("Save Draft")
-
 
 
 class ReceiptAllocationForm(FlaskForm):
@@ -83,7 +125,8 @@ class ReceiptSearchForm(FlaskForm):
     q = StringField("Search", validators=[Optional()])
     status = SelectField(
         "Status",
-        choices=[("", "All")] + [(s.value, s.value.replace("_", " ").title()) for s in ReceiptStatus],
+        choices=[("", "All")]
+        + [(s.value, s.value.replace("_", " ").title()) for s in ReceiptStatus],
         validators=[Optional()],
     )
     submit = SubmitField("Filter")

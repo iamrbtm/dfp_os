@@ -37,14 +37,22 @@ def settings_update():
         if key in ("csrf_token",):
             continue
         existing = db.session.scalar(select(Setting).where(Setting.key == key))
-        before = {"key": key, "value": existing.value, "type": existing.setting_type} if existing else None
+        before = (
+            {"key": key, "value": existing.value, "type": existing.setting_type}
+            if existing
+            else None
+        )
         set_setting(key, value)
         record_audit_event(
             action="settings.changed",
             entity_type="setting",
             entity_id=key,
             before_state=before,
-            after_state={"key": key, "value": value, "type": existing.setting_type if existing else "string"},
+            after_state={
+                "key": key,
+                "value": value,
+                "type": existing.setting_type if existing else "string",
+            },
             source_module=__name__,
             actor_id=current_user.id,
         )
@@ -129,7 +137,9 @@ def module_status_update():
         record = FeatureFlag.query.filter_by(key=key).first()
         before_state = {"enabled": module["enabled"]}
         if record is None:
-            record = FeatureFlag(key=key, enabled=enabled, description=f"Override for {module['display_name']}")
+            record = FeatureFlag(
+                key=key, enabled=enabled, description=f"Override for {module['display_name']}"
+            )
             db.session.add(record)
         else:
             record.enabled = enabled
@@ -162,9 +172,18 @@ def _group_settings(settings: list) -> dict[str, list]:
         "Trend Scout": [],
         "System": [],
     }
-    store_keys = {"store_name", "store_tagline", "store_email", "store_phone",
-                  "store_address", "store_city", "store_state", "store_zip",
-                  "currency_symbol", "tax_rate"}
+    store_keys = {
+        "store_name",
+        "store_tagline",
+        "store_email",
+        "store_phone",
+        "store_address",
+        "store_city",
+        "store_state",
+        "store_zip",
+        "currency_symbol",
+        "tax_rate",
+    }
     pos_keys = {"pos_default_opening_cash", "pos_card_processor", "pos_card_processing_enabled"}
     for s in settings:
         if s.key in store_keys:

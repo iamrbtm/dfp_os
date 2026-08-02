@@ -11,9 +11,7 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
 
 class Config:
     DFPOS_OPENAPI_URL = os.getenv("DFPOS_OPENAPI_URL", "http://localhost:5000/api/openapi.json")
-    DFPOS_OPENAPI_FALLBACK_PATH = os.getenv(
-        "DFPOS_OPENAPI_FALLBACK_PATH", "./openapi/openapi.json"
-    )
+    DFPOS_OPENAPI_FALLBACK_PATH = os.getenv("DFPOS_OPENAPI_FALLBACK_PATH", "./openapi/openapi.json")
     DFPOS_OPENAPI_REFRESH_INTERVAL = int(os.getenv("DFPOS_OPENAPI_REFRESH_INTERVAL", "300"))
 
     HOST = os.getenv("HOST", "0.0.0.0")

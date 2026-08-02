@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from curl_cffi import requests as curl_requests
+
     HAS_CURL_CFFI = True
 except ImportError:
     HAS_CURL_CFFI = False
@@ -46,6 +47,7 @@ HOT_CATEGORIES = [
     "3d-printer",
 ]
 
+
 def _design_to_item(d: dict, category_slug: str, sort: str) -> dict[str, Any]:
     creator = d.get("designCreator") or {}
     designer_name = creator.get("name", "") if isinstance(creator, dict) else ""
@@ -73,7 +75,9 @@ def _extract_designs(page_props: dict) -> list[dict]:
     return []
 
 
-def _parse_browse_page(text: str, category_slug: str, sort: str, max_items: int) -> tuple[list[dict[str, Any]], list[str]]:
+def _parse_browse_page(
+    text: str, category_slug: str, sort: str, max_items: int
+) -> tuple[list[dict[str, Any]], list[str]]:
     errors: list[str] = []
     items: list[dict[str, Any]] = []
 
@@ -174,7 +178,11 @@ def fetch_trending(session: Any, limiter: Any) -> list[ScoutResult]:
 
     if not HAS_CURL_CFFI:
         results.append(
-            ScoutResult(source="makerworld", keyword_or_category="init_error", errors=["curl_cffi not installed"])
+            ScoutResult(
+                source="makerworld",
+                keyword_or_category="init_error",
+                errors=["curl_cffi not installed"],
+            )
         )
         return results
 
@@ -193,7 +201,11 @@ def fetch_trending(session: Any, limiter: Any) -> list[ScoutResult]:
     for slug_key in HOT_CATEGORIES:
         limiter.wait()
         cat_slug = CATEGORIES[slug_key]
-        url = f"{BASE_URL}/en/3d-models/{cat_slug}?orderBy=hotScore&page=1" if cat_slug else f"{BASE_URL}/en/3d-models?orderBy=hotScore&page=1"
+        url = (
+            f"{BASE_URL}/en/3d-models/{cat_slug}?orderBy=hotScore&page=1"
+            if cat_slug
+            else f"{BASE_URL}/en/3d-models?orderBy=hotScore&page=1"
+        )
         r = _fetch_scrape_result(url, slug_key, "hotScore", 15)
         results.append(r)
 

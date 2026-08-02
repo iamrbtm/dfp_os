@@ -88,7 +88,12 @@ ORDER_RESOURCES: dict[str, ResourceConfig] = {
             ("Order", lambda item: item.order.order_number if item.order else "\u2014"),
             ("Amount", lambda item: item.amount),
             ("Method", lambda item: item.method),
-            ("Date", lambda item: item.payment_date.strftime("%Y-%m-%d") if item.payment_date else "\u2014"),
+            (
+                "Date",
+                lambda item: (
+                    item.payment_date.strftime("%Y-%m-%d") if item.payment_date else "\u2014"
+                ),
+            ),
         ],
     ),
     "pickup-locations": ResourceConfig(

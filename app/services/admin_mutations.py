@@ -64,7 +64,9 @@ def create_resource(instance, *, actor_id: int | None = None, entity_type: str |
     return instance
 
 
-def update_resource(instance, *, before_state: dict, actor_id: int | None = None, entity_type: str | None = None):
+def update_resource(
+    instance, *, before_state: dict, actor_id: int | None = None, entity_type: str | None = None
+):
     db.session.add(instance)
     db.session.commit()
     record_audit_event(

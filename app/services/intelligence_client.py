@@ -71,13 +71,20 @@ class IntelligenceClient:
         return self._request("GET", "/api/v1/imports/legacy-mariadb/tables")
 
     def legacy_review_table(self, table_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._request("POST", f"/api/v1/imports/legacy-mariadb/tables/{table_name}/review", json=payload)
+        return self._request(
+            "POST", f"/api/v1/imports/legacy-mariadb/tables/{table_name}/review", json=payload
+        )
 
     def legacy_delete_table_staging(self, table_name: str, confirm: bool = True) -> dict[str, Any]:
-        return self._request("DELETE", f"/api/v1/imports/legacy-mariadb/tables/{table_name}/staging", params={"confirm": str(confirm).lower()})
+        return self._request(
+            "DELETE",
+            f"/api/v1/imports/legacy-mariadb/tables/{table_name}/staging",
+            params={"confirm": str(confirm).lower()},
+        )
 
     def legacy_upload_json(self, file_path: str) -> dict[str, Any]:
         import httpx
+
         with open(file_path, "rb") as f:
             files = {"file": (file_path, f, "application/json")}
             with httpx.Client(

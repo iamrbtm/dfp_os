@@ -216,8 +216,9 @@ def polygons_overlap(a: list[Point], b: list[Point]) -> bool:
     return True
 
 
-def _transform(points: list[Point], scale: float, rot_deg: float,
-               tx: float, ty: float) -> list[Point]:
+def _transform(
+    points: list[Point], scale: float, rot_deg: float, tx: float, ty: float
+) -> list[Point]:
     theta = math.radians(rot_deg)
     c, s = math.cos(theta), math.sin(theta)
     out: list[Point] = []
@@ -230,8 +231,7 @@ def _transform(points: list[Point], scale: float, rot_deg: float,
 def placed_polygon(footprint_xy: list[Point], placement: Placement) -> list[Point]:
     """Convex hull of the source footprint after applying ``placement``."""
     hull = convex_hull(footprint_xy)
-    return _transform(hull, placement.scale, placement.rot_deg,
-                      placement.x, placement.y)
+    return _transform(hull, placement.scale, placement.rot_deg, placement.x, placement.y)
 
 
 def polygon_distance(a: list[Point], b: list[Point]) -> float:
@@ -282,8 +282,7 @@ def _angles(angle_step_deg: float) -> list[float]:
     return out
 
 
-def _scale_for(hull0: list[Point], part_height: float,
-               target_dim: float | None) -> float:
+def _scale_for(hull0: list[Point], part_height: float, target_dim: float | None) -> float:
     bx0, by0, bx1, by1 = _bbox(hull0)
     longest = max(bx1 - bx0, by1 - by0, part_height)
     if target_dim is None or longest <= _EPS:
@@ -341,37 +340,48 @@ def pack(
         scaled_pts = [(x * scale, y * scale) for x, y in footprint_xy]
         base_area = _polygon_area([(x * scale, y * scale) for x, y in hull0])
         from . import bitmap
+
         if mode == "auto" and not bitmap.dense_enough(scaled_pts, CELL, base_area):
             use_hull = True
 
     if use_hull:
-        result = _pack_hull(footprint_xy, part_height, target_dim, spacing,
-                            pack_w, pack_d, count, angle_step_deg, reserve_in,
-                            bed_w, bed_d)
+        result = _pack_hull(
+            footprint_xy,
+            part_height,
+            target_dim,
+            spacing,
+            pack_w,
+            pack_d,
+            count,
+            angle_step_deg,
+            reserve_in,
+            bed_w,
+            bed_d,
+        )
         _center_hull(result, footprint_xy, spacing, pack_w, pack_d, reserve_in)
     else:
         from . import bitmap
+
         angles = _bitmap_angles(angle_step_deg)
         masks = bitmap.make_masks(scaled_pts, angles, spacing, CELL, base_area)
         if mode == "bitmap":
-            placements = _pack_bitmap(masks, angles, pack_w, pack_d, count,
-                                      scale, reserve_in)
+            placements = _pack_bitmap(masks, angles, pack_w, pack_d, count, scale, reserve_in)
             method = "bitmap"
         elif mode == "lattice":
-            placements = _pack_lattice(masks, angles, pack_w, pack_d, count,
-                                       scale, angle_step_deg, reserve_in)
+            placements = _pack_lattice(
+                masks, angles, pack_w, pack_d, count, scale, angle_step_deg, reserve_in
+            )
             method = "lattice"
         else:  # auto + dense
-            bmp = _pack_bitmap(masks, angles, pack_w, pack_d, count, scale,
-                               reserve_in)
-            lat = _pack_lattice(masks, angles, pack_w, pack_d, count, scale,
-                                angle_step_deg, reserve_in)
+            bmp = _pack_bitmap(masks, angles, pack_w, pack_d, count, scale, reserve_in)
+            lat = _pack_lattice(
+                masks, angles, pack_w, pack_d, count, scale, angle_step_deg, reserve_in
+            )
             if len(lat) >= len(bmp):
                 placements, method = lat, "lattice"
             else:
                 placements, method = bmp, "bitmap"
-        result = _finalize_v2(placements, scale, base_area, bed_w, bed_d,
-                              count, method)
+        result = _finalize_v2(placements, scale, base_area, bed_w, bed_d, count, method)
         _center_v2(result, masks, pack_w, pack_d, reserve_in)
 
     if inset:
@@ -386,9 +396,7 @@ def pack(
         usable -= max(0.0, reserve[2]) * max(0.0, reserve[3])
     part_area = _polygon_area(hull0) * result.scale * result.scale
     if usable > _EPS:
-        result.usable_utilization = min(
-            1.0, len(result.placements) * part_area / usable
-        )
+        result.usable_utilization = min(1.0, len(result.placements) * part_area / usable)
     return result
 
 
@@ -417,8 +425,9 @@ def _pack_hull(
     warnings: list[str] = []
     hull0 = convex_hull(footprint_xy)
     if len(hull0) < 3:
-        return PackResult(scale=1.0, fits_requested=count in (None, 0),
-                          warnings=["footprint has no 2D area"])
+        return PackResult(
+            scale=1.0, fits_requested=count in (None, 0), warnings=["footprint has no 2D area"]
+        )
 
     scale = _scale_for(hull0, part_height, target_dim)
 
@@ -476,9 +485,7 @@ def _pack_hull(
     fits_requested = True
     if count is not None and n < count:
         fits_requested = False
-        warnings.append(
-            f"requested {count} but only {n} fit on {bed_w:g}x{bed_d:g} bed"
-        )
+        warnings.append(f"requested {count} but only {n} fit on {bed_w:g}x{bed_d:g} bed")
     if n == 0:
         warnings.append("no instances placed")
 
@@ -588,9 +595,7 @@ def _finalize_v2(placements, scale, base_area, bed_w, bed_d, count, method):
     fits_requested = True
     if count is not None and n < count:
         fits_requested = False
-        warnings.append(
-            f"requested {count} but only {n} fit on {bed_w:g}x{bed_d:g} bed"
-        )
+        warnings.append(f"requested {count} but only {n} fit on {bed_w:g}x{bed_d:g} bed")
     if n == 0:
         warnings.append("no instances placed")
     bed_area = bed_w * bed_d
@@ -629,8 +634,7 @@ def _center_hull(result, footprint_xy, spacing, pack_w, pack_d, reserve):
     if not pls:
         return
     hull0 = convex_hull(footprint_xy)
-    base_hull = simplify_hull([(x * result.scale, y * result.scale)
-                               for x, y in hull0])
+    base_hull = simplify_hull([(x * result.scale, y * result.scale) for x, y in hull0])
     infl = inflate_hull(base_hull, spacing / 2.0)
     polys = [_transform(infl, 1.0, p.rot_deg, p.x, p.y) for p in pls]
     bbs = [_bbox(poly) for poly in polys]
@@ -649,11 +653,12 @@ def _center_hull(result, footprint_xy, spacing, pack_w, pack_d, reserve):
         )
         sx, sy = 0.0, 0.0
         for frac in (1.0, 0.5, 0.25):
-            tsx, tsy = _center_shift(minx, maxx, pack_w) * frac, \
-                _center_shift(miny, maxy, pack_d) * frac
+            tsx, tsy = (
+                _center_shift(minx, maxx, pack_w) * frac,
+                _center_shift(miny, maxy, pack_d) * frac,
+            )
             if not any(
-                polygons_overlap([(x + tsx, y + tsy) for x, y in poly], rect)
-                for poly in polys
+                polygons_overlap([(x + tsx, y + tsy) for x, y in poly], rect) for poly in polys
             ):
                 sx, sy = tsx, tsy
                 break
@@ -754,8 +759,7 @@ def _bitmap_greedy(bed, masks, angles, remaining, scale, placements, ub):
         m = masks[a]
         bed.place(m, gx, gy)
         placements.append(
-            Placement(x=gx * CELL - m.offset_x, y=gy * CELL - m.offset_y,
-                      rot_deg=a, scale=scale)
+            Placement(x=gx * CELL - m.offset_x, y=gy * CELL - m.offset_y, rot_deg=a, scale=scale)
         )
         ub = _extend_ub(ub, gx, gy, m.width, m.height)
         remaining -= 1
@@ -831,13 +835,13 @@ def _tiling_free(a, b, dx, dy, px, py, sx=0):
             if m == 0 and n == 0:
                 continue
             ox, oy = m * px + n * sx, n * py
-            if ov(a, a, ox, oy):                       # A_c vs A_n
+            if ov(a, a, ox, oy):  # A_c vs A_n
                 return False
-            if ov(a, b, ox + dx, oy + dy):             # A_c vs B_n
+            if ov(a, b, ox + dx, oy + dy):  # A_c vs B_n
                 return False
-            if ov(b, a, ox - dx, oy - dy):             # B_c vs A_n
+            if ov(b, a, ox - dx, oy - dy):  # B_c vs A_n
                 return False
-            if ov(b, b, ox, oy):                       # B_c vs B_n
+            if ov(b, b, ox, oy):  # B_c vs B_n
                 return False
     return True
 
@@ -936,8 +940,9 @@ def _lattice_candidate(masks, angle_step_deg, bed_wc, bed_hc, stagger):
     return best
 
 
-def _pack_one_lattice(masks, angles, bed_w, bed_d, bed_wc, bed_hc, count, scale,
-                      candidate, reserve):
+def _pack_one_lattice(
+    masks, angles, bed_w, bed_d, bed_wc, bed_hc, count, scale, candidate, reserve
+):
     """Place one lattice ``candidate`` pattern, then greedily fill the rest."""
     from . import bitmap
 
@@ -965,10 +970,12 @@ def _pack_one_lattice(masks, angles, bed_w, bed_d, bed_wc, bed_hc, count, scale,
                     if bed.can_place(mask, gx + ex, gy + ey):
                         bed.place(mask, gx + ex, gy + ey)
                         placements.append(
-                            Placement(x=(gx + ex) * CELL - mask.offset_x,
-                                      y=(gy + ey) * CELL - mask.offset_y,
-                                      rot_deg=th if mask is a else (th + 180.0) % 360.0,
-                                      scale=scale)
+                            Placement(
+                                x=(gx + ex) * CELL - mask.offset_x,
+                                y=(gy + ey) * CELL - mask.offset_y,
+                                rot_deg=th if mask is a else (th + 180.0) % 360.0,
+                                scale=scale,
+                            )
                         )
                         ub = _extend_ub(ub, gx + ex, gy + ey, mask.width, mask.height)
                         remaining -= 1
@@ -977,21 +984,24 @@ def _pack_one_lattice(masks, angles, bed_w, bed_d, bed_wc, bed_hc, count, scale,
     return placements
 
 
-def _pack_lattice(masks, angles, bed_w, bed_d, count, scale, angle_step_deg,
-                  reserve=None, stagger=True):
+def _pack_lattice(
+    masks, angles, bed_w, bed_d, count, scale, angle_step_deg, reserve=None, stagger=True
+):
     bed_wc = int(math.floor(bed_w / CELL + 1e-9))
     bed_hc = int(math.floor(bed_d / CELL + 1e-9))
 
     cand = _lattice_candidate(masks, angle_step_deg, bed_wc, bed_hc, stagger)
-    placements = _pack_one_lattice(masks, angles, bed_w, bed_d, bed_wc, bed_hc,
-                                   count, scale, cand, reserve)
+    placements = _pack_one_lattice(
+        masks, angles, bed_w, bed_d, bed_wc, bed_hc, count, scale, cand, reserve
+    )
     # A staggered pattern can occasionally leave worse greedy-fill gaps than the
     # rigid grid; keep whichever actually places more so stagger never regresses.
     if stagger:
         rigid = _lattice_candidate(masks, angle_step_deg, bed_wc, bed_hc, False)
         if rigid is not None and (cand is None or rigid[1:] != cand[1:]):
-            rigid_pl = _pack_one_lattice(masks, angles, bed_w, bed_d, bed_wc,
-                                         bed_hc, count, scale, rigid, reserve)
+            rigid_pl = _pack_one_lattice(
+                masks, angles, bed_w, bed_d, bed_wc, bed_hc, count, scale, rigid, reserve
+            )
             if len(rigid_pl) > len(placements):
                 placements = rigid_pl
     return placements
@@ -1002,9 +1012,7 @@ def _pack_lattice(masks, angles, bed_w, bed_d, count, scale, angle_step_deg,
 # --------------------------------------------------------------------------- #
 
 
-def silhouette_rings(
-    points: list[Point], resolution: int = 128
-) -> list[list[Point]]:
+def silhouette_rings(points: list[Point], resolution: int = 128) -> list[list[Point]]:
     """Trace the top-down outline of a part from its projected vertices.
 
     Bins the XY points into a grid, then walks the boundary of the occupied
@@ -1064,9 +1072,7 @@ def silhouette_rings(
             if not seg.get(ring_idx[-1]):
                 seg.pop(ring_idx[-1], None)
         else:
-            ring = [
-                (minx + i * c, miny + j * c) for i, j in ring_idx
-            ]
+            ring = [(minx + i * c, miny + j * c) for i, j in ring_idx]
             rings.append(_merge_collinear(ring))
     return rings
 
@@ -1078,9 +1084,7 @@ def _merge_collinear(ring: list[Point]) -> list[Point]:
     n = len(ring)
     for i in range(n):
         prev, cur, nxt = ring[i - 1], ring[i], ring[(i + 1) % n]
-        cross = (cur[0] - prev[0]) * (nxt[1] - cur[1]) - (
-            cur[1] - prev[1]
-        ) * (nxt[0] - cur[0])
+        cross = (cur[0] - prev[0]) * (nxt[1] - cur[1]) - (cur[1] - prev[1]) * (nxt[0] - cur[0])
         if abs(cross) > _EPS:
             out.append(cur)
     return out or ring
@@ -1137,9 +1141,7 @@ def preview_svg(
         f'fill="none" stroke="#333" stroke-width="1"/>'
     )
     # origin marker + bed size label
-    parts.append(
-        f'<circle cx="0" cy="{_num(bed_d)}" r="2" fill="#2f6feb"/>'
-    )
+    parts.append(f'<circle cx="0" cy="{_num(bed_d)}" r="2" fill="#2f6feb"/>')
     parts.append(
         f'<text x="{_num(bed_w - 2)}" y="{_num(bed_d - 2)}" font-size="6" '
         f'text-anchor="end" fill="#8b93a1">{_num(bed_w)}×{_num(bed_d)} mm</text>'
@@ -1185,14 +1187,8 @@ def preview_svg(
     for ring in rings:
         # pre-flip Y so per-instance transforms stay a plain rotate/scale
         coords = [(px, -py) for px, py in ring]
-        path_d.append(
-            "M "
-            + " L ".join(f"{_num(px)} {_num(py)}" for px, py in coords)
-            + " Z"
-        )
-    parts.append(
-        f'<defs><path id="part" fill-rule="evenodd" d="{" ".join(path_d)}"/></defs>'
-    )
+        path_d.append("M " + " L ".join(f"{_num(px)} {_num(py)}" for px, py in coords) + " Z")
+    parts.append(f'<defs><path id="part" fill-rule="evenodd" d="{" ".join(path_d)}"/></defs>')
 
     for i, pl in enumerate(result.placements):
         poly = _transform(hull, pl.scale, pl.rot_deg, pl.x, pl.y)

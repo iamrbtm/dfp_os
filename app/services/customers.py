@@ -32,7 +32,9 @@ def create_customer(instance: Customer, *, actor_id: int | None = None) -> Custo
     return instance
 
 
-def update_customer(instance: Customer, *, before_state: dict, actor_id: int | None = None) -> Customer:
+def update_customer(
+    instance: Customer, *, before_state: dict, actor_id: int | None = None
+) -> Customer:
     db.session.add(instance)
     db.session.commit()
     record_audit_event(

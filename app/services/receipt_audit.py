@@ -20,8 +20,9 @@ def record_audit(
     if details:
         try:
             import json
+
             metadata = json.loads(details) if isinstance(details, str) else {"details": details}
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             metadata = {"details": str(details)}
 
     client.record(

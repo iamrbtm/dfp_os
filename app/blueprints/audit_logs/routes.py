@@ -21,4 +21,9 @@ def index():
         "offset": request.args.get("offset", 0, type=int),
     }
     events = client.search(**filters) if hasattr(client, "search") else []
-    return render_template("audit_logs/index.html", events=events or [], filters=filters, audit_configured=client._is_configured())
+    return render_template(
+        "audit_logs/index.html",
+        events=events or [],
+        filters=filters,
+        audit_configured=client._is_configured(),
+    )

@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 from flask_wtf import FlaskForm
-from wtforms import HiddenField, IntegerField, RadioField, SelectField, StringField, SubmitField, TextAreaField
+from wtforms import (
+    HiddenField,
+    IntegerField,
+    RadioField,
+    SelectField,
+    StringField,
+    SubmitField,
+    TextAreaField,
+)
 from wtforms.validators import DataRequired, Email, Length, NumberRange, Optional
 
 
 class AddToCartForm(FlaskForm):
     product_id = HiddenField(validators=[DataRequired()])
-    quantity = IntegerField("Quantity", validators=[DataRequired(), NumberRange(min=1, max=25)], default=1)
+    quantity = IntegerField(
+        "Quantity", validators=[DataRequired(), NumberRange(min=1, max=25)], default=1
+    )
     submit = SubmitField("Add to cart")
 
 
@@ -24,8 +34,12 @@ class CheckoutForm(FlaskForm):
     )
     pickup_slot_id = SelectField("Pickup window", coerce=int, validators=[Optional()], choices=[])
     shipping_name = StringField("Recipient name", validators=[Optional(), Length(max=255)])
-    shipping_address_line_1 = StringField("Street address", validators=[Optional(), Length(max=255)])
-    shipping_address_line_2 = StringField("Apartment, suite, etc. (optional)", validators=[Optional(), Length(max=255)])
+    shipping_address_line_1 = StringField(
+        "Street address", validators=[Optional(), Length(max=255)]
+    )
+    shipping_address_line_2 = StringField(
+        "Apartment, suite, etc. (optional)", validators=[Optional(), Length(max=255)]
+    )
     shipping_city = StringField("City", validators=[Optional(), Length(max=120)])
     shipping_state = StringField("State", validators=[Optional(), Length(max=120)])
     shipping_postal_code = StringField("ZIP code", validators=[Optional(), Length(max=20)])

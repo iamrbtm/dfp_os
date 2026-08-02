@@ -92,10 +92,7 @@ def draft_list():
         stmt = stmt.where(ContentDraft.channel == channel_filter)
 
     pagination = paginate_query(stmt, page, 25)
-    rows = [
-        {"id": d.id, "cells": _draft_columns(d)}
-        for d in pagination.items
-    ]
+    rows = [{"id": d.id, "cells": _draft_columns(d)} for d in pagination.items]
 
     return render_template(
         "dashboard/promotion/draft_list.html",
@@ -121,9 +118,7 @@ def draft_create():
         create_resource(draft, actor_id=current_user.id)
         flash("Content draft created.", "success")
         return redirect(url_for("promotion.draft_detail", draft_id=draft.id))
-    return render_template(
-        "dashboard/promotion/draft_form.html", form=form, mode="create"
-    )
+    return render_template("dashboard/promotion/draft_form.html", form=form, mode="create")
 
 
 @bp.route("/drafts/<int:draft_id>/edit", methods=["GET", "POST"])
@@ -255,10 +250,7 @@ def sign_list():
         stmt = stmt.where(SignAsset.status == status_filter)
 
     pagination = paginate_query(stmt, page, 25)
-    rows = [
-        {"id": s.id, "cells": _sign_columns(s)}
-        for s in pagination.items
-    ]
+    rows = [{"id": s.id, "cells": _sign_columns(s)} for s in pagination.items]
 
     return render_template(
         "dashboard/promotion/sign_list.html",
@@ -283,9 +275,7 @@ def sign_create():
         save_sign_html(sign)
         flash("Sign created.", "success")
         return redirect(url_for("promotion.sign_detail", sign_id=sign.id))
-    return render_template(
-        "dashboard/promotion/sign_form.html", form=form, mode="create"
-    )
+    return render_template("dashboard/promotion/sign_form.html", form=form, mode="create")
 
 
 @bp.route("/signs/<int:sign_id>/edit", methods=["GET", "POST"])
@@ -302,9 +292,7 @@ def sign_edit(sign_id: int):
         save_sign_html(sign)
         flash("Sign updated.", "success")
         return redirect(url_for("promotion.sign_detail", sign_id=sign.id))
-    return render_template(
-        "dashboard/promotion/sign_form.html", form=form, mode="edit", sign=sign
-    )
+    return render_template("dashboard/promotion/sign_form.html", form=form, mode="edit", sign=sign)
 
 
 @bp.get("/signs/<int:sign_id>")
@@ -374,7 +362,9 @@ def sign_generate_ai_image(sign_id: int):
     if result.ai_image_path:
         flash("AI graphical sign generated.", "success")
     else:
-        flash("AI generation skipped (AI disabled or API error). Sign remains text layout.", "warning")
+        flash(
+            "AI generation skipped (AI disabled or API error). Sign remains text layout.", "warning"
+        )
     return redirect(url_for("promotion.sign_detail", sign_id=sign.id))
 
 

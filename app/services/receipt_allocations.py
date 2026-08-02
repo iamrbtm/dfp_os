@@ -20,7 +20,11 @@ def allocate_taxes_and_fees(receipt_id: int) -> dict[str, Any]:
     if not receipt:
         return {"success": False, "errors": ["Receipt not found."]}
 
-    items = ReceiptLineItem.query.filter_by(receipt_id=receipt_id).order_by(ReceiptLineItem.row_order).all()
+    items = (
+        ReceiptLineItem.query.filter_by(receipt_id=receipt_id)
+        .order_by(ReceiptLineItem.row_order)
+        .all()
+    )
     if not items:
         return {"success": False, "errors": ["No line items found."]}
 
@@ -53,7 +57,7 @@ def allocate_taxes_and_fees(receipt_id: int) -> dict[str, Any]:
         tip_result = _allocate_tip(items, tip_total, receipt.id)
         results["tip"] = tip_result
 
-    # 5. Deposit allocation  
+    # 5. Deposit allocation
     deposit_total = receipt.deposit_total or Decimal("0")
     if deposit_total > 0 and AdjustmentType.DEPOSIT.value not in existing_by_type:
         deposit_result = _allocate_deposit(items, deposit_total, receipt.id)
@@ -69,7 +73,9 @@ def _allocate_tax(items: list[ReceiptLineItem], tax_total: Decimal, receipt_id: 
 
     if not taxable_items or total_taxable == 0:
         taxable_items = [i for i in items if i.line_subtotal]
-        total_taxable = sum(i.line_subtotal for i in taxable_items) if taxable_items else Decimal("0")
+        total_taxable = (
+            sum(i.line_subtotal for i in taxable_items) if taxable_items else Decimal("0")
+        )
 
     if not taxable_items or total_taxable == 0:
         alloc = ReceiptAdjustmentAllocation(
@@ -103,31 +109,57 @@ def _allocate_tax(items: list[ReceiptLineItem], tax_total: Decimal, receipt_id: 
         source_amount=tax_total,
         allocated_amount=allocated_total,
         unallocated_amount=tax_total - allocated_total,
-        calculation_json=json.dumps({"allocations": allocations, "total_allocated": str(allocated_total)}),
+        calculation_json=json.dumps(
+            {"allocations": allocations, "total_allocated": str(allocated_total)}
+        ),
     )
     db.session.add(alloc)
     return {"method": "taxable_proportional", "allocated": str(allocated_total)}
 
 
 def _allocate_fees(items: list[ReceiptLineItem], fee_total: Decimal, receipt_id: int) -> dict:
-    return _proportional_allocate(items, fee_total, receipt_id, AdjustmentType.FEE, AllocationMethod.SUBTOTAL_PROPORTIONAL)
+    return _proportional_allocate(
+        items, fee_total, receipt_id, AdjustmentType.FEE, AllocationMethod.SUBTOTAL_PROPORTIONAL
+    )
 
 
-def _allocate_discount(items: list[ReceiptLineItem], discount_total: Decimal, receipt_id: int) -> dict:
-    return _proportional_allocate(items, discount_total, receipt_id, AdjustmentType.DISCOUNT, AllocationMethod.SUBTOTAL_PROPORTIONAL)
+def _allocate_discount(
+    items: list[ReceiptLineItem], discount_total: Decimal, receipt_id: int
+) -> dict:
+    return _proportional_allocate(
+        items,
+        discount_total,
+        receipt_id,
+        AdjustmentType.DISCOUNT,
+        AllocationMethod.SUBTOTAL_PROPORTIONAL,
+    )
 
 
 def _allocate_tip(items: list[ReceiptLineItem], tip_total: Decimal, receipt_id: int) -> dict:
-    return _proportional_allocate(items, tip_total, receipt_id, AdjustmentType.TIP, AllocationMethod.SUBTOTAL_PROPORTIONAL)
+    return _proportional_allocate(
+        items, tip_total, receipt_id, AdjustmentType.TIP, AllocationMethod.SUBTOTAL_PROPORTIONAL
+    )
 
 
-def _allocate_deposit(items: list[ReceiptLineItem], deposit_total: Decimal, receipt_id: int) -> dict:
-    return _proportional_allocate(items, deposit_total, receipt_id, AdjustmentType.DEPOSIT, AllocationMethod.SUBTOTAL_PROPORTIONAL)
+def _allocate_deposit(
+    items: list[ReceiptLineItem], deposit_total: Decimal, receipt_id: int
+) -> dict:
+    return _proportional_allocate(
+        items,
+        deposit_total,
+        receipt_id,
+        AdjustmentType.DEPOSIT,
+        AllocationMethod.SUBTOTAL_PROPORTIONAL,
+    )
 
 
-def _proportional_allocate(items: list, total: Decimal, receipt_id: int, adj_type: AdjustmentType, method: AllocationMethod) -> dict:
+def _proportional_allocate(
+    items: list, total: Decimal, receipt_id: int, adj_type: AdjustmentType, method: AllocationMethod
+) -> dict:
     items_with_subtotal = [i for i in items if i.line_subtotal]
-    total_subtotal = sum(i.line_subtotal for i in items_with_subtotal) if items_with_subtotal else Decimal("0")
+    total_subtotal = (
+        sum(i.line_subtotal for i in items_with_subtotal) if items_with_subtotal else Decimal("0")
+    )
 
     if not items_with_subtotal or total_subtotal == 0:
         alloc = ReceiptAdjustmentAllocation(
@@ -161,7 +193,9 @@ def _proportional_allocate(items: list, total: Decimal, receipt_id: int, adj_typ
         source_amount=total,
         allocated_amount=allocated_total,
         unallocated_amount=total - allocated_total,
-        calculation_json=json.dumps({"allocations": allocations, "total_allocated": str(allocated_total)}),
+        calculation_json=json.dumps(
+            {"allocations": allocations, "total_allocated": str(allocated_total)}
+        ),
     )
     db.session.add(alloc)
     return {"method": method.value, "allocated": str(allocated_total)}

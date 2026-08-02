@@ -23,19 +23,45 @@ jinja_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 templates = Jinja2Templates(env=jinja_env)
 
 EXCLUDE_PATTERNS = [
-    "session", "cache", "log", "temp", "backup", "Migration",
-    "sys_", "debug", "error", "audit_log", "import_batch",
-    "LegacyMariaDbTableSnapshot", "legacy_import", "legacy_table",
+    "session",
+    "cache",
+    "log",
+    "temp",
+    "backup",
+    "Migration",
+    "sys_",
+    "debug",
+    "error",
+    "audit_log",
+    "import_batch",
+    "LegacyMariaDbTableSnapshot",
+    "legacy_import",
+    "legacy_table",
 ]
 
 PRODUCT_PATTERNS = [
-    "product", "category", "collection", "variant", "sku",
+    "product",
+    "category",
+    "collection",
+    "variant",
+    "sku",
 ]
 
 BUSINESS_PATTERNS = [
-    "customer", "order", "invoice", "payment", "inventory",
-    "printer", "print_job", "filament", "spool", "market",
-    "receipt", "expense", "prep_task", "shipment",
+    "customer",
+    "order",
+    "invoice",
+    "payment",
+    "inventory",
+    "printer",
+    "print_job",
+    "filament",
+    "spool",
+    "market",
+    "receipt",
+    "expense",
+    "prep_task",
+    "shipment",
 ]
 
 
@@ -66,23 +92,26 @@ async def review_page(
     tables = []
     for t in result.tables:
         rec_action, rec_note = _recommend(t.table_name)
-        tables.append({
-            "table_name": t.table_name,
-            "staged_row_count": t.staged_row_count,
-            "columns": t.columns,
-            "primary_key_columns": t.primary_key_columns,
-            "recommended_action": rec_action,
-            "recommendation_note": rec_note,
-            "review_decision": t.review_decision,
-            "review_notes": t.review_notes,
-        })
+        tables.append(
+            {
+                "table_name": t.table_name,
+                "staged_row_count": t.staged_row_count,
+                "columns": t.columns,
+                "primary_key_columns": t.primary_key_columns,
+                "recommended_action": rec_action,
+                "recommendation_note": rec_note,
+                "review_decision": t.review_decision,
+                "review_notes": t.review_notes,
+            }
+        )
 
     import json
+
     promoted_data: dict | None = None
     if promoted:
         try:
             promoted_data = json.loads(promoted)
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             pass
 
     return templates.TemplateResponse(
@@ -111,11 +140,11 @@ async def review_submit(
 
     for key in form:
         if key.startswith("decision_"):
-            table_name = key[len("decision_"):]
+            table_name = key[len("decision_") :]
             table_names.add(table_name)
             decisions[table_name] = str(form[key])
         elif key.startswith("note_"):
-            table_name = key[len("note_"):]
+            table_name = key[len("note_") :]
             notes[table_name] = str(form[key])
 
     saved_errors: list[str] = []
@@ -149,6 +178,7 @@ async def promote_handler(
     db: AsyncSession = Depends(get_db),
 ):
     import json
+
     result = await promote_kept_tables(db)
     promoted_json = json.dumps(result)
     return RedirectResponse(

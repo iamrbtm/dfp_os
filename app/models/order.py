@@ -108,7 +108,9 @@ class Order(PrimaryKeyMixin, TimestampMixin, db.Model):
     pickup_status: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     pickup_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     picked_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    pickup_no_show_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pickup_no_show_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     pickup_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     pos_session_id: Mapped[int | None] = mapped_column(
         ForeignKey("pos_sessions.id"), nullable=True, index=True
@@ -178,9 +180,7 @@ class OrderItem(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     order = relationship("Order", back_populates="items")
     product = relationship("Product")
-    print_jobs = relationship(
-        "PrintJob", back_populates="order_item", cascade="all, delete-orphan"
-    )
+    print_jobs = relationship("PrintJob", back_populates="order_item", cascade="all, delete-orphan")
 
 
 class Payment(PrimaryKeyMixin, TimestampMixin, db.Model):

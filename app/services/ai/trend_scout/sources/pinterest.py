@@ -55,7 +55,8 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
         result = ScoutResult(source="pinterest", keyword_or_category=query)
         try:
             resp = request_with_retry(
-                session, "GET",
+                session,
+                "GET",
                 f"{API_BASE}/search/pins",
                 params={"query": query, "page_size": 20},
                 headers=headers,
@@ -94,7 +95,7 @@ def fetch_trending(session: requests.Session, limiter: Any) -> list[ScoutResult]
                 result.metadata["query"] = query
             elif resp.status_code == 401:
                 result.errors.append(
-                    "HTTP 401 - Invalid Pinterest API key. " "Verify PINTEREST_API_KEY is correct."
+                    "HTTP 401 - Invalid Pinterest API key. Verify PINTEREST_API_KEY is correct."
                 )
             elif resp.status_code == 403:
                 result.errors.append(

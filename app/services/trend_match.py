@@ -23,7 +23,12 @@ BUSINESS_SYNONYMS: dict[str, list[str]] = {
     "sign": ["nameplate", "plaque", "label", "marker", "plate"],
     "name sign": ["desk sign", "nameplate", "custom name", "name tag", "name plate"],
     "desk sign": ["nameplate", "desk plate", "office sign", "desk nameplate"],
-    "teacher gift": ["teacher keychain", "teacher ornament", "teacher appreciation", "teacher sign"],
+    "teacher gift": [
+        "teacher keychain",
+        "teacher ornament",
+        "teacher appreciation",
+        "teacher sign",
+    ],
     "market display": ["vendor sign", "booth sign", "price tag", "tent card", "display stand"],
     "qr sign": ["qr code sign", "qr code display", "qr stand", "qr plate"],
     "fidget": ["fidget toy", "stress toy", "fidget slider", "fidget cube", "pop it"],

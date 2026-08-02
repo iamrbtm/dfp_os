@@ -79,13 +79,11 @@ def _weights_from_settings(prefix: str, defaults: dict[str, float]) -> dict[str,
 
     out = {}
     for key in defaults:
-        setting = db.session.query(Setting).filter(
-            Setting.key == prefix + key
-        ).first()
+        setting = db.session.query(Setting).filter(Setting.key == prefix + key).first()
         if setting and setting.value:
             try:
                 out[key] = float(setting.value)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 out[key] = defaults[key]
         else:
             out[key] = defaults[key]
@@ -117,15 +115,17 @@ def load_all_weights() -> dict[str, Any]:
     }
 
 
-def load_source_enabled_state(source_keys: list[str] | tuple[str, ...] | set[str]) -> dict[str, bool]:
+def load_source_enabled_state(
+    source_keys: list[str] | tuple[str, ...] | set[str],
+) -> dict[str, bool]:
     if not has_app_context():
         return {key: True for key in source_keys}
 
     state = {}
     for key in source_keys:
-        setting = db.session.query(Setting).filter(
-            Setting.key == PREFIX_SOURCE_ENABLED + key
-        ).first()
+        setting = (
+            db.session.query(Setting).filter(Setting.key == PREFIX_SOURCE_ENABLED + key).first()
+        )
         state[key] = setting is None or setting.value == "1"
     return state
 
@@ -138,9 +138,7 @@ def scoring_version() -> str:
 
 def save_weight(prefix: str, key: str, value: float) -> None:
     setting_key = prefix + key
-    setting = db.session.query(Setting).filter(
-        Setting.key == setting_key
-    ).first()
+    setting = db.session.query(Setting).filter(Setting.key == setting_key).first()
     if setting:
         setting.value = str(value)
     else:
@@ -169,7 +167,7 @@ def validate_score_weights(weights: dict[str, float]) -> list[str]:
     for key, val in weights.items():
         try:
             val = float(val)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             errors.append(f"'{key}' is not a valid number")
             continue
         if val < -1.0 or val > 2.0:
@@ -188,17 +186,17 @@ def seed_default_weights() -> list[str]:
     ]:
         for key, default_val in defaults.items():
             setting_key = prefix + key
-            existing = db.session.query(Setting).filter(
-                Setting.key == setting_key
-            ).first()
+            existing = db.session.query(Setting).filter(Setting.key == setting_key).first()
             if not existing:
                 label = prefix.replace("trend_", "").replace(".", " ").strip()
-                db.session.add(Setting(
-                    key=setting_key,
-                    value=str(default_val),
-                    description=f"Trend Scout {label} weight: {key}",
-                    setting_type="float",
-                ))
+                db.session.add(
+                    Setting(
+                        key=setting_key,
+                        value=str(default_val),
+                        description=f"Trend Scout {label} weight: {key}",
+                        setting_type="float",
+                    )
+                )
                 created.append(setting_key)
     if created:
         db.session.commit()

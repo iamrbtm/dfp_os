@@ -126,6 +126,7 @@ def create_resource(resource_key: str = "expenses"):
             create_expense(instance, actor_id=current_user.id)
         except IntegrityError:
             from app.extensions import db
+
             db.session.rollback()
             flash(
                 f"Unable to save that {config.singular.lower()}. Please review duplicate values.",
@@ -135,12 +136,16 @@ def create_resource(resource_key: str = "expenses"):
                 "dashboard/resource_form.html", resource=config, form=form, mode="create"
             ), 400
         flash(f"{config.singular} created successfully.", "success")
-        return redirect(url_for(
-            "expenses.detail_resource",
-            resource_key=resource_key,
-            resource_id=instance.id,
-        ))
-    return render_template("dashboard/resource_form.html", resource=config, form=form, mode="create")
+        return redirect(
+            url_for(
+                "expenses.detail_resource",
+                resource_key=resource_key,
+                resource_id=instance.id,
+            )
+        )
+    return render_template(
+        "dashboard/resource_form.html", resource=config, form=form, mode="create"
+    )
 
 
 @bp.get("/<int:resource_id>")
@@ -180,6 +185,7 @@ def edit_resource(resource_id: int, resource_key: str = "expenses"):
             update_expense(instance, before_state=before_state, actor_id=current_user.id)
         except IntegrityError:
             from app.extensions import db
+
             db.session.rollback()
             flash(
                 f"Unable to update that {config.singular.lower()}. Please review duplicate values.",
@@ -189,11 +195,13 @@ def edit_resource(resource_id: int, resource_key: str = "expenses"):
                 "dashboard/resource_form.html", resource=config, form=form, mode="edit"
             ), 400
         flash(f"{config.singular} updated successfully.", "success")
-        return redirect(url_for(
-            "expenses.detail_resource",
-            resource_key=resource_key,
-            resource_id=instance.id,
-        ))
+        return redirect(
+            url_for(
+                "expenses.detail_resource",
+                resource_key=resource_key,
+                resource_id=instance.id,
+            )
+        )
     return render_template("dashboard/resource_form.html", resource=config, form=form, mode="edit")
 
 

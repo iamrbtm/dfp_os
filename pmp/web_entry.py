@@ -94,9 +94,7 @@ def nest_bytes(
     # Pack the ORIENTED part (the source build-item transform applied) so the
     # footprint is its true top-down projection and saved geometry stands as in
     # the source; mirrors ``cli.run_nest``.
-    t_src = next(
-        (it.transform for it in model.build_items if it.object_id == oid), None
-    )
+    t_src = next((it.transform for it in model.build_items if it.object_id == oid), None)
     t_src = t_src if t_src is not None else threemf.IDENTITY
     verts_o = threemf.apply_transform(obj.vertices, t_src)
     footprint = [(x, y) for x, y, _z in verts_o]
@@ -133,8 +131,7 @@ def nest_bytes(
     )
     if not result.placements:
         raise NestError(
-            f"nothing fits on the bed ({bed_w:g}x{bed_d:g} mm); "
-            "try scaling down or a larger bed"
+            f"nothing fits on the bed ({bed_w:g}x{bed_d:g} mm); try scaling down or a larger bed"
         )
 
     tz = -min_z * result.scale
@@ -156,13 +153,12 @@ def nest_bytes(
     # all of Metadata/ loses per-object extruder + filament colours (Rayquaza
     # regression), so the surgical save always keeps it.
     model.save(
-        str(out_path), items,
+        str(out_path),
+        items,
         **model.surgical_save_kwargs(bed_w, bed_d, items, printer=printer),
     )
 
-    svg = packing.preview_svg(
-        result, footprint, bed_w, bed_d, reserve=reserve, margin=margin
-    )
+    svg = packing.preview_svg(result, footprint, bed_w, bed_d, reserve=reserve, margin=margin)
     return {
         "svg": svg,
         "placed": len(items),
@@ -202,7 +198,7 @@ def _decode(data: bytes) -> list[str]:
 
 
 def _tool_label(report: gcode.GcodeReport, tool: int) -> str:
-    """"T5 (#008080)" when a filament color is known, else "T5". These strings
+    """ "T5 (#008080)" when a filament color is known, else "T5". These strings
     go into G-code comments, so hex-only (no ambiguous names, no ANSI); matches
     the plain ``cli._tool_label`` output so injected pause notes are identical."""
     hexv = report.filament_colors.get(tool)
@@ -250,9 +246,7 @@ def analyze_lines(lines: list[str], max_tools: int = 4) -> dict:
     plan_dict = {
         "feasible": plan.feasible,
         "blocking": plan.blocking,
-        "initial_loadout": [
-            [h, t] for h, t in sorted(plan.initial_loadout.items())
-        ],
+        "initial_loadout": [[h, t] for h, t in sorted(plan.initial_loadout.items())],
         "swaps": [
             {
                 "head": w.head,

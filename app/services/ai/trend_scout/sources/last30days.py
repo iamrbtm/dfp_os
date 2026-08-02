@@ -22,9 +22,7 @@ ITEM_ENTRY_RE = re.compile(r"^\d+\.\s+\[(\w+)\]\s+(.+?)$", re.MULTILINE)
 
 URL_LINE_RE = re.compile(r"^\s*URL:\s*(https?://\S+)\s*$", re.MULTILINE)
 
-COMMENT_RE = re.compile(
-    r"^\s*-\s*@([\w.-]+)\s*\((\d+)\s*likes?\):\s*(.+)$", re.MULTILINE
-)
+COMMENT_RE = re.compile(r"^\s*-\s*@([\w.-]+)\s*\((\d+)\s*likes?\):\s*(.+)$", re.MULTILINE)
 
 META_BRACKET_RE = re.compile(r"\[([^\]]*?(?:\d[\d,]*[kKmMbB]?views?[^\]]*))\]", re.IGNORECASE)
 
@@ -218,10 +216,7 @@ def fetch_trending(session=None, limiter=None) -> list[ScoutResult]:
             ScoutResult(
                 source="last30days",
                 keyword_or_category="pipeline_error",
-                errors=[
-                    "Clusters found but no items could be parsed. "
-                    "Check the raw file format."
-                ],
+                errors=["Clusters found but no items could be parsed. Check the raw file format."],
             )
         ]
 

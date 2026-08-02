@@ -404,7 +404,9 @@ def _apply_feature_flag(instance: FeatureFlag, data: dict):
 
 def _apply_inventory_record(instance: InventoryRecord, data: dict):
     if instance.id is not None and {"quantity_on_hand", "quantity_reserved"}.intersection(data):
-        raise ValueError("Inventory quantities must be changed through inventory workflow endpoints.")
+        raise ValueError(
+            "Inventory quantities must be changed through inventory workflow endpoints."
+        )
     instance.product_id = data["product_id"]
     instance.location_id = data["location_id"]
     if instance.id is None:
@@ -843,9 +845,7 @@ API_RESOURCES = {
     "order-items": ApiResourceConfig(
         "order-items", OrderItem, OrderItemSchema, [], _apply_order_item
     ),
-    "payments": ApiResourceConfig(
-        "payments", Payment, PaymentSchema, [], _apply_payment
-    ),
+    "payments": ApiResourceConfig("payments", Payment, PaymentSchema, [], _apply_payment),
     "pickup-locations": ApiResourceConfig(
         "pickup-locations",
         PickupLocation,
@@ -1224,8 +1224,13 @@ def product_dead_stock_action(body_data, recommendation_id: int, action: str):
         return denied
     recommendation = get_by_id(DeadStockRecommendation, recommendation_id)
     if recommendation is None:
-        return {"error": {"code": "not_found", "message": "Recommendation not found.", "details": {}}}, 404
-    from app.services.product_ops import accept_dead_stock_recommendation, dismiss_dead_stock_recommendation
+        return {
+            "error": {"code": "not_found", "message": "Recommendation not found.", "details": {}}
+        }, 404
+    from app.services.product_ops import (
+        accept_dead_stock_recommendation,
+        dismiss_dead_stock_recommendation,
+    )
 
     actor_id = getattr(getattr(g, "api_token", None), "user_id", None)
     if action == "accept":
@@ -1241,7 +1246,9 @@ def product_dead_stock_action(body_data, recommendation_id: int, action: str):
             actor_id=actor_id,
         )
     else:
-        return {"error": {"code": "not_found", "message": "Unsupported action.", "details": {}}}, 404
+        return {
+            "error": {"code": "not_found", "message": "Unsupported action.", "details": {}}
+        }, 404
     return {
         "data": {
             "id": recommendation.id,
@@ -1288,6 +1295,7 @@ class ThemeCollection(MethodView):
         if denied:
             return denied
         from app.theme_registry import ALL_THEMES
+
         return [
             {"slug": t.slug, "name": t.name, "mode": t.mode, "description": t.description}
             for t in ALL_THEMES
@@ -1305,6 +1313,7 @@ class ThemeCurrent(MethodView):
             return denied
         from flask_login import current_user
         from app.theme_registry import THEME_MAP, DEFAULT_THEME
+
         slug = getattr(current_user, "theme_slug", DEFAULT_THEME)
         theme = THEME_MAP.get(slug)
         return {
@@ -1342,7 +1351,13 @@ class TrendReportRun(MethodView):
                     "failed_sources": result.get("failed_sources", []),
                 }
             }
-        return {"error": {"code": "pipeline_failed", "message": result.get("error", "Pipeline failed"), "details": {}}}, 500
+        return {
+            "error": {
+                "code": "pipeline_failed",
+                "message": result.get("error", "Pipeline failed"),
+                "details": {},
+            }
+        }, 500
 
 
 @catalog_blp.route("/trend-scout/opportunities/<int:score_id>/print-now")
@@ -1357,12 +1372,30 @@ class TrendOpportunityPrintNow(MethodView):
             return denied
         score = db.session.get(TrendOpportunityScore, score_id)
         if not score:
-            return {"error": {"code": "not_found", "message": "Opportunity score not found.", "details": {}}}, 404
+            return {
+                "error": {
+                    "code": "not_found",
+                    "message": "Opportunity score not found.",
+                    "details": {},
+                }
+            }, 404
         if not score.product_id:
-            return {"error": {"code": "no_product", "message": "No product linked to this opportunity.", "details": {}}}, 400
+            return {
+                "error": {
+                    "code": "no_product",
+                    "message": "No product linked to this opportunity.",
+                    "details": {},
+                }
+            }, 400
         product = db.session.get(Product, score.product_id)
         if not product:
-            return {"error": {"code": "product_not_found", "message": "Linked product not found.", "details": {}}}, 404
+            return {
+                "error": {
+                    "code": "product_not_found",
+                    "message": "Linked product not found.",
+                    "details": {},
+                }
+            }, 404
         job = PrintJob(
             product_id=product.id,
             label=f"Trend: {score.keyword}",
@@ -1375,10 +1408,21 @@ class TrendOpportunityPrintNow(MethodView):
             action="trend_opportunity.print_now",
             entity_type="trend_opportunity_score",
             entity_id=str(score.id),
-            metadata={"product_id": product.id, "product_name": product.name, "print_job_id": job.id},
+            metadata={
+                "product_id": product.id,
+                "product_name": product.name,
+                "print_job_id": job.id,
+            },
             source_module="api.routes",
         )
-        return {"data": {"print_job_id": job.id, "product_id": product.id, "product_name": product.name}, "status": "created"}
+        return {
+            "data": {
+                "print_job_id": job.id,
+                "product_id": product.id,
+                "product_name": product.name,
+            },
+            "status": "created",
+        }
 
 
 @catalog_blp.route("/trend-scout/opportunities/<int:score_id>/create-product")
@@ -1393,7 +1437,13 @@ class TrendOpportunityCreateProduct(MethodView):
             return denied
         score = db.session.get(TrendOpportunityScore, score_id)
         if not score:
-            return {"error": {"code": "not_found", "message": "Opportunity score not found.", "details": {}}}, 404
+            return {
+                "error": {
+                    "code": "not_found",
+                    "message": "Opportunity score not found.",
+                    "details": {},
+                }
+            }, 404
         product = Product(
             name=score.title or score.keyword,
             slug=score.keyword.lower().replace(" ", "-")[:120],
@@ -1410,11 +1460,18 @@ class TrendOpportunityCreateProduct(MethodView):
             action="trend_opportunity.create_product",
             entity_type="trend_opportunity_score",
             entity_id=str(score.id),
-            metadata={"product_id": product.id, "product_name": product.name, "keyword": score.keyword},
+            metadata={
+                "product_id": product.id,
+                "product_name": product.name,
+                "keyword": score.keyword,
+            },
             source_module="api.routes",
         )
         db.session.commit()
-        return {"data": {"product_id": product.id, "product_name": product.name}, "status": "created"}, 201
+        return {
+            "data": {"product_id": product.id, "product_name": product.name},
+            "status": "created",
+        }, 201
 
 
 @catalog_blp.route("/trend-scout/opportunities/<int:score_id>/action")
@@ -1429,7 +1486,13 @@ class TrendOpportunityRecommendationAction(MethodView):
             return denied
         score = db.session.get(TrendOpportunityScore, score_id)
         if not score:
-            return {"error": {"code": "not_found", "message": "Opportunity score not found.", "details": {}}}, 404
+            return {
+                "error": {
+                    "code": "not_found",
+                    "message": "Opportunity score not found.",
+                    "details": {},
+                }
+            }, 404
 
         product_id = score.product_id
         action_taken = {"action": score.action}
@@ -1453,19 +1516,25 @@ class TrendOpportunityRecommendationAction(MethodView):
                 product = db.session.get(Product, product_id)
                 if product:
                     old_notes = product.admin_notes or ""
-                    product.admin_notes = f"[CLEARANCE - Trend Scout #{score.id}] {old_notes}".strip()
+                    product.admin_notes = (
+                        f"[CLEARANCE - Trend Scout #{score.id}] {old_notes}".strip()
+                    )
         elif score.action == "retire_review":
             if product_id:
                 product = db.session.get(Product, product_id)
                 if product:
                     old_notes = product.admin_notes or ""
-                    product.admin_notes = f"[RETIRE REVIEW - Trend Scout #{score.id}] {old_notes}".strip()
+                    product.admin_notes = (
+                        f"[RETIRE REVIEW - Trend Scout #{score.id}] {old_notes}".strip()
+                    )
         elif score.action == "license_review":
             if product_id:
                 product = db.session.get(Product, product_id)
                 if product:
                     old_notes = product.admin_notes or ""
-                    product.admin_notes = f"[LICENSE REVIEW - Trend Scout #{score.id}] {old_notes}".strip()
+                    product.admin_notes = (
+                        f"[LICENSE REVIEW - Trend Scout #{score.id}] {old_notes}".strip()
+                    )
 
         record_audit_event(
             action=f"trend_opportunity.{score.action}",
@@ -1488,16 +1557,47 @@ class MarketsExport(MethodView):
             return denied
         import csv
         import io
+
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["id", "name", "location_name", "address", "city", "state", "zip_code", "event_date", "booth_fee", "application_fee", "status", "actual_revenue", "actual_profit", "notes"])
+        writer.writerow(
+            [
+                "id",
+                "name",
+                "location_name",
+                "address",
+                "city",
+                "state",
+                "zip_code",
+                "event_date",
+                "booth_fee",
+                "application_fee",
+                "status",
+                "actual_revenue",
+                "actual_profit",
+                "notes",
+            ]
+        )
         markets = Market.query.order_by(Market.event_date.desc()).all()
         for m in markets:
-            writer.writerow([
-                m.id, m.name, m.location_name or "", m.address or "", m.city or "", m.state or "", m.zip_code or "",
-                m.event_date.isoformat() if m.event_date else "", m.booth_fee or 0, m.application_fee or 0,
-                m.status.value, m.actual_revenue or 0, m.actual_profit or 0, m.notes or ""
-            ])
+            writer.writerow(
+                [
+                    m.id,
+                    m.name,
+                    m.location_name or "",
+                    m.address or "",
+                    m.city or "",
+                    m.state or "",
+                    m.zip_code or "",
+                    m.event_date.isoformat() if m.event_date else "",
+                    m.booth_fee or 0,
+                    m.application_fee or 0,
+                    m.status.value,
+                    m.actual_revenue or 0,
+                    m.actual_profit or 0,
+                    m.notes or "",
+                ]
+            )
         record_audit_event(
             action="csv.export",
             entity_type="market",
@@ -1505,6 +1605,7 @@ class MarketsExport(MethodView):
             source_module=__name__,
         )
         from flask import Response
+
         return Response(
             output.getvalue(),
             mimetype="text/csv",
@@ -1522,16 +1623,37 @@ class ExpensesExport(MethodView):
             return denied
         import csv
         import io
+
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["id", "date", "vendor", "category", "description", "amount", "payment_method", "related_market_id", "tax_deductible"])
+        writer.writerow(
+            [
+                "id",
+                "date",
+                "vendor",
+                "category",
+                "description",
+                "amount",
+                "payment_method",
+                "related_market_id",
+                "tax_deductible",
+            ]
+        )
         expenses = Expense.query.order_by(Expense.date.desc()).all()
         for e in expenses:
-            writer.writerow([
-                e.id, e.date.isoformat() if e.date else "", e.vendor, e.category.value,
-                e.description or "", e.amount, e.payment_method or "", e.related_market_id or "",
-                "yes" if e.tax_deductible else "no"
-            ])
+            writer.writerow(
+                [
+                    e.id,
+                    e.date.isoformat() if e.date else "",
+                    e.vendor,
+                    e.category.value,
+                    e.description or "",
+                    e.amount,
+                    e.payment_method or "",
+                    e.related_market_id or "",
+                    "yes" if e.tax_deductible else "no",
+                ]
+            )
         record_audit_event(
             action="csv.export",
             entity_type="expense",
@@ -1539,6 +1661,7 @@ class ExpensesExport(MethodView):
             source_module=__name__,
         )
         from flask import Response
+
         return Response(
             output.getvalue(),
             mimetype="text/csv",
@@ -1556,15 +1679,33 @@ class MarketPackingListsExport(MethodView):
             return denied
         import csv
         import io
+
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["id", "market_id", "product_id", "planned_quantity", "packed_quantity", "sold_quantity", "returned_quantity"])
+        writer.writerow(
+            [
+                "id",
+                "market_id",
+                "product_id",
+                "planned_quantity",
+                "packed_quantity",
+                "sold_quantity",
+                "returned_quantity",
+            ]
+        )
         items = MarketPackingList.query.order_by(MarketPackingList.market_id).all()
         for i in items:
-            writer.writerow([
-                i.id, i.market_id, i.product_id,
-                i.planned_quantity or 0, i.packed_quantity or 0, i.sold_quantity or 0, i.returned_quantity or 0
-            ])
+            writer.writerow(
+                [
+                    i.id,
+                    i.market_id,
+                    i.product_id,
+                    i.planned_quantity or 0,
+                    i.packed_quantity or 0,
+                    i.sold_quantity or 0,
+                    i.returned_quantity or 0,
+                ]
+            )
         record_audit_event(
             action="csv.export",
             entity_type="market_packing_list",
@@ -1572,6 +1713,7 @@ class MarketPackingListsExport(MethodView):
             source_module=__name__,
         )
         from flask import Response
+
         return Response(
             output.getvalue(),
             mimetype="text/csv",
@@ -1683,6 +1825,7 @@ class AnalyticsSummary(MethodView):
         if denied:
             return denied
         from app.services.analytics import executive_summary
+
         s = executive_summary()
         return {
             "today_revenue": float(s["today_revenue"]),
@@ -1708,17 +1851,21 @@ class AnalyticsProducts(MethodView):
         if denied:
             return denied
         from app.services.analytics import product_analytics
+
         products = product_analytics()
-        return [{
-            "id": p["id"],
-            "name": p["name"],
-            "sku": p["sku"],
-            "units_sold": p["units_sold"],
-            "revenue": float(p["revenue"]),
-            "avg_price": float(p["avg_price"]),
-            "inventory_on_hand": p["inventory_on_hand"],
-            "failure_count": p["failure_count"],
-        } for p in products]
+        return [
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "sku": p["sku"],
+                "units_sold": p["units_sold"],
+                "revenue": float(p["revenue"]),
+                "avg_price": float(p["avg_price"]),
+                "inventory_on_hand": p["inventory_on_hand"],
+                "failure_count": p["failure_count"],
+            }
+            for p in products
+        ]
 
 
 @catalog_blp.route("/analytics/markets")
@@ -1731,17 +1878,21 @@ class AnalyticsMarkets(MethodView):
         if denied:
             return denied
         from app.services.analytics import market_analytics
+
         markets = market_analytics()
-        return [{
-            "id": m["id"],
-            "name": m["name"],
-            "date": str(m["date"]) if m["date"] else None,
-            "total_sales": float(m["total_sales"]),
-            "total_expenses": float(m["total_expenses"]),
-            "booth_cost": float(m["booth_cost"]),
-            "profit": float(m["profit"]),
-            "units_sold": m["units_sold"],
-        } for m in markets]
+        return [
+            {
+                "id": m["id"],
+                "name": m["name"],
+                "date": str(m["date"]) if m["date"] else None,
+                "total_sales": float(m["total_sales"]),
+                "total_expenses": float(m["total_expenses"]),
+                "booth_cost": float(m["booth_cost"]),
+                "profit": float(m["profit"]),
+                "units_sold": m["units_sold"],
+            }
+            for m in markets
+        ]
 
 
 @catalog_blp.route("/analytics/printing")
@@ -1754,6 +1905,7 @@ class AnalyticsPrinting(MethodView):
         if denied:
             return denied
         from app.services.analytics import printing_analytics
+
         return printing_analytics()
 
 
@@ -1767,6 +1919,7 @@ class AnalyticsInventory(MethodView):
         if denied:
             return denied
         from app.services.analytics import inventory_analytics
+
         inv = inventory_analytics()
         return {
             "low_stock_count": inv["low_stock_count"],
@@ -1786,6 +1939,7 @@ class AnalyticsPos(MethodView):
         if denied:
             return denied
         from app.services.analytics import pos_analytics
+
         p = pos_analytics()
         return {
             "total_revenue": float(p["total_revenue"]),
@@ -1806,10 +1960,14 @@ class AnalyticsExpenses(MethodView):
         if denied:
             return denied
         from app.services.analytics import expense_analytics
+
         e = expense_analytics()
         return {
             "total_expenses": float(e["total_expenses"]),
-            "by_category": [{"category": c["category"], "total": float(c["total"]), "count": c["count"]} for c in e["by_category"]],
+            "by_category": [
+                {"category": c["category"], "total": float(c["total"]), "count": c["count"]}
+                for c in e["by_category"]
+            ],
         }
 
 
@@ -1882,7 +2040,9 @@ class CostEngineProduct(MethodView):
 
         product = db.session.get(Product, product_id)
         if product is None:
-            return {"error": {"code": "not_found", "message": "Product not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "Product not found.", "details": {}}
+            }, 404
         breakdown = calculate_product_cost(product=product)
         data = {key: str(value) for key, value in breakdown.as_dict().items()}
         data["pricing_scenarios"] = build_pricing_scenarios(product=product)
@@ -1901,9 +2061,13 @@ class CostEngineOrder(MethodView):
         from app.services.cost_engine import estimate_order_profit
 
         try:
-            return {"data": {key: str(value) for key, value in estimate_order_profit(order_id).items()}}
+            return {
+                "data": {key: str(value) for key, value in estimate_order_profit(order_id).items()}
+            }
         except ValueError:
-            return {"error": {"code": "not_found", "message": "Order not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "Order not found.", "details": {}}
+            }, 404
 
 
 @catalog_blp.route("/cost-engine/markets/<int:market_id>")
@@ -1917,7 +2081,9 @@ class CostEngineMarket(MethodView):
             return denied
         from app.services.cost_engine import estimate_market_profit
 
-        return {"data": {key: str(value) for key, value in estimate_market_profit(market_id).items()}}
+        return {
+            "data": {key: str(value) for key, value in estimate_market_profit(market_id).items()}
+        }
 
 
 @catalog_blp.route("/prep-tasks/markets/<int:market_id>/generate")
@@ -1935,8 +2101,14 @@ class PrepTaskGenerate(MethodView):
         try:
             tasks = generate_market_prep_tasks(market_id, actor_id=g.api_user.id)
         except ValueError:
-            return {"error": {"code": "not_found", "message": "Market not found.", "details": {}}}, 404
-        return {"data": [{"id": task.id, "title": task.title, "status": task.status.value} for task in tasks]}, 201
+            return {
+                "error": {"code": "not_found", "message": "Market not found.", "details": {}}
+            }, 404
+        return {
+            "data": [
+                {"id": task.id, "title": task.title, "status": task.status.value} for task in tasks
+            ]
+        }, 201
 
 
 @catalog_blp.route("/prep-tasks/markets/<int:market_id>/readiness")
@@ -1965,7 +2137,12 @@ class ApiTokenCollection(MethodView):
         if denied:
             return denied
         from app.models import ApiToken
-        tokens = ApiToken.query.filter_by(user_id=g.api_user.id).order_by(ApiToken.created_at.desc()).all()
+
+        tokens = (
+            ApiToken.query.filter_by(user_id=g.api_user.id)
+            .order_by(ApiToken.created_at.desc())
+            .all()
+        )
         schema = ApiTokenSchema(many=True)
         return {"data": schema.dump(tokens)}
 
@@ -1977,10 +2154,17 @@ class ApiTokenCollection(MethodView):
         if denied:
             return denied
         from app.services.api_tokens import create_api_token
+
         payload = request.get_json(silent=True) or {}
         name = payload.get("name", "").strip()
         if not name:
-            return {"error": {"code": "validation_error", "message": "Token name is required.", "details": {}}}, 400
+            return {
+                "error": {
+                    "code": "validation_error",
+                    "message": "Token name is required.",
+                    "details": {},
+                }
+            }, 400
         scopes = payload.get("scopes", "")
         expires_at_str = payload.get("expires_at")
 
@@ -1988,9 +2172,18 @@ class ApiTokenCollection(MethodView):
         if expires_at_str:
             try:
                 from datetime import datetime, timezone
-                expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+                expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc
+                )
             except ValueError:
-                return {"error": {"code": "validation_error", "message": "Invalid expires_at format (use YYYY-MM-DD).", "details": {}}}, 400
+                return {
+                    "error": {
+                        "code": "validation_error",
+                        "message": "Invalid expires_at format (use YYYY-MM-DD).",
+                        "details": {},
+                    }
+                }, 400
 
         token, raw_token = create_api_token(
             user=g.api_user,
@@ -2015,7 +2208,9 @@ class ApiTokenItem(MethodView):
             return denied
         token = db.session.get(ApiToken, token_id)
         if token is None or token.user_id != g.api_user.id:
-            return {"error": {"code": "not_found", "message": "API token not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "API token not found.", "details": {}}
+            }, 404
         return {"data": ApiTokenSchema().dump(token)}
 
     @api_token_required
@@ -2026,7 +2221,9 @@ class ApiTokenItem(MethodView):
             return denied
         token = db.session.get(ApiToken, token_id)
         if token is None or token.user_id != g.api_user.id:
-            return {"error": {"code": "not_found", "message": "API token not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "API token not found.", "details": {}}
+            }, 404
         revoke_api_token(token, actor_id=g.api_user.id)
         return {"status": "revoked"}
 
@@ -2041,6 +2238,7 @@ class SettingCollection(MethodView):
         if denied:
             return denied
         from app.services.settings import get_all_settings
+
         settings = get_all_settings()
         return {"data": SettingSchema(many=True).dump(settings)}
 
@@ -2056,9 +2254,12 @@ class SettingItem(MethodView):
             return denied
         from app.models import Setting
         from sqlalchemy import select
+
         setting = db.session.scalar(select(Setting).where(Setting.key == key))
         if setting is None:
-            return {"error": {"code": "not_found", "message": "Setting not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "Setting not found.", "details": {}}
+            }, 404
         return {"data": SettingSchema().dump(setting)}
 
     @api_token_required
@@ -2071,9 +2272,16 @@ class SettingItem(MethodView):
         from app.services.settings import set_setting
         from app.services.audit import record_audit_event
         from app.models import Setting
+
         payload = request.get_json(silent=True) or {}
         if "value" not in payload:
-            return {"error": {"code": "validation_error", "message": "value is required.", "details": {}}}, 400
+            return {
+                "error": {
+                    "code": "validation_error",
+                    "message": "value is required.",
+                    "details": {},
+                }
+            }, 400
         before = db.session.scalar(select(Setting).where(Setting.key == key))
         before_state = {"value": before.value, "type": before.setting_type} if before else None
         setting = set_setting(
@@ -2095,6 +2303,7 @@ class SettingItem(MethodView):
 
 # --- Promotion: Content Drafts ---
 
+
 @catalog_blp.route("/content-drafts")
 class ContentDraftCollection(MethodView):
     @api_token_required
@@ -2106,6 +2315,7 @@ class ContentDraftCollection(MethodView):
             return denied
         from app.services.crud import apply_search, paginate_query
         from sqlalchemy import select
+
         page = request.args.get("page", 1, type=int)
         q = request.args.get("q", "").strip()
         stmt = select(ContentDraft).order_by(ContentDraft.updated_at.desc())
@@ -2127,7 +2337,9 @@ class ContentDraftCollection(MethodView):
         payload = request.get_json(silent=True) or {}
         errors = ContentDraftSchema().validate(payload)
         if errors:
-            return {"error": {"code": "validation_error", "message": str(errors), "details": errors}}, 400
+            return {
+                "error": {"code": "validation_error", "message": str(errors), "details": errors}
+            }, 400
         draft = ContentDraft(
             title=payload.get("title", ""),
             content_type=payload.get("content_type", "social_post"),
@@ -2142,6 +2354,7 @@ class ContentDraftCollection(MethodView):
         db.session.add(draft)
         db.session.commit()
         from app.services.audit import record_audit_event
+
         record_audit_event(
             action="content_draft.created",
             entity_type="content_draft",
@@ -2162,7 +2375,9 @@ class ContentDraftItem(MethodView):
             return denied
         draft = db.session.get(ContentDraft, draft_id)
         if draft is None:
-            return {"error": {"code": "not_found", "message": "Content draft not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "Content draft not found.", "details": {}}
+            }, 404
         return {"data": ContentDraftSchema().dump(draft)}
 
     @api_token_required
@@ -2174,12 +2389,17 @@ class ContentDraftItem(MethodView):
             return denied
         draft = db.session.get(ContentDraft, draft_id)
         if draft is None:
-            return {"error": {"code": "not_found", "message": "Content draft not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "Content draft not found.", "details": {}}
+            }, 404
         payload = request.get_json(silent=True) or {}
         errors = ContentDraftSchema().validate(payload)
         if errors:
-            return {"error": {"code": "validation_error", "message": str(errors), "details": errors}}, 400
+            return {
+                "error": {"code": "validation_error", "message": str(errors), "details": errors}
+            }, 400
         from app.services.admin_mutations import snapshot_instance
+
         before_state = snapshot_instance(draft)
         for field in ("title", "content_type", "caption", "media_reference", "notes"):
             if field in payload:
@@ -2198,6 +2418,7 @@ class ContentDraftItem(MethodView):
             draft.planned_publish_date = payload.get("planned_publish_date")
         db.session.commit()
         from app.services.audit import record_audit_event
+
         record_audit_event(
             action="content_draft.updated",
             entity_type="content_draft",
@@ -2216,10 +2437,13 @@ class ContentDraftItem(MethodView):
             return denied
         draft = db.session.get(ContentDraft, draft_id)
         if draft is None:
-            return {"error": {"code": "not_found", "message": "Content draft not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "Content draft not found.", "details": {}}
+            }, 404
         draft.status = ContentStatus.ARCHIVED
         db.session.commit()
         from app.services.audit import record_audit_event
+
         record_audit_event(
             action="content_draft.archived",
             entity_type="content_draft",
@@ -2241,16 +2465,30 @@ def content_draft_generate_ai():
     source_type = payload.get("source_type", "").strip()
     source_id = payload.get("source_id", 0)
     if not source_type or not source_id:
-        return {"error": {"code": "validation_error", "message": "source_type and source_id are required.", "details": {}}}, 400
+        return {
+            "error": {
+                "code": "validation_error",
+                "message": "source_type and source_id are required.",
+                "details": {},
+            }
+        }, 400
     from app.services.promotion import generate_ai_assisted_draft
+
     actor_id = getattr(g, "api_user", None) and g.api_user.id
     draft = generate_ai_assisted_draft(source_type, int(source_id), actor_id=actor_id)
     if draft is None:
-        return {"error": {"code": "not_found", "message": f"Could not find {source_type} with id {source_id}.", "details": {}}}, 404
+        return {
+            "error": {
+                "code": "not_found",
+                "message": f"Could not find {source_type} with id {source_id}.",
+                "details": {},
+            }
+        }, 404
     return {"data": ContentDraftSchema().dump(draft)}, 201
 
 
 # --- Promotion: Sign Assets ---
+
 
 @catalog_blp.route("/sign-assets")
 class SignAssetCollection(MethodView):
@@ -2263,6 +2501,7 @@ class SignAssetCollection(MethodView):
             return denied
         from app.services.crud import apply_search, paginate_query
         from sqlalchemy import select
+
         page = request.args.get("page", 1, type=int)
         q = request.args.get("q", "").strip()
         stmt = select(SignAsset).order_by(SignAsset.updated_at.desc())
@@ -2284,7 +2523,9 @@ class SignAssetCollection(MethodView):
         payload = request.get_json(silent=True) or {}
         errors = SignAssetSchema().validate(payload)
         if errors:
-            return {"error": {"code": "validation_error", "message": str(errors), "details": errors}}, 400
+            return {
+                "error": {"code": "validation_error", "message": str(errors), "details": errors}
+            }, 400
         sign = SignAsset(
             title=payload.get("title", ""),
             subtitle=payload.get("subtitle"),
@@ -2301,9 +2542,11 @@ class SignAssetCollection(MethodView):
         db.session.add(sign)
         db.session.flush()
         from app.services.promotion import save_sign_html
+
         save_sign_html(sign)
         db.session.commit()
         from app.services.audit import record_audit_event
+
         record_audit_event(
             action="sign_asset.created",
             entity_type="sign_asset",
@@ -2324,7 +2567,9 @@ class SignAssetItem(MethodView):
             return denied
         sign = db.session.get(SignAsset, sign_id)
         if sign is None:
-            return {"error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}
+            }, 404
         return {"data": SignAssetSchema().dump(sign)}
 
     @api_token_required
@@ -2336,14 +2581,27 @@ class SignAssetItem(MethodView):
             return denied
         sign = db.session.get(SignAsset, sign_id)
         if sign is None:
-            return {"error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}
+            }, 404
         payload = request.get_json(silent=True) or {}
         errors = SignAssetSchema().validate(payload)
         if errors:
-            return {"error": {"code": "validation_error", "message": str(errors), "details": errors}}, 400
+            return {
+                "error": {"code": "validation_error", "message": str(errors), "details": errors}
+            }, 400
         from app.services.admin_mutations import snapshot_instance
+
         before_state = snapshot_instance(sign)
-        for field in ("title", "subtitle", "price_display", "short_description", "care_note", "qr_target_url", "layout"):
+        for field in (
+            "title",
+            "subtitle",
+            "price_display",
+            "short_description",
+            "care_note",
+            "qr_target_url",
+            "layout",
+        ):
             if field in payload:
                 setattr(sign, field, payload[field])
         if "product_id" in payload:
@@ -2355,9 +2613,11 @@ class SignAssetItem(MethodView):
         if "status" in payload:
             sign.status = SignStatus(payload["status"])
         from app.services.promotion import save_sign_html
+
         save_sign_html(sign)
         db.session.commit()
         from app.services.audit import record_audit_event
+
         record_audit_event(
             action="sign_asset.updated",
             entity_type="sign_asset",
@@ -2376,10 +2636,13 @@ class SignAssetItem(MethodView):
             return denied
         sign = db.session.get(SignAsset, sign_id)
         if sign is None:
-            return {"error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}}, 404
+            return {
+                "error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}
+            }, 404
         sign.status = SignStatus.ARCHIVED
         db.session.commit()
         from app.services.audit import record_audit_event
+
         record_audit_event(
             action="sign_asset.archived",
             entity_type="sign_asset",
@@ -2448,22 +2711,50 @@ def report_studio_heat_map_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Name", "City", "State", "Status", "Date", "Booth Fee", "Revenue", "Profit", "Margin %", "Has Coordinates", "Worth Repeating"])
+    writer.writerow(
+        [
+            "Name",
+            "City",
+            "State",
+            "Status",
+            "Date",
+            "Booth Fee",
+            "Revenue",
+            "Profit",
+            "Margin %",
+            "Has Coordinates",
+            "Worth Repeating",
+        ]
+    )
     for m in data:
-        writer.writerow([
-            m["name"], m.get("city", ""), m.get("state", ""), m.get("status", ""),
-            m.get("event_date", ""), m.get("booth_fee", 0), m.get("revenue", 0),
-            m.get("profit", 0), m.get("margin_pct", ""),
-            "Yes" if m.get("has_coordinates") else "No",
-            "Yes" if m.get("worth_repeating") is True else ("No" if m.get("worth_repeating") is False else ""),
-        ])
+        writer.writerow(
+            [
+                m["name"],
+                m.get("city", ""),
+                m.get("state", ""),
+                m.get("status", ""),
+                m.get("event_date", ""),
+                m.get("booth_fee", 0),
+                m.get("revenue", 0),
+                m.get("profit", 0),
+                m.get("margin_pct", ""),
+                "Yes" if m.get("has_coordinates") else "No",
+                "Yes"
+                if m.get("worth_repeating") is True
+                else ("No" if m.get("worth_repeating") is False else ""),
+            ]
+        )
     record_audit_event(
         action="csv.export",
         entity_type="market",
         metadata={"export_type": "market_heat_map", "row_count": len(data)},
         source_module=__name__,
     )
-    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=market_heat_map.csv"})
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=market_heat_map.csv"},
+    )
 
 
 @catalog_blp.route("/report-studio/application-tracker/csv", methods=["GET"])
@@ -2482,17 +2773,41 @@ def report_studio_application_tracker_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Market", "City", "State", "Status", "Deadline", "App Fee", "Booth Fee", "Total Fee", "Has Documents", "Follow-Up Date", "Needs Follow-Up", "Worth Repeating"])
+    writer.writerow(
+        [
+            "Market",
+            "City",
+            "State",
+            "Status",
+            "Deadline",
+            "App Fee",
+            "Booth Fee",
+            "Total Fee",
+            "Has Documents",
+            "Follow-Up Date",
+            "Needs Follow-Up",
+            "Worth Repeating",
+        ]
+    )
     for m in data.get("pipeline", []):
-        writer.writerow([
-            m["name"], m.get("city", ""), m.get("state", ""), m.get("status", ""),
-            m.get("application_deadline", ""), m.get("application_fee", 0),
-            m.get("booth_fee", 0), m.get("total_fee", 0),
-            "Yes" if m.get("has_documents") else "No",
-            m.get("follow_up_date", ""),
-            "Yes" if m.get("needs_follow_up") else "No",
-            "Yes" if m.get("worth_repeating") is True else ("No" if m.get("worth_repeating") is False else ""),
-        ])
+        writer.writerow(
+            [
+                m["name"],
+                m.get("city", ""),
+                m.get("state", ""),
+                m.get("status", ""),
+                m.get("application_deadline", ""),
+                m.get("application_fee", 0),
+                m.get("booth_fee", 0),
+                m.get("total_fee", 0),
+                "Yes" if m.get("has_documents") else "No",
+                m.get("follow_up_date", ""),
+                "Yes" if m.get("needs_follow_up") else "No",
+                "Yes"
+                if m.get("worth_repeating") is True
+                else ("No" if m.get("worth_repeating") is False else ""),
+            ]
+        )
     pipeline = data.get("pipeline", [])
     record_audit_event(
         action="csv.export",
@@ -2500,7 +2815,11 @@ def report_studio_application_tracker_csv():
         metadata={"export_type": "application_tracker", "row_count": len(pipeline)},
         source_module=__name__,
     )
-    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=application_tracker.csv"})
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=application_tracker.csv"},
+    )
 
 
 @catalog_blp.route("/sign-assets/<int:sign_id>/generate-ai-image", methods=["POST"])
@@ -2513,8 +2832,11 @@ def sign_asset_generate_ai_image(sign_id: int):
         return denied
     sign = db.session.get(SignAsset, sign_id)
     if sign is None:
-        return {"error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}}, 404
+        return {
+            "error": {"code": "not_found", "message": "Sign asset not found.", "details": {}}
+        }, 404
     from app.services.promotion import generate_ai_sign_image
+
     result = generate_ai_sign_image(sign)
     return {"data": SignAssetSchema().dump(result)}
 

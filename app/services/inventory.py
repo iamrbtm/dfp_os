@@ -35,7 +35,9 @@ def record_movement(
 ) -> InventoryMovement:
     movement = InventoryMovement(
         inventory_record_id=inventory_record.id if inventory_record else None,
-        product_id=product_id if product_id is not None else getattr(inventory_record, "product_id", None),
+        product_id=product_id
+        if product_id is not None
+        else getattr(inventory_record, "product_id", None),
         from_location_id=from_location_id,
         to_location_id=to_location_id,
         quantity=quantity,
@@ -54,10 +56,14 @@ def get_or_create_inventory_record(
     product_id: int,
     location_id: int,
 ) -> InventoryRecord:
-    record = InventoryRecord.query.filter_by(
-        product_id=product_id,
-        location_id=location_id,
-    ).with_for_update().first()
+    record = (
+        InventoryRecord.query.filter_by(
+            product_id=product_id,
+            location_id=location_id,
+        )
+        .with_for_update()
+        .first()
+    )
     if record is None:
         record = InventoryRecord(
             product_id=product_id,
@@ -418,7 +424,12 @@ def return_inventory(
             "quantity_on_hand": record.quantity_on_hand,
             "quantity_reserved": record.quantity_reserved,
         },
-        metadata={"reference_type": reference_type, "reference_id": str(reference_id), "quantity": quantity, "notes": notes},
+        metadata={
+            "reference_type": reference_type,
+            "reference_id": str(reference_id),
+            "quantity": quantity,
+            "notes": notes,
+        },
         source_module=__name__,
         actor_id=actor_id,
     )

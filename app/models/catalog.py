@@ -4,7 +4,18 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, event
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    event,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
@@ -81,7 +92,9 @@ class ProductModelAsset(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "product_model_assets"
 
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
-    business_id: Mapped[int | None] = mapped_column(ForeignKey("businesses.id"), nullable=True, index=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
     storage_reference: Mapped[str] = mapped_column(String(500), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     safe_filename: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -106,8 +119,12 @@ class ProductAnalysisRun(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "product_analysis_runs"
 
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
-    business_id: Mapped[int | None] = mapped_column(ForeignKey("businesses.id"), nullable=True, index=True)
-    source_asset_id: Mapped[int] = mapped_column(ForeignKey("product_model_assets.id"), nullable=False, index=True)
+    business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id"), nullable=True, index=True
+    )
+    source_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("product_model_assets.id"), nullable=False, index=True
+    )
     requested_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     status: Mapped[AnalysisRunStatus] = mapped_column(
         Enum(AnalysisRunStatus, native_enum=False, length=30),
@@ -125,9 +142,15 @@ class ProductAnalysisRun(PrimaryKeyMixin, TimestampMixin, db.Model):
     parsed_filament_grams: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     parsed_print_minutes: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     parsed_material_cost: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
-    gcode_asset_id: Mapped[int | None] = mapped_column(ForeignKey("product_model_assets.id"), nullable=True)
-    preview_asset_id: Mapped[int | None] = mapped_column(ForeignKey("product_model_assets.id"), nullable=True)
-    metadata_asset_id: Mapped[int | None] = mapped_column(ForeignKey("product_model_assets.id"), nullable=True)
+    gcode_asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_model_assets.id"), nullable=True
+    )
+    preview_asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_model_assets.id"), nullable=True
+    )
+    metadata_asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_model_assets.id"), nullable=True
+    )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -213,8 +236,12 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     # Issue 14 / Issue 38 — per-product cost-engine overrides. All default to
     # None so the cost engine falls back to the global settings when unset.
     packaging_cost_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
-    target_margin_percent_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
-    market_allocation_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    target_margin_percent_override: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
+    market_allocation_override: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
     payment_fee_rate_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
     material_spool_override: Mapped[int | None] = mapped_column(
         ForeignKey("filament_spools.id"), nullable=True
@@ -248,7 +275,9 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     model_proof_of_license_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     model_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     model_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    analysis_status: Mapped[str | None] = mapped_column(String(30), default=None, nullable=True, index=True)
+    analysis_status: Mapped[str | None] = mapped_column(
+        String(30), default=None, nullable=True, index=True
+    )
     analysis_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     analysis_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

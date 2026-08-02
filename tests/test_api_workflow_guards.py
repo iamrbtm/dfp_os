@@ -36,7 +36,9 @@ def _api_headers(scopes: list[str]) -> dict[str, str]:
 
 
 def _product_and_location() -> tuple[Product, InventoryLocation]:
-    category = Category(name="Guard Category", slug="guard-category", is_public=True, is_pos_visible=True)
+    category = Category(
+        name="Guard Category", slug="guard-category", is_public=True, is_pos_visible=True
+    )
     product = Product(
         name="Guard Product",
         slug="guard-product",
@@ -141,7 +143,12 @@ def test_generic_api_cannot_change_pos_sale_status(client):
 
     response = client.put(
         f"/api/v1/pos-sales/{sale_id}",
-        json={"payment_method": "cash", "total": "10.00", "amount_received": "10.00", "status": "refunded"},
+        json={
+            "payment_method": "cash",
+            "total": "10.00",
+            "amount_received": "10.00",
+            "status": "refunded",
+        },
         headers=headers,
     )
 

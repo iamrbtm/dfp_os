@@ -57,7 +57,9 @@ class PosSession(PrimaryKeyMixin, TimestampMixin, db.Model):
     closed_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True
     )
-    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
+    market_id: Mapped[int | None] = mapped_column(
+        ForeignKey("markets.id"), nullable=True, index=True
+    )
     inventory_location_id: Mapped[int | None] = mapped_column(
         ForeignKey("inventory_locations.id"), nullable=True, index=True
     )
@@ -129,9 +131,7 @@ class PosSale(PrimaryKeyMixin, TimestampMixin, db.Model):
 class PosSaleItem(PrimaryKeyMixin, TimestampMixin, db.Model):
     __tablename__ = "pos_sale_items"
 
-    pos_sale_id: Mapped[int] = mapped_column(
-        ForeignKey("pos_sales.id"), nullable=False, index=True
-    )
+    pos_sale_id: Mapped[int] = mapped_column(ForeignKey("pos_sales.id"), nullable=False, index=True)
     product_id: Mapped[int | None] = mapped_column(
         ForeignKey("products.id"), nullable=True, index=True
     )

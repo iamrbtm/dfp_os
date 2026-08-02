@@ -503,9 +503,7 @@ async def review_table(
 ) -> LegacyTableReviewResponse:
     now = utcnow()
 
-    review = await db.execute(
-        select(LegacyTableReviewState).where(LegacyTableReviewState.table_name == table_name)
-    )
+    review = await db.execute(select(LegacyTableReviewState).where(LegacyTableReviewState.table_name == table_name))
     review = review.scalar_one_or_none()
 
     if payload.decision == TableReviewDecision.DELETE_STAGING.value:
@@ -515,9 +513,7 @@ async def review_table(
             raise ValueError(f"Table '{table_name}' has already been deleted from staging.")
 
         result = await db.execute(
-            delete(LegacyImportRowStage).where(
-                LegacyImportRowStage.source_table_name == table_name
-            )
+            delete(LegacyImportRowStage).where(LegacyImportRowStage.source_table_name == table_name)
         )
         deleted_count = result.rowcount
 
@@ -582,9 +578,7 @@ async def review_table(
     manifest = manifest.scalar_one_or_none()
 
     staged_count = await db.execute(
-        select(func.count(LegacyImportRowStage.id)).where(
-            LegacyImportRowStage.source_table_name == table_name
-        )
+        select(func.count(LegacyImportRowStage.id)).where(LegacyImportRowStage.source_table_name == table_name)
     )
     staged_count = staged_count.scalar() or 0
 
@@ -705,18 +699,12 @@ async def delete_table_staging(
     if not confirm:
         raise ValueError("Must set confirm=True to delete staging rows for table '{table_name}'.")
 
-    review = await db.execute(
-        select(LegacyTableReviewState).where(LegacyTableReviewState.table_name == table_name)
-    )
+    review = await db.execute(select(LegacyTableReviewState).where(LegacyTableReviewState.table_name == table_name))
     review = review.scalar_one_or_none()
     if review and review.deleted_at:
         raise ValueError(f"Table '{table_name}' has already been deleted from staging.")
 
-    result = await db.execute(
-        delete(LegacyImportRowStage).where(
-            LegacyImportRowStage.source_table_name == table_name
-        )
-    )
+    result = await db.execute(delete(LegacyImportRowStage).where(LegacyImportRowStage.source_table_name == table_name))
     deleted = result.rowcount
 
     now = utcnow()

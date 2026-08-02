@@ -10,6 +10,7 @@ packaging_cost_override, target_margin_percent_override,
 market_allocation_override, payment_fee_rate_override, and
 material_spool_override (a FK to filament_spools.id).
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -21,12 +22,18 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column("products", sa.Column("packaging_cost_override", sa.Numeric(10, 2), nullable=True))
+    op.add_column(
+        "products", sa.Column("packaging_cost_override", sa.Numeric(10, 2), nullable=True)
+    )
     op.add_column(
         "products", sa.Column("target_margin_percent_override", sa.Numeric(10, 2), nullable=True)
     )
-    op.add_column("products", sa.Column("market_allocation_override", sa.Numeric(10, 2), nullable=True))
-    op.add_column("products", sa.Column("payment_fee_rate_override", sa.Numeric(10, 4), nullable=True))
+    op.add_column(
+        "products", sa.Column("market_allocation_override", sa.Numeric(10, 2), nullable=True)
+    )
+    op.add_column(
+        "products", sa.Column("payment_fee_rate_override", sa.Numeric(10, 4), nullable=True)
+    )
     op.add_column(
         "products",
         sa.Column("material_spool_override", sa.Integer(), nullable=True),
