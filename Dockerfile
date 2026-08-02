@@ -8,7 +8,10 @@ COPY package.json package-lock.json postcss.config.js tailwind.config.js ./
 RUN --mount=type=cache,target=/root/.cache/npm \
     npm ci --no-audit --no-fund
 
+# Tailwind scans Jinja templates for utility classes. Copy templates into the
+# asset stage before building CSS, otherwise Docker builds purge most styles.
 COPY app/static ./app/static
+COPY app/templates ./app/templates
 RUN npm run build
 
 # Base runtime: pre-built image (Dockerfile.base) with system packages already

@@ -103,8 +103,7 @@ def test_gcode_parser_prusa_total_filament_and_normal_mode_time(tmp_path):
 def test_gcode_parser_bambu_filament_used_g(tmp_path):
     path = tmp_path / "bambu.gcode"
     path.write_text(
-        "; filament used [g] = 18.42\n"
-        "; total estimated time = 42m 15s\n",
+        "; filament used [g] = 18.42\n; total estimated time = 42m 15s\n",
         encoding="utf-8",
     )
     result = _parse_gcode_stats(path)
@@ -118,8 +117,7 @@ def test_gcode_parser_bambu_filament_used_g(tmp_path):
 def test_gcode_parser_orca_estimated_time(tmp_path):
     path = tmp_path / "orca.gcode"
     path.write_text(
-        "; total filament used [g] = 9.00\n"
-        "; estimated time = 1h 5m\n",
+        "; total filament used [g] = 9.00\n; estimated time = 1h 5m\n",
         encoding="utf-8",
     )
     result = _parse_gcode_stats(path)
@@ -145,8 +143,7 @@ def test_gcode_parser_total_filament_cost(tmp_path):
 def test_gcode_parser_cm3_volume_fallback_uses_density(tmp_path):
     path = tmp_path / "vol.gcode"
     path.write_text(
-        "; filament used [cm3] = 10.00\n"
-        "; estimated print time = 10m\n",
+        "; filament used [cm3] = 10.00\n; estimated print time = 10m\n",
         encoding="utf-8",
     )
     result = _parse_gcode_stats(path, density=Decimal("1.27"))
@@ -242,23 +239,25 @@ def test_ensure_slicer_profiles_dir_is_noop_when_present(tmp_path):
 
 
 def test_runtime_health_shape_with_mocked_slicer_service():
-    with mock.patch.object(runtime_checks, "check_trimesh_available", return_value=True), \
-            mock.patch.object(runtime_checks, "check_slicer_service_available", return_value=True):
+    with (
+        mock.patch.object(runtime_checks, "check_trimesh_available", return_value=True),
+        mock.patch.object(runtime_checks, "check_slicer_service_available", return_value=True),
+    ):
         health = runtime_checks.runtime_health()
     assert health == {"trimesh": True, "prusaslicer": True}
 
 
 def test_check_prusaslicer_available_returns_false_on_file_not_found():
-    with mock.patch.object(
-        runtime_checks.subprocess, "run", side_effect=FileNotFoundError
-    ):
+    with mock.patch.object(runtime_checks.subprocess, "run", side_effect=FileNotFoundError):
         assert runtime_checks.check_prusaslicer_available() is False
 
 
 def test_check_prusaslicer_available_uses_env_path():
     fake_proc = mock.Mock(returncode=0)
-    with mock.patch.dict("os.environ", {"PRUSA_SLICER_PATH": "/custom/prusa"}), \
-            mock.patch.object(runtime_checks.subprocess, "run", return_value=fake_proc) as run_mock:
+    with (
+        mock.patch.dict("os.environ", {"PRUSA_SLICER_PATH": "/custom/prusa"}),
+        mock.patch.object(runtime_checks.subprocess, "run", return_value=fake_proc) as run_mock,
+    ):
         assert runtime_checks.check_prusaslicer_available() is True
     assert run_mock.call_args.args[0][0] == "/custom/prusa"
 
@@ -380,6 +379,38 @@ def test_cost_snapshot_accepts_decimal_string_scale_percent(app):
         assert snapshot is not None
         assert snapshot.scale_percent == 100
         assert snapshot.copies == 1
+
+
+def test_reset_product_analysis_keeps_non_nullable_estimates(app):
+    """Reanalysis reset must not set non-nullable estimate columns to NULL."""
+    from app.extensions import db
+    from app.models import Category, Product, ProductStatus, ProductType
+    from app.services.product_analysis import reset_product_analysis
+
+    with app.app_context():
+        category = Category(name="Reset", slug="reset", is_public=True, is_pos_visible=True)
+        product = Product(
+            name="Reset Product",
+            slug="reset-product",
+            sku_base="RESET-1",
+            category=category,
+            product_type=ProductType.FINISHED_GOOD,
+            status=ProductStatus.ACTIVE,
+            base_price=20,
+            estimated_material_cost=Decimal("1.23"),
+            estimated_print_minutes=42,
+            estimated_profit=Decimal("8.77"),
+        )
+        db.session.add(category)
+        db.session.add(product)
+        db.session.flush()
+
+        reset_product_analysis(product)
+        db.session.commit()
+
+        assert product.estimated_material_cost == Decimal("0.00")
+        assert product.estimated_print_minutes == 0
+        assert product.estimated_profit == Decimal("0.00")
 
 
 def test_coerce_to_mesh_merges_scene():

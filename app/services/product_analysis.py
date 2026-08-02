@@ -547,9 +547,6 @@ ANALYSIS_SUMMARY_FIELDS: tuple[str, ...] = (
     "parsed_volume_mm3",
     "parsed_surface_area_mm2",
     "parsed_triangle_count",
-    "estimated_material_cost",
-    "estimated_profit",
-    "estimated_print_minutes",
     "gcode_path",
     "converted_model_path",
     "convert_status",
@@ -557,11 +554,19 @@ ANALYSIS_SUMMARY_FIELDS: tuple[str, ...] = (
     "model_metadata_path",
 )
 
+NON_NULL_ANALYSIS_SUMMARY_DEFAULTS = {
+    "estimated_material_cost": Decimal("0"),
+    "estimated_profit": Decimal("0"),
+    "estimated_print_minutes": 0,
+}
+
 
 def reset_product_analysis(product: Product, *, keep_status_pending: bool = True) -> None:
     """Clear stale analysis/cost fields before a new run overwrites them."""
     for field in ANALYSIS_SUMMARY_FIELDS:
         setattr(product, field, None)
+    for field, value in NON_NULL_ANALYSIS_SUMMARY_DEFAULTS.items():
+        setattr(product, field, value)
     product.analysis_error = None
     product.analysis_completed_at = None
     product.analysis_requested_at = datetime.now(timezone.utc)
