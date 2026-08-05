@@ -2930,9 +2930,9 @@ def booth_mode_context_api(query_args):
             market_id=query_args.get("market_id"),
             session_id=query_args.get("session_id"),
         )
-    except ValueError as exc:
+    except ValueError:
         return jsonify(
-            {"error": {"code": "not_found", "message": str(exc), "details": {}}}
+            {"error": {"code": "not_found", "message": "No open POS session found.", "details": {}}}
         ), 404
     return ctx
 
