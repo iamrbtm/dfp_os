@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.catalog import LicenseStatus
-from app.models.inventory import InventoryRecord
+from app.models.inventory import InventoryLocation, InventoryRecord
 from app.models.order import Order, OrderItem
 from app.models.pos import PosSale, PosSaleItem
 from app.services.trend_match import match_product_to_term
@@ -285,7 +285,8 @@ def _keyword_velocity_scores(signal_rows: list[Any]) -> dict[tuple[str, str], fl
         week_label = _week_start(row.scraped_at).isoformat()
         item_keyword = _normalise_keyword(row.keyword_or_category)
         for item in items:
-            weekly_counts[(item_keyword, week_label)] += _item_signal_score(item)
+            key = (item_keyword, week_label)
+            weekly_counts[key] = weekly_counts.get(key, 0.0) + _item_signal_score(item)
     return weekly_counts
 
 
@@ -293,47 +294,46 @@ def _collect_signal_candidates(signal_rows: list[Any]) -> dict[str, OpportunityC
     candidates: dict[str, OpportunityCandidate] = {}
     velocity_scores = _keyword_velocity_scores(signal_rows)
 
-    keyword_item_weeks: dict[str, set[str]] = {}
-    for keyword, week_label in velocity_scores:
-        if keyword not in keyword_item_weeks:
-            keyword_item_weeks[keyword] = set()
-        keyword_item_weeks[keyword].add(week_label)
-
     for row in signal_rows:
-        keyword = _normalise_keyword(row.keyword_or_category)
-        if keyword in INTERNAL_KEYWORDS:
+        row_keyword = _normalise_keyword(row.keyword_or_category)
+        if row_keyword in INTERNAL_KEYWORDS:
             continue
         items = row.raw_metadata.get("items", []) if row.raw_metadata else []
         if not items:
             continue
 
-        signal_total = _calc_signal_total(items)
-        purchase_raw = sum(_item_purchase_signal(item, row.source) for item in items)
-        item_count = len(items)
         source_set = {row.source}
 
-        existing = candidates.get(keyword)
-        if existing:
-            existing.item_count += item_count
-            existing.signal_total += signal_total
-            existing.purchase_raw += purchase_raw
-            existing.sources.update(source_set)
-            continue
+        for item in items:
+            item_kw = item.get("keyword", "")
+            keyword = _normalise_keyword(item_kw) if item_kw else row_keyword
+            if keyword in INTERNAL_KEYWORDS or not keyword:
+                keyword = row_keyword
+            title = item.get("title", "") or row_keyword.title()
+            item_score = _item_signal_score(item)
+            item_purchase = _item_purchase_signal(item, row.source)
 
-        velocity_raw = (
-            max(v for k, v in velocity_scores.items() if k[0] == keyword)
-            if velocity_scores
-            else 0.0
-        )
+            existing = candidates.get(keyword)
+            if existing:
+                existing.item_count += 1
+                existing.signal_total += item_score
+                existing.purchase_raw += item_purchase
+                existing.sources.update(source_set)
+                existing.title = existing.title or title
+                continue
 
-        candidates[keyword] = OpportunityCandidate(
-            keyword=keyword,
-            item_count=item_count,
-            signal_total=signal_total,
-            purchase_raw=purchase_raw,
-            velocity_raw=velocity_raw,
-            sources=source_set,
-        )
+            velocity_scores_for_kw = {v for k, v in velocity_scores.items() if k[0] == keyword}
+            velocity_raw = max(velocity_scores_for_kw) if velocity_scores_for_kw else 0.0
+
+            candidates[keyword] = OpportunityCandidate(
+                keyword=keyword,
+                title=title,
+                item_count=1,
+                signal_total=item_score,
+                purchase_raw=item_purchase,
+                velocity_raw=velocity_raw,
+                sources=source_set,
+            )
 
     for keyword, candidate in candidates.items():
         candidate.maker_signal_count = sum(
@@ -374,7 +374,8 @@ def compute_velocity_and_momentum(db_session: Session, lookback_weeks: int = 4) 
         item_keyword = _normalise_keyword(row.keyword_or_category)
         for item in items:
             score = _item_signal_score(item)
-            weekly_counts[(item_keyword, week_label)] += score
+            key = (item_keyword, week_label)
+            weekly_counts[key] = weekly_counts.get(key, 0.0) + score
             source_weekly_counts[(row.source, item_keyword, week_label)] = (
                 source_weekly_counts.get((row.source, item_keyword, week_label), 0) + score
             )
@@ -403,20 +404,37 @@ def compute_velocity_and_momentum(db_session: Session, lookback_weeks: int = 4) 
         except ValueError:
             pass
 
-    keyword_mom: dict[str, dict[str, Any]] = {}
+    keyword_mom: dict[str, dict[str, dict[str, Any]]] = {}
     for kw, vec in keyword_week_vectors.items():
         if len(vec) < 2:
-            keyword_mom[kw] = {"velocity": 0, "direction": "flat", "total": sum(vec)}
+            keyword_mom.setdefault(kw, {})
             continue
         first_half = sum(vec[: len(vec) // 2])
         second_half = sum(vec[len(vec) // 2 :])
         velocity = second_half - first_half
         direction = "up" if velocity > 0 else ("down" if velocity < 0 else "flat")
-        keyword_mom[kw] = {
-            "velocity": velocity,
-            "direction": direction,
-            "total": sum(vec),
-        }
+        keyword_mom.setdefault(
+            kw, {"velocity": velocity, "direction": direction, "total": sum(vec)}
+        )
+
+    source_mom: dict[str, dict[str, dict[str, Any]]] = {}
+    for kw, sv in keyword_source_vectors.items():
+        for source, vec in sv.items():
+            if len(vec) < 2:
+                source_mom.setdefault(source, {}).setdefault(kw, {})
+                continue
+            first_half = sum(vec[: len(vec) // 2])
+            second_half = sum(vec[len(vec) // 2 :])
+            velocity = second_half - first_half
+            direction = "up" if velocity > 0 else ("down" if velocity < 0 else "flat")
+            source_mom.setdefault(source, {}).setdefault(
+                kw,
+                {
+                    "velocity": velocity,
+                    "direction": direction,
+                    "total": sum(vec),
+                },
+            )
 
     cross_source: dict[str, list[str]] = {}
     for kw, sv in keyword_source_vectors.items():
@@ -431,7 +449,7 @@ def compute_velocity_and_momentum(db_session: Session, lookback_weeks: int = 4) 
             "lookback_weeks": lookback_weeks,
             "errors_by_source": error_map,
         },
-        "keyword_momentum": keyword_mom,
+        "momentum": source_mom,
         "cross_source_correlation": cross_source,
         "velocity_snapshots": all_weeks_set,
     }
@@ -533,7 +551,10 @@ def _catalog_metrics(
             db_session.query(func.coalesce(func.sum(InventoryRecord.quantity_on_hand), 0))
             .filter(
                 InventoryRecord.product_id == p.id,
-                InventoryRecord.is_active.is_(True),
+            )
+            .join(InventoryLocation)
+            .filter(
+                InventoryLocation.active.is_(True),
             )
             .scalar()
             or 0
@@ -768,7 +789,8 @@ def _local_fit(candidate: OpportunityCandidate) -> int:
     terms = _find_matched_local_terms(text)
     if not terms:
         return 5
-    return min(100, max(terms.values() if isinstance(terms, dict) else [5]))
+    scores = [LOCAL_FIT_TERMS.get(t, 5) for t in terms]
+    return min(100, max(scores))
 
 
 def _production_fit(candidate: OpportunityCandidate) -> int:
@@ -1049,7 +1071,7 @@ def _score_candidate(candidate: OpportunityCandidate) -> dict[str, Any]:
         "production_fit": scores["production_fit"],
         "license_risk": scores["license_risk"],
         "action": action,
-        "candidate_type": "current" if candidate.current_product else "potential",
+        "candidate_type": "current_product" if candidate.current_product else "potential",
         "product_id": candidate.product_id,
         "inventory_available": candidate.inventory_available,
         "base_price": round(candidate.base_price, 2),

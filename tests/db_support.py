@@ -7,14 +7,14 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 
-DEFAULT_TEST_DATABASE_URL = "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test"
+DEFAULT_TEST_DATABASE_URL = "postgresql+psycopg://dfpos_test:dfpos_test@127.0.0.1:5432/dfpos_test"
 DEFAULT_MIGRATION_DATABASE_URL = os.getenv(
     "MIGRATION_DATABASE_URL",
-    "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_migration_check",
+    "postgresql+psycopg://dfpos_test:dfpos_test@127.0.0.1:5432/dfpos_migration_check",
 )
 DEFAULT_TEST_DATABASE_ADMIN_URL = os.getenv(
     "TEST_DATABASE_ADMIN_URL",
-    "mysql+pymysql://root:rootpassword@127.0.0.1:3306/mysql",
+    "postgresql+psycopg://dfpos:dfpos@127.0.0.1:5432/postgres",
 )
 
 
@@ -45,62 +45,63 @@ def _database_password(database_url: str) -> str | None:
     return make_url(database_url).password
 
 
-def _database_host_pattern(database_url: str) -> str:
-    host = make_url(database_url).host or "%"
-    return "%" if host in {"127.0.0.1", "localhost", "db"} else host
-
-
 def ensure_database_exists(database_url: str) -> None:
     admin_url = admin_database_url()
-    database_name = _database_name(database_url).replace("`", "``")
+    database_name = _database_name(database_url)
     username = _database_user(database_url)
-    password = (_database_password(database_url) or "").replace("'", "''")
-    host_pattern = _database_host_pattern(database_url).replace("'", "''")
+    password = _database_password(database_url) or ""
     engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
     try:
         with engine.connect() as connection:
-            connection.execute(
-                text(
-                    f"CREATE DATABASE IF NOT EXISTS `{database_name}` "
-                    "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-                )
-            )
-            if username:
+            if not username:
+                raise ValueError("Postgres test database URL must include a username")
+            exists = connection.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                {"name": database_name},
+            ).scalar()
+            role_exists = connection.execute(
+                text("SELECT 1 FROM pg_roles WHERE rolname = :name"),
+                {"name": username},
+            ).scalar()
+            if not role_exists:
                 connection.execute(
-                    text(
-                        f"GRANT ALL PRIVILEGES ON `{database_name}`.* "
-                        f"TO '{username}'@'{host_pattern}' IDENTIFIED BY '{password}'"
-                    )
+                    text(f'CREATE ROLE "{username}" LOGIN PASSWORD :password'),
+                    {"password": password},
                 )
-                connection.execute(text("FLUSH PRIVILEGES"))
+            if not exists:
+                connection.execute(text(f'CREATE DATABASE "{database_name}" OWNER "{username}"'))
     finally:
         engine.dispose()
 
 
 def recreate_database(database_url: str) -> None:
     admin_url = admin_database_url()
-    database_name = _database_name(database_url).replace("`", "``")
+    database_name = _database_name(database_url)
     username = _database_user(database_url)
-    password = (_database_password(database_url) or "").replace("'", "''")
-    host_pattern = _database_host_pattern(database_url).replace("'", "''")
+    password = _database_password(database_url) or ""
+    if not username:
+        raise ValueError("Postgres test database URL must include a username")
     engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
     try:
         with engine.connect() as connection:
-            connection.execute(text(f"DROP DATABASE IF EXISTS `{database_name}`"))
+            role_exists = connection.execute(
+                text("SELECT 1 FROM pg_roles WHERE rolname = :name"),
+                {"name": username},
+            ).scalar()
+            if not role_exists:
+                connection.execute(
+                    text(f'CREATE ROLE "{username}" LOGIN PASSWORD :password'),
+                    {"password": password},
+                )
             connection.execute(
                 text(
-                    f"CREATE DATABASE `{database_name}` "
-                    "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-                )
+                    "SELECT pg_terminate_backend(pid) "
+                    "FROM pg_stat_activity WHERE datname = :name AND pid <> pg_backend_pid()"
+                ),
+                {"name": database_name},
             )
-            if username:
-                connection.execute(
-                    text(
-                        f"GRANT ALL PRIVILEGES ON `{database_name}`.* "
-                        f"TO '{username}'@'{host_pattern}' IDENTIFIED BY '{password}'"
-                    )
-                )
-                connection.execute(text("FLUSH PRIVILEGES"))
+            connection.execute(text(f'DROP DATABASE IF EXISTS "{database_name}"'))
+            connection.execute(text(f'CREATE DATABASE "{database_name}" OWNER "{username}"'))
     finally:
         engine.dispose()
 
@@ -125,6 +126,7 @@ def base_test_app_config(tmp_path: Path, **overrides: object) -> dict[str, objec
         "S3_AUTO_CREATE_BUCKETS": False,
         "CELERY_BROKER_URL": "memory://",
         "CELERY_RESULT_BACKEND": "cache+memory://",
+        "MAX_CONTENT_LENGTH_MB": 16,
     }
     config.update(overrides)
     return config

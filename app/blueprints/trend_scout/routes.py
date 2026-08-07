@@ -556,7 +556,7 @@ def settings():
                             key=_profile_storage_key(profile_name),
                             value=json.dumps(weights),
                             description=f"Trend Scout profile: {profile_name}",
-                            type="json",
+                            setting_type="json",
                         )
                     )
                 db.session.commit()

@@ -186,7 +186,7 @@ def upgrade():
     )
     op.add_column("cost_snapshots", sa.Column("material", sa.String(length=40), nullable=True))
     op.add_column(
-        "cost_snapshots", sa.Column("density", sa.Numeric(length=6, scale=4), nullable=True)
+        "cost_snapshots", sa.Column("density", sa.Numeric(precision=6, scale=4), nullable=True)
     )
     op.add_column(
         "cost_snapshots",
@@ -207,11 +207,11 @@ def upgrade():
     op.add_column("cost_snapshots", sa.Column("copies", sa.Integer(), nullable=True))
     op.add_column(
         "cost_snapshots",
-        sa.Column("parsed_filament_grams", sa.Numeric(length=10, scale=2), nullable=True),
+        sa.Column("parsed_filament_grams", sa.Numeric(precision=10, scale=2), nullable=True),
     )
     op.add_column(
         "cost_snapshots",
-        sa.Column("parsed_print_minutes", sa.Numeric(length=10, scale=2), nullable=True),
+        sa.Column("parsed_print_minutes", sa.Numeric(precision=10, scale=2), nullable=True),
     )
     op.add_column(
         "cost_snapshots", sa.Column("cost_resolver_evidence_json", sa.Text(), nullable=True)

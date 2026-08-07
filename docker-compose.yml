@@ -3,7 +3,7 @@ x-env-app: &env-app
   SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
   APP_NAME: ${APP_NAME:-Dude Fish OS}
   APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
-  DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:?POSTGRES_DB must be set}
   ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
   CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://audit-redis:6379/1}
@@ -56,19 +56,18 @@ x-build-app-dev: &build-app-dev
 
 services:
   db:
-    image: mariadb:11
+    image: postgres:17
     environment:
-      MARIADB_DATABASE: ${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
-      MARIADB_USER: ${MARIADB_USER:?MARIADB_USER must be set}
-      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}
-      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?MARIADB_ROOT_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     expose:
-      - "3306"
+      - "5432"
     volumes:
-      - mariadb_data:/var/lib/mysql
-      - ./docker/mariadb/init:/docker-entrypoint-initdb.d:ro
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u$${MARIADB_USER} -p$${MARIADB_PASSWORD} --silent"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -170,7 +169,7 @@ services:
     environment:
       FLASK_ENV: ${FLASK_ENV:-production}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      DATABASE_URL: mysql+pymysql://${MARIADB_USER:?MARIADB_USER must be set}:${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set}@db:3306/${MARIADB_DATABASE:?MARIADB_DATABASE must be set}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:?POSTGRES_DB must be set}
     depends_on:
       db:
         condition: service_healthy
@@ -302,10 +301,8 @@ services:
     environment:
       FLASK_ENV: testing
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      TEST_DATABASE_URL: mysql+pymysql://username:password@db:3306/dudefish_os_test
-      DATABASE_URL: mysql+pymysql://username:password@db:3306/dudefish_os_test
-      TEST_DATABASE_ADMIN_URL: mysql+pymysql://root:rootpassword@db:3306/mysql
-      MIGRATION_DATABASE_URL: mysql+pymysql://username:password@db:3306/dudefish_os_migration_check
+      TEST_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:?POSTGRES_DB must be set}_test
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:?POSTGRES_DB must be set}_test
     depends_on:
       db:
         condition: service_healthy
@@ -330,7 +327,7 @@ services:
       - web
 
 volumes:
-  mariadb_data:
+  postgres_data:
   receipt_uploads:
   seaweedfs_data:
   audit_postgres_data:

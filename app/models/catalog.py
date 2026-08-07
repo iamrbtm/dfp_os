@@ -328,6 +328,14 @@ class Product(PrimaryKeyMixin, TimestampMixin, db.Model):
     block_reprint: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    @property
+    def inventory_available(self) -> int:
+        return sum(r.quantity_on_hand - r.quantity_reserved for r in self.inventory_records)
+
+    @property
+    def reorder_target(self) -> int:
+        return max((r.reorder_target for r in self.inventory_records), default=0)
+
     category = relationship("Category", back_populates="products")
     collection = relationship("Collection", back_populates="primary_products")
     collections = relationship(

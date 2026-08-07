@@ -146,7 +146,7 @@ def save_weight(prefix: str, key: str, value: float) -> None:
             key=setting_key,
             value=str(value),
             description=f"Trend Scout {prefix.strip('.')} weight: {key}",
-            type="float",
+            setting_type="float",
         )
         db.session.add(setting)
     db.session.commit()

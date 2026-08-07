@@ -45,7 +45,7 @@ def _scoped_token(client, *scopes: str) -> str:
             role=UserRole.ADMIN,
             is_active=True,
         )
-        user.set_password("secret")
+        user.set_password("secret123")
         db.session.add(user)
         db.session.commit()
         _token, raw = create_api_token(user, "Scoped API Token", scopes=list(scopes))
@@ -54,7 +54,7 @@ def _scoped_token(client, *scopes: str) -> str:
 
 @pytest.fixture()
 def admin_headers(app, client):
-    """Create an admin user and return Bearer token auth headers."""
+    """Create an admin user, log in via session, and return Bearer token auth headers."""
     from app.models import User, UserRole
 
     with app.app_context():
@@ -65,13 +65,18 @@ def admin_headers(app, client):
             role=UserRole.ADMIN,
             is_active=True,
         )
-        user.set_password("secret")
+        user.set_password("secret123")
         db.session.add(user)
         db.session.commit()
         _token, raw = create_api_token(
             user, "Admin Headers Token", scopes=["admin", "markets", "receipts"]
         )
-        return {"Authorization": f"Bearer {raw}"}
+
+    client.post(
+        "/auth/login",
+        data={"email": user.email, "password": "secret123"},
+    )
+    return {"Authorization": f"Bearer {raw}"}
 
 
 def test_market_model_can_be_created(app):
@@ -542,7 +547,7 @@ def test_weather_fetch_stores_matching_forecast(app, monkeypatch):
             return False
 
         def get(self, url):
-            if "points" in url:
+            if "/points/" in url:
                 return FakeResponse(
                     {"properties": {"forecast": "https://api.weather.gov/gridpoints/test"}}
                 )
@@ -627,7 +632,6 @@ def test_market_application_list_requires_auth(client):
 def test_market_application_tracker_status_filter(app, client):
     with app.app_context():
         from app.models import User, UserRole
-        from flask_login import login_user
 
         user = User(
             email="app-tracker-admin@example.com",
@@ -636,7 +640,7 @@ def test_market_application_tracker_status_filter(app, client):
             role=UserRole.ADMIN,
             is_active=True,
         )
-        user.set_password("secret")
+        user.set_password("secret123")
         db.session.add(user)
         for name, status in [
             ("Spring Festival", MarketStatus.INTERESTED),
@@ -647,10 +651,13 @@ def test_market_application_tracker_status_filter(app, client):
         ]:
             db.session.add(Market(name=name, status=status))
         db.session.commit()
+        email = user.email
 
     with client:
-        with app.app_context():
-            login_user(user)
+        client.post(
+            "/auth/login",
+            data={"email": email, "password": "secret123"},
+        )
         resp = client.get("/markets/markets/?status=application")
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
@@ -664,7 +671,6 @@ def test_market_application_tracker_status_filter(app, client):
 def test_market_application_tracker_admin_create(app, client):
     with app.app_context():
         from app.models import User, UserRole
-        from flask_login import login_user
 
         user = User(
             email="app-create-admin@example.com",
@@ -673,13 +679,16 @@ def test_market_application_tracker_admin_create(app, client):
             role=UserRole.ADMIN,
             is_active=True,
         )
-        user.set_password("secret")
+        user.set_password("secret123")
         db.session.add(user)
         db.session.commit()
+        email = user.email
 
     with client:
-        with app.app_context():
-            login_user(user)
+        client.post(
+            "/auth/login",
+            data={"email": email, "password": "secret123"},
+        )
         _ensure_csrf_cookie(client)
         resp = client.post(
             "/markets/new",
@@ -980,7 +989,7 @@ def test_table_layout_generates_default_sections(app, client, admin_headers):
             state="TN",
         )
         db.session.add(market)
-        db.session.flush()
+        db.session.commit()
         market_id = market.id
 
     resp = client.get(f"/table_layouts/new?market_id={market_id}", headers=admin_headers)

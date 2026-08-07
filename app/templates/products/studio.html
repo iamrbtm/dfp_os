@@ -21,7 +21,7 @@
 <section class="product-studio-shell mx-auto space-y-8">
   <div>
     <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
-    <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Product Studio</h1>
+     <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{% if mode == "create" %}New Product{% else %}Product Studio{% endif %}</h1>
     <p class="mt-1 text-sm" style="color: var(--color-text-muted);">
       One product record holds pricing, sellable details, model analysis, and images.
     </p>
@@ -269,7 +269,11 @@
             </div>
 
             <form id="model-upload-form" data-product-id="{{ product.id }}" enctype="multipart/form-data" class="space-y-4">
-              {{ upload_form.csrf_token }}
+              {% if upload_form.csrf_token is defined %}
+                {{ upload_form.csrf_token }}
+              {% else %}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {% endif %}
               <div id="model-drop-zone" class="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer" style="border-color: var(--color-border);">
                 <div class="text-4xl mb-3">📁</div>
                 <p id="drop-zone-label" style="color: var(--color-text-muted);">

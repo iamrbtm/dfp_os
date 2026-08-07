@@ -136,6 +136,7 @@ def test_analytics_api_summary_with_token(app: Flask, client: FlaskClient):
             name="Test Analytics",
             token_hash=hashlib.sha256(raw.encode()).hexdigest(),
             prefix=raw[:8],
+            scopes="admin",
         )
         db.session.add(token)
         db.session.commit()

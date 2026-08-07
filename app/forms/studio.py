@@ -85,7 +85,7 @@ class ProductStudioForm(FlaskForm):
     safety_notes = TextAreaField("Safety Notes", validators=[Optional()])
     launch_override_reason = TextAreaField(
         "Launch Override Reason",
-        validators=[Optional(), Length(min=10, max=7000)],
+        validators=[Optional(), Length(min=10, max=2000)],
     )
     license_status = SelectField(
         "License Status", choices=enum_choices(LicenseStatus), validators=[DataRequired()]

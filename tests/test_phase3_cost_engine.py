@@ -65,7 +65,7 @@ def _catalog(app):
         )
         collection = Collection(name="Col", slug="col", is_public=True, sort_order=1)
         db.session.add_all([category, collection])
-        db.session.flush()
+        db.session.commit()
         return category.id, collection.id
 
 

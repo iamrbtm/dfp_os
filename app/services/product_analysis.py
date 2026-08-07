@@ -363,7 +363,7 @@ def retire_current_gcode_assets(
         )
         .update(
             {ProductModelAsset.is_current: False},
-            synchronize_session=False,
+        synchronize_session="fetch",
         )
     )
     product.gcode_path = None
@@ -418,9 +418,13 @@ def is_current_run(run_id: int, *, for_update: bool = False) -> bool:
             .with_for_update()
             .one_or_none()
         )
-    else:
-        run = db.session.get(ProductAnalysisRun, run_id)
-    return bool(run and run.is_current)
+        return bool(run and run.is_current)
+    result = (
+        db.session.query(ProductAnalysisRun.is_current)
+        .filter(ProductAnalysisRun.id == run_id)
+        .scalar()
+    )
+    return bool(result)
 
 
 def get_current_run(product: Product) -> ProductAnalysisRun | None:

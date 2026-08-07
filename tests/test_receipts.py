@@ -5,6 +5,7 @@ from decimal import Decimal
 import io
 
 import pytest
+from sqlalchemy import text
 from werkzeug.datastructures import FileStorage
 
 from app import create_app
@@ -51,11 +52,15 @@ def app_with_receipts(tmp_path):
     )
 
     with app.app_context():
-        db.drop_all()
+        db.session.execute(text("DROP SCHEMA public CASCADE"))
+        db.session.execute(text("CREATE SCHEMA public"))
+        db.session.commit()
         db.create_all()
         yield app
         db.session.remove()
-        db.drop_all()
+        db.session.execute(text("DROP SCHEMA public CASCADE"))
+        db.session.execute(text("CREATE SCHEMA public"))
+        db.session.commit()
 
 
 @pytest.fixture()

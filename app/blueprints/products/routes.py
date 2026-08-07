@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.products import bp
-from app.forms import CategoryForm, CollectionForm
+from app.forms import CategoryForm, CollectionForm, ProductStudioForm
 from app.models import Category, Collection, Product, UserRole
 from app.services.crud import (
     apply_search,
@@ -50,6 +50,20 @@ def _bool_column(attr: str):
 
 
 PRODUCT_RESOURCES: dict[str, ResourceConfig] = {
+    "products": ResourceConfig(
+        key="products",
+        singular="Product",
+        plural="Products",
+        model=Product,
+        form_class=ProductStudioForm,
+        search_fields=["name", "sku_base", "slug"],
+        columns=[
+            ("Name", lambda item: item.name),
+            ("SKU", lambda item: item.sku_base or ""),
+            ("Status", lambda item: _display_value(item.status)),
+            ("Price", lambda item: _display_value(item.base_price)),
+        ],
+    ),
     "categories": ResourceConfig(
         key="categories",
         singular="Category",

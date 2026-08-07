@@ -79,7 +79,7 @@ def test_starting_a_new_run_supersedes_the_prior_current_run(app):
     with app.app_context():
         product = _make_product()
         asset_a = _source_asset(product)
-        run_a = start_analysis_run(product, source_asset=asset_a, requested_by_id=1)
+        run_a = start_analysis_run(product, source_asset=asset_a, requested_by_id=None)
         assert run_a.is_current is True
         assert run_a.status == AnalysisRunStatus.QUEUED
 
@@ -94,7 +94,7 @@ def test_starting_a_new_run_supersedes_the_prior_current_run(app):
             sha256="b" * 64,
             asset_kind=AssetKind.SOURCE_MODEL,
         )
-        run_b = start_analysis_run(product, source_asset=asset_b, requested_by_id=1)
+        run_b = start_analysis_run(product, source_asset=asset_b, requested_by_id=None)
 
         db.session.flush()
         assert run_b.is_current is True
@@ -108,10 +108,10 @@ def test_superseded_run_does_not_overwrite_product_fields(app):
     with app.app_context():
         product = _make_product()
         asset = _source_asset(product)
-        run_a = start_analysis_run(product, source_asset=asset, requested_by_id=1)
+        run_a = start_analysis_run(product, source_asset=asset, requested_by_id=None)
 
         # Run B arrives and becomes current.
-        run_b = start_analysis_run(product, source_asset=asset, requested_by_id=1)
+        run_b = start_analysis_run(product, source_asset=asset, requested_by_id=None)
         # B publishes its results to the product first.
         publish_run_results(
             run_b,
@@ -288,7 +288,7 @@ def test_cost_snapshot_records_full_evidence(app):
     with app.app_context():
         product = _analyzed_product()
         asset = _source_asset(product)
-        run = start_analysis_run(product, source_asset=asset, requested_by_id=1)
+        run = start_analysis_run(product, source_asset=asset, requested_by_id=None)
         breakdown = calculate_product_cost(product=product)
         snapshot = persist_cost_snapshot(
             product=product,

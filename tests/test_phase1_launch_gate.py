@@ -82,7 +82,7 @@ def _ready_product(app) -> Product:
         )
         db.session.add_all([category, product])
         db.session.commit()
-        return product
+        return product.id
 
 
 def test_launch_gate_rejects_empty_and_short_override(app):
@@ -120,7 +120,7 @@ def test_launch_gate_rejects_empty_and_short_override(app):
 
 
 def test_launch_gate_rejects_overlong_override(app):
-    pid = _ready_product(app).id  # ensure app context seeds a category/slug set
+    pid = _ready_product(app)  # ensure app context seeds a category/slug set
     with app.app_context():
         product = db.session.get(Product, pid)
         product.launch_override_reason = "x" * 2001

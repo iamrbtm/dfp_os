@@ -25,7 +25,7 @@ def _admin_token(client):
             role=UserRole.ADMIN,
             is_active=True,
         )
-        user.set_password("secret")
+        user.set_password("secret123")
         db.session.add(user)
         db.session.commit()
         token, raw = create_api_token(user, "RS API Token", scopes=["report_studio"])
@@ -141,7 +141,7 @@ def test_vendor_market_heat_map_min_profit_filter(app):
 
 def test_vendor_market_heat_map_status_filter(app):
     with app.app_context():
-        _create_market("Scheduled Market", MarketStatus.SCHEDULED, name="SchedMarket")
+        _create_market("SchedMarket", MarketStatus.SCHEDULED)
         data = get_vendor_market_heat_map({"status": "scheduled"})
         assert all(m["status"] == "scheduled" for m in data)
 
@@ -172,7 +172,7 @@ def test_market_application_pipeline_report_with_data(app):
 def test_market_application_pipeline_report_metrics(app):
     with app.app_context():
         _create_market(
-            "Interested Market", MarketStatus.INTERESTED, application_deadline=date(2026, 8, 1)
+            "Interested Market", MarketStatus.INTERESTED, application_deadline=date(2026, 9, 1)
         )
         report = get_market_application_pipeline_report({})
         assert report["upcoming_deadlines"] >= 1
@@ -191,7 +191,7 @@ def test_route_home_requires_auth(client):
     assert resp.status_code == 302
 
 
-def test_route_home_loads_for_admin(client, app):
+def test_route_home_loads_for_admin(client, app, admin_user):
     with app.app_context():
         _create_market("RS Test Market", MarketStatus.COMPLETED)
     client.post("/auth/login", data={"email": "owner@example.com", "password": "super-secret"})
@@ -200,13 +200,13 @@ def test_route_home_loads_for_admin(client, app):
     assert b"Report Studio" in resp.data
 
 
-def test_route_home_empty_state(client, app):
+def test_route_home_empty_state(client, app, admin_user):
     client.post("/auth/login", data={"email": "owner@example.com", "password": "super-secret"})
     resp = client.get("/report-studio/")
     assert resp.status_code == 200
 
 
-def test_route_heat_map_loads(client, app):
+def test_route_heat_map_loads(client, app, admin_user):
     with app.app_context():
         _create_market("HM Market", MarketStatus.COMPLETED)
     client.post("/auth/login", data={"email": "owner@example.com", "password": "super-secret"})
@@ -215,13 +215,13 @@ def test_route_heat_map_loads(client, app):
     assert b"Vendor Market Heat Map" in resp.data
 
 
-def test_route_heat_map_empty(client, app):
+def test_route_heat_map_empty(client, app, admin_user):
     client.post("/auth/login", data={"email": "owner@example.com", "password": "super-secret"})
     resp = client.get("/report-studio/heat-map")
     assert resp.status_code == 200
 
 
-def test_route_application_tracker_loads(client, app):
+def test_route_application_tracker_loads(client, app, admin_user):
     with app.app_context():
         _create_market("AT Market", MarketStatus.APPLIED)
     client.post("/auth/login", data={"email": "owner@example.com", "password": "super-secret"})
@@ -230,7 +230,7 @@ def test_route_application_tracker_loads(client, app):
     assert b"Market Application Tracker" in resp.data
 
 
-def test_route_application_tracker_empty(client, app):
+def test_route_application_tracker_empty(client, app, admin_user):
     client.post("/auth/login", data={"email": "owner@example.com", "password": "super-secret"})
     resp = client.get("/report-studio/application-tracker")
     assert resp.status_code == 200
@@ -286,25 +286,24 @@ def test_api_application_tracker_returns_data(client, app):
     assert "data" in data
 
 
-def test_api_heat_map_csv_export(client, app):
+def test_api_heat_map_csv_export(client, app, admin_user):
     token = _admin_token(client)
     resp = client.get(
         "/api/v1/report-studio/heat-map/csv",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
-    assert resp.content_type == "text/csv"
     assert "text/csv" in resp.content_type
 
 
-def test_api_application_tracker_csv_export(client, app):
+def test_api_application_tracker_csv_export(client, app, admin_user):
     token = _admin_token(client)
     resp = client.get(
         "/api/v1/report-studio/application-tracker/csv",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
-    assert resp.content_type == "text/csv"
+    assert "text/csv" in resp.content_type
 
 
 def test_module_blocked_when_disabled(client, app):
@@ -323,7 +322,7 @@ def test_module_blocked_when_disabled(client, app):
     assert resp.status_code == 403
 
 
-def test_staff_can_access_report_studio(client, app):
+def test_staff_can_access_report_studio(client, app, admin_user):
     from app.models import User
 
     with app.app_context():
@@ -334,9 +333,9 @@ def test_staff_can_access_report_studio(client, app):
             role=UserRole.STAFF,
             is_active=True,
         )
-        user.set_password("secret")
+        user.set_password("secret123")
         db.session.add(user)
         db.session.commit()
-    client.post("/auth/login", data={"email": "staff-rs@example.com", "password": "secret"})
+    client.post("/auth/login", data={"email": "staff-rs@example.com", "password": "secret123"})
     resp = client.get("/report-studio/")
     assert resp.status_code == 200

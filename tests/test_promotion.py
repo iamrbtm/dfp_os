@@ -154,7 +154,7 @@ def test_sign_asset_linked_to_product(app):
 def test_generate_draft_from_product(app):
     with app.app_context():
         product = _ensure_product()
-        draft = generate_draft_from_product(product.id, actor_id=1)
+        draft = generate_draft_from_product(product.id, actor_id=None)
 
         assert draft is not None
         assert draft.product_id == product.id
@@ -174,7 +174,7 @@ def test_generate_draft_from_market(app):
         db.session.add(market)
         db.session.commit()
 
-        draft = generate_draft_from_market(market.id, actor_id=1)
+        draft = generate_draft_from_market(market.id, actor_id=None)
 
         assert draft is not None
         assert draft.market_id == market.id
@@ -193,7 +193,7 @@ def test_generate_draft_from_custom_request(app):
         db.session.add(cr)
         db.session.commit()
 
-        draft = generate_draft_from_custom_request(cr.id, actor_id=1)
+        draft = generate_draft_from_custom_request(cr.id, actor_id=None)
 
         assert draft is not None
         assert draft.custom_request_id == cr.id
@@ -322,7 +322,7 @@ def test_draft_admin_create_flow(app, client):
                 role=UserRole.ADMIN,
                 is_active=True,
             )
-            user.set_password("secret")
+            user.set_password("secret123")
             db.session.add(user)
             db.session.commit()
 
@@ -330,7 +330,7 @@ def test_draft_admin_create_flow(app, client):
         "/auth/login",
         data={
             "email": "promo-admin@example.com",
-            "password": "secret",
+            "password": "secret123",
         },
         follow_redirects=True,
     )
@@ -352,7 +352,7 @@ def test_draft_admin_create_flow(app, client):
 
 def test_sign_asset_admin_api_token_enforcement(client):
     resp = client.post(
-        "/api/v1/promotion/signs",
+        "/api/v1/sign-assets",
         json={"title": "Should fail", "status": "draft"},
         headers={"Authorization": "Bearer invalid-token"},
     )
@@ -389,7 +389,7 @@ def test_ai_assisted_draft_falls_back_to_deterministic_when_ai_disabled(app):
         current_app.config["OPENAI_API_KEY"] = ""
 
         product = _ensure_product()
-        draft = generate_ai_assisted_draft("product", product.id, actor_id=1)
+        draft = generate_ai_assisted_draft("product", product.id, actor_id=None)
 
         assert draft is not None
         assert draft.product_id == product.id
@@ -413,7 +413,7 @@ def test_ai_assisted_draft_from_market_falls_back_when_disabled(app):
         db.session.add(market)
         db.session.commit()
 
-        draft = generate_ai_assisted_draft("market", market.id, actor_id=1)
+        draft = generate_ai_assisted_draft("market", market.id, actor_id=None)
 
         assert draft is not None
         assert draft.market_id == market.id
@@ -422,7 +422,7 @@ def test_ai_assisted_draft_from_market_falls_back_when_disabled(app):
 
 def test_ai_assisted_draft_handles_unknown_source(app):
     with app.app_context():
-        draft = generate_ai_assisted_draft("unknown_source", 1, actor_id=1)
+        draft = generate_ai_assisted_draft("unknown_source", 1, actor_id=None)
         assert draft is None
 
 
@@ -442,7 +442,7 @@ def test_ai_assisted_draft_dispatches_audit_event(app, monkeypatch):
         current_app.config["OPENAI_API_KEY"] = ""
 
         product = _ensure_product()
-        generate_ai_assisted_draft("product", product.id, actor_id=42)
+        generate_ai_assisted_draft("product", product.id, actor_id=None)
 
     assert any(call["action"] == "content_draft.generated_from_product" for call in calls)
 

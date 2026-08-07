@@ -1187,7 +1187,33 @@ def product_readiness(product_id: int):
                 }
                 for item in checklist
             ],
-        }
+    }
+}
+
+
+@catalog_blp.route("/printers/reliability", methods=["GET"])
+@api_token_required
+@catalog_blp.doc(tags=["Printers"])
+@catalog_blp.response(200)
+def printer_reliability_list():
+    denied = _scope_guard_for("printers")
+    if denied:
+        return denied
+    from app.services.printer_reliability import get_all_printer_reliability_summaries
+
+    summaries = get_all_printer_reliability_summaries()
+    return {
+        "data": [
+            {
+                "printer_name": s.printer_name,
+                "printer_model": s.printer_model,
+                "failure_rate_percent": float(s.failure_rate * 100),
+                "completed_count": s.completed_count,
+                "failed_count": s.failed_count,
+                "total_finished_count": s.total_finished_count,
+            }
+            for s in summaries
+        ]
     }
 
 
@@ -2335,27 +2361,22 @@ class ContentDraftCollection(MethodView):
 
     @api_token_required
     @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.arguments(ContentDraftSchema)
     @catalog_blp.response(201)
-    def post(self):
+    def post(self, body_data):
         denied = require_api_scopes("promotion")
         if denied:
             return denied
-        payload = request.get_json(silent=True) or {}
-        errors = ContentDraftSchema().validate(payload)
-        if errors:
-            return {
-                "error": {"code": "validation_error", "message": str(errors), "details": errors}
-            }, 400
         draft = ContentDraft(
-            title=payload.get("title", ""),
-            content_type=payload.get("content_type", "social_post"),
-            channel=payload.get("channel", "other"),
-            caption=payload.get("caption"),
-            media_reference=payload.get("media_reference"),
-            product_id=payload.get("product_id"),
-            market_id=payload.get("market_id"),
-            custom_request_id=payload.get("custom_request_id"),
-            status=ContentStatus(payload.get("status", "draft")),
+            title=body_data.get("title", ""),
+            content_type=body_data.get("content_type", "social_post"),
+            channel=body_data.get("channel", "other"),
+            caption=body_data.get("caption"),
+            media_reference=body_data.get("media_reference"),
+            product_id=body_data.get("product_id"),
+            market_id=body_data.get("market_id"),
+            custom_request_id=body_data.get("custom_request_id"),
+            status=ContentStatus(body_data.get("status", "draft")),
         )
         db.session.add(draft)
         db.session.commit()
@@ -2462,14 +2483,14 @@ class ContentDraftItem(MethodView):
 @catalog_blp.route("/content-drafts/generate-ai", methods=["POST"])
 @api_token_required
 @catalog_blp.doc(tags=["Promotion"])
+@catalog_blp.arguments(EmptyBodySchema)
 @catalog_blp.response(201)
-def content_draft_generate_ai():
+def content_draft_generate_ai(body_data: dict):
     denied = require_api_scopes("promotion")
     if denied:
         return denied
-    payload = request.get_json(silent=True) or {}
-    source_type = payload.get("source_type", "").strip()
-    source_id = payload.get("source_id", 0)
+    source_type = (body_data or {}).get("source_type", "").strip()
+    source_id = (body_data or {}).get("source_id", 0)
     if not source_type or not source_id:
         return {
             "error": {
@@ -2521,29 +2542,24 @@ class SignAssetCollection(MethodView):
 
     @api_token_required
     @catalog_blp.doc(tags=["Promotion"])
+    @catalog_blp.arguments(SignAssetSchema)
     @catalog_blp.response(201)
-    def post(self):
+    def post(self, body_data: dict):
         denied = require_api_scopes("promotion")
         if denied:
             return denied
-        payload = request.get_json(silent=True) or {}
-        errors = SignAssetSchema().validate(payload)
-        if errors:
-            return {
-                "error": {"code": "validation_error", "message": str(errors), "details": errors}
-            }, 400
         sign = SignAsset(
-            title=payload.get("title", ""),
-            subtitle=payload.get("subtitle"),
-            price_display=payload.get("price_display"),
-            short_description=payload.get("short_description"),
-            care_note=payload.get("care_note"),
-            qr_target_url=payload.get("qr_target_url"),
-            layout=payload.get("layout", "text"),
-            product_id=payload.get("product_id"),
-            collection_id=payload.get("collection_id"),
-            is_active=payload.get("is_active", True),
-            status=SignStatus(payload.get("status", "draft")),
+            title=body_data.get("title", ""),
+            subtitle=body_data.get("subtitle"),
+            price_display=body_data.get("price_display"),
+            short_description=body_data.get("short_description"),
+            care_note=body_data.get("care_note"),
+            qr_target_url=body_data.get("qr_target_url"),
+            layout=body_data.get("layout", "text"),
+            product_id=body_data.get("product_id"),
+            collection_id=body_data.get("collection_id"),
+            is_active=body_data.get("is_active", True),
+            status=SignStatus(body_data.get("status", "draft")),
         )
         db.session.add(sign)
         db.session.flush()
@@ -2831,8 +2847,9 @@ def report_studio_application_tracker_csv():
 @catalog_blp.route("/sign-assets/<int:sign_id>/generate-ai-image", methods=["POST"])
 @api_token_required
 @catalog_blp.doc(tags=["Promotion"])
+@catalog_blp.arguments(EmptyBodySchema)
 @catalog_blp.response(200)
-def sign_asset_generate_ai_image(sign_id: int):
+def sign_asset_generate_ai_image(body_data: dict, sign_id: int):
     denied = require_api_scopes("promotion")
     if denied:
         return denied

@@ -53,21 +53,21 @@ def test_get_all_settings(app):
 
 def test_get_setting_typed_string(app):
     with app.app_context():
-        set_setting("test_str", "hello", type="string")
+        set_setting("test_str", "hello", setting_type="string")
         assert get_setting_typed("test_str") == "hello"
 
 
 def test_get_setting_typed_boolean(app):
     with app.app_context():
-        set_setting("test_bool", "true", type="boolean")
+        set_setting("test_bool", "true", setting_type="boolean")
         assert get_setting_typed("test_bool") is True
-        set_setting("test_bool2", "false", type="boolean")
+        set_setting("test_bool2", "false", setting_type="boolean")
         assert get_setting_typed("test_bool2") is False
 
 
 def test_get_setting_typed_integer(app):
     with app.app_context():
-        set_setting("test_int", "42", type="integer")
+        set_setting("test_int", "42", setting_type="integer")
         assert get_setting_typed("test_int") == 42
 
 

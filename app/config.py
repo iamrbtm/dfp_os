@@ -5,9 +5,9 @@ from pathlib import Path
 from decimal import Decimal
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_DOCKER_DATABASE_URL = "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os"
+DEFAULT_DOCKER_DATABASE_URL = "postgresql+psycopg://dfpos_test:dfpos_test@127.0.0.1:15432/dfpos_app"
 DEFAULT_DOCKER_TEST_DATABASE_URL = (
-    "mysql+pymysql://username:password@127.0.0.1:3306/dudefish_os_test"
+    "postgresql+psycopg://dfpos_test:dfpos_test@127.0.0.1:15432/dfpos_test"
 )
 
 

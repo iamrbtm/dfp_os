@@ -119,7 +119,7 @@ def _gen_from_custom_requests(
                     _make_task(
                         market=market,
                         follow_up_type=FollowUpType.CUSTOM_LEAD,
-                        title=f"Review custom request from {req.customer_name or 'unknown'}",
+                         title=f"Review custom request from {req.name or 'unknown'}",
                         customer_id=customer_id,
                         related_custom_request_id=req.id,
                         due_days=2,

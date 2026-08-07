@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 
 from app import create_app
 from app.extensions import db
@@ -15,6 +16,12 @@ from tests.db_support import (
 )
 
 
+def _reset_postgres_schema() -> None:
+    db.session.execute(text("DROP SCHEMA public CASCADE"))
+    db.session.execute(text("CREATE SCHEMA public"))
+    db.session.commit()
+
+
 @pytest.fixture()
 def app(tmp_path: Path):
     ensure_database_exists(configured_test_database_url())
@@ -25,11 +32,11 @@ def app(tmp_path: Path):
     )
 
     with app.app_context():
-        db.drop_all()
+        _reset_postgres_schema()
         db.create_all()
         yield app
         db.session.remove()
-        db.drop_all()
+        _reset_postgres_schema()
 
 
 @pytest.fixture()
@@ -129,5 +136,5 @@ def api_token(app):
         user.set_password("super-secret")
         db.session.add(user)
         db.session.commit()
-        _, raw_token = create_api_token(user, "Phase 2 Test Token", scopes=["catalog"])
+        _, raw_token = create_api_token(user, "Phase 2 Test Token", scopes=["catalog", "settings"])
         return raw_token

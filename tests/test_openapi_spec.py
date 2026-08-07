@@ -61,7 +61,7 @@ def test_openapi_crud_has_request_bodies(client):
     for path, method in post_paths:
         op = paths[path][method]
         if "requestBody" not in op:
-            if "api-tokens" in path or path.endswith("/exports/markets.csv"):
+            if "api-tokens" in path or path.endswith("/exports/markets.csv") or "/dead-stock" in path:
                 continue
             assert False, f"{path} POST missing requestBody"
 

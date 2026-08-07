@@ -370,7 +370,7 @@ def retire_product(
 
 def launch_gate(product: Product) -> tuple[bool, list[str]]:
     readiness = calculate_product_readiness(product)
-    # Issue 42 — the override reason must be a meaningful (10-7000 char) string.
+    # Issue 42 — the override reason must be a meaningful (10-2000 char) string.
     # A single space or "lol" must NOT bypass the gate, and this check is
     # server-side so it cannot be skirted by sending raw data past the form.
     override = (product.launch_override_reason or "").strip()
@@ -380,8 +380,8 @@ def launch_gate(product: Product) -> tuple[bool, list[str]]:
                 "Override reason must be at least 10 characters to bypass the launch gate.",
                 *readiness.critical_blockers,
             ]
-        if len(override) > 7000:
-            return False, ["Override reason must be 7000 characters or fewer."]
+        if len(override) > 2000:
+            return False, ["Override reason must be 2000 characters or fewer."]
         return True, []
     if readiness.critical_blockers:
         return False, readiness.critical_blockers

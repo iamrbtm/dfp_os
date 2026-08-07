@@ -57,6 +57,9 @@ class CustomRequest(PrimaryKeyMixin, TimestampMixin, db.Model):
     customer_id: Mapped[int | None] = mapped_column(
         ForeignKey("customers.id"), nullable=True, index=True
     )
+    market_id: Mapped[int | None] = mapped_column(
+        ForeignKey("markets.id"), nullable=True, index=True
+    )
     business_id: Mapped[int | None] = mapped_column(
         ForeignKey("businesses.id"), nullable=True, index=True
     )
@@ -75,4 +78,5 @@ class CustomRequest(PrimaryKeyMixin, TimestampMixin, db.Model):
 
     converted_to_order = relationship("Order", foreign_keys=[converted_to_order_id])
     customer = relationship("Customer", back_populates="custom_requests")
+    market = relationship("Market", foreign_keys=[market_id])
     pickup_slot = relationship("PickupSlot", back_populates="custom_requests")

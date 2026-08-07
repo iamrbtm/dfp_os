@@ -1912,7 +1912,7 @@ def trend_score(product_id: int):
             stockout_detected=bool(product_metrics.get("stockout_detected", False)),
             margin_pct=float(product_metrics.get("margin_pct", 0.0)),
             last_sale_at=product_metrics.get("last_sale_at"),
-            admin_override=product.admin_notes or "",
+            admin_override=product.model_notes or "",
         )
 
         if candidate.base_price > 0:
