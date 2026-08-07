@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask import Response, current_app, g, jsonify, request
 from flask.views import MethodView
@@ -10,6 +10,7 @@ from marshmallow import Schema, fields
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.extensions import db
 from app.models import (
     AMSUnit,
     AMSUnitStatus,
@@ -18,13 +19,13 @@ from app.models import (
     Business,
     Category,
     Collection,
+    Customer,
     CustomRequest,
     CustomRequestStatus,
-    Customer,
     DeadStockRecommendation,
     Expense,
-    FeatureFlag,
     ExpenseCategory,
+    FeatureFlag,
     FilamentSpool,
     FilamentStatus,
     InventoryLocation,
@@ -45,8 +46,8 @@ from app.models import (
     OrderFulfillmentMethod,
     OrderItem,
     OrderPaymentStatus,
-    OrderStatus,
     OrderSource,
+    OrderStatus,
     Payment,
     PaymentMethod,
     PickupLocation,
@@ -85,10 +86,9 @@ from app.schemas import (
     BusinessSchema,
     CategorySchema,
     CollectionSchema,
-    SettingSchema,
     ContentDraftSchema,
-    CustomRequestSchema,
     CustomerSchema,
+    CustomRequestSchema,
     ExpenseSchema,
     FeatureFlagSchema,
     FilamentSpoolSchema,
@@ -114,25 +114,29 @@ from app.schemas import (
     PrintJobSchema,
     ProductSchema,
     ResourceListEnvelope,
+    SettingSchema,
     SignAssetSchema,
     TrendOpportunityScoreSchema,
     TrendReportSchema,
     TrendSourceHealthRecordSchema,
 )
-from app.schemas.receipt import ReceiptSchema, ReceiptLineItemSchema
+from app.schemas.receipt import ReceiptLineItemSchema, ReceiptSchema
 from app.services.admin_mutations import (
     archive_resource as archive_admin_resource,
+)
+from app.services.admin_mutations import (
     create_resource as create_admin_resource,
+)
+from app.services.admin_mutations import (
     update_resource as update_admin_resource,
 )
+from app.services.api_tokens import revoke_api_token
+from app.services.audit import record_audit_event
 from app.services.crud import (
     apply_search,
     get_by_id,
     paginate_query,
 )
-from app.extensions import db
-from app.services.audit import record_audit_event
-from app.services.api_tokens import revoke_api_token
 from app.services.inventory import release_inventory, reserve_inventory, transfer_inventory
 from app.services.pos import refund_sale
 from app.utils import slugify
@@ -748,7 +752,7 @@ def _apply_trend_report(instance: TrendReport, data: dict):
     instance.declining_trends = data.get("declining_trends")
     instance.pipeline_meta = data.get("pipeline_meta")
     if not instance.report_date:
-        instance.report_date = datetime.now(timezone.utc)
+        instance.report_date = datetime.now(UTC)
 
 
 def _apply_trend_opportunity_score(instance: TrendOpportunityScore, data: dict):
@@ -1318,7 +1322,8 @@ class ThemeCurrent(MethodView):
         if denied:
             return denied
         from flask_login import current_user
-        from app.theme_registry import THEME_MAP, DEFAULT_THEME
+
+        from app.theme_registry import DEFAULT_THEME, THEME_MAP
 
         slug = getattr(current_user, "theme_slug", DEFAULT_THEME)
         theme = THEME_MAP.get(slug)
@@ -1339,8 +1344,8 @@ class TrendReportRun(MethodView):
         denied = require_api_scopes("trend_scout")
         if denied:
             return denied
-        from app.services.ai.trend_scout import run_full_pipeline
         from app.extensions import db
+        from app.services.ai.trend_scout import run_full_pipeline
 
         result = run_full_pipeline(
             openai_api_key=current_app.config.get("OPENAI_API_KEY", ""),
@@ -2177,10 +2182,10 @@ class ApiTokenCollection(MethodView):
         expires_at = None
         if expires_at_str:
             try:
-                from datetime import datetime, timezone
+                from datetime import datetime
 
                 expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").replace(
-                    tzinfo=timezone.utc
+                    tzinfo=UTC
                 )
             except ValueError:
                 return {
@@ -2258,8 +2263,9 @@ class SettingItem(MethodView):
         denied = require_api_scopes("settings")
         if denied:
             return denied
-        from app.models import Setting
         from sqlalchemy import select
+
+        from app.models import Setting
 
         setting = db.session.scalar(select(Setting).where(Setting.key == key))
         if setting is None:
@@ -2275,9 +2281,9 @@ class SettingItem(MethodView):
         denied = require_api_scopes("settings")
         if denied:
             return denied
-        from app.services.settings import set_setting
-        from app.services.audit import record_audit_event
         from app.models import Setting
+        from app.services.audit import record_audit_event
+        from app.services.settings import set_setting
 
         payload = request.get_json(silent=True) or {}
         if "value" not in payload:
@@ -2319,8 +2325,9 @@ class ContentDraftCollection(MethodView):
         denied = require_api_scopes("promotion")
         if denied:
             return denied
-        from app.services.crud import apply_search, paginate_query
         from sqlalchemy import select
+
+        from app.services.crud import apply_search, paginate_query
 
         page = request.args.get("page", 1, type=int)
         q = request.args.get("q", "").strip()
@@ -2505,8 +2512,9 @@ class SignAssetCollection(MethodView):
         denied = require_api_scopes("promotion")
         if denied:
             return denied
-        from app.services.crud import apply_search, paginate_query
         from sqlalchemy import select
+
+        from app.services.crud import apply_search, paginate_query
 
         page = request.args.get("page", 1, type=int)
         q = request.args.get("q", "").strip()
@@ -2663,7 +2671,7 @@ class SignAssetItem(MethodView):
 @catalog_blp.doc(tags=["Report Studio"])
 @catalog_blp.response(200)
 def report_studio_reports():
-    from app.services.report_studio import get_report_catalog, get_data_quality_summary
+    from app.services.report_studio import get_data_quality_summary, get_report_catalog
 
     denied = require_api_scopes("report_studio")
     if denied:
@@ -2847,5 +2855,88 @@ def sign_asset_generate_ai_image(sign_id: int):
     return {"data": SignAssetSchema().dump(result)}
 
 
+# ---------------------------------------------------------------------------
+# Booth Mode API
+# ---------------------------------------------------------------------------
+
+booth_mode_blp = Blueprint("booth_mode_api", __name__, url_prefix="/api/v1")
+
+
+class BreakEvenSchema(Schema):
+    revenue = fields.Decimal(as_string=True)
+    costs = fields.Decimal(as_string=True)
+    remaining = fields.Decimal(as_string=True)
+    profit = fields.Decimal(as_string=True)
+    reached = fields.Boolean()
+    elapsed_minutes = fields.Integer()
+    sales_per_hour = fields.Decimal(as_string=True)
+    projected_revenue = fields.Decimal(as_string=True, allow_none=True)
+    pace_warning = fields.Boolean()
+
+
+class BoothHintSchema(Schema):
+    id = fields.Integer()
+    key = fields.String()
+    title = fields.String()
+    message = fields.String()
+    severity = fields.String()
+    status = fields.String()
+
+
+class TopSellerSchema(Schema):
+    product_id = fields.Integer(attribute="product.id")
+    product_name = fields.String(attribute="product.name")
+    qty_sold = fields.Integer()
+    revenue = fields.Decimal(as_string=True)
+    estimated_profit = fields.Decimal(as_string=True, allow_none=True)
+
+
+class BoothModeContextSchema(Schema):
+    session_id = fields.Integer(attribute="session.id")
+    session_number = fields.String(attribute="session.session_number")
+    market_id = fields.Integer(attribute="market.id", allow_none=True)
+    market_name = fields.String(attribute="market.name", allow_none=True)
+    break_even = fields.Nested(BreakEvenSchema)
+    hints = fields.List(fields.Nested(BoothHintSchema))
+    top_sellers = fields.List(fields.Nested(TopSellerSchema))
+    payment_totals = fields.Dict(
+        keys=fields.String(), values=fields.Decimal(as_string=True), attribute="summary.payment_totals"
+    )
+    expected_cash = fields.Decimal(as_string=True, attribute="summary.expected_cash")
+    sale_count = fields.Integer(attribute="summary.sale_count")
+
+
+class BoothModeQuerySchema(Schema):
+    market_id = fields.Integer(load_default=None, allow_none=True)
+    session_id = fields.Integer(load_default=None, allow_none=True)
+
+
+@booth_mode_blp.route("/booth-mode/context", methods=["GET"])
+@api_token_required
+@booth_mode_blp.doc(tags=["Booth Mode"])
+@booth_mode_blp.arguments(BoothModeQuerySchema, location="query")
+@booth_mode_blp.response(200, BoothModeContextSchema)
+def booth_mode_context_api(query_args):
+    """Return live booth mode context (break-even, hints, top sellers, payment mix)."""
+    from app.module_registry import is_module_enabled
+    from app.services.booth_mode import booth_mode_context
+
+    if not is_module_enabled("booth_mode"):
+        return jsonify(
+            {"error": {"code": "module_disabled", "message": "Booth Mode is not enabled.", "details": {}}}
+        ), 403
+    try:
+        ctx = booth_mode_context(
+            market_id=query_args.get("market_id"),
+            session_id=query_args.get("session_id"),
+        )
+    except ValueError:
+        return jsonify(
+            {"error": {"code": "not_found", "message": "No open POS session found.", "details": {}}}
+        ), 404
+    return ctx
+
+
 def register_api_blueprints(api):
     api.register_blueprint(catalog_blp)
+    api.register_blueprint(booth_mode_blp)
