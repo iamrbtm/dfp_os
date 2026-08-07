@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from decimal import Decimal
+from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DOCKER_DATABASE_URL = "postgresql+psycopg://dfpos_test:dfpos_test@127.0.0.1:15432/dfpos_app"
@@ -175,6 +175,8 @@ class Config:
 
     CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
     CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+
+    BOOTH_MODE_SNOOZE_MINUTES = int(os.getenv("BOOTH_MODE_SNOOZE_MINUTES", "30"))
 
     DEFAULT_THEME = "dfp-dudefish-light"
 
