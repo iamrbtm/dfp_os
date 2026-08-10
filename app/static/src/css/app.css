@@ -362,7 +362,6 @@
   background-color: var(--color-sidebar-bg);
   border-right: 1px solid var(--color-sidebar-border);
   color: var(--color-sidebar-text);
-  overflow-y: auto;
 }
 .app-sidebar a {
   color: var(--color-sidebar-muted);
