@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{{ mode | title }} Listing | Market Catalog | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6">
+    <div>
+      <a href="{{ url_for('market_catalog.list_listings') }}" class="text-sm" style="color: var(--color-link);">&larr; Back to catalog</a>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">{{ mode | title }} Listing</h1>
+    </div>
+
+    <form method="post" class="space-y-6">
+      {{ form.hidden_tag() }}
+
+      <div class="app-card p-6 space-y-4">
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Identity</h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.name.label.text }}</label>
+            {{ form.name(class="app-input mt-1") }}
+            {% for e in form.name.errors %}<p class="text-xs mt-1" style="color: #b91c1c;">{{ e }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.category_id.label.text }}</label>
+            {{ form.category_id(class="app-input mt-1") }}
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.description.label.text }}</label>
+          {{ form.description(class="app-input mt-1", rows=3) }}
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.website_url.label.text }}</label>{{ form.website_url(class="app-input mt-1") }}</div>
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.interest_level.label.text }}</label>{{ form.interest_level(class="app-input mt-1") }}</div>
+        </div>
+      </div>
+
+      <div class="app-card p-6 space-y-4">
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Location</h2>
+        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.location_name.label.text }}</label>{{ form.location_name(class="app-input mt-1") }}</div>
+        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.address.label.text }}</label>{{ form.address(class="app-input mt-1") }}</div>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.city.label.text }}</label>{{ form.city(class="app-input mt-1") }}</div>
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.state.label.text }}</label>{{ form.state(class="app-input mt-1") }}</div>
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.zip_code.label.text }}</label>{{ form.zip_code(class="app-input mt-1") }}</div>
+        </div>
+        <p class="text-xs" style="color: var(--color-text-muted);">Latitude/longitude are auto-filled from the address on save when empty.</p>
+      </div>
+
+      <div class="app-card p-6 space-y-4">
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Timing &amp; Recurrence</h2>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.default_start_time.label.text }}</label>{{ form.default_start_time(class="app-input mt-1") }}</div>
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.default_end_time.label.text }}</label>{{ form.default_end_time(class="app-input mt-1") }}</div>
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.timezone.label.text }}</label>{{ form.timezone(class="app-input mt-1") }}</div>
+        </div>
+        <label class="inline-flex items-center gap-2 text-sm" style="color: var(--color-text);">
+          {{ form.is_recurring(class="rounded") }} {{ form.is_recurring.label.text }}
+        </label>
+        <div>
+          <label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.rrule.label.text }}</label>
+          {{ form.rrule(class="app-input mt-1 font-mono text-xs", rows=2, placeholder="FREQ=YEARLY;BYMONTH=10;BYDAY=SA;BYSETPOS=3") }}
+          <p class="text-xs mt-1" style="color: var(--color-text-muted);">Examples: <code>FREQ=YEARLY;BYMONTH=10;BYDAY=SA;BYSETPOS=3</code> (3rd Saturday of October), <code>FREQ=YEARLY;BYMONTH=7;BYMONTHDAY=4</code> (July 4th), <code>FREQ=MONTHLY;BYDAY=SU;BYSETPOS=1</code> (1st Sunday monthly).</p>
+        </div>
+        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.recurrence_description.label.text }}</label>{{ form.recurrence_description(class="app-input mt-1", placeholder="3rd Saturday in October") }}</div>
+      </div>
+
+      <div class="app-card p-6 space-y-4">
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Scale &amp; Amenities</h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.estimated_vendor_count.label.text }}</label>{{ form.estimated_vendor_count(class="app-input mt-1") }}</div>
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.estimated_attendee_count.label.text }}</label>{{ form.estimated_attendee_count(class="app-input mt-1") }}</div>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-4">
+          {% for f in [form.power_available, form.wifi_available, form.food_available, form.restrooms_available] %}
+            <label class="inline-flex items-center gap-2 text-sm" style="color: var(--color-text);">{{ f(class="rounded") }} {{ f.label.text }}</label>
+          {% endfor %}
+        </div>
+        <div class="grid gap-3 sm:grid-cols-3">
+          {% for f in [form.indoor, form.covered_outdoor, form.outdoor] %}
+            <label class="inline-flex items-center gap-2 text-sm" style="color: var(--color-text);">{{ f(class="rounded") }} {{ f.label.text }}</label>
+          {% endfor %}
+        </div>
+        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.parking_notes.label.text }}</label>{{ form.parking_notes(class="app-input mt-1", rows=2) }}</div>
+      </div>
+
+      <div class="app-card p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold" style="color: var(--color-text);">Booth Tiers</h2>
+          <button type="button" id="add-tier" class="app-btn app-btn-secondary text-xs">+ Add tier</button>
+        </div>
+        <p class="text-xs" style="color: var(--color-text-muted);">One row per booth size &amp; price. Leave price blank if unknown.</p>
+        <div id="tier-rows" class="space-y-2">
+          {% if listing and listing.booth_tiers %}
+            {% for t in listing.booth_tiers %}
+              <div class="tier-row grid gap-2 sm:grid-cols-6 items-end p-2 rounded" style="background: var(--color-bg-muted);">
+                <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Label</label><input type="text" name="tier_label" value="{{ t.label }}" class="app-input"></div>
+                <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Dimensions</label><input type="text" name="tier_dimensions" value="{{ t.dimensions or '' }}" class="app-input"></div>
+                <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Price</label><input type="number" step="0.01" name="tier_price" value="{{ t.price or '' }}" class="app-input"></div>
+                <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Corner +</label><input type="number" step="0.01" name="tier_corner" value="{{ t.corner_premium or '' }}" class="app-input"></div>
+                <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Notes</label><input type="text" name="tier_notes" value="{{ t.notes or '' }}" class="app-input"></div>
+                <button type="button" class="app-btn app-btn-secondary text-xs remove-tier" style="color: #b91c1c;">Remove</button>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="tier-row grid gap-2 sm:grid-cols-6 items-end p-2 rounded" style="background: var(--color-bg-muted);">
+              <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Label</label><input type="text" name="tier_label" placeholder="10x10" class="app-input"></div>
+              <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Dimensions</label><input type="text" name="tier_dimensions" placeholder="10ft x 10ft" class="app-input"></div>
+              <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Price</label><input type="number" step="0.01" name="tier_price" placeholder="75.00" class="app-input"></div>
+              <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Corner +</label><input type="number" step="0.01" name="tier_corner" placeholder="25.00" class="app-input"></div>
+              <div><label class="block text-[10px] uppercase" style="color: var(--color-text-muted);">Notes</label><input type="text" name="tier_notes" class="app-input"></div>
+              <button type="button" class="app-btn app-btn-secondary text-xs remove-tier" style="color: #b91c1c;">Remove</button>
+            </div>
+          {% endif %}
+        </div>
+        <input type="hidden" name="tier_sort" value="0">
+      </div>
+
+      <div class="app-card p-6 space-y-4">
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Organizer Contact</h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.organizer_name.label.text }}</label>{{ form.organizer_name(class="app-input mt-1") }}</div>
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.organizer_email.label.text }}</label>{{ form.organizer_email(class="app-input mt-1") }}</div>
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.organizer_phone.label.text }}</label>{{ form.organizer_phone(class="app-input mt-1") }}</div>
+          <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.application_contact.label.text }}</label>{{ form.application_contact(class="app-input mt-1") }}</div>
+        </div>
+        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.application_url.label.text }}</label>{{ form.application_url(class="app-input mt-1") }}</div>
+        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.application_deadline_description.label.text }}</label>{{ form.application_deadline_description(class="app-input mt-1") }}</div>
+      </div>
+
+      <div class="app-card p-6 space-y-4">
+        <h2 class="text-lg font-semibold" style="color: var(--color-text);">Rules &amp; Notes</h2>
+        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.booth_rules.label.text }}</label>{{ form.booth_rules(class="app-input mt-1", rows=3) }}</div>
+        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.required_documents.label.text }}</label>{{ form.required_documents(class="app-input mt-1", rows=3) }}</div>
+        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.notes.label.text }}</label>{{ form.notes(class="app-input mt-1", rows=3) }}</div>
+      </div>
+
+      <div class="flex gap-3">
+        {{ form.submit(class="app-btn app-btn-primary") }}
+        <a href="{{ url_for('market_catalog.list_listings') }}" class="app-btn app-btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </section>
+
+  {% block scripts %}
+  <script>
+    (function() {
+      const container = document.getElementById('tier-rows');
+      const addBtn = document.getElementById('add-tier');
+      if (!container || !addBtn) return;
+      function bindRemove(row) {
+        const btn = row.querySelector('.remove-tier');
+        if (btn) btn.addEventListener('click', () => row.remove());
+      }
+      container.querySelectorAll('.tier-row').forEach(bindRemove);
+      addBtn.addEventListener('click', () => {
+        const tpl = container.querySelector('.tier-row');
+        if (!tpl) return;
+        const clone = tpl.cloneNode(true);
+        clone.querySelectorAll('input').forEach(i => i.value = '');
+        container.appendChild(clone);
+        bindRemove(clone);
+      });
+    })();
+  </script>
+  {% endblock %}
+{% endblock %}

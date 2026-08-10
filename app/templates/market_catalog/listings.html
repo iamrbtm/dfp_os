@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Market Catalog | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Discovery</p>
+        <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Market Catalog</h1>
+        <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">A master list of markets we've discovered. Book the ones worth attending, and the recurrence rule keeps the next date current.</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="{{ url_for('market_catalog.list_categories') }}" class="app-btn app-btn-secondary">Categories</a>
+        <a href="{{ url_for('market_catalog.create_listing_view') }}" class="app-btn app-btn-primary">New Listing</a>
+      </div>
+    </div>
+
+    <form method="get" class="app-card p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <input type="search" name="q" value="{{ search_term }}" placeholder="Search by name, city, organizer" class="app-input flex-1">
+      <select name="category" class="app-input">
+        <option value="">All categories</option>
+        {% for c in categories %}
+          <option value="{{ c.id }}" {% if c.id == category_filter %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="interest" class="app-input">
+        <option value="">All interest levels</option>
+        <option value="watching" {% if interest_filter == 'watching' %}selected{% endif %}>Watching</option>
+        <option value="interested" {% if interest_filter == 'interested' %}selected{% endif %}>Interested</option>
+        <option value="priority" {% if interest_filter == 'priority' %}selected{% endif %}>Priority</option>
+      </select>
+      <label class="inline-flex items-center gap-2 text-sm" style="color: var(--color-text-muted);">
+        <input type="checkbox" name="archived" value="1" {% if archived %}checked{% endif %} onchange="this.form.submit()"> Archived
+      </label>
+      <button type="submit" class="app-btn app-btn-secondary">Filter</button>
+    </form>
+
+    {% if listings %}
+      <div class="app-card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b" style="border-color: var(--color-border);">
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Name</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Category</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Location</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Recurrence</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Next Date</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Interest</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Booth</th>
+                <th class="px-4 py-3 text-right font-semibold" style="color: var(--color-text-muted);">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in listings %}
+                <tr class="border-b last:border-0" style="border-color: var(--color-border);">
+                  <td class="px-4 py-3">
+                    <a href="{{ url_for('market_catalog.detail_listing', listing_id=item.id) }}" class="app-link font-medium">{{ item.name }}</a>
+                    {% if item.is_demo %}<span class="ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded" style="background: var(--color-bg-muted); color: var(--color-text-muted);">Demo</span>{% endif %}
+                  </td>
+                  <td class="px-4 py-3" style="color: var(--color-text-muted);">
+                    {% if item.category %}<span class="inline-block rounded-full px-2 py-0.5 text-xs" style="background: var(--color-bg-muted);">{{ item.category.name }}</span>{% else %}—{% endif %}
+                  </td>
+                  <td class="px-4 py-3" style="color: var(--color-text-muted);">{{ [item.city, item.state] | select('ne', None) | join(', ') or '—' }}</td>
+                  <td class="px-4 py-3 text-xs" style="color: var(--color-text-muted);">{{ item.recurrence_description or 'One-off' }}</td>
+                  <td class="px-4 py-3" style="color: var(--color-text);">{{ item.next_occurrence_date.strftime('%b %d, %Y') if item.next_occurrence_date else '—' }}</td>
+                  <td class="px-4 py-3">
+                    {% set lvl = item.interest_level.value if item.interest_level else 'watching' %}
+                    <span class="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+                          style="background: {% if lvl == 'priority' %}var(--color-danger-soft, #fee2e2){% elif lvl == 'interested' %}var(--color-warning-soft, #fef3c7){% else %}var(--color-bg-muted){% endif %};
+                                 color: {% if lvl == 'priority' %}#b91c1c{% elif lvl == 'interested' %}#92400e{% else %}var(--color-text-muted){% endif %};">
+                      {{ lvl | title }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-xs" style="color: var(--color-text-muted);">
+                    {% if item.booth_tiers %}{{ item.booth_tiers | length }} tier(s){% else %}—{% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                    <a href="{{ url_for('market_catalog.book_listing', listing_id=item.id) }}" class="app-btn app-btn-primary text-xs">Book it</a>
+                    <a href="{{ url_for('market_catalog.detail_listing', listing_id=item.id) }}" class="app-link text-xs">View</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% if pagination.pages > 1 %}
+        <nav class="flex justify-center gap-2 text-sm">
+          {% if pagination.has_prev %}
+            <a href="{{ url_for('market_catalog.list_listings', q=search_term, page=pagination.prev_num, category=category_filter, interest=interest_filter) }}" class="app-btn app-btn-secondary">Prev</a>
+          {% endif %}
+          <span class="px-3 py-2" style="color: var(--color-text-muted);">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+          {% if pagination.has_next %}
+            <a href="{{ url_for('market_catalog.list_listings', q=search_term, page=pagination.next_num, category=category_filter, interest=interest_filter) }}" class="app-btn app-btn-secondary">Next</a>
+          {% endif %}
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="app-card p-12 text-center">
+        <p class="text-lg font-medium" style="color: var(--color-text);">No market listings yet.</p>
+        <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Add markets you discover here. When one looks worth booking, hit "Book it" to create a dated Market from the listing.</p>
+        <a href="{{ url_for('market_catalog.create_listing_view') }}" class="app-btn app-btn-primary mt-4 inline-block">Add your first market</a>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

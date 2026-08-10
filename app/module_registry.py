@@ -174,7 +174,7 @@ MODULES: dict[str, ModuleDefinition] = {
         description="Vendor markets, applications, packing lists, sales attribution, and performance.",
         feature_flag_key="module.markets.enabled",
         dependencies=("pos", "inventory"),
-        blueprint_names=("markets",),
+        blueprint_names=("markets", "market_catalog"),
         api_resources=(
             "markets",
             "market-packing-lists",
@@ -183,6 +183,9 @@ MODULES: dict[str, ModuleDefinition] = {
             "market-weather-snapshots",
             "market-hotel-bookings",
             "market-documents",
+            "market-categories",
+            "market-catalog-listings",
+            "market-catalog-booth-tiers",
         ),
     ),
     "receipts": ModuleDefinition(

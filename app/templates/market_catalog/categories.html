@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Market Categories | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Discovery</p>
+        <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Market Categories</h1>
+        <p class="mt-2 max-w-2xl" style="color: var(--color-text-muted);">Categorize catalog listings. Edit, archive, or add new ones as you discover new types of markets.</p>
+      </div>
+      <a href="{{ url_for('market_catalog.create_category_view') }}" class="app-btn app-btn-primary">New Category</a>
+    </div>
+
+    {% if categories %}
+      <div class="app-card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b" style="border-color: var(--color-border);">
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Name</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Slug</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Listings</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Order</th>
+                <th class="px-4 py-3 text-left font-semibold" style="color: var(--color-text-muted);">Active</th>
+                <th class="px-4 py-3 text-right font-semibold" style="color: var(--color-text-muted);">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in categories %}
+                <tr class="border-b last:border-0" style="border-color: var(--color-border);">
+                  <td class="px-4 py-3 font-medium" style="color: var(--color-text);">{{ c.name }}</td>
+                  <td class="px-4 py-3 font-mono text-xs" style="color: var(--color-text-muted);">{{ c.slug }}</td>
+                  <td class="px-4 py-3" style="color: var(--color-text);">{{ listing_counts.get(c.id, 0) }}</td>
+                  <td class="px-4 py-3" style="color: var(--color-text-muted);">{{ c.sort_order }}</td>
+                  <td class="px-4 py-3">
+                    {% if c.is_active %}<span class="inline-block rounded-full px-2 py-0.5 text-xs" style="background: var(--color-bg-muted); color: var(--color-text);">Active</span>{% else %}<span class="text-xs" style="color: var(--color-text-muted);">Inactive</span>{% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                    <a href="{{ url_for('market_catalog.edit_category_view', category_id=c.id) }}" class="app-link text-xs">Edit</a>
+                    <form method="post" action="{{ url_for('market_catalog.archive_category_view', category_id=c.id) }}" class="inline" onsubmit="return confirm('Archive this category? Existing listings keep their category.');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="text-xs" style="color: #b91c1c;">Archive</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% else %}
+      <div class="app-card p-12 text-center">
+        <p class="text-lg font-medium" style="color: var(--color-text);">No categories yet.</p>
+        <a href="{{ url_for('market_catalog.create_category_view') }}" class="app-btn app-btn-primary mt-4 inline-block">Add a category</a>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

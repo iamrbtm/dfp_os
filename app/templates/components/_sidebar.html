@@ -1,4 +1,31 @@
-<div class="app-sidebar fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-200 lg:translate-x-0 flex flex-col"
+{% macro nav_link(label, href, is_active=False, badge=None) -%}
+  <a href="{{ href }}"
+     class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors"
+     style="{% if is_active %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-text);{% endif %}">
+    <span class="min-w-0 flex-1">{{ label }}</span>
+    {% if badge %}
+    <span class="text-xs font-bold px-1.5 py-0.5 rounded-full"
+          style="background: var(--color-danger); color: white;">{{ badge }}</span>
+    {% endif %}
+  </a>
+{%- endmacro %}
+
+{% macro sub_link(label, href, is_active=False) -%}
+  <a href="{{ href }}"
+     class="block rounded-lg pl-4 pr-3 py-1.5 text-xs transition-colors"
+     style="{% if is_active %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
+    {{ label }}
+  </a>
+{%- endmacro %}
+
+{% set sell_open = active_section in ['pos', 'customers', 'orders', 'custom_orders'] %}
+{% set make_open = active_section in ['products', 'print_jobs', 'printers'] %}
+{% set stock_open = active_section in ['inventory', 'markets', 'market_catalog', 'prep_tasks', 'table_layouts'] %}
+{% set money_open = active_section in ['expenses', 'cost_engine', 'api_tokens'] %}
+{% set grow_open = active_section in ['analytics', 'report_studio', 'intelligence', 'trend_scout', 'promotion', 'booth_mode'] %}
+{% set system_open = active_section in ['settings', 'feature_flags', 'audit_logs'] %}
+
+<div class="app-sidebar fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-200 lg:translate-x-0 flex flex-col"
      :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
   <div class="flex items-center justify-between px-4 py-4 border-b flex-shrink-0" style="border-color: var(--color-sidebar-border);">
     <a href="{{ url_for('dashboard.index') }}" class="text-lg font-semibold tracking-tight" style="color: var(--color-sidebar-text);">
@@ -9,231 +36,201 @@
     </button>
   </div>
 
-  <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
-    {% if is_module_enabled('dashboard') %}
-    <a href="{{ url_for('dashboard.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'dashboard' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Dashboard
-    </a>
-    {% endif %}
+  <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+    <section class="space-y-2">
+      <div class="px-3">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.18em]" style="color: var(--color-sidebar-muted);">Quick access</p>
+      </div>
+      <div class="space-y-1">
+        {% if is_module_enabled('dashboard') %}
+          {{ nav_link('Dashboard', url_for('dashboard.index'), active_section == 'dashboard') }}
+        {% endif %}
+        {% if is_module_enabled('notifications') %}
+          {{ nav_link('Notifications', url_for('notifications.notification_list'), active_section == 'notifications', unread_notification_count if unread_notification_count > 0 else none) }}
+        {% endif %}
+        {% if is_module_enabled('pos') %}
+          {{ nav_link('POS', url_for('pos.session_list'), active_section == 'pos') }}
+        {% endif %}
+      </div>
+    </section>
 
-    {% if is_module_enabled('notifications') %}
-    <a href="{{ url_for('notifications.notification_list') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'notifications' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Notifications
-      {% if unread_notification_count > 0 %}
-      <span class="ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full"
-            style="background:var(--color-danger);color:white;">{{ unread_notification_count }}</span>
-      {% endif %}
-    </a>
-    {% endif %}
+    <details class="space-y-2 group" {% if sell_open %}open{% endif %}>
+      <summary class="flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-left list-none"
+               style="color: var(--color-sidebar-text); background-color: var(--color-sidebar-bg);">
+        <div>
+          <p class="text-sm font-semibold">Sell</p>
+          <p class="text-xs" style="color: var(--color-sidebar-muted);">Checkout, customers, and orders</p>
+        </div>
+        <span class="text-xs font-semibold" style="color: var(--color-sidebar-muted);">Toggle</span>
+      </summary>
+      <div class="space-y-1">
+        {% if is_module_enabled('pos') %}
+          {{ nav_link('POS', url_for('pos.session_list'), active_section == 'pos') }}
+        {% endif %}
+        {% if is_module_enabled('customers') %}
+          {{ nav_link('Customers', url_for('customers.list_resource', resource_key='customers'), active_section == 'customers') }}
+        {% endif %}
+        {% if is_module_enabled('orders') %}
+          {{ nav_link('Orders', url_for('orders.list_resource', resource_key='orders'), active_section == 'orders') }}
+          {{ sub_link('Pickup Board', url_for('orders.pickup_board'), request.endpoint == 'orders.pickup_board') }}
+        {% endif %}
+        {% if is_module_enabled('custom_orders') %}
+          {{ nav_link('Custom Orders', url_for('custom_orders.list_resource', resource_key='requests'), active_section == 'custom_orders') }}
+        {% endif %}
+      </div>
+    </details>
 
-    {% if is_module_enabled('pos') %}
-    <a href="{{ url_for('pos.session_list') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'pos' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      POS
-    </a>
-    {% endif %}
+    <details class="space-y-2 group" {% if make_open %}open{% endif %}>
+      <summary class="flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-left list-none"
+               style="color: var(--color-sidebar-text); background-color: var(--color-sidebar-bg);">
+        <div>
+          <p class="text-sm font-semibold">Make</p>
+          <p class="text-xs" style="color: var(--color-sidebar-muted);">Products, printers, and production</p>
+        </div>
+        <span class="text-xs font-semibold" style="color: var(--color-sidebar-muted);">Toggle</span>
+      </summary>
+      <div class="space-y-1">
+        {% if is_module_enabled('products') %}
+          {{ nav_link('Products', url_for('products.studio'), active_section == 'products') }}
+          {{ sub_link('Categories', url_for('products.list_resource', resource_key='categories'), request.args.get('resource_key') == 'categories' or request.path.endswith('/categories')) }}
+          {{ sub_link('Collections', url_for('products.list_resource', resource_key='collections'), request.args.get('resource_key') == 'collections' or request.path.endswith('/collections')) }}
+        {% endif %}
+        {% if is_module_enabled('print_jobs') %}
+          {{ nav_link('Print Jobs', url_for('print_jobs.list_resource', resource_key='print-jobs'), active_section == 'print_jobs') }}
+        {% endif %}
+        {% if is_module_enabled('printers') %}
+          {{ nav_link('Printers', url_for('printers.list_resource', resource_key='printers'), active_section == 'printers') }}
+          {{ sub_link('Reliability', url_for('printers.reliability'), request.endpoint == 'printers.reliability') }}
+        {% endif %}
+      </div>
+    </details>
 
-    {% if is_module_enabled('products') %}
-    <div>
-      <a href="{{ url_for('products.studio') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-         style="{% if active_section == 'products' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-        Products
-      </a>
-      {% if active_section == 'products' %}
-      <a href="{{ url_for('products.list_resource', resource_key='categories') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Categories</a>
-      <a href="{{ url_for('products.list_resource', resource_key='collections') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Collections</a>
-      {% endif %}
-    </div>
-    {% endif %}
+    <details class="space-y-2 group" {% if stock_open %}open{% endif %}>
+      <summary class="flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-left list-none"
+               style="color: var(--color-sidebar-text); background-color: var(--color-sidebar-bg);">
+        <div>
+          <p class="text-sm font-semibold">Stock</p>
+          <p class="text-xs" style="color: var(--color-sidebar-muted);">Inventory, markets, and prep</p>
+        </div>
+        <span class="text-xs font-semibold" style="color: var(--color-sidebar-muted);">Toggle</span>
+      </summary>
+      <div class="space-y-1">
+        {% if is_module_enabled('inventory') %}
+          {{ nav_link('Inventory', url_for('inventory.list_resource', resource_key='records'), active_section == 'inventory') }}
+        {% endif %}
+        {% if is_module_enabled('markets') %}
+          {{ nav_link('Markets', url_for('markets.list_resource', resource_key='markets'), active_section == 'markets') }}
+          {{ nav_link('Market Catalog', url_for('market_catalog.list_listings'), active_section == 'market_catalog') }}
+        {% endif %}
+        {% if is_module_enabled('table_layouts') %}
+          {{ nav_link('Table Layouts', url_for('table_layouts.list_layouts'), active_section == 'table_layouts') }}
+        {% endif %}
+        {% if is_module_enabled('prep_tasks') %}
+          {{ nav_link('Prep Tasks', url_for('prep_tasks.list_resource', resource_key='tasks'), active_section == 'prep_tasks') }}
+          {{ sub_link('Follow-Up Queue', url_for('prep_tasks.follow_up_queue'), request.endpoint == 'prep_tasks.follow_up_queue') }}
+          {{ sub_link('Impulse Tray', url_for('prep_tasks.impulse_tray_optimizer'), request.endpoint == 'prep_tasks.impulse_tray_optimizer') }}
+        {% endif %}
+      </div>
+    </details>
 
-    {% if is_module_enabled('customers') %}
-    <a href="{{ url_for('customers.list_resource', resource_key='customers') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'customers' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Customers
-    </a>
-    {% endif %}
+    <details class="space-y-2 group" {% if money_open %}open{% endif %}>
+      <summary class="flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-left list-none"
+               style="color: var(--color-sidebar-text); background-color: var(--color-sidebar-bg);">
+        <div>
+          <p class="text-sm font-semibold">Money</p>
+          <p class="text-xs" style="color: var(--color-sidebar-muted);">Receipts, expenses, pricing, and tokens</p>
+        </div>
+        <span class="text-xs font-semibold" style="color: var(--color-sidebar-muted);">Toggle</span>
+      </summary>
+      <div class="space-y-1">
+        {% if is_module_enabled('expense_ledger') %}
+          {{ nav_link('Expenses', url_for('expenses.list_resource', resource_key='expenses'), active_section == 'expenses') }}
+          {% if is_module_enabled('receipts') %}
+            {{ sub_link('Receipts', url_for('receipts.dashboard'), request.endpoint == 'receipts.dashboard') }}
+            {{ sub_link('Receipt Inbox', url_for('receipts.inbox'), request.endpoint == 'receipts.inbox') }}
+            {{ sub_link('Upload Receipt', url_for('receipts.upload'), request.endpoint == 'receipts.upload') }}
+          {% endif %}
+        {% elif is_module_enabled('receipts') %}
+          {{ nav_link('Receipts', url_for('receipts.dashboard'), active_section == 'expenses') }}
+          {{ sub_link('Receipt Inbox', url_for('receipts.inbox'), request.endpoint == 'receipts.inbox') }}
+          {{ sub_link('Upload Receipt', url_for('receipts.upload'), request.endpoint == 'receipts.upload') }}
+        {% endif %}
+        {% if is_module_enabled('cost_engine') %}
+          {{ nav_link('Cost Engine', url_for('cost_engine.index'), active_section == 'cost_engine') }}
+        {% endif %}
+        {% if is_module_enabled('api') %}
+          {{ nav_link('API Tokens', url_for('api_tokens.list_tokens'), active_section == 'api_tokens') }}
+        {% endif %}
+      </div>
+    </details>
 
-    {% if is_module_enabled('orders') %}
-    <a href="{{ url_for('orders.list_resource', resource_key='orders') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'orders' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Orders
-    </a>
-    {% endif %}
+    <details class="space-y-2 group" {% if grow_open %}open{% endif %}>
+      <summary class="flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-left list-none"
+               style="color: var(--color-sidebar-text); background-color: var(--color-sidebar-bg);">
+        <div>
+          <p class="text-sm font-semibold">Grow</p>
+          <p class="text-xs" style="color: var(--color-sidebar-muted);">Insights, reports, and promotion</p>
+        </div>
+        <span class="text-xs font-semibold" style="color: var(--color-sidebar-muted);">Toggle</span>
+      </summary>
+      <div class="space-y-1">
+        {% if is_module_enabled('booth_mode') %}
+          {{ nav_link('Booth Mode', url_for('booth_mode.index'), active_section == 'booth_mode') }}
+        {% endif %}
+        {% if is_module_enabled('analytics') %}
+          {{ nav_link('Analytics', url_for('analytics.index'), active_section == 'analytics') }}
+        {% endif %}
+        {% if is_module_enabled('report_studio') %}
+          {{ nav_link('Report Studio', url_for('report_studio.home'), active_section == 'report_studio') }}
+          {{ sub_link('Heat Map', url_for('report_studio.heat_map'), request.endpoint == 'report_studio.heat_map') }}
+          {{ sub_link('Application Tracker', url_for('report_studio.application_tracker'), request.endpoint == 'report_studio.application_tracker') }}
+          {{ sub_link('Printer Reliability', url_for('report_studio.printer_reliability'), request.endpoint == 'report_studio.printer_reliability') }}
+        {% endif %}
+        {% if is_module_enabled('trend_scout') %}
+          {{ nav_link('Trend Scout', url_for('trend_scout.index'), active_section == 'trend_scout') }}
+          {{ sub_link('Task Monitor', url_for('trend_scout.task_monitor'), request.endpoint == 'trend_scout.task_monitor' or request.endpoint == 'trend_scout.task_monitor_detail') }}
+          {{ sub_link('Calibration', url_for('trend_scout.calibration'), request.endpoint == 'trend_scout.calibration') }}
+          {{ sub_link('Settings', url_for('trend_scout.settings'), request.endpoint == 'trend_scout.settings') }}
+        {% endif %}
+        {% if is_module_enabled('dfp_intelligence') %}
+          {{ nav_link('DFP Intelligence', url_for('intelligence.index'), active_section == 'intelligence') }}
+          {{ sub_link('Ask DFP', url_for('intelligence.ask'), request.endpoint == 'intelligence.ask') }}
+          {{ sub_link('Market Advisor', url_for('intelligence.market_advisor'), request.endpoint == 'intelligence.market_advisor') }}
+          {{ sub_link('Notes', url_for('intelligence.notes'), request.endpoint == 'intelligence.notes') }}
+          {{ sub_link('Legacy Import', url_for('intelligence.legacy_management'), request.endpoint == 'intelligence.legacy_management') }}
+          {{ sub_link('Normalized Pipeline', url_for('intelligence.pipeline_status'), request.endpoint == 'intelligence.pipeline_status' or request.endpoint == 'intelligence.pipeline_run') }}
+        {% endif %}
+        {% if is_module_enabled('promotion') %}
+          {{ nav_link('Promotion', url_for('promotion.draft_list'), active_section == 'promotion') }}
+          {{ sub_link('Display Signs', url_for('promotion.sign_list'), request.endpoint in ['promotion.sign_list', 'promotion.sign_create', 'promotion.sign_edit', 'promotion.sign_detail', 'promotion.sign_print']) }}
+        {% endif %}
+      </div>
+    </details>
 
-    {% if is_module_enabled('custom_orders') %}
-    <a href="{{ url_for('custom_orders.list_resource', resource_key='requests') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'custom_orders' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Custom Orders
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('printers') %}
-    <div>
-      <a href="{{ url_for('printers.list_resource', resource_key='printers') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-         style="{% if active_section == 'printers' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-        Printers
-      </a>
-      {% if active_section == 'printers' %}
-      <a href="{{ url_for('printers.reliability') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Reliability</a>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    {% if is_module_enabled('print_jobs') %}
-    <a href="{{ url_for('print_jobs.list_resource', resource_key='print-jobs') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'print_jobs' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Print Jobs
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('inventory') %}
-    <a href="{{ url_for('inventory.list_resource', resource_key='records') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'inventory' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Inventory
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('api') %}
-    <a href="{{ url_for('api_tokens.list_tokens') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'api_tokens' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      API Tokens
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('settings') %}
-    <div>
-      <a href="{{ url_for('settings.settings_list') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-         style="{% if active_section == 'settings' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-        Settings
-      </a>
-      {% if active_section == 'settings' %}
-      <a href="{{ url_for('settings.business_settings') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Business</a>
-      <a href="{{ url_for('settings.module_status') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Modules</a>
-      <a href="{{ url_for('settings.themes') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Themes</a>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    {% if is_module_enabled('feature_flags') %}
-    <a href="{{ url_for('feature_flags.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'feature_flags' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Feature Flags
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('markets') %}
-    <a href="{{ url_for('markets.list_resource', resource_key='markets') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'markets' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Markets
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('prep_tasks') %}
-    <div>
-      <a href="{{ url_for('prep_tasks.list_resource', resource_key='tasks') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-         style="{% if active_section == 'prep_tasks' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-        Prep Tasks
-      </a>
-      {% if active_section == 'prep_tasks' %}
-      <a href="{{ url_for('prep_tasks.follow_up_queue') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Follow-Up Queue</a>
-      <a href="{{ url_for('prep_tasks.impulse_tray_optimizer') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Impulse Tray</a>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    {% if is_module_enabled('promotion') %}
-    <a href="{{ url_for('promotion.draft_list') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'promotion' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Promotion
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('expense_ledger') %}
-    <div class="space-y-0.5">
-      <a href="{{ url_for('expenses.list_resource', resource_key='expenses') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-         style="{% if active_section == 'expenses' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-        Expenses
-      </a>
-      {% if active_section == 'expenses' and is_module_enabled('receipts') %}
-      <a href="{{ url_for('receipts.dashboard') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">
-        Receipts
-      </a>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    {% if is_module_enabled('report_studio') %}
-    <a href="{{ url_for('report_studio.home') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'report_studio' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Report Studio
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('analytics') %}
-    <a href="{{ url_for('analytics.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'analytics' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Analytics
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('dfp_intelligence') %}
-    <div>
-      <a href="{{ url_for('intelligence.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-         style="{% if active_section == 'intelligence' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-        DFP Intelligence
-      </a>
-      {% if active_section == 'intelligence' %}
-      <a href="{{ url_for('intelligence.ask') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Ask DFP</a>
-      <a href="{{ url_for('intelligence.market_advisor') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Market Advisor</a>
-      <a href="{{ url_for('intelligence.notes') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Notes</a>
-      <a href="{{ url_for('intelligence.legacy_management') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Legacy Import</a>
-      <a href="{{ url_for('intelligence.pipeline') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Normalized Pipeline</a>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    {% if is_module_enabled('trend_scout') %}
-    <div>
-      <a href="{{ url_for('trend_scout.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-         style="{% if active_section == 'trend_scout' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-        Trend Scout
-      </a>
-      {% if active_section == 'trend_scout' %}
-      <a href="{{ url_for('trend_scout.calibration') }}" class="flex items-center gap-3 rounded-lg pl-10 pr-3 py-1.5 text-xs transition-colors"
-         style="color: var(--color-sidebar-muted);">Calibration</a>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    {% if is_module_enabled('cost_engine') %}
-    <a href="{{ url_for('cost_engine.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'cost_engine' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Cost Engine
-    </a>
-    {% endif %}
-
-    {% if is_module_enabled('audit_logs') %}
-    <a href="{{ url_for('audit_logs.index') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-       style="{% if active_section == 'audit_logs' %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
-      Audit Logs
-    </a>
-    {% endif %}
+    <details class="space-y-2 group" {% if system_open %}open{% endif %}>
+      <summary class="flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-left list-none"
+               style="color: var(--color-sidebar-text); background-color: var(--color-sidebar-bg);">
+        <div>
+          <p class="text-sm font-semibold">System</p>
+          <p class="text-xs" style="color: var(--color-sidebar-muted);">Settings, flags, and audit tools</p>
+        </div>
+        <span class="text-xs font-semibold" style="color: var(--color-sidebar-muted);">Toggle</span>
+      </summary>
+      <div class="space-y-1">
+        {% if is_module_enabled('settings') %}
+          {{ nav_link('Settings', url_for('settings.settings_list'), active_section == 'settings') }}
+          {{ sub_link('Business', url_for('settings.business_settings'), request.endpoint == 'settings.business_settings') }}
+          {{ sub_link('Modules', url_for('settings.module_status'), request.endpoint == 'settings.module_status') }}
+          {{ sub_link('Themes', url_for('settings.themes'), request.endpoint == 'settings.themes') }}
+        {% endif %}
+        {% if is_module_enabled('feature_flags') %}
+          {{ nav_link('Feature Flags', url_for('feature_flags.index'), active_section == 'feature_flags') }}
+        {% endif %}
+        {% if is_module_enabled('audit_logs') %}
+          {{ nav_link('Audit Logs', url_for('audit_logs.index'), active_section == 'audit_logs') }}
+        {% endif %}
+      </div>
+    </details>
   </nav>
 
   <div class="border-t px-4 py-4 flex-shrink-0" style="border-color: var(--color-sidebar-border);">

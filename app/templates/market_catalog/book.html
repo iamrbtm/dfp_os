@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Book {{ listing.name }} | Market Catalog | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6 max-w-3xl">
+    <div>
+      <a href="{{ url_for('market_catalog.detail_listing', listing_id=listing.id) }}" class="text-sm" style="color: var(--color-link);">&larr; Back to listing</a>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Book this market</h1>
+      <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Creates a dated Market instance pre-filled from this catalog listing. All fields carry over and can be edited in the Market studio.</p>
+    </div>
+
+    <div class="app-card p-6 space-y-3">
+      <h2 class="text-lg font-semibold" style="color: var(--color-text);">{{ listing.name }}</h2>
+      <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+        <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Location</dt><dd style="color: var(--color-text);">{{ [listing.city, listing.state] | select('ne', None) | join(', ') or '—' }}</dd></div>
+        <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Recurrence</dt><dd style="color: var(--color-text);">{{ listing.recurrence_description or 'One-off' }}</dd></div>
+        <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Default hours</dt><dd style="color: var(--color-text);">{{ listing.default_start_time.strftime('%I:%M %p') if listing.default_start_time else '—' }} – {{ listing.default_end_time.strftime('%I:%M %p') if listing.default_end_time else '—' }}</dd></div>
+        <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Organizer</dt><dd style="color: var(--color-text);">{{ listing.organizer_name or '—' }}</dd></div>
+      </dl>
+    </div>
+
+    {% if suggested_dates %}
+      <div class="app-card p-4">
+        <p class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Suggested upcoming dates</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          {% for d in suggested_dates %}
+            <button type="button" onclick="document.getElementById('event_date').value='{{ d.isoformat() }}'"
+                    class="rounded-full px-3 py-1 text-sm border" style="border-color: var(--color-border); color: var(--color-text); background: var(--color-bg-muted);">
+              {{ format_date(d) }}
+            </button>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    <form method="post" class="app-card p-6 space-y-4">
+      {{ form.hidden_tag() }}
+      <div>
+        <label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.event_date.label.text }}</label>
+        {{ form.event_date(class="app-input mt-1", id="event_date") }}
+        {% for e in form.event_date.errors %}<p class="text-xs mt-1" style="color: #b91c1c;">{{ e }}</p>{% endfor %}
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.booth_tier_id.label.text }}</label>
+          {{ form.booth_tier_id(class="app-input mt-1") }}
+        </div>
+        <div>
+          <label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.status.label.text }}</label>
+          {{ form.status(class="app-input mt-1") }}
+        </div>
+      </div>
+      <label class="inline-flex items-center gap-2 text-sm" style="color: var(--color-text);">
+        {{ form.apply_corner_premium(class="rounded") }} {{ form.apply_corner_premium.label.text }}
+      </label>
+      <p class="text-xs" style="color: var(--color-text-muted);">Adds the corner premium (if set on the tier) to the booth fee.</p>
+      <div class="flex gap-3">
+        {{ form.submit(class="app-btn app-btn-primary") }}
+        <a href="{{ url_for('market_catalog.detail_listing', listing_id=listing.id) }}" class="app-btn app-btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

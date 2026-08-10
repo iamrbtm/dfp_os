@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}{{ listing.name }} | Market Catalog | {{ app_name }}{% endblock %}
+{% block content %}
+  <section class="space-y-6">
+    <div>
+      <a href="{{ url_for('market_catalog.list_listings') }}" class="text-sm" style="color: var(--color-link);">&larr; Back to catalog</a>
+      <div class="mt-2 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-3xl font-semibold" style="color: var(--color-text);">{{ listing.name }}</h1>
+            {% if listing.is_demo %}<span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded" style="background: var(--color-bg-muted); color: var(--color-text-muted);">Demo</span>{% endif %}
+          </div>
+          <p class="mt-1 text-sm" style="color: var(--color-text-muted);">{{ [listing.city, listing.state] | select('ne', None) | join(', ') or 'Location not set' }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="{{ url_for('market_catalog.book_listing', listing_id=listing.id) }}" class="app-btn app-btn-primary">Book this market</a>
+          <a href="{{ url_for('market_catalog.edit_listing_view', listing_id=listing.id) }}" class="app-btn app-btn-secondary">Edit</a>
+          <form method="post" action="{{ url_for('market_catalog.sync_listing_view', listing_id=listing.id) }}" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="app-btn app-btn-secondary">Sync date</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-3">
+      <div class="lg:col-span-2 space-y-6">
+        {% if listing.description %}
+          <div class="app-card p-6">
+            <h2 class="text-lg font-semibold" style="color: var(--color-text);">About</h2>
+            <p class="mt-2 text-sm whitespace-pre-line" style="color: var(--color-text-muted);">{{ listing.description }}</p>
+            {% if listing.website_url %}<p class="mt-2"><a href="{{ listing.website_url }}" target="_blank" rel="noopener" class="app-link text-sm">{{ listing.website_url }}</a></p>{% endif %}
+          </div>
+        {% endif %}
+
+        <div class="app-card p-6">
+          <h2 class="text-lg font-semibold" style="color: var(--color-text);">Recurrence &amp; Dates</h2>
+          <dl class="mt-3 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Recurrence</dt><dd class="mt-0.5" style="color: var(--color-text);">{{ humanize(listing.rrule) }}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Next Occurrence</dt><dd class="mt-0.5 font-medium" style="color: var(--color-text);">{{ format_date(listing.next_occurrence_date) }}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Last Occurrence</dt><dd class="mt-0.5" style="color: var(--color-text-muted);">{{ format_date(listing.last_occurrence_date) }}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Default Hours</dt><dd class="mt-0.5" style="color: var(--color-text);">{{ format_time(listing.default_start_time) }} – {{ format_time(listing.default_end_time) }}</dd></div>
+          </dl>
+          {% if occurrences %}
+            <div class="mt-4">
+              <p class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Upcoming occurrences</p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                {% for d in occurrences %}
+                  <span class="inline-block rounded-full px-3 py-1 text-xs font-medium" style="background: var(--color-bg-muted); color: var(--color-text);">{{ format_date(d) }}</span>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+          {% if listing.rrule %}
+            <details class="mt-3">
+              <summary class="text-xs cursor-pointer" style="color: var(--color-link);">Show RRULE</summary>
+              <code class="mt-1 block text-xs rounded p-2" style="background: var(--color-bg-muted); color: var(--color-text-muted);">{{ listing.rrule }}</code>
+            </details>
+          {% endif %}
+        </div>
+
+        <div class="app-card p-6">
+          <h2 class="text-lg font-semibold" style="color: var(--color-text);">Location &amp; Logistics</h2>
+          <dl class="mt-3 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Venue</dt><dd class="mt-0.5" style="color: var(--color-text);">{{ listing.location_name or '—' }}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Address</dt><dd class="mt-0.5" style="color: var(--color-text);">{{ [listing.address, listing.city, listing.state, listing.zip_code] | select('ne', None) | join(', ') or '—' }}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Est. Vendors</dt><dd class="mt-0.5" style="color: var(--color-text);">{{ listing.estimated_vendor_count or '—' }}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Est. Attendees</dt><dd class="mt-0.5" style="color: var(--color-text);">{{ listing.estimated_attendee_count or '—' }}</dd></div>
+          </dl>
+          <div class="mt-4 flex flex-wrap gap-2">
+            {% set amenities = [] %}
+            {% if listing.power_available %}{% set _ = amenities.append('Power') %}{% endif %}
+            {% if listing.wifi_available %}{% set _ = amenities.append('Wi-Fi') %}{% endif %}
+            {% if listing.food_available %}{% set _ = amenities.append('Food') %}{% endif %}
+            {% if listing.restrooms_available %}{% set _ = amenities.append('Restrooms') %}{% endif %}
+            {% if listing.indoor %}{% set _ = amenities.append('Indoor') %}{% endif %}
+            {% if listing.covered_outdoor %}{% set _ = amenities.append('Covered Outdoor') %}{% endif %}
+            {% if listing.outdoor %}{% set _ = amenities.append('Outdoor') %}{% endif %}
+            {% for a in amenities %}
+              <span class="inline-block rounded-full px-3 py-1 text-xs" style="background: var(--color-bg-muted); color: var(--color-text);">{{ a }}</span>
+            {% else %}
+              <span class="text-xs" style="color: var(--color-text-muted);">No amenities recorded</span>
+            {% endfor %}
+          </div>
+          {% if listing.parking_notes %}<p class="mt-3 text-xs" style="color: var(--color-text-muted);"><strong>Parking:</strong> {{ listing.parking_notes }}</p>{% endif %}
+        </div>
+
+        {% if listing.booth_tiers %}
+          <div class="app-card p-6">
+            <h2 class="text-lg font-semibold" style="color: var(--color-text);">Booth Tiers</h2>
+            <div class="mt-3 overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b" style="border-color: var(--color-border);">
+                    <th class="px-2 py-2 text-left font-medium" style="color: var(--color-text-muted);">Label</th>
+                    <th class="px-2 py-2 text-left font-medium" style="color: var(--color-text-muted);">Dimensions</th>
+                    <th class="px-2 py-2 text-left font-medium" style="color: var(--color-text-muted);">Price</th>
+                    <th class="px-2 py-2 text-left font-medium" style="color: var(--color-text-muted);">Corner Premium</th>
+                    <th class="px-2 py-2 text-left font-medium" style="color: var(--color-text-muted);">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for t in listing.booth_tiers %}
+                    <tr class="border-b last:border-0" style="border-color: var(--color-border);">
+                      <td class="px-2 py-2" style="color: var(--color-text);">{{ t.label }}</td>
+                      <td class="px-2 py-2" style="color: var(--color-text-muted);">{{ t.dimensions or '—' }}</td>
+                      <td class="px-2 py-2 font-medium" style="color: var(--color-text);">{{ format_money(t.price) }}</td>
+                      <td class="px-2 py-2" style="color: var(--color-text-muted);">{{ format_money(t.corner_premium) if t.corner_premium else '—' }}</td>
+                      <td class="px-2 py-2 text-xs" style="color: var(--color-text-muted);">{{ t.notes or '—' }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% else %}
+          <div class="app-card p-6">
+            <h2 class="text-lg font-semibold" style="color: var(--color-text);">Booth Tiers</h2>
+            <p class="mt-2 text-sm" style="color: var(--color-text-muted);">No booth tiers recorded. Edit the listing to add pricing by booth size.</p>
+          </div>
+        {% endif %}
+
+        {% if listing.booth_rules or listing.required_documents %}
+          <div class="app-card p-6">
+            <h2 class="text-lg font-semibold" style="color: var(--color-text);">Rules &amp; Documents</h2>
+            {% if listing.booth_rules %}<div class="mt-3"><p class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Booth Rules</p><p class="mt-1 text-sm whitespace-pre-line" style="color: var(--color-text-muted);">{{ listing.booth_rules }}</p></div>{% endif %}
+            {% if listing.required_documents %}<div class="mt-3"><p class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Required Documents</p><p class="mt-1 text-sm whitespace-pre-line" style="color: var(--color-text-muted);">{{ listing.required_documents }}</p></div>{% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="space-y-6">
+        <div class="app-card p-6">
+          <h2 class="text-lg font-semibold" style="color: var(--color-text);">Interest &amp; Status</h2>
+          <div class="mt-3 flex items-center gap-2">
+            {% set lvl = listing.interest_level.value if listing.interest_level else 'watching' %}
+            <span class="inline-block rounded-full px-3 py-1 text-sm font-medium"
+                  style="background: {% if lvl == 'priority' %}#fee2e2{% elif lvl == 'interested' %}#fef3c7{% else %}var(--color-bg-muted){% endif %};
+                         color: {% if lvl == 'priority' %}#b91c1c{% elif lvl == 'interested' %}#92400e{% else %}var(--color-text-muted){% endif %};">
+              {{ lvl | title }}
+            </span>
+            {% if listing.category %}<span class="inline-block rounded-full px-3 py-1 text-sm" style="background: var(--color-bg-muted); color: var(--color-text);">{{ listing.category.name }}</span>{% endif %}
+          </div>
+          {% if listing.application_deadline_description %}<p class="mt-3 text-xs" style="color: var(--color-text-muted);"><strong>Deadline:</strong> {{ listing.application_deadline_description }}</p>{% endif %}
+        </div>
+
+        <div class="app-card p-6">
+          <h2 class="text-lg font-semibold" style="color: var(--color-text);">Organizer</h2>
+          <dl class="mt-3 space-y-2 text-sm">
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Name</dt><dd style="color: var(--color-text);">{{ listing.organizer_name or '—' }}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Email</dt><dd style="color: var(--color-text);">{{ listing.organizer_email or '—' }}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Phone</dt><dd style="color: var(--color-text);">{{ listing.organizer_phone or '—' }}</dd></div>
+            {% if listing.application_url %}<div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Application</dt><dd><a href="{{ listing.application_url }}" target="_blank" rel="noopener" class="app-link">{{ listing.application_url }}</a></dd></div>{% endif %}
+          </dl>
+        </div>
+
+        {% if booked_markets %}
+          <div class="app-card p-6">
+            <h2 class="text-lg font-semibold" style="color: var(--color-text);">Booked Markets</h2>
+            <ul class="mt-3 space-y-2 text-sm">
+              {% for m in booked_markets %}
+                <li>
+                  <a href="{{ url_for('markets.detail_resource', resource_id=m.id) }}" class="app-link">{{ m.event_date.strftime('%b %d, %Y') if m.event_date else 'No date' }}</a>
+                  <span class="text-xs ml-2" style="color: var(--color-text-muted);">{{ m.status.value | title }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        {% if listing.notes %}
+          <div class="app-card p-6">
+            <h2 class="text-lg font-semibold" style="color: var(--color-text);">Notes</h2>
+            <p class="mt-2 text-sm whitespace-pre-line" style="color: var(--color-text-muted);">{{ listing.notes }}</p>
+          </div>
+        {% endif %}
+
+        <div class="app-card p-6">
+          <form method="post" action="{{ url_for('market_catalog.archive_listing_view', listing_id=listing.id) }}" onsubmit="return confirm('Archive this listing? You can restore it later.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="app-btn app-btn-secondary text-sm w-full" style="color: #b91c1c;">Archive listing</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

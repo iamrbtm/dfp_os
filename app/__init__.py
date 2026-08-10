@@ -22,6 +22,7 @@ from app.blueprints.feature_flags import bp as feature_flags_bp
 from app.blueprints.custom_orders import bp as custom_orders_bp
 from app.blueprints.dashboard import bp as dashboard_bp
 from app.blueprints.markets import bp as markets_bp
+from app.blueprints.market_catalog import bp as market_catalog_bp
 from app.blueprints.notifications import bp as notifications_bp
 from app.blueprints.inventory import bp as inventory_bp
 from app.blueprints.intelligence import bp as intelligence_bp
@@ -128,6 +129,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(booth_mode_bp)
     app.register_blueprint(print_jobs_bp)
     app.register_blueprint(markets_bp)
+    app.register_blueprint(market_catalog_bp)
     app.register_blueprint(prep_tasks_bp)
     app.register_blueprint(promotion_bp)
     app.register_blueprint(report_studio_bp)
@@ -327,6 +329,7 @@ def register_context_processors(app: Flask) -> None:
             "inventory": "inventory",
             "intelligence": "intelligence",
             "markets": "markets",
+            "market_catalog": "market_catalog",
             "receipts": "expenses",
             "expenses": "expenses",
             "report_studio": "report_studio",
@@ -395,6 +398,7 @@ def register_context_processors(app: Flask) -> None:
                 ("Markets", url_for("markets.list_resource", resource_key="markets")),
                 ("New Market", url_for("markets.create_resource", resource_key="markets")),
                 ("Packing List", url_for("markets.list_resource", resource_key="packing-lists")),
+                ("Market Catalog", url_for("market_catalog.list_listings")),
             ],
             "prep_tasks": [
                 ("Tasks", url_for("prep_tasks.list_resource", resource_key="tasks")),

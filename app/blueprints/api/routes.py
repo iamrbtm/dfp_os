@@ -41,6 +41,10 @@ from app.models import (
     MarketTimelineEvent,
     MarketTimelineEventType,
     MarketWeatherSnapshot,
+    MarketCatalogBoothTier,
+    MarketCatalogListing,
+    MarketCategory,
+    MarketInterestLevel,
     ModelSourceType,
     Order,
     OrderFulfillmentMethod,
@@ -100,6 +104,9 @@ from app.schemas import (
     MarketSchema,
     MarketTimelineEventSchema,
     MarketWeatherSnapshotSchema,
+    MarketCatalogBoothTierSchema,
+    MarketCatalogListingSchema,
+    MarketCategorySchema,
     OrderItemSchema,
     OrderSchema,
     PaymentSchema,
@@ -220,6 +227,9 @@ RESOURCE_SCOPES: dict[str, tuple[str, ...]] = {
     "market-weather-snapshots": ("markets",),
     "market-hotel-bookings": ("markets",),
     "market-documents": ("markets",),
+    "market-categories": ("markets",),
+    "market-catalog-listings": ("markets",),
+    "market-catalog-booth-tiers": ("markets",),
     "expenses": ("receipts",),
     "receipts": ("receipts",),
     "receipt-line-items": ("receipts",),
@@ -705,6 +715,70 @@ def _apply_market_document(instance: MarketDocument, data: dict):
     instance.notes = data.get("notes")
 
 
+def _apply_market_category(instance: MarketCategory, data: dict):
+    instance.name = data["name"].strip()
+    if "description" in data:
+        instance.description = data.get("description")
+    if "sort_order" in data:
+        instance.sort_order = data.get("sort_order") or 0
+    if "is_active" in data:
+        instance.is_active = bool(data.get("is_active"))
+
+
+def _apply_market_catalog_listing(instance: MarketCatalogListing, data: dict):
+    instance.name = data["name"].strip()
+    instance.category_id = data.get("category_id")
+    instance.description = data.get("description")
+    instance.website_url = data.get("website_url")
+    instance.location_name = data.get("location_name")
+    instance.address = data.get("address")
+    instance.city = data.get("city")
+    instance.state = data.get("state")
+    instance.zip_code = data.get("zip_code")
+    instance.latitude = data.get("latitude")
+    instance.longitude = data.get("longitude")
+    instance.default_start_time = data.get("default_start_time")
+    instance.default_end_time = data.get("default_end_time")
+    instance.timezone = data.get("timezone") or "America/Chicago"
+    instance.is_recurring = bool(data.get("is_recurring", False))
+    instance.rrule = data.get("rrule")
+    instance.recurrence_description = data.get("recurrence_description")
+    instance.estimated_vendor_count = data.get("estimated_vendor_count")
+    instance.estimated_attendee_count = data.get("estimated_attendee_count")
+    instance.power_available = bool(data.get("power_available", False))
+    instance.wifi_available = bool(data.get("wifi_available", False))
+    instance.food_available = bool(data.get("food_available", False))
+    instance.restrooms_available = bool(data.get("restrooms_available", False))
+    instance.indoor = bool(data.get("indoor", False))
+    instance.covered_outdoor = bool(data.get("covered_outdoor", False))
+    instance.outdoor = bool(data.get("outdoor", False))
+    instance.parking_notes = data.get("parking_notes")
+    instance.organizer_name = data.get("organizer_name")
+    instance.organizer_email = data.get("organizer_email")
+    instance.organizer_phone = data.get("organizer_phone")
+    instance.application_url = data.get("application_url")
+    instance.application_contact = data.get("application_contact")
+    instance.application_deadline_description = data.get("application_deadline_description")
+    instance.booth_rules = data.get("booth_rules")
+    instance.required_documents = data.get("required_documents")
+    instance.notes = data.get("notes")
+    if data.get("interest_level"):
+        try:
+            instance.interest_level = MarketInterestLevel(data["interest_level"])
+        except ValueError:
+            instance.interest_level = MarketInterestLevel.WATCHING
+
+
+def _apply_market_catalog_booth_tier(instance: MarketCatalogBoothTier, data: dict):
+    instance.listing_id = data["listing_id"]
+    instance.label = data["label"].strip()
+    instance.dimensions = data.get("dimensions")
+    instance.price = data.get("price")
+    instance.corner_premium = data.get("corner_premium")
+    instance.notes = data.get("notes")
+    instance.sort_order = data.get("sort_order") or 0
+
+
 def _apply_receipt(instance: Receipt, data: dict):
     instance.merchant_name = data.get("merchant_name", instance.merchant_name)
     instance.store_name = data.get("store_name", instance.store_name)
@@ -957,6 +1031,27 @@ API_RESOURCES = {
         ["original_filename", "notes"],
         _apply_market_document,
     ),
+    "market-categories": ApiResourceConfig(
+        "market-categories",
+        MarketCategory,
+        MarketCategorySchema,
+        ["name", "slug"],
+        _apply_market_category,
+    ),
+    "market-catalog-listings": ApiResourceConfig(
+        "market-catalog-listings",
+        MarketCatalogListing,
+        MarketCatalogListingSchema,
+        ["name", "city", "state", "location_name", "organizer_name"],
+        _apply_market_catalog_listing,
+    ),
+    "market-catalog-booth-tiers": ApiResourceConfig(
+        "market-catalog-booth-tiers",
+        MarketCatalogBoothTier,
+        MarketCatalogBoothTierSchema,
+        ["label", "dimensions"],
+        _apply_market_catalog_booth_tier,
+    ),
     "expenses": ApiResourceConfig(
         "expenses",
         Expense,
@@ -1191,8 +1286,8 @@ def product_readiness(product_id: int):
                 }
                 for item in checklist
             ],
+        }
     }
-}
 
 
 @catalog_blp.route("/printers/reliability", methods=["GET"])
@@ -2210,9 +2305,7 @@ class ApiTokenCollection(MethodView):
             try:
                 from datetime import datetime
 
-                expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").replace(
-                    tzinfo=UTC
-                )
+                expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").replace(tzinfo=UTC)
             except ValueError:
                 return {
                     "error": {
@@ -2917,7 +3010,9 @@ class BoothModeContextSchema(Schema):
     hints = fields.List(fields.Nested(BoothHintSchema))
     top_sellers = fields.List(fields.Nested(TopSellerSchema))
     payment_totals = fields.Dict(
-        keys=fields.String(), values=fields.Decimal(as_string=True), attribute="summary.payment_totals"
+        keys=fields.String(),
+        values=fields.Decimal(as_string=True),
+        attribute="summary.payment_totals",
     )
     expected_cash = fields.Decimal(as_string=True, attribute="summary.expected_cash")
     sale_count = fields.Integer(attribute="summary.sale_count")
@@ -2940,7 +3035,13 @@ def booth_mode_context_api(query_args):
 
     if not is_module_enabled("booth_mode"):
         return jsonify(
-            {"error": {"code": "module_disabled", "message": "Booth Mode is not enabled.", "details": {}}}
+            {
+                "error": {
+                    "code": "module_disabled",
+                    "message": "Booth Mode is not enabled.",
+                    "details": {},
+                }
+            }
         ), 403
     try:
         ctx = booth_mode_context(
