@@ -1,5 +1,6 @@
 {% macro nav_link(label, href, is_active=False, badge=None) -%}
   <a href="{{ href }}"
+     @click="sidebarOpen = false"
      class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors"
      style="{% if is_active %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-text);{% endif %}">
     <span class="min-w-0 flex-1">{{ label }}</span>
@@ -12,6 +13,7 @@
 
 {% macro sub_link(label, href, is_active=False) -%}
   <a href="{{ href }}"
+     @click="sidebarOpen = false"
      class="block rounded-lg pl-4 pr-3 py-1.5 text-xs transition-colors"
      style="{% if is_active %}background-color: var(--color-sidebar-active-bg); color: var(--color-sidebar-active-text);{% else %}color: var(--color-sidebar-muted);{% endif %}">
     {{ label }}
