@@ -105,6 +105,20 @@ def migrate_group() -> None:
     """Migrate data between versions."""
 
 
+@click.group("market-catalog")
+def market_catalog_group() -> None:
+    """Market catalog utilities."""
+
+
+@market_catalog_group.command("sync")
+def market_catalog_sync() -> None:
+    """Advance stale next_occurrence_date values for recurring listings."""
+    from app.services.market_catalog_sync import sync_all_listings
+
+    advanced = sync_all_listings()
+    click.echo(f"Listings advanced: {advanced}")
+
+
 @migrate_group.command("file-paths")
 def migrate_file_paths() -> None:
     """Migrate product asset file paths to the new structured layout.

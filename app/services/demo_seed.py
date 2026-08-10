@@ -18,6 +18,10 @@ from app.models import (
     InventoryLocation,
     InventoryRecord,
     Market,
+    MarketCatalogBoothTier,
+    MarketCatalogListing,
+    MarketCategory,
+    MarketInterestLevel,
     MarketPackingList,
     MarketStatus,
     Order,
@@ -411,6 +415,8 @@ def seed_demo_data(*, admin_email: str, admin_password: str) -> dict[str, int]:
 
     _seed_trend_weights()
 
+    catalog_counts = _seed_market_catalog(business)
+
     db.session.commit()
 
     return {
@@ -434,4 +440,197 @@ def seed_demo_data(*, admin_email: str, admin_password: str) -> dict[str, int]:
         "feature_flags": FeatureFlag.query.count(),
         "filament_cost_per_gram": int(filament.cost_per_gram > 0),
         "staff_users": int(staff_user.id > 0),
+        "market_categories": catalog_counts["categories"],
+        "market_catalog_listings": catalog_counts["listings"],
+        "market_catalog_booth_tiers": catalog_counts["booth_tiers"],
+    }
+
+
+def _seed_market_catalog(business) -> dict[str, int]:
+    """Seed demo market catalog categories, listings, and booth tiers.
+
+    Demo data is clearly flagged with is_demo=True. Recurring listings use RRULE
+    so next_occurrence_date can be advanced after the date passes.
+    """
+    from app.services.market_catalog_recurrence import (
+        build_rrule,
+        next_occurrence,
+        parse_rrule,
+    )
+
+    # Ensure default categories exist (migration already seeds them, but be safe
+    # when db.create_all() is used in tests).
+    default_categories = [
+        ("Holiday", "holiday", 1),
+        ("Flea", "flea", 2),
+        ("Craft", "craft", 3),
+        ("Farmers", "farmers", 4),
+        ("Art", "art", 5),
+        ("Antique/Vintage", "antique-vintage", 6),
+        ("Festival", "festival", 7),
+        ("Trade Show", "trade-show", 8),
+        ("Pop-up", "pop-up", 9),
+        ("Night Market", "night-market", 10),
+        ("Other", "other", 99),
+    ]
+    category_map: dict[str, MarketCategory] = {}
+    for name, slug, order in default_categories:
+        cat = _upsert(
+            MarketCategory,
+            slug=slug,
+            defaults={"name": name, "sort_order": order, "is_active": True},
+        )
+        category_map[name] = cat
+
+    demo_listings = [
+        {
+            "name": "[Demo] Clarksville Holiday Market",
+            "category": "Holiday",
+            "description": "Annual holiday gift market in Clarksville, TN. Demo listing for the catalog.",
+            "city": "Clarksville",
+            "state": "TN",
+            "location_name": "Clarksville Convention Center",
+            "address": "430 Page Ave",
+            "zip_code": "37040",
+            "default_start_time": None,
+            "default_end_time": None,
+            "is_recurring": True,
+            "rrule": build_rrule("yearly", month=10, weekday="SA", week_number=3),
+            "recurrence_description": "3rd Saturday in October",
+            "interest_level": MarketInterestLevel.PRIORITY,
+            "organizer_name": "Clarksville Events Board",
+            "organizer_email": "events@example.com",
+            "organizer_phone": "(931) 555-0100",
+            "application_url": "https://example.com/holiday-market-apply",
+            "power_available": True,
+            "wifi_available": True,
+            "food_available": True,
+            "restrooms_available": True,
+            "indoor": True,
+            "estimated_vendor_count": 80,
+            "estimated_attendee_count": 1200,
+            "booth_tiers": [
+                {
+                    "label": "10x10",
+                    "dimensions": "10ft x 10ft",
+                    "price": Decimal("75.00"),
+                    "corner_premium": Decimal("25.00"),
+                },
+                {
+                    "label": "10x20",
+                    "dimensions": "10ft x 20ft",
+                    "price": Decimal("130.00"),
+                    "corner_premium": Decimal("25.00"),
+                },
+            ],
+        },
+        {
+            "name": "[Demo] Liberty Day Festival",
+            "category": "Festival",
+            "description": "July 4th community festival. Demo listing for the catalog.",
+            "city": "Clarksville",
+            "state": "TN",
+            "location_name": "Liberty Park",
+            "is_recurring": True,
+            "rrule": build_rrule("yearly", month=7, day_of_month=4),
+            "recurrence_description": "Every July 4th",
+            "interest_level": MarketInterestLevel.INTERESTED,
+            "organizer_name": "Clarksville Parks & Rec",
+            "power_available": False,
+            "wifi_available": False,
+            "food_available": True,
+            "restrooms_available": True,
+            "outdoor": True,
+            "estimated_vendor_count": 40,
+            "estimated_attendee_count": 3000,
+            "booth_tiers": [
+                {"label": "Standard", "dimensions": "10x10", "price": Decimal("50.00")},
+                {"label": "Corner", "dimensions": "10x10 corner", "price": Decimal("75.00")},
+            ],
+        },
+        {
+            "name": "[Demo] Clarksville Flea Market",
+            "category": "Flea",
+            "description": "Monthly flea market, first Sunday of each month. Demo listing.",
+            "city": "Clarksville",
+            "state": "TN",
+            "location_name": "Fairgrounds",
+            "is_recurring": True,
+            "rrule": build_rrule("monthly", weekday="SU", week_number=1),
+            "recurrence_description": "1st Sunday of each month",
+            "interest_level": MarketInterestLevel.WATCHING,
+            "power_available": False,
+            "wifi_available": False,
+            "food_available": True,
+            "outdoor": True,
+            "covered_outdoor": True,
+            "estimated_vendor_count": 120,
+            "estimated_attendee_count": 800,
+            "booth_tiers": [
+                {"label": "Booth", "dimensions": "10x10", "price": Decimal("30.00")},
+            ],
+        },
+        {
+            "name": "[Demo] Riverside Craft Fair",
+            "category": "Craft",
+            "description": "One-off craft fair demo listing with a fixed date.",
+            "city": "Nashville",
+            "state": "TN",
+            "location_name": "Riverside Pavilion",
+            "is_recurring": False,
+            "rrule": None,
+            "next_date": date(2026, 9, 12),
+            "interest_level": MarketInterestLevel.INTERESTED,
+            "power_available": True,
+            "wifi_available": True,
+            "indoor": True,
+            "estimated_vendor_count": 60,
+            "estimated_attendee_count": 900,
+            "booth_tiers": [
+                {"label": "10x10", "price": Decimal("95.00"), "corner_premium": Decimal("20.00")},
+            ],
+        },
+    ]
+
+    listings_count = 0
+    tiers_count = 0
+    for data in demo_listings:
+        existing = MarketCatalogListing.query.filter_by(name=data["name"]).first()
+        if existing is not None:
+            continue
+        category = category_map.get(data["category"])
+        tiers_data = data.pop("booth_tiers", [])
+        next_date = data.pop("next_date", None)
+        listing = MarketCatalogListing(
+            name=data["name"],
+            category_id=category.id if category else None,
+            is_demo=True,
+            business_id=business.id,
+            **data,
+        )
+        db.session.add(listing)
+        db.session.flush()
+        for index, tier_data in enumerate(tiers_data):
+            tier = MarketCatalogBoothTier(
+                listing_id=listing.id,
+                sort_order=index,
+                **tier_data,
+            )
+            db.session.add(tier)
+            tiers_count += 1
+        # Compute + set next occurrence for recurring listings.
+        if listing.is_recurring and listing.rrule:
+            rrule_obj = parse_rrule(listing.rrule)
+            if rrule_obj is not None:
+                listing.next_occurrence_date = next_occurrence(rrule_obj)
+        elif next_date is not None:
+            listing.next_occurrence_date = next_date
+        listings_count += 1
+
+    db.session.flush()
+
+    return {
+        "categories": MarketCategory.query.count(),
+        "listings": MarketCatalogListing.query.filter_by(is_demo=True).count(),
+        "booth_tiers": MarketCatalogBoothTier.query.count(),
     }

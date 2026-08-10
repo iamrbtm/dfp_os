@@ -39,7 +39,7 @@ from app.blueprints.promotion import bp as promotion_bp
 from app.blueprints.report_studio import bp as report_studio_bp
 from app.blueprints.table_layouts import bp as table_layouts_bp
 from app.blueprints.trend_scout import bp as trend_scout_bp
-from app.cli import migrate_group, seed_group, trend_scout_group
+from app.cli import market_catalog_group, migrate_group, seed_group, trend_scout_group
 from app.extensions import api, csrf, db, login_manager, migrate
 from app.models import User
 
@@ -244,6 +244,7 @@ def register_cli(app: Flask) -> None:
     app.cli.add_command(seed_group)
     app.cli.add_command(migrate_group)
     app.cli.add_command(trend_scout_group)
+    app.cli.add_command(market_catalog_group)
 
 
 def register_error_handlers(app: Flask) -> None:
