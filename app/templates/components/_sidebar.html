@@ -33,7 +33,7 @@
     <a href="{{ url_for('dashboard.index') }}" class="text-lg font-semibold tracking-tight" style="color: var(--color-sidebar-text);">
       {{ app_name }}
     </a>
-    <button @click="sidebarOpen = false" class="lg:hidden p-1 rounded" style="color: var(--color-sidebar-muted);">
+    <button type="button" @click="sidebarOpen = false" class="lg:hidden p-1 rounded" style="color: var(--color-sidebar-muted);">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
   </div>
