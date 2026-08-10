@@ -119,7 +119,11 @@ class Market(PrimaryKeyMixin, TimestampMixin, db.Model):
     follow_up_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     worth_repeating: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    market_catalog_listing_id: Mapped[int | None] = mapped_column(
+        ForeignKey("market_catalog_listings.id"), nullable=True, index=True
+    )
 
+    catalog_listing = relationship("MarketCatalogListing", back_populates="booked_markets")
     packing_list = relationship(
         "MarketPackingList", back_populates="market", cascade="all, delete-orphan"
     )

@@ -46,6 +46,13 @@ from app.models.market import (
     MarketTimelineEventType,
     MarketWeatherSnapshot,
 )
+from app.models.market_catalog import (
+    MarketCatalogBoothTier,
+    MarketCatalogListing,
+    MarketCategory,
+    MarketInterestLevel,
+    MarketRecurrenceFrequency,
+)
 from app.models.inventory import FilamentSpool, FilamentStatus, InventoryLocation, InventoryRecord
 from app.models.inventory_movement import InventoryMovement, InventoryMovementType
 from app.models.order import (
@@ -169,6 +176,11 @@ __all__ = [
     "MarketTimelineEvent",
     "MarketTimelineEventType",
     "MarketWeatherSnapshot",
+    "MarketCatalogBoothTier",
+    "MarketCatalogListing",
+    "MarketCategory",
+    "MarketInterestLevel",
+    "MarketRecurrenceFrequency",
     "ModelSourceType",
     "Order",
     "OrderFulfillmentMethod",
