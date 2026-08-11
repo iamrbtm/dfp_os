@@ -6,8 +6,8 @@ x-env-app: &env-app
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:?POSTGRES_DB must be set}
   ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
-  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://audit-redis:6379/1}
-  CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://audit-redis:6379/1}
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
   AUDIT_LOG_BASE_URL: http://audit-log:8090
   AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
   AUDIT_LOG_ENABLED: ${AUDIT_LOG_ENABLED:-false}
@@ -37,30 +37,33 @@ x-env-app: &env-app
   SLICER_ENABLED: ${SLICER_ENABLED:-true}
   SLICER_SERVICE_URL: http://slicer:8092
   SLICER_INTERNAL_API_TOKEN: ${SLICER_INTERNAL_API_TOKEN:?SLICER_INTERNAL_API_TOKEN must be set}
+  INTELLIGENCE_ENABLED: ${INTELLIGENCE_ENABLED:-true}
+  INTELLIGENCE_SERVICE_URL: http://intelligence:8091
+  INTELLIGENCE_INTERNAL_API_TOKEN: ${INTELLIGENCE_INTERNAL_API_TOKEN:?INTELLIGENCE_INTERNAL_API_TOKEN must be set}
 
-x-depends-all: &depends-all
+x-depends-core: &depends-core
   db:
     condition: service_healthy
-  audit-redis:
+  redis:
     condition: service_healthy
   seaweedfs:
     condition: service_healthy
 
-x-build-app: &build-app
-  context: .
-  target: base
-
-x-build-app-dev: &build-app-dev
-  context: .
-  target: dev
-
 services:
+  # ── Infrastructure ──────────────────────────
+
   db:
     image: postgres:17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      AUDIT_POSTGRES_DB: ${AUDIT_POSTGRES_DB:?AUDIT_POSTGRES_DB must be set}
+      AUDIT_POSTGRES_USER: ${AUDIT_POSTGRES_USER:?AUDIT_POSTGRES_USER must be set}
+      AUDIT_POSTGRES_PASSWORD: ${AUDIT_POSTGRES_PASSWORD:?AUDIT_POSTGRES_PASSWORD must be set}
+      INTELLIGENCE_POSTGRES_DB: ${INTELLIGENCE_POSTGRES_DB:?INTELLIGENCE_POSTGRES_DB must be set}
+      INTELLIGENCE_POSTGRES_USER: ${INTELLIGENCE_POSTGRES_USER:?INTELLIGENCE_POSTGRES_USER must be set}
+      INTELLIGENCE_POSTGRES_PASSWORD: ${INTELLIGENCE_POSTGRES_PASSWORD:?INTELLIGENCE_POSTGRES_PASSWORD must be set}
     expose:
       - "5432"
     volumes:
@@ -68,9 +71,23 @@ services:
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
+      interval: 5s
+      timeout: 3s
       retries: 5
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 2s
 
   seaweedfs:
     image: chrislusf/seaweedfs:3.85
@@ -91,29 +108,33 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
 
-  audit-redis:
-    image: redis:7-alpine
-    expose:
-      - "6379"
-    volumes:
-      - audit_redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # ── Build-cache images (build profile only) ──
 
-  base:
+  base-build:
+    profiles: [build]
     build:
       context: .
       dockerfile: Dockerfile.base
-    image: dfpos-base:${DFPOS_IMAGE_TAG:-local}
+    image: dfpos-base:local
     command: ["true"]
 
+  slicer-base-build:
+    profiles: [build]
+    build:
+      context: services/slicer
+      dockerfile: Dockerfile.base
+    image: dfpos-slicer-base:local
+    command: ["true"]
+
+  # ── Flask app + workers ─────────────────────
+
   web:
-    build: *build-app
-    image: dfpos-app:${DFPOS_IMAGE_TAG:-local}
+    build:
+      context: .
+      target: ${DOCKER_TARGET:-base}
+    image: dfpos-app:local
     init: true
     mem_limit: 1024m
     environment:
@@ -123,9 +144,7 @@ services:
     volumes:
       - receipt_uploads:/app/uploads/receipts
     depends_on:
-      <<: *depends-all
-      base:
-        condition: service_completed_successfully
+      <<: *depends-core
       slicer:
         condition: service_healthy
     healthcheck:
@@ -133,9 +152,30 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 10s
+    develop:
+      watch:
+        - path: ./app
+          target: /app/app
+          action: sync
+          ignore:
+            - "**/__pycache__/"
+            - "**/*.pyc"
+            - "**/.DS_Store"
+        - path: ./migrations
+          target: /app/migrations
+          action: sync
+        - path: ./pyproject.toml
+          action: rebuild
+        - path: ./uv.lock
+          action: rebuild
+        - path: ./package.json
+          action: rebuild
+        - path: ./package-lock.json
+          action: rebuild
 
   worker:
-    image: dfpos-app:${DFPOS_IMAGE_TAG:-local}
+    image: dfpos-app:local
     init: true
     mem_limit: 1024m
     environment:
@@ -143,13 +183,26 @@ services:
     volumes:
       - receipt_uploads:/app/uploads/receipts
     depends_on:
-      <<: *depends-all
+      <<: *depends-core
       slicer:
         condition: service_healthy
     command: ["celery", "-A", "app.celery_app.celery", "worker", "--loglevel=info"]
+    develop:
+      watch:
+        - path: ./app
+          target: /app/app
+          action: sync
+          ignore:
+            - "**/__pycache__/"
+            - "**/*.pyc"
+            - "**/.DS_Store"
+        - path: ./pyproject.toml
+          action: rebuild
+        - path: ./uv.lock
+          action: rebuild
 
   beat:
-    image: dfpos-app:${DFPOS_IMAGE_TAG:-local}
+    image: dfpos-app:local
     init: true
     mem_limit: 1024m
     environment:
@@ -157,15 +210,33 @@ services:
     volumes:
       - receipt_uploads:/app/uploads/receipts
     depends_on:
-      <<: *depends-all
+      <<: *depends-core
       slicer:
         condition: service_healthy
     command: ["celery", "-A", "app.celery_app.celery", "beat", "--loglevel=info", "--schedule", "/app/instance/celerybeat-schedule"]
 
+  # ── Dev tooling ─────────────────────────────
+
+  tailwind-watch:
+    profiles: [dev]
+    image: node:22-slim
+    working_dir: /app
+    volumes:
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./tailwind.config.js:/app/tailwind.config.js:ro
+      - ./postcss.config.js:/app/postcss.config.js:ro
+      - ./app/static:/app/app/static
+      - ./app/templates:/app/app/templates:ro
+      - tailwind_node_modules:/app/node_modules
+    command: >
+      sh -c "npm install --no-audit --no-fund --prefer-offline 2>/dev/null; npx tailwindcss -i ./app/static/src/input.css -o ./app/static/dist/app.css --watch"
+
+  # ── One-shot services ───────────────────────
+
   migrate:
-    image: dfpos-app:${DFPOS_IMAGE_TAG:-local}
-    profiles:
-      - release
+    image: dfpos-app:local
+    profiles: [release]
     environment:
       FLASK_ENV: ${FLASK_ENV:-production}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
@@ -177,33 +248,35 @@ services:
       - ./migrations/versions:/app/migrations/versions
     command: ["flask", "--app", "app:create_app", "db", "upgrade"]
 
-  audit-postgres:
-    image: postgres:17
+  test:
+    build:
+      context: .
+      target: dev
+    image: dfpos-app-dev:local
+    profiles: [test]
     environment:
-      POSTGRES_DB: ${AUDIT_POSTGRES_DB:?AUDIT_POSTGRES_DB must be set}
-      POSTGRES_USER: ${AUDIT_POSTGRES_USER:?AUDIT_POSTGRES_USER must be set}
-      POSTGRES_PASSWORD: ${AUDIT_POSTGRES_PASSWORD:?AUDIT_POSTGRES_PASSWORD must be set}
-    expose:
-      - "5432"
-    volumes:
-      - audit_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      FLASK_ENV: testing
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      TEST_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/dfpos_test
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/dfpos_test
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["uv", "run", "pytest", "-v", "--tb=long"]
+
+  # ── Microservices ───────────────────────────
 
   audit-log:
     build: services/audit-log
-    image: dfpos-audit-log:${DFPOS_IMAGE_TAG:-local}
+    image: dfpos-audit-log:local
     init: true
     environment:
       AUDIT_SERVICE_ENV: ${AUDIT_SERVICE_ENV:-production}
       AUDIT_SERVICE_NAME: ${AUDIT_SERVICE_NAME:-dfp-audit-log}
       AUDIT_API_HOST: 0.0.0.0
       AUDIT_API_PORT: 8090
-      AUDIT_DATABASE_URL: postgresql+asyncpg://${AUDIT_POSTGRES_USER:?AUDIT_POSTGRES_USER must be set}:${AUDIT_POSTGRES_PASSWORD:?AUDIT_POSTGRES_PASSWORD must be set}@audit-postgres:5432/${AUDIT_POSTGRES_DB:?AUDIT_POSTGRES_DB must be set}
-      AUDIT_REDIS_URL: redis://audit-redis:6379/0
+      AUDIT_DATABASE_URL: postgresql+asyncpg://${AUDIT_POSTGRES_USER:?AUDIT_POSTGRES_USER must be set}:${AUDIT_POSTGRES_PASSWORD:?AUDIT_POSTGRES_PASSWORD must be set}@db:5432/${AUDIT_POSTGRES_DB:?AUDIT_POSTGRES_DB must be set}
+      AUDIT_REDIS_URL: redis://redis:6379/0
       AUDIT_INTERNAL_API_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
       AUDIT_HASH_SECRET: ${AUDIT_HASH_SECRET:?AUDIT_HASH_SECRET must be set}
       AUDIT_USE_REDIS_STREAM: ${AUDIT_USE_REDIS_STREAM:-false}
@@ -211,65 +284,40 @@ services:
     expose:
       - "8090"
     depends_on:
-      audit-postgres:
+      db:
         condition: service_healthy
-      audit-redis:
+      redis:
         condition: service_healthy
     command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090"]
 
-  intelligence-postgres:
-    image: postgres:17
-    environment:
-      POSTGRES_DB: ${INTELLIGENCE_POSTGRES_DB:?INTELLIGENCE_POSTGRES_DB must be set}
-      POSTGRES_USER: ${INTELLIGENCE_POSTGRES_USER:?INTELLIGENCE_POSTGRES_USER must be set}
-      POSTGRES_PASSWORD: ${INTELLIGENCE_POSTGRES_PASSWORD:?INTELLIGENCE_POSTGRES_PASSWORD must be set}
-    expose:
-      - "5432"
-    volumes:
-      - intelligence_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   intelligence:
     build: services/intelligence
-    image: dfpos-intelligence:${DFPOS_IMAGE_TAG:-local}
+    image: dfpos-intelligence:local
     init: true
     environment:
       INTELLIGENCE_SERVICE_ENV: ${INTELLIGENCE_SERVICE_ENV:-production}
       INTELLIGENCE_SERVICE_NAME: ${INTELLIGENCE_SERVICE_NAME:-dfp-intelligence}
       INTELLIGENCE_API_HOST: 0.0.0.0
       INTELLIGENCE_API_PORT: 8091
-      INTELLIGENCE_DATABASE_URL: postgresql+asyncpg://${INTELLIGENCE_POSTGRES_USER:?INTELLIGENCE_POSTGRES_USER must be set}:${INTELLIGENCE_POSTGRES_PASSWORD:?INTELLIGENCE_POSTGRES_PASSWORD must be set}@intelligence-postgres:5432/${INTELLIGENCE_POSTGRES_DB:?INTELLIGENCE_POSTGRES_DB must be set}
+      INTELLIGENCE_DATABASE_URL: postgresql+asyncpg://${INTELLIGENCE_POSTGRES_USER:?INTELLIGENCE_POSTGRES_USER must be set}:${INTELLIGENCE_POSTGRES_PASSWORD:?INTELLIGENCE_POSTGRES_PASSWORD must be set}@db:5432/${INTELLIGENCE_POSTGRES_DB:?INTELLIGENCE_POSTGRES_DB must be set}
       INTELLIGENCE_INTERNAL_API_TOKEN: ${INTELLIGENCE_INTERNAL_API_TOKEN:?INTELLIGENCE_INTERNAL_API_TOKEN must be set}
       INTELLIGENCE_AUDIT_LOG_BASE_URL: http://audit-log:8090
       INTELLIGENCE_AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
     expose:
       - "8091"
     depends_on:
-      intelligence-postgres:
+      db:
         condition: service_healthy
       audit-log:
         condition: service_started
     command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8091"]
 
-  slicer-base:
-    profiles:
-      - build
-    build:
-      context: services/slicer
-      dockerfile: Dockerfile.base
-    image: dfpos-slicer-base:${DFPOS_IMAGE_TAG:-local}
-    command: ["true"]
-
   slicer:
     build:
       context: services/slicer
       args:
-        DFPOS_IMAGE_TAG: ${DFPOS_IMAGE_TAG:-local}
-    image: dfpos-slicer:${DFPOS_IMAGE_TAG:-local}
+        DFPOS_IMAGE_TAG: local
+    image: dfpos-slicer:local
     init: true
     mem_limit: 2048m
     environment:
@@ -292,29 +340,12 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  test:
-    build: *build-app-dev
-    image: dfpos-app-dev:${DFPOS_IMAGE_TAG:-local}
-    profiles:
-      - test
-    environment:
-      FLASK_ENV: testing
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      TEST_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:?POSTGRES_DB must be set}_test
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:?POSTGRES_DB must be set}_test
-    depends_on:
-      db:
-        condition: service_healthy
-      base:
-        condition: service_completed_successfully
-    command: ["uv", "run", "pytest", "-v", "--tb=long"]
+      start_period: 10s
 
   api-docs:
-    profiles:
-      - docs
+    profiles: [docs]
     build: services/dfpos-api-docs
-    image: dfpos-api-docs:${DFPOS_IMAGE_TAG:-local}
+    image: dfpos-api-docs:local
     environment:
       DFPOS_OPENAPI_URL: http://web:5000/api/openapi.json
       APP_NAME: Dude Fish OS API Reference
@@ -328,8 +359,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   receipt_uploads:
   seaweedfs_data:
-  audit_postgres_data:
-  intelligence_postgres_data:
-  audit_redis_data:
+  tailwind_node_modules:

@@ -485,6 +485,7 @@ def _seed_market_catalog(business) -> dict[str, int]:
     demo_listings = [
         {
             "name": "[Demo] Clarksville Holiday Market",
+            "slug": "demo-clarksville-holiday-market",
             "category": "Holiday",
             "description": "Annual holiday gift market in Clarksville, TN. Demo listing for the catalog.",
             "city": "Clarksville",
@@ -526,6 +527,7 @@ def _seed_market_catalog(business) -> dict[str, int]:
         },
         {
             "name": "[Demo] Liberty Day Festival",
+            "slug": "demo-liberty-day-festival",
             "category": "Festival",
             "description": "July 4th community festival. Demo listing for the catalog.",
             "city": "Clarksville",
@@ -550,6 +552,7 @@ def _seed_market_catalog(business) -> dict[str, int]:
         },
         {
             "name": "[Demo] Clarksville Flea Market",
+            "slug": "demo-clarksville-flea-market",
             "category": "Flea",
             "description": "Monthly flea market, first Sunday of each month. Demo listing.",
             "city": "Clarksville",
@@ -572,6 +575,7 @@ def _seed_market_catalog(business) -> dict[str, int]:
         },
         {
             "name": "[Demo] Riverside Craft Fair",
+            "slug": "demo-riverside-craft-fair",
             "category": "Craft",
             "description": "One-off craft fair demo listing with a fixed date.",
             "city": "Nashville",
@@ -598,16 +602,15 @@ def _seed_market_catalog(business) -> dict[str, int]:
         existing = MarketCatalogListing.query.filter_by(name=data["name"]).first()
         if existing is not None:
             continue
-        category = category_map.get(data["category"])
+        category = category_map.get(data.pop("category"))
         tiers_data = data.pop("booth_tiers", [])
         next_date = data.pop("next_date", None)
-        listing = MarketCatalogListing(
-            name=data["name"],
-            category_id=category.id if category else None,
-            is_demo=True,
-            business_id=business.id,
-            **data,
-        )
+        data.setdefault("is_demo", True)
+        data.setdefault("business_id", business.id)
+        listing = MarketCatalogListing(**data)
+        listing.category_id = category.id if category else None
+        listing.is_demo = True
+        listing.business_id = business.id
         db.session.add(listing)
         db.session.flush()
         for index, tier_data in enumerate(tiers_data):
