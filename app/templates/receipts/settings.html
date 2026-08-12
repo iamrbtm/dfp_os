@@ -13,10 +13,9 @@
       <h2 class="text-lg font-semibold mb-3" style="color: var(--color-text);">Current Configuration</h2>
       <dl class="space-y-2 text-sm">
         <div class="flex justify-between"><dt>OCR Provider</dt><dd><code>{{ config.get('RECEIPT_OCR_PROVIDER', 'paddleocr') }}</code></dd></div>
-        {% set receipt_ai_provider = config.get('RECEIPT_AI_PROVIDER', config.get('AI_PROVIDER', 'openai')) %}
         <div class="flex justify-between"><dt>AI Provider</dt><dd><code>{{ receipt_ai_provider }}</code></dd></div>
-        <div class="flex justify-between"><dt>AI Model</dt><dd><code>{% if receipt_ai_provider == 'kilo' %}{{ config.get('KILO_MODEL_RECEIPTS', config.get('KILO_MODEL')) }}{% else %}{{ config.get('OPENAI_MODEL_RECEIPTS', config.get('OPENAI_MODEL', 'gpt-4o-mini')) }}{% endif %}</code></dd></div>
-        <div class="flex justify-between"><dt>API Key Set</dt><dd>{% if (receipt_ai_provider == 'kilo' and config.get('KILO_API_KEY')) or (receipt_ai_provider != 'kilo' and config.get('OPENAI_API_KEY')) %}Yes{% else %}<span style="color: var(--color-danger);">No</span>{% endif %}</dd></div>
+        <div class="flex justify-between"><dt>AI Model</dt><dd><code>{{ receipt_ai_model }}</code></dd></div>
+        <div class="flex justify-between"><dt>API Key Set</dt><dd>{% if receipt_ai_key_configured %}Yes{% else %}<span style="color: var(--color-danger);">No</span>{% endif %}</dd></div>
         <div class="flex justify-between"><dt>Max Upload</dt><dd>{{ config.get('RECEIPT_MAX_UPLOAD_MB', 25) }} MB</dd></div>
         <div class="flex justify-between"><dt>Confidence Threshold</dt><dd>{{ config.get('RECEIPT_LOW_CONFIDENCE_THRESHOLD', 0.8) }}</dd></div>
       </dl>

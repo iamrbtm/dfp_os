@@ -22,6 +22,7 @@ from app.services.receipt_providers import (
     AIExtractionProvider,
 )
 from app.services.audit import record_audit_event
+from app.services.settings import get_setting
 from app.services.storage import (
     content_type_for_name,
     materialize_storage_reference,
@@ -351,16 +352,28 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
             ai_provider = AIExtractionProvider()
             ai_kwargs = {
                 "raw_ocr_text": ocr_result.raw_text or "",
-                "provider": ocr_config.get("RECEIPT_AI_PROVIDER", "openai"),
+                "provider": get_setting(
+                    "receipt_ai_provider", ocr_config.get("RECEIPT_AI_PROVIDER", "openai")
+                ),
             }
             if ai_kwargs["provider"] in {"openai", "kilo"}:
-                ai_kwargs["openai_api_key"] = ocr_config.get("OPENAI_API_KEY", "")
-                ai_kwargs["openai_model"] = ocr_config.get("OPENAI_MODEL_RECEIPTS", "gpt-4o-mini")
+                ai_kwargs["openai_api_key"] = get_setting(
+                    "openai_api_key", ocr_config.get("OPENAI_API_KEY", "")
+                )
+                ai_kwargs["openai_model"] = get_setting(
+                    "openai_model_receipts",
+                    ocr_config.get("OPENAI_MODEL_RECEIPTS", "gpt-4o-mini"),
+                )
                 if ai_kwargs["provider"] == "kilo":
-                    ai_kwargs["openai_api_key"] = ocr_config.get("KILO_API_KEY", "")
-                    ai_kwargs["openai_model"] = ocr_config.get(
-                        "KILO_MODEL_RECEIPTS",
-                        ocr_config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
+                    ai_kwargs["openai_api_key"] = get_setting(
+                        "kilo_api_key", ocr_config.get("KILO_API_KEY", "")
+                    )
+                    ai_kwargs["openai_model"] = get_setting(
+                        "kilo_model_receipts",
+                        ocr_config.get(
+                            "KILO_MODEL_RECEIPTS",
+                            ocr_config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
+                        ),
                     )
             else:
                 ai_kwargs["ollama_base_url"] = ocr_config.get(

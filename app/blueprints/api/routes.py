@@ -1479,14 +1479,18 @@ class TrendReportRun(MethodView):
             return denied
         from app.extensions import db
         from app.services.ai.trend_scout import run_full_pipeline
+        from app.services.settings import get_setting
 
-        ai_provider = current_app.config.get("AI_PROVIDER", "openai")
-        api_key = current_app.config.get("OPENAI_API_KEY", "")
-        model = current_app.config.get("OPENAI_MODEL_TREND_SCOUT", "gpt-4o-mini")
+        ai_provider = get_setting("ai_provider", current_app.config.get("AI_PROVIDER", "openai"))
+        api_key = get_setting("openai_api_key", current_app.config.get("OPENAI_API_KEY", ""))
+        model = get_setting(
+            "openai_model_trend_scout",
+            current_app.config.get("OPENAI_MODEL_TREND_SCOUT", "gpt-4o-mini"),
+        )
         if ai_provider == "kilo":
-            api_key = current_app.config.get("KILO_API_KEY", "")
-            model = current_app.config.get(
-                "KILO_MODEL_TREND_SCOUT",
+            api_key = get_setting("kilo_api_key", current_app.config.get("KILO_API_KEY", ""))
+            model = get_setting(
+                "kilo_model_trend_scout",
                 current_app.config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
             )
         result = run_full_pipeline(

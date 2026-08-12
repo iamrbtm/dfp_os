@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from flask import current_app
 
+from app.services.settings import get_setting
+
 KILO_GATEWAY_BASE_URL = "https://api.kilo.ai/api/gateway"
 
 
@@ -15,7 +17,7 @@ class AIProviderSettings:
 
 
 def configured_ai_provider() -> str:
-    return str(current_app.config.get("AI_PROVIDER", "openai") or "openai").strip().lower()
+    return _setting_or_config("AI_PROVIDER", "openai").strip().lower()
 
 
 def get_ai_provider_settings(provider: str | None = None) -> AIProviderSettings:
@@ -23,13 +25,13 @@ def get_ai_provider_settings(provider: str | None = None) -> AIProviderSettings:
     if selected == "kilo":
         return AIProviderSettings(
             provider="kilo",
-            api_key=current_app.config.get("KILO_API_KEY", ""),
-            base_url=current_app.config.get("KILO_GATEWAY_BASE_URL", KILO_GATEWAY_BASE_URL),
+            api_key=_setting_or_config("KILO_API_KEY", ""),
+            base_url=_setting_or_config("KILO_GATEWAY_BASE_URL", KILO_GATEWAY_BASE_URL),
         )
     return AIProviderSettings(
         provider="openai",
-        api_key=current_app.config.get("OPENAI_API_KEY", ""),
-        base_url=current_app.config.get("OPENAI_BASE_URL") or None,
+        api_key=_setting_or_config("OPENAI_API_KEY", ""),
+        base_url=_setting_or_config("OPENAI_BASE_URL", "") or None,
     )
 
 
@@ -53,11 +55,17 @@ def model_for(feature: str) -> str:
     provider = configured_ai_provider()
     feature_key = feature.upper()
     if provider == "kilo":
-        return current_app.config.get(
+        return _setting_or_config(
             f"KILO_MODEL_{feature_key}",
-            current_app.config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
+            _setting_or_config("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
         )
-    return current_app.config.get(
+    return _setting_or_config(
         f"OPENAI_MODEL_{feature_key}",
-        current_app.config.get("OPENAI_MODEL", "gpt-4o-mini"),
+        _setting_or_config("OPENAI_MODEL", "gpt-4o-mini"),
     )
+
+
+def _setting_or_config(key: str, default: str = "") -> str:
+    env_value = current_app.config.get(key, default)
+    value = get_setting(key.lower(), str(env_value or default))
+    return str(value or "")

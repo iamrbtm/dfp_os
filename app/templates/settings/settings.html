@@ -19,7 +19,16 @@
           {% if setting.description %}
           <p class="text-xs mb-1" style="color: var(--color-text-muted);">{{ setting.description }}</p>
           {% endif %}
-          {% if setting.type == 'boolean' %}
+          {% if setting.key in secret_setting_keys %}
+          <input type="password" name="{{ setting.key }}" value="" class="app-input" autocomplete="off" placeholder="{% if setting.value %}Configured - paste a new key to replace{% else %}Paste API key{% endif %}">
+          {% if setting.value %}<p class="mt-1 text-xs" style="color: var(--color-text-muted);">A key is saved. Leave blank to keep it unchanged.</p>{% endif %}
+          {% elif setting.key in ['ai_provider', 'receipt_ai_provider'] %}
+          <select name="{{ setting.key }}" class="app-select">
+            <option value="openai" {% if setting.value == 'openai' %}selected{% endif %}>OpenAI</option>
+            <option value="kilo" {% if setting.value == 'kilo' %}selected{% endif %}>Kilo Gateway</option>
+            {% if setting.key == 'receipt_ai_provider' %}<option value="ollama" {% if setting.value == 'ollama' %}selected{% endif %}>Ollama</option>{% endif %}
+          </select>
+          {% elif setting.type == 'boolean' %}
           <select name="{{ setting.key }}" class="app-select">
             <option value="true" {% if setting.value == 'true' %}selected{% endif %}>Enabled</option>
             <option value="false" {% if setting.value == 'false' %}selected{% endif %}>Disabled</option>

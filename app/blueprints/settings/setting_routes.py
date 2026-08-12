@@ -11,21 +11,27 @@ from app.services.admin_mutations import (
     snapshot_instance,
     update_resource as update_admin_resource,
 )
-from app.services.settings import get_all_settings, set_setting
+from app.services.settings import get_all_settings, seed_default_settings, set_setting
 from app.module_registry import module_statuses
 from app.services.business import ensure_default_business
 from app.services.audit import record_audit_event
 from app.utils.auth import roles_required
 
 CRITICAL_MODULE_KEYS = {"public_site", "auth", "dashboard", "settings"}
+SECRET_SETTING_KEYS = {"openai_api_key", "kilo_api_key"}
 
 
 @bp.route("/")
 @login_required
 @roles_required(UserRole.ADMIN)
 def settings_list():
+    seed_default_settings()
     settings = get_all_settings()
-    return render_template("settings/settings.html", setting_groups=_group_settings(settings))
+    return render_template(
+        "settings/settings.html",
+        setting_groups=_group_settings(settings),
+        secret_setting_keys=SECRET_SETTING_KEYS,
+    )
 
 
 @bp.route("/update", methods=["POST"])
@@ -37,12 +43,21 @@ def settings_update():
         if key in ("csrf_token",):
             continue
         existing = db.session.scalar(select(Setting).where(Setting.key == key))
+        if key in SECRET_SETTING_KEYS and not value.strip():
+            continue
         before = (
-            {"key": key, "value": existing.value, "type": existing.setting_type}
+            {
+                "key": key,
+                "value": "[configured]"
+                if key in SECRET_SETTING_KEYS and existing.value
+                else existing.value,
+                "type": existing.setting_type,
+            }
             if existing
             else None
         )
-        set_setting(key, value)
+        setting_type = existing.setting_type if existing else "string"
+        set_setting(key, value, setting_type=setting_type)
         record_audit_event(
             action="settings.changed",
             entity_type="setting",
@@ -50,8 +65,8 @@ def settings_update():
             before_state=before,
             after_state={
                 "key": key,
-                "value": value,
-                "type": existing.setting_type if existing else "string",
+                "value": "[configured]" if key in SECRET_SETTING_KEYS and value else value,
+                "type": setting_type,
             },
             source_module=__name__,
             actor_id=current_user.id,
@@ -167,6 +182,7 @@ TREND_SCOUT_PREFIXES = {"trend_weight.", "trend_source.", "trend_buyer.", "trend
 
 def _group_settings(settings: list) -> dict[str, list]:
     groups: dict[str, list] = {
+        "AI": [],
         "Store": [],
         "POS": [],
         "Trend Scout": [],
@@ -185,8 +201,30 @@ def _group_settings(settings: list) -> dict[str, list]:
         "tax_rate",
     }
     pos_keys = {"pos_default_opening_cash", "pos_card_processor", "pos_card_processing_enabled"}
+    ai_keys = {
+        "ai_provider",
+        "receipt_ai_provider",
+        "openai_api_key",
+        "openai_base_url",
+        "openai_model",
+        "openai_model_receipts",
+        "openai_model_analytics",
+        "openai_model_trend_scout",
+        "openai_model_market_catalog",
+        "openai_model_product_story",
+        "kilo_api_key",
+        "kilo_gateway_base_url",
+        "kilo_model",
+        "kilo_model_receipts",
+        "kilo_model_analytics",
+        "kilo_model_trend_scout",
+        "kilo_model_market_catalog",
+        "kilo_model_product_story",
+    }
     for s in settings:
-        if s.key in store_keys:
+        if s.key in ai_keys:
+            groups["AI"].append(s)
+        elif s.key in store_keys:
             groups["Store"].append(s)
         elif s.key in pos_keys:
             groups["POS"].append(s)

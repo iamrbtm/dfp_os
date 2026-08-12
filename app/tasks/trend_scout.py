@@ -7,6 +7,7 @@ from flask import current_app
 from app.celery_app import celery
 from app.extensions import db
 from app.services.ai.trend_scout import enabled_fetcher_count, run_full_pipeline
+from app.services.settings import get_setting
 from app.services.trend_scout_task_monitor import (
     complete_task_run,
     create_task_run,
@@ -29,18 +30,18 @@ def trend_scout_pipeline(self) -> dict:
     task_id = self.request.id
     logger.info("[Task %s] Trend Scout full pipeline starting...", task_id)
 
-    api_key = current_app.config.get("OPENAI_API_KEY", "")
-    model = current_app.config.get(
-        "OPENAI_MODEL_TREND_SCOUT",
+    api_key = get_setting("openai_api_key", current_app.config.get("OPENAI_API_KEY", ""))
+    model = get_setting(
+        "openai_model_trend_scout",
         current_app.config.get(
             "OPENAI_MODEL_ANALYTICS", current_app.config.get("OPENAI_MODEL", "gpt-4o-mini")
         ),
     )
-    ai_provider = current_app.config.get("AI_PROVIDER", "openai")
+    ai_provider = get_setting("ai_provider", current_app.config.get("AI_PROVIDER", "openai"))
     if ai_provider == "kilo":
-        api_key = current_app.config.get("KILO_API_KEY", "")
-        model = current_app.config.get(
-            "KILO_MODEL_TREND_SCOUT",
+        api_key = get_setting("kilo_api_key", current_app.config.get("KILO_API_KEY", ""))
+        model = get_setting(
+            "kilo_model_trend_scout",
             current_app.config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
         )
 

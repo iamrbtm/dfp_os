@@ -33,6 +33,7 @@ from app.services.receipt_allocations import (
 )
 from app.services.receipt_audit import record_audit
 from app.services.receipt_audit import snapshot_line_item, snapshot_receipt
+from app.services.settings import get_setting
 from app.services.receipt_duplicates import check_duplicates, resolve_duplicate
 from app.services.receipts import (
     approve_receipt,
@@ -606,7 +607,34 @@ def duplicates():
 @login_required
 @roles_required(UserRole.ADMIN)
 def settings():
-    return render_template("receipts/settings.html")
+    receipt_ai_provider = get_setting(
+        "receipt_ai_provider", current_app.config.get("RECEIPT_AI_PROVIDER", "openai")
+    )
+    if receipt_ai_provider == "kilo":
+        ai_model = get_setting(
+            "kilo_model_receipts",
+            current_app.config.get(
+                "KILO_MODEL_RECEIPTS",
+                current_app.config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
+            ),
+        )
+        ai_key_configured = bool(
+            get_setting("kilo_api_key", current_app.config.get("KILO_API_KEY", ""))
+        )
+    else:
+        ai_model = get_setting(
+            "openai_model_receipts",
+            current_app.config.get("OPENAI_MODEL_RECEIPTS", "gpt-4o-mini"),
+        )
+        ai_key_configured = bool(
+            get_setting("openai_api_key", current_app.config.get("OPENAI_API_KEY", ""))
+        )
+    return render_template(
+        "receipts/settings.html",
+        receipt_ai_provider=receipt_ai_provider,
+        receipt_ai_model=ai_model,
+        receipt_ai_key_configured=ai_key_configured,
+    )
 
 
 @bp.route("/help")
