@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from datetime import date, time
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
+
+import requests
 
 from app.config import BASE_DIR
 from app.extensions import db
@@ -28,8 +32,9 @@ The user will hand you ONE input that can be any of:
   - a URL (you must fetch it yourself)
   - plain text / pasted notes
 
-The server does NO preprocessing. Whatever the user gives you is what you get.
-You are responsible for reading, fetching, parsing, and researching.
+The server may include fetched URL content as context when the user gives a URL.
+Use the original input and any fetched context. You are responsible for reading,
+parsing, and light research from that context.
 
 ============================================================
 YOUR TOOL BUDGET (hard caps -- do not exceed)
@@ -149,6 +154,9 @@ def generate_market_catalog_extraction(
     text_input = (user_input or "").strip()
     if text_input:
         content.append({"type": "text", "text": f"input: {text_input}"})
+        fetched = _fetch_url_context(text_input)
+        if fetched:
+            content.append({"type": "text", "text": fetched})
 
     if uploaded_file and uploaded_file.filename:
         file_content = uploaded_file.read()
@@ -178,9 +186,62 @@ def generate_market_catalog_extraction(
         temperature=0.1,
         response_format={"type": "json_object"},
     )
-    payload = json.loads(response.choices[0].message.content or "{}")
+    raw_content = response.choices[0].message.content or ""
+    payload = _parse_ai_json(raw_content)
     if not isinstance(payload, dict) or not payload.get("name"):
         raise ValueError("AI response did not contain a usable market catalog extraction.")
+    return payload
+
+
+def _fetch_url_context(value: str) -> str | None:
+    url = _extract_url(value)
+    if not url:
+        return None
+    try:
+        response = requests.get(
+            url,
+            timeout=12,
+            headers={"User-Agent": "Dude Fish OS market catalog importer/1.0"},
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        return f"Original input URL could not be fetched by the server: {url}"
+    content_type = response.headers.get("content-type", "")
+    text = response.text[:60_000]
+    return f"Fetched source URL: {url}\nContent-Type: {content_type}\n\n{text}"
+
+
+def _extract_url(value: str) -> str | None:
+    match = re.search(r"https?://[^\s<>'\"]+", value.strip())
+    if not match:
+        return None
+    url = match.group(0).rstrip(".,);]")
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return url
+
+
+def _parse_ai_json(raw_content: str) -> dict[str, Any]:
+    content = raw_content.strip()
+    if not content:
+        raise ValueError(
+            "AI provider returned an empty response. Try a different model or paste event text instead of only a URL."
+        )
+    if content.startswith("```"):
+        content = re.sub(r"^```(?:json)?\s*", "", content)
+        content = re.sub(r"\s*```$", "", content).strip()
+    start = content.find("{")
+    end = content.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        content = content[start : end + 1]
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError as exc:
+        preview = raw_content.strip().replace("\n", " ")[:180] or "empty response"
+        raise ValueError(f"AI provider returned non-JSON output: {preview}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("AI provider returned JSON, but it was not an object.")
     return payload
 
 
