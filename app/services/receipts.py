@@ -353,9 +353,15 @@ def process_receipt(receipt_id: int) -> dict[str, Any]:
                 "raw_ocr_text": ocr_result.raw_text or "",
                 "provider": ocr_config.get("RECEIPT_AI_PROVIDER", "openai"),
             }
-            if ai_kwargs["provider"] == "openai":
+            if ai_kwargs["provider"] in {"openai", "kilo"}:
                 ai_kwargs["openai_api_key"] = ocr_config.get("OPENAI_API_KEY", "")
                 ai_kwargs["openai_model"] = ocr_config.get("OPENAI_MODEL_RECEIPTS", "gpt-4o-mini")
+                if ai_kwargs["provider"] == "kilo":
+                    ai_kwargs["openai_api_key"] = ocr_config.get("KILO_API_KEY", "")
+                    ai_kwargs["openai_model"] = ocr_config.get(
+                        "KILO_MODEL_RECEIPTS",
+                        ocr_config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
+                    )
             else:
                 ai_kwargs["ollama_base_url"] = ocr_config.get(
                     "OLLAMA_BASE_URL", "http://localhost:11434"

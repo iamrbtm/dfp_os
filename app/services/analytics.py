@@ -478,6 +478,11 @@ def analytics_numbers_snapshot() -> dict:
 
 def analytics_insights() -> dict:
     from flask import current_app
+    from app.services.ai_gateway import (
+        ai_provider_configured,
+        get_openai_compatible_client,
+        model_for,
+    )
     from app.services.audit import record_audit_event
 
     snapshot = analytics_numbers_snapshot()
@@ -492,29 +497,32 @@ def analytics_insights() -> dict:
     if not current_app.config.get("AI_ANALYTICS_INSIGHTS_ENABLED", False):
         return fallback
 
-    api_key = current_app.config.get("OPENAI_API_KEY")
-    if not api_key:
+    if not ai_provider_configured():
         return fallback
 
     try:
-        from openai import OpenAI
-
-        client = OpenAI(api_key=api_key)
-        response = client.responses.create(
-            model=current_app.config.get("OPENAI_MODEL_ANALYTICS", "gpt-4o-mini"),
-            input=(
-                "Explain these small-business 3D printing analytics. Keep the answer practical. "
-                "Mention what changed, what to print next, which markets look repeatable, expenses "
-                "hurting margin, and what needs attention. Always ground claims in the numbers.\n\n"
-                + json.dumps(snapshot)
-            ),
+        model = model_for("analytics")
+        client = get_openai_compatible_client()
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Explain these small-business 3D printing analytics. Keep the answer practical. "
+                        "Mention what changed, what to print next, which markets look repeatable, expenses "
+                        "hurting margin, and what needs attention. Always ground claims in the numbers.\n\n"
+                        + json.dumps(snapshot)
+                    ),
+                }
+            ],
         )
-        text = getattr(response, "output_text", None) or ""
+        text = response.choices[0].message.content or ""
         record_audit_event(
             action="analytics.ai_insight_generated",
             entity_type="analytics",
             entity_id="summary",
-            after_state={"model": current_app.config.get("OPENAI_MODEL_ANALYTICS")},
+            after_state={"model": model, "provider": current_app.config.get("AI_PROVIDER")},
             source_module=__name__,
         )
         return {"enabled": True, "insight": text, "numbers": snapshot}

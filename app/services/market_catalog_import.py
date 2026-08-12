@@ -7,11 +7,10 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from flask import current_app
-
 from app.config import BASE_DIR
 from app.extensions import db
 from app.models import MarketCategory
+from app.services.ai_gateway import get_openai_compatible_client, model_for
 from app.services.business import get_default_business
 
 
@@ -139,11 +138,6 @@ def load_market_catalog_extraction_schema() -> dict[str, Any]:
 def generate_market_catalog_extraction(
     *, user_input: str | None, uploaded_file=None
 ) -> dict[str, Any]:
-    if not current_app.config.get("OPENAI_API_KEY"):
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
-
-    from openai import OpenAI
-
     schema = load_market_catalog_extraction_schema()
     content: list[dict[str, Any]] = [
         {"type": "text", "text": MARKET_CATALOG_AI_PROMPT.replace("<input data goes here>", "")},
@@ -177,14 +171,9 @@ def generate_market_catalog_extraction(
                 }
             )
 
-    client = OpenAI(api_key=current_app.config["OPENAI_API_KEY"])
+    client = get_openai_compatible_client()
     response = client.chat.completions.create(
-        model=current_app.config.get(
-            "OPENAI_MODEL_MARKET_CATALOG",
-            current_app.config.get(
-                "OPENAI_MODEL_ANALYTICS", current_app.config.get("OPENAI_MODEL")
-            ),
-        ),
+        model=model_for("market_catalog"),
         messages=[{"role": "user", "content": content}],
         temperature=0.1,
         response_format={"type": "json_object"},

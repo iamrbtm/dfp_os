@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import requests
 
+from app.services.ai_gateway import get_openai_compatible_client
 from app.services.receipt_providers.base import BaseReceiptProvider, ProviderResult
 
 
@@ -164,12 +165,14 @@ class AIExtractionProvider(BaseReceiptProvider):
         if provider == "mock":
             return self._mock_response()
 
-        if provider == "openai":
+        if provider in {"openai", "kilo"}:
             api_key = kwargs.get("openai_api_key", "")
             if not api_key:
-                return ProviderResult(success=False, errors=["OpenAI API key is required."])
+                return ProviderResult(
+                    success=False, errors=[f"{provider.title()} API key is required."]
+                )
             model = kwargs.get("openai_model", OPENAI_DEFAULT_MODEL)
-            return self._call_openai(raw_ocr_text, api_key, model)
+            return self._call_openai(raw_ocr_text, api_key, model, provider=provider)
 
         # Ollama fallback path
         primary_url = kwargs.get("ollama_base_url", "http://localhost:11434")
@@ -205,13 +208,16 @@ class AIExtractionProvider(BaseReceiptProvider):
         )
 
     def _call_openai(
-        self, ocr_text: str, api_key: str, model: str = OPENAI_DEFAULT_MODEL
+        self,
+        ocr_text: str,
+        api_key: str,
+        model: str = OPENAI_DEFAULT_MODEL,
+        provider: str = "openai",
     ) -> ProviderResult:
         try:
-            from openai import OpenAI
             import json as json_module
         except ImportError:
-            return ProviderResult(success=False, errors=["openai package is not installed."])
+            return ProviderResult(success=False, errors=["json package is not installed."])
 
         prompts = [
             EXTRACTION_PROMPT % (json_module.dumps(AI_EXTRACTION_SCHEMA, indent=2), ocr_text),
@@ -225,7 +231,7 @@ class AIExtractionProvider(BaseReceiptProvider):
         last_error = None
         for i, prompt in enumerate(prompts):
             try:
-                client = OpenAI(api_key=api_key)
+                client = get_openai_compatible_client(provider)
                 response = client.chat.completions.create(
                     model=model,
                     response_format={"type": "json_object"},
@@ -245,18 +251,21 @@ class AIExtractionProvider(BaseReceiptProvider):
                     raw_json=json_module.dumps(parsed),
                     data=parsed,
                     confidence=parsed.get("confidence_overall", 0.8),
-                    diagnostics={"provider": "openai", "model": model, "retry": i > 0},
+                    diagnostics={"provider": provider, "model": model, "retry": i > 0},
                 )
             except json_module.JSONDecodeError:
                 last_error = ProviderResult(
-                    success=False, errors=[f"OpenAI returned invalid JSON (attempt {i + 1})"]
+                    success=False,
+                    errors=[f"{provider.title()} returned invalid JSON (attempt {i + 1})"],
                 )
             except Exception as e:
                 last_error = ProviderResult(
-                    success=False, errors=[f"OpenAI error (attempt {i + 1}): {e}"]
+                    success=False, errors=[f"{provider.title()} error (attempt {i + 1}): {e}"]
                 )
 
-        return last_error or ProviderResult(success=False, errors=["All OpenAI attempts failed."])
+        return last_error or ProviderResult(
+            success=False, errors=[f"All {provider.title()} attempts failed."]
+        )
 
     def _call_ollama(self, ocr_text: str, base_url: str, model: str) -> ProviderResult:
         import json as json_module

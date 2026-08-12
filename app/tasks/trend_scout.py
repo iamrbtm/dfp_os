@@ -36,6 +36,13 @@ def trend_scout_pipeline(self) -> dict:
             "OPENAI_MODEL_ANALYTICS", current_app.config.get("OPENAI_MODEL", "gpt-4o-mini")
         ),
     )
+    ai_provider = current_app.config.get("AI_PROVIDER", "openai")
+    if ai_provider == "kilo":
+        api_key = current_app.config.get("KILO_API_KEY", "")
+        model = current_app.config.get(
+            "KILO_MODEL_TREND_SCOUT",
+            current_app.config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
+        )
 
     total_steps = enabled_fetcher_count() + 1
     internal_task_id = f"celery-{task_id}"
@@ -82,6 +89,7 @@ def trend_scout_pipeline(self) -> dict:
     result = run_full_pipeline(
         openai_api_key=api_key,
         openai_model=model,
+        ai_provider=ai_provider,
         progress_callback=_on_progress,
     )
 

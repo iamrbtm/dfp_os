@@ -188,6 +188,7 @@ def _parse_scraped_at(value: str | None, fallback: datetime) -> datetime:
 def run_full_pipeline(
     openai_api_key: str = "",
     openai_model: str = "gpt-4o-mini",
+    ai_provider: str = "openai",
     progress_callback=None,
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
@@ -247,6 +248,7 @@ def run_full_pipeline(
         db_session=db.session,
         openai_api_key=openai_api_key,
         openai_model=openai_model,
+        ai_provider=ai_provider,
         source_health=source_health,
     )
     report_id = report.id if report else None

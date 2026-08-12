@@ -69,6 +69,7 @@ def run_analysis(
     db_session: Session,
     openai_api_key: str = "",
     openai_model: str = "gpt-4o-mini",
+    ai_provider: str = "openai",
     source_health: list[dict[str, Any]] | None = None,
 ) -> TrendReport | None:
     velocity_data = compute_velocity_and_momentum(db_session)
@@ -83,7 +84,7 @@ def run_analysis(
         "emerging_clusters": clusters.get("clusters", []),
     }
 
-    summary = _synthesize_report(synthesis_data, openai_api_key, openai_model)
+    summary = _synthesize_report(synthesis_data, openai_api_key, openai_model, ai_provider)
     used_ai_synthesis = bool(summary)
 
     if not summary:
@@ -149,15 +150,16 @@ def _synthesize_report(
     data: dict[str, Any],
     api_key: str,
     model: str,
+    provider: str = "openai",
 ) -> str:
     if not api_key:
-        logger.warning("No OpenAI API key; skipping AI synthesis")
+        logger.warning("No %s API key; skipping AI synthesis", provider)
         return ""
 
     try:
-        from openai import OpenAI
+        from app.services.ai_gateway import get_openai_compatible_client
 
-        client = OpenAI(api_key=api_key)
+        client = get_openai_compatible_client(provider)
         response = client.chat.completions.create(
             model=model,
             messages=[

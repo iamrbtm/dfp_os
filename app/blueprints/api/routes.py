@@ -1480,9 +1480,19 @@ class TrendReportRun(MethodView):
         from app.extensions import db
         from app.services.ai.trend_scout import run_full_pipeline
 
+        ai_provider = current_app.config.get("AI_PROVIDER", "openai")
+        api_key = current_app.config.get("OPENAI_API_KEY", "")
+        model = current_app.config.get("OPENAI_MODEL_TREND_SCOUT", "gpt-4o-mini")
+        if ai_provider == "kilo":
+            api_key = current_app.config.get("KILO_API_KEY", "")
+            model = current_app.config.get(
+                "KILO_MODEL_TREND_SCOUT",
+                current_app.config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
+            )
         result = run_full_pipeline(
-            openai_api_key=current_app.config.get("OPENAI_API_KEY", ""),
-            openai_model=current_app.config.get("OPENAI_MODEL_TREND_SCOUT", "gpt-4o-mini"),
+            openai_api_key=api_key,
+            openai_model=model,
+            ai_provider=ai_provider,
         )
         db.session.commit()
         if result.get("success"):

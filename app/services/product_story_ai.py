@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from flask import current_app
 
 from app.models import LicenseStatus, Product
+from app.services.ai_gateway import ai_provider_configured, get_openai_compatible_client, model_for
 from app.services.audit import record_audit_event
 
 _AT_RISK_LICENSE_STATUSES = {
@@ -40,8 +41,8 @@ class StoryCardDraft:
 
 
 def story_card_ai_enabled() -> bool:
-    return bool(current_app.config.get("AI_PRODUCT_STORY_ENABLED", False)) and bool(
-        current_app.config.get("OPENAI_API_KEY", "")
+    return (
+        bool(current_app.config.get("AI_PRODUCT_STORY_ENABLED", False)) and ai_provider_configured()
     )
 
 
@@ -83,14 +84,8 @@ def generate_story_card_draft(
 
 
 def _generate_with_openai(product: Product) -> StoryCardDraft | None:
-    from openai import OpenAI
-
-    api_key = current_app.config["OPENAI_API_KEY"]
-    model = current_app.config.get(
-        "OPENAI_MODEL_PRODUCT_STORY",
-        current_app.config.get("OPENAI_MODEL", "gpt-4o-mini"),
-    )
-    client = OpenAI(api_key=api_key)
+    model = model_for("product_story")
+    client = get_openai_compatible_client()
     response = client.chat.completions.create(
         model=model,
         messages=[
