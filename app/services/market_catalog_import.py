@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
+from bs4 import BeautifulSoup
 
 from app.config import BASE_DIR
 from app.extensions import db
@@ -21,6 +22,8 @@ from app.services.business import get_default_business
 MARKET_CATALOG_EXTRACTION_SCHEMA_PATH = (
     BASE_DIR / "import" / "validate" / "MarketCatalogExtraction.schema"
 )
+FETCHED_URL_TEXT_LIMIT = 18_000
+MARKET_CATALOG_AI_TIMEOUT_SECONDS = 60
 
 MARKET_CATALOG_AI_PROMPT = """You are an extraction + light-research agent for Dude Fish Printing, a small
 3D-printing business in Clarksville, Tennessee. You are populating an internal
@@ -179,13 +182,20 @@ def generate_market_catalog_extraction(
                 }
             )
 
-    client = get_openai_compatible_client()
-    response = client.chat.completions.create(
-        model=model_for("market_catalog"),
-        messages=[{"role": "user", "content": content}],
-        temperature=0.1,
-        response_format={"type": "json_object"},
-    )
+    client = get_openai_compatible_client().with_options(timeout=MARKET_CATALOG_AI_TIMEOUT_SECONDS)
+    try:
+        response = client.chat.completions.create(
+            model=model_for("market_catalog"),
+            messages=[{"role": "user", "content": content}],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+    except Exception as exc:
+        if "timed out" in str(exc).lower() or exc.__class__.__name__ == "APITimeoutError":
+            raise ValueError(
+                "AI provider timed out while extracting this market. Try a faster model or paste the event details directly."
+            ) from exc
+        raise
     raw_content = response.choices[0].message.content or ""
     payload = _parse_ai_json(raw_content)
     if not isinstance(payload, dict) or not payload.get("name"):
@@ -207,8 +217,17 @@ def _fetch_url_context(value: str) -> str | None:
     except requests.RequestException:
         return f"Original input URL could not be fetched by the server: {url}"
     content_type = response.headers.get("content-type", "")
-    text = response.text[:60_000]
+    text = _html_to_readable_text(response.text)[:FETCHED_URL_TEXT_LIMIT]
     return f"Fetched source URL: {url}\nContent-Type: {content_type}\n\n{text}"
+
+
+def _html_to_readable_text(source: str) -> str:
+    soup = BeautifulSoup(source, "html.parser")
+    for element in soup(["script", "style", "svg", "noscript", "template"]):
+        element.decompose()
+    return "\n".join(
+        line for line in (text.strip() for text in soup.get_text("\n").splitlines()) if line
+    )
 
 
 def _extract_url(value: str) -> str | None:

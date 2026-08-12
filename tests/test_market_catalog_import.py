@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services import market_catalog_import
-from app.services.market_catalog_import import _extract_url, _parse_ai_json
+from app.services.market_catalog_import import _extract_url, _html_to_readable_text, _parse_ai_json
 
 
 def test_market_catalog_import_extracts_url_from_text():
@@ -22,6 +22,16 @@ def test_market_catalog_import_parses_json_fenced_response():
 def test_market_catalog_import_non_json_error_is_readable():
     with pytest.raises(ValueError, match="AI provider returned non-JSON output"):
         _parse_ai_json("I cannot browse that URL.")
+
+
+def test_market_catalog_import_strips_noisy_html():
+    text = _html_to_readable_text(
+        "<html><style>.x{}</style><script>alert(1)</script><h1>Market</h1><p>Booths $35</p></html>"
+    )
+
+    assert "Market" in text
+    assert "Booths $35" in text
+    assert "alert" not in text
 
 
 def test_market_catalog_import_sends_fetched_url_context(monkeypatch):
@@ -50,7 +60,14 @@ def test_market_catalog_import_sends_fetched_url_context(monkeypatch):
                 ]
             )
 
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    class FakeClient:
+        chat = SimpleNamespace(completions=FakeCompletions())
+
+        def with_options(self, **kwargs):
+            captured["client_options"] = kwargs
+            return self
+
+    fake_client = FakeClient()
     monkeypatch.setattr(market_catalog_import.requests, "get", fake_get)
     monkeypatch.setattr(market_catalog_import, "get_openai_compatible_client", lambda: fake_client)
     monkeypatch.setattr(market_catalog_import, "model_for", lambda _key: "test-model")
@@ -62,6 +79,7 @@ def test_market_catalog_import_sends_fetched_url_context(monkeypatch):
     assert payload == {"name": "River Market"}
     assert captured["url"] == "https://example.com/river-market"
     assert captured["request_kwargs"]["timeout"] == 12
+    assert captured["client_options"]["timeout"] == 60
     message_content = captured["ai_kwargs"]["messages"][0]["content"]
     assert any("Fetched source URL" in part["text"] for part in message_content)
     assert any("Vendor booths are $35" in part["text"] for part in message_content)
