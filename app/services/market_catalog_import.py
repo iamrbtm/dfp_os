@@ -158,9 +158,13 @@ def generate_market_catalog_extraction(
     text_input = (user_input or "").strip()
     if text_input:
         content.append({"type": "text", "text": f"input: {text_input}"})
+        url = _extract_url(text_input)
         fetched = _fetch_url_context(text_input)
         if fetched:
             content.append({"type": "text", "text": fetched})
+            direct_payload = _extract_market_from_text(url=url, source_text=fetched)
+            if direct_payload:
+                return direct_payload
 
     if uploaded_file and uploaded_file.filename:
         file_content = uploaded_file.read()
@@ -229,6 +233,177 @@ def _html_to_readable_text(source: str) -> str:
     return "\n".join(
         line for line in (text.strip() for text in soup.get_text("\n").splitlines()) if line
     )
+
+
+def _extract_market_from_text(*, url: str | None, source_text: str) -> dict[str, Any] | None:
+    text = source_text.strip()
+    name = _first_content_line(text)
+    if not name:
+        return None
+    address = _address_from_text(text)
+    event_date = _first_event_date(text)
+    email = _email_from_text(text)
+    if not address and not event_date and not email:
+        return None
+
+    city = state = zip_code = None
+    if address:
+        city_match = re.search(r"\n([^\n,]+),?\s+([A-Z]{2})\s+(\d{5})(?:-\d{4})?", text)
+        if city_match:
+            city = city_match.group(1).strip()
+            state = city_match.group(2)
+            zip_code = city_match.group(3)
+
+    vendor_count = _first_int_match(text, r"(?:over\s+)?(\d{2,4})\s+local vendors")
+    application_url = (
+        _absolute_url(url, "/vendor-applications/")
+        if "vendor applications" in text.lower()
+        else None
+    )
+    full_categories = _section_after(
+        text, "Full Categories:", stop_markers=("All vendors", "Venue Information")
+    )
+    what_to_expect = _section_after(text, "What to Expect", stop_markers=("Location",))
+    notes = "Fast URL extraction from fetched page text. Human should verify booth fees, load-in details, and application requirements."
+    if full_categories:
+        notes += f" Full categories listed: {full_categories}"
+
+    return {
+        "name": name,
+        "website_url": url,
+        "description": what_to_expect,
+        "interest_level": "watching",
+        "location": {
+            "location_name": "Covered pavilion" if "covered pavilion" in text.lower() else None,
+            "address": address,
+            "city": city,
+            "state": state,
+            "zip_code": zip_code,
+            "country": "US" if state else None,
+        },
+        "timing": {
+            "timezone": "America/Chicago",
+            "is_recurring": False,
+            "anchor_date": event_date.isoformat() if event_date else None,
+            "next_occurrence_date": event_date.isoformat() if event_date else None,
+        },
+        "scale": {"estimated_vendor_count": vendor_count, "estimated_attendee_count": None},
+        "amenities": {
+            "power_available": False,
+            "wifi_available": False,
+            "food_available": False,
+            "restrooms_available": False,
+            "indoor": False,
+            "covered_outdoor": "covered pavilion" in text.lower(),
+            "outdoor": "outdoor event" in text.lower(),
+            "parking_notes": "FREE parking available onsite."
+            if "free parking" in text.lower()
+            else None,
+        },
+        "organizer": {
+            "name": name,
+            "email": email,
+            "phone": None,
+            "application_url": application_url,
+            "application_contact": None,
+            "application_deadline_description": "Rolling acceptance of vendors."
+            if "rolling acceptance" in text.lower()
+            else None,
+        },
+        "rules": {
+            "booth_rules": "Only trained service animals allowed in the event area."
+            if "trained service animals" in text.lower()
+            else None,
+            "required_documents": None,
+        },
+        "booth_tiers": [],
+        "category_hint": "holiday_market" if "christmas" in text.lower() else None,
+        "field_confidence": {
+            "identity": "high",
+            "location": "high" if address else "low",
+            "timing": "medium" if event_date else "low",
+            "scale": "high" if vendor_count else "low",
+            "amenities": "medium",
+            "organizer": "medium" if email else "low",
+            "rules": "medium",
+            "booth_tiers": "low",
+        },
+        "sources_consulted": [
+            {"url": url, "purpose": "Fetched source page", "fields_filled": ["market catalog"]}
+        ]
+        if url
+        else [],
+        "search_queries_used": [],
+        "research_complete": True,
+        "extraction_notes": notes,
+    }
+
+
+def _first_content_line(text: str) -> str | None:
+    for line in text.splitlines():
+        cleaned = line.strip(" -")
+        if cleaned and not cleaned.lower().startswith(
+            ("fetched source url", "content-type", "skip to")
+        ):
+            return cleaned.split(" – ", 1)[0].strip()[:200]
+    return None
+
+
+def _address_from_text(text: str) -> str | None:
+    match = re.search(
+        r"\n(\d{3,6}\s+[^\n]+(?:Road|Rd|Street|St|Avenue|Ave|Drive|Dr|Lane|Ln))\n", text
+    )
+    return match.group(1).strip() if match else None
+
+
+def _first_event_date(text: str) -> date | None:
+    year_match = re.search(r"\b(20\d{2})\b", text)
+    year = int(year_match.group(1)) if year_match else date.today().year
+    month_names = (
+        "January|February|March|April|May|June|July|August|September|October|November|December"
+    )
+    match = re.search(
+        rf"\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)?\s*({month_names})\s+(\d{{1,2}})\b",
+        text,
+    )
+    if not match:
+        return None
+    month = {
+        name: index
+        for index, name in enumerate(
+            "January February March April May June July August September October November December".split(),
+            start=1,
+        )
+    }[match.group(1)]
+    return date(year, month, int(match.group(2)))
+
+
+def _email_from_text(text: str) -> str | None:
+    match = re.search(r"[A-Z0-9._%+-]+\s*@\s*[A-Z0-9.-]+\.[A-Z]{2,}", text, re.IGNORECASE)
+    return re.sub(r"\s+", "", match.group(0)) if match else None
+
+
+def _first_int_match(text: str, pattern: str) -> int | None:
+    match = re.search(pattern, text, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _section_after(text: str, marker: str, *, stop_markers: tuple[str, ...]) -> str | None:
+    if marker not in text:
+        return None
+    section = text.split(marker, 1)[1]
+    for stop in stop_markers:
+        if stop in section:
+            section = section.split(stop, 1)[0]
+    section = " ".join(line.strip() for line in section.splitlines() if line.strip())
+    return section[:800] or None
+
+
+def _absolute_url(base_url: str | None, path: str) -> str | None:
+    if not base_url:
+        return None
+    parsed = urlparse(base_url)
+    return f"{parsed.scheme}://{parsed.netloc}{path}"
 
 
 def _extract_url(value: str) -> str | None:

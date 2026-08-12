@@ -6,7 +6,12 @@ from types import SimpleNamespace
 import pytest
 
 from app.services import market_catalog_import
-from app.services.market_catalog_import import _extract_url, _html_to_readable_text, _parse_ai_json
+from app.services.market_catalog_import import (
+    _extract_market_from_text,
+    _extract_url,
+    _html_to_readable_text,
+    _parse_ai_json,
+)
 
 
 def test_market_catalog_import_extracts_url_from_text():
@@ -32,6 +37,44 @@ def test_market_catalog_import_strips_noisy_html():
     assert "Market" in text
     assert "Booths $35" in text
     assert "alert" not in text
+
+
+def test_market_catalog_import_fast_path_extracts_clarksville_market():
+    payload = _extract_market_from_text(
+        url="https://clarksvillechristmasmarket.com/",
+        source_text="""
+Fetched source URL: https://clarksvillechristmasmarket.com/
+Content-Type: text/html; charset=UTF-8
+
+Clarksville Christmas Market – Kick off the holidays in Clarksville, TN with us
+Vendor Applications
+Save the date we are coming back in 2025!!!!
+Apply to be considered as a Vendor below. We will start a rolling acceptance of vendors from here on out.
+Venue Information
+Venue is a covered pavilion that will have lighting with a compacted dirt floor.
+FREE parking also available onsite.
+This is an outdoor event.
+What to Expect
+A family friendly event to help kick off your holidays season. With over 120 local vendors.
+Location
+1921 Rossview Road
+Clarksville, TN 37043
+Hours
+Friday November 28 2 – 6 pm
+Saturday November 29 10 am – 3 pm
+Contact
+ClarksvilleChristmasMarket@gmail.com
+""",
+    )
+
+    assert payload is not None
+    assert payload["name"] == "Clarksville Christmas Market"
+    assert payload["location"]["address"] == "1921 Rossview Road"
+    assert payload["location"]["city"] == "Clarksville"
+    assert payload["timing"]["anchor_date"] == "2025-11-28"
+    assert payload["scale"]["estimated_vendor_count"] == 120
+    assert payload["organizer"]["email"] == "ClarksvilleChristmasMarket@gmail.com"
+    assert payload["category_hint"] == "holiday_market"
 
 
 def test_market_catalog_import_sends_fetched_url_context(monkeypatch):
