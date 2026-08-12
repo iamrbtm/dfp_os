@@ -16,7 +16,6 @@ from sqlalchemy import (
     String,
     Text,
     Time,
-    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -88,6 +87,7 @@ class MarketCatalogListing(PrimaryKeyMixin, TimestampMixin, db.Model):
     is_recurring: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     rrule: Mapped[str | None] = mapped_column(Text, nullable=True)
     recurrence_description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    anchor_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     next_occurrence_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     last_occurrence_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -164,7 +164,7 @@ class MarketCatalogBoothTier(PrimaryKeyMixin, TimestampMixin, db.Model):
     )
     label: Mapped[str] = mapped_column(String(80), nullable=False)
     dimensions: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=0)
+    price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     corner_premium: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

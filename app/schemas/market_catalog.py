@@ -52,6 +52,7 @@ class MarketCatalogListingSchema(Schema):
     is_recurring = fields.Boolean(allow_none=True)
     rrule = fields.String(allow_none=True)
     recurrence_description = fields.String(allow_none=True)
+    anchor_date = fields.Date(allow_none=True)
     next_occurrence_date = fields.Date(dump_only=True, allow_none=True)
     last_occurrence_date = fields.Date(dump_only=True, allow_none=True)
     last_synced_at = fields.DateTime(dump_only=True, allow_none=True)

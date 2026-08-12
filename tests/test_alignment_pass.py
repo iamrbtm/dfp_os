@@ -63,9 +63,9 @@ def test_feature_flag_and_prep_task_template_creation(client, login_admin):
     feature_response = client.post(
         "/settings/feature-flags/new",
         data={
-            "key": "module.test.enabled",
+            "key": "module.notifications.enabled",
             "enabled": "y",
-            "description": "Test flag",
+            "description": "Notifications module flag",
             "business_id": "0",
         },
         follow_redirects=False,
@@ -86,7 +86,7 @@ def test_feature_flag_and_prep_task_template_creation(client, login_admin):
     assert template_response.status_code == 302
 
     with client.application.app_context():
-        assert FeatureFlag.query.filter_by(key="module.test.enabled").first() is not None
+        assert FeatureFlag.query.filter_by(key="module.notifications.enabled").first() is not None
         assert PrepTaskTemplate.query.filter_by(title="Pack batteries").first() is not None
 
 

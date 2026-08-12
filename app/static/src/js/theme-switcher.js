@@ -35,6 +35,18 @@
 
   window.__applyTheme = applyTheme;
 
+  window.__toggleLightDark = function () {
+    var current = document.documentElement.getAttribute("data-theme") || "";
+    var target;
+    if (current.indexOf("-dark") !== -1 || current === "dfp-dracula" || current === "dfp-tokyo-night" || current === "dfp-catppuccin-mocha" || current === "dfp-one-dark-pro" || current === "dfp-github-dark") {
+      target = "dfp-dudefish-light";
+    } else {
+      target = "dfp-dudefish-dark";
+    }
+    applyTheme(target);
+    setTimeout(function () { window.location.reload(); }, 120);
+  };
+
   function updateCharts(slug) {
     if (typeof Chart === "undefined") return;
     var root = document.documentElement;

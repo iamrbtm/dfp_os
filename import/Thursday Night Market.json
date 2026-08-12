@@ -1,0 +1,73 @@
+{
+  "name": "Thursday Night Market",
+  "website_url": "https://oldglorydistilling.com/thursday-night-farmers-market-clarksville-tn/",
+  "category_hint": "farmers_market",
+  "interest_level": "watching",
+  "location": {
+    "location_name": "The Silo Park at Old Glory Distilling Co.",
+    "address": "451 Alfred Thun Rd",
+    "city": "Clarksville",
+    "state": "TN",
+    "zip_code": "37040",
+    "country": "US"
+  },
+  "timing": {
+    "default_start_time": "17:00",
+    "default_end_time": "20:00",
+    "timezone": "America/Chicago",
+    "is_recurring": true,
+    "recurrence_description": "Every Thursday, April 16 through November 5",
+    "anchor_date": "2026-04-16",
+    "next_occurrence_date": "2026-08-13"
+  },
+  "scale": {},
+  "amenities": {
+    "power_available": false,
+    "wifi_available": false,
+    "food_available": false,
+    "restrooms_available": false,
+    "indoor": false,
+    "covered_outdoor": false,
+    "outdoor": true,
+    "parking_notes": "parking available"
+  },
+  "organizer": {
+    "name": "Old Glory Distilling Co.",
+    "email": "cheers@oldglorydistilling.com",
+    "phone": "931-919-2522",
+    "application_url": "https://oldglorydistilling.com/thursday-night-farmers-market-clarksville-tn/"
+  },
+  "rules": {
+    "booth_rules": "Producer-focused market. No resale items. All vendors must grow, raise, or produce the items they sell."
+  },
+  "booth_tiers": [
+    {
+      "label": "Standard",
+      "sort_order": 1
+    }
+  ],
+  "field_confidence": {
+    "identity": "high",
+    "location": "high",
+    "timing": "high",
+    "scale": "low",
+    "amenities": "low",
+    "organizer": "high",
+    "rules": "medium",
+    "booth_tiers": "low"
+  },
+  "sources_consulted": [
+    {
+      "url": "https://oldglorydistilling.com/thursday-night-farmers-market-clarksville-tn/",
+      "purpose": "Identify market timing, location, and application details"
+    }
+  ],
+  "search_queries_used": [
+    "\"2026 Thursday Night Farmers Market Application\" \"Old Glory Distilling\"",
+    "\"Thursday Night Market\" \"Old Glory Distilling\" vendor application Clarksville",
+    "\"Thursday Night Farmers Market Application\" site:oldglorydistilling.com",
+    "\"Thursday Night Market\" application form Old Glory Distilling"
+  ],
+  "research_complete": true,
+  "extraction_notes": "Fetched market page and ran searches to find the application link and booth fees, but the application is likely an embedded form link stripped by the browsing tool and fees are not published publicly. You will need to reach out directly to the organizer or click the application link manually on the site. Since this market is producer-only and requires handmade/grown goods, a 3D printing business should verify eligibility."
+}

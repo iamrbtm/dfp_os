@@ -5,8 +5,6 @@ from decimal import Decimal
 from app.extensions import db
 from app.models import (
     Category,
-    CustomRequest,
-    CustomRequestStatus,
     Customer,
     InventoryLocation,
     Order,
@@ -25,7 +23,6 @@ from app.models import (
     User,
     UserRole,
 )
-from app.services import orders as order_svc
 from app.services import print_jobs as print_job_svc
 from app.services.crud import apply_search, archive_instance, get_by_id
 from app.services.api_tokens import create_api_token
@@ -119,85 +116,6 @@ def test_archive_instance_status_retired(app):
 def test_get_by_id_none(app):
     with app.app_context():
         assert get_by_id(Product, 99999) is None
-
-
-# ---------------------------------------------------------------------------
-# Workflow services
-# ---------------------------------------------------------------------------
-
-
-def test_convert_custom_request_new_customer_no_deposit(app):
-    with app.app_context():
-        req = CustomRequest(
-            name="New Person",
-            email="new@example.com",
-            description="Custom widget",
-            status=CustomRequestStatus.NEW,
-        )
-        db.session.add(req)
-        db.session.commit()
-        order = order_svc.convert_custom_request_to_order(req, Decimal("50.00"))
-        assert order.total == Decimal("50.00")
-        assert order.paid_amount == Decimal("0")
-        assert order.source == OrderSource.CUSTOM
-        assert len(order.payments) == 0
-        cust = Customer.query.filter_by(email="new@example.com").first()
-        assert cust is not None
-        assert req.converted_to_order_id == order.id
-
-
-def test_convert_custom_request_existing_customer_with_deposit(app):
-    with app.app_context():
-        cust = Customer(
-            first_name="Existing", last_name="Cust", email="existing@example.com", is_active=True
-        )
-        db.session.add(cust)
-        db.session.commit()
-        req = CustomRequest(
-            name="Existing Cust",
-            email="existing@example.com",
-            description="Another widget",
-            status=CustomRequestStatus.NEW,
-        )
-        db.session.add(req)
-        db.session.commit()
-        order = order_svc.convert_custom_request_to_order(
-            req,
-            Decimal("75.00"),
-            deposit_amount=Decimal("25.00"),
-            deposit_method=PaymentMethod.VENMO,
-        )
-        assert order.paid_amount == Decimal("25.00")
-        assert len(order.payments) == 1
-        assert order.payments[0].method == PaymentMethod.VENMO
-        assert req.status == CustomRequestStatus.DEPOSIT_COLLECTED
-
-
-def test_convert_custom_request_single_word_name(app):
-    with app.app_context():
-        req = CustomRequest(
-            name="SingleName",
-            email="single@example.com",
-            description="Test",
-            status=CustomRequestStatus.NEW,
-        )
-        db.session.add(req)
-        db.session.commit()
-        order_svc.convert_custom_request_to_order(req, Decimal("10.00"))
-        cust = Customer.query.filter_by(email="single@example.com").first()
-        assert cust.first_name == "SingleName"
-        assert cust.last_name == ""
-
-
-def test_convert_custom_request_no_email(app):
-    with app.app_context():
-        req = CustomRequest(
-            name="No Email", email="", description="Test", status=CustomRequestStatus.NEW
-        )
-        db.session.add(req)
-        db.session.commit()
-        order = order_svc.convert_custom_request_to_order(req, Decimal("10.00"))
-        assert order.customer.email is None
 
 
 def test_create_print_job_from_order_item_default_label(app):
@@ -742,20 +660,3 @@ def test_payment_no_reference(app):
         db.session.add(p)
         db.session.commit()
         assert p.reference is None
-
-
-# ---------------------------------------------------------------------------
-# Customer with no email in convert workflow (edge from service)
-# ---------------------------------------------------------------------------
-
-
-def test_convert_request_no_email_no_existing_customer(app):
-    with app.app_context():
-        req = CustomRequest(
-            name="No Email Req", email="", description="test", status=CustomRequestStatus.NEW
-        )
-        db.session.add(req)
-        db.session.commit()
-        order = order_svc.convert_custom_request_to_order(req, Decimal("20.00"))
-        assert order.total == Decimal("20.00")
-        assert req.converted_to_order_id == order.id

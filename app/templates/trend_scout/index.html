@@ -174,7 +174,7 @@
                     {% if s.product_id %}
                       {% if s.action in ("clearance_candidate",) %}
                       <button class="text-xs px-2 py-0.5 rounded"
-                              style="background:var(--color-warning);color:#000;border:none;cursor:pointer;"
+                              style="background:var(--color-warning);color:var(--color-warning-text);border:none;cursor:pointer;"
                               hx-post="{{ url_for('trend_scout.action_flag_clearance') }}"
                               hx-vals='{"product_id": {{ s.product_id }}, "keyword": "{{ keyword|e }}"}'
                               hx-swap="outerHTML" hx-disabled-elt="closest button">Flag Clr</button>

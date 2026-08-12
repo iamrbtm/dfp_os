@@ -39,3 +39,41 @@ def test_404_page_renders(client):
 def test_testing_config_overrides_apply(app, tmp_path):
     assert app.config["MAX_CONTENT_LENGTH_MB"] == 16
     assert app.config["UPLOAD_FOLDER"] == str(tmp_path / "uploads")
+
+
+def test_authenticated_sidebar_uses_grouped_navigation(client, login_admin):
+    response = client.get("/dashboard/")
+
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Quick access" in html
+    assert "Sell" in html
+    assert "Make" in html
+    assert "Stock" in html
+    assert "Money" in html
+    assert "Grow" in html
+    assert "System" in html
+    assert "Dashboard" in html
+    assert "Notifications" in html
+    assert "POS" in html
+    assert "Categories" in html
+    assert "Collections" in html
+    assert "Feature Flags" in html
+    assert "Booth Mode" in html
+    assert "Table Layouts" in html
+    assert "Display Signs" in html
+    assert "Heat Map" in html
+    assert "Task Monitor" in html
+
+
+def test_active_sidebar_group_expands_for_product_pages(client, login_admin):
+    response = client.get("/products/studio")
+
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'x-data="{ open: true }"' in html
+    assert "Make" in html
+    assert "Categories" in html
+    assert "Collections" in html

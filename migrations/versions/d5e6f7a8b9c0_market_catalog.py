@@ -1,7 +1,7 @@
 """market catalog
 
-Revision ID: d5e6f7a8b9c0
-Revises: c4d5e6f7a8b9
+Revision ID: e6f7a8b9c0d1
+Revises: d5e6f7a8b9c0
 Create Date: 2026-08-10 00:00:00.000000
 
 Adds the Market Catalog discovery pool: market_categories, market_catalog_listings,
@@ -13,8 +13,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "d5e6f7a8b9c0"
-down_revision = "c4d5e6f7a8b9"
+revision = "e6f7a8b9c0d1"
+down_revision = "d5e6f7a8b9c0"
 branch_labels = None
 depends_on = None
 
@@ -42,7 +42,7 @@ def upgrade():
         sa.Column("slug", sa.String(80), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -65,7 +65,7 @@ def upgrade():
         ),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("website_url", sa.String(500), nullable=True),
-        sa.Column("is_demo", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_demo", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("location_name", sa.String(200), nullable=True),
         sa.Column("address", sa.String(300), nullable=True),
         sa.Column("city", sa.String(100), nullable=True),
@@ -76,7 +76,7 @@ def upgrade():
         sa.Column("default_start_time", sa.Time(), nullable=True),
         sa.Column("default_end_time", sa.Time(), nullable=True),
         sa.Column("timezone", sa.String(50), nullable=False, server_default="America/Chicago"),
-        sa.Column("is_recurring", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_recurring", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("rrule", sa.Text(), nullable=True),
         sa.Column("recurrence_description", sa.String(255), nullable=True),
         sa.Column("next_occurrence_date", sa.Date(), nullable=True),
@@ -84,13 +84,13 @@ def upgrade():
         sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("estimated_vendor_count", sa.Integer(), nullable=True),
         sa.Column("estimated_attendee_count", sa.Integer(), nullable=True),
-        sa.Column("power_available", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("wifi_available", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("food_available", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("restrooms_available", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("indoor", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("covered_outdoor", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("outdoor", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("power_available", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("wifi_available", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("food_available", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("restrooms_available", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("indoor", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("covered_outdoor", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("outdoor", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("parking_notes", sa.Text(), nullable=True),
         sa.Column("organizer_name", sa.String(200), nullable=True),
         sa.Column("organizer_email", sa.String(200), nullable=True),
@@ -180,7 +180,7 @@ def upgrade():
         "INSERT INTO market_categories (name, slug, description, sort_order, is_active, "
         "created_at, updated_at) VALUES "
         + ", ".join(
-            f"('{name}', '{slug}', NULL, {order}, 1, now(), now())"
+            f"('{name}', '{slug}', NULL, {order}, true, now(), now())"
             for name, slug, order in DEFAULT_CATEGORIES
         )
     )

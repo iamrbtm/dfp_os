@@ -2,16 +2,42 @@
 {% block title %}Privacy Policy | Dude Fish Printing{% endblock %}
 {% block content %}
 <section class="mx-auto max-w-3xl space-y-6">
-  <h1 class="text-4xl font-semibold tracking-tight">Privacy Policy</h1>
-  <div class="space-y-4 text-sm">
-    <p>This is a placeholder privacy policy for Dude Fish Printing. A complete policy will be drafted before the site launches publicly.</p>
-    <p>In general:</p>
-    <ul class="list-disc pl-6 space-y-2">
-      <li>We collect the information you provide through our checkout, contact, and custom order forms.</li>
-      <li>We do not share your personal information with third parties except as needed to fulfill your order.</li>
-      <li>We do not store credit card information. Card payments are handled by external providers such as Square.</li>
-      <li>You may request deletion of your data at any time by contacting us.</li>
-    </ul>
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]">Information and data handling</p>
+    <h1 class="mt-2 text-4xl font-semibold tracking-tight">Privacy Policy</h1>
+    <p class="mt-4 text-sm leading-7">This policy explains how Dude Fish Printing collects, uses, and protects information submitted through this website. It applies to storefront browsing, checkout, contact forms, and custom-order requests.</p>
+  </div>
+
+  <div class="space-y-5 text-sm leading-7">
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Information We Collect</h2>
+      <p>We collect information you choose to provide, including your name, email address, phone number, shipping or pickup details, order notes, and custom-order request details.</p>
+      <p>We also store order records, product selections, and limited technical data needed to keep the site working, such as session-based cart information and basic request logs.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">How We Use Information</h2>
+      <p>We use your information to respond to inquiries, prepare quotes, fulfill orders, coordinate pickup or shipping, provide customer support, and keep internal business records.</p>
+      <p>We may also use order and browsing activity in aggregated form to understand which products or categories are in demand and to improve the site experience.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Payments and Third-Party Services</h2>
+      <p>Card checkout, when enabled, is handled by external providers such as Square. Dude Fish Printing does not store full card numbers, CVV values, or expiration data inside Dude Fish OS.</p>
+      <p>We may rely on third-party providers for services such as payment processing, file storage, hosting, or email delivery when needed to operate the business.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Sharing and Retention</h2>
+      <p>We do not sell your personal information. We share it only when reasonably necessary to operate the business, complete a transaction, comply with legal obligations, or protect against fraud or abuse.</p>
+      <p>We keep records for as long as they are reasonably needed for customer service, operational history, tax and accounting support, fraud prevention, or legal compliance.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Your Choices</h2>
+      <p>You can contact us to request correction or deletion of personal information that is no longer needed for an active order, legal recordkeeping, or fraud-prevention purpose.</p>
+      <p>Questions about this policy can be sent through the <a href="{{ url_for('public.contact') }}" class="app-link">contact page</a>.</p>
+    </article>
   </div>
 </section>
 {% endblock %}

@@ -1,7 +1,5 @@
 {% extends "dashboard/layout.html" %}
 {% block title %}{% if mode == 'create' %}New{% else %}Edit{% endif %} Table Layout — DFPos{% endblock %}
-{% block body_class %}bg-neutral-50{% endblock %}
-
 {% block content %}
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
   <a href="{{ url_for('table_layouts.list_layouts') }}" class="text-sm" style="color: var(--color-link);">&larr; Back to Layouts</a>

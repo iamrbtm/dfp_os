@@ -14,16 +14,16 @@ def suggest_booking_dates(
 ) -> list[date]:
     if listing is None or listing.deleted_at is not None:
         return []
+    anchor = today or date.today()
     if not listing.is_recurring or not listing.rrule:
-        if listing.next_occurrence_date and (
-            today is None or listing.next_occurrence_date >= today
-        ):
-            return [listing.next_occurrence_date]
+        candidate = listing.next_occurrence_date or listing.anchor_date
+        if candidate and candidate >= anchor:
+            return [candidate]
         return []
     rrule_obj = parse_rrule(listing.rrule)
     if rrule_obj is None:
         return []
-    return next_occurrences(rrule_obj, after_date=today or date.today(), count=count)
+    return next_occurrences(rrule_obj, after_date=anchor, count=count)
 
 
 def book_from_catalog(

@@ -10,7 +10,47 @@
       </div>
       <div class="flex gap-2">
         <a href="{{ url_for('market_catalog.list_categories') }}" class="app-btn app-btn-secondary">Categories</a>
+        <button type="button" class="app-btn app-btn-secondary" data-open-market-import>Import</button>
         <a href="{{ url_for('market_catalog.create_listing_view') }}" class="app-btn app-btn-primary">New Listing</a>
+      </div>
+    </div>
+
+    <div id="market-import-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="market-import-title">
+      <button type="button" class="absolute inset-0" style="background: rgb(15 23 42 / 0.58);" data-close-market-import aria-label="Close import modal"></button>
+      <div class="app-card relative z-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-xl">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Import</p>
+            <h2 id="market-import-title" class="mt-1 text-2xl font-semibold" style="color: var(--color-text);">Add to Market Catalog</h2>
+            <p class="mt-2 text-sm" style="color: var(--color-text-muted);">Paste a URL, notes, raw HTML, or upload a flyer/file. The AI tab returns structured JSON and creates a reviewed catalog draft record.</p>
+          </div>
+          <button type="button" class="app-btn app-btn-secondary" data-close-market-import aria-label="Close">×</button>
+        </div>
+
+        <div class="mt-6 border-b" style="border-color: var(--color-border);">
+          <button type="button" class="rounded-t-xl px-4 py-2 text-sm font-semibold" style="background: var(--color-bg-muted); color: var(--color-text); border: 1px solid var(--color-border); border-bottom-color: transparent;">AI</button>
+        </div>
+
+        <form method="post" action="{{ url_for('market_catalog.import_listing_ai_view') }}" enctype="multipart/form-data" class="mt-5 space-y-5">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div>
+            <label for="market-import-ai-input" class="block text-sm font-medium" style="color: var(--color-text);">Input</label>
+            <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Use one source at a time when possible: a URL, pasted event copy, raw HTML, or a prompt.</p>
+            <textarea id="market-import-ai-input" name="ai_input" rows="10" class="app-input mt-2 w-full" placeholder="input: <input data goes here>"></textarea>
+          </div>
+          <div>
+            <label for="market-import-ai-file" class="block text-sm font-medium" style="color: var(--color-text);">Optional file</label>
+            <input id="market-import-ai-file" name="ai_file" type="file" class="app-input mt-2 w-full" accept="image/*,.txt,.html,.htm,.json,.md,.csv,.pdf">
+            <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Images are sent directly to AI. Text-like files are included as text. PDFs may need pasted text if the model cannot read the upload.</p>
+          </div>
+          {% if not market_catalog_ai_ready %}
+            <div class="rounded-xl border p-3 text-sm" style="border-color: var(--color-border); background: var(--color-warning-soft, #fef3c7); color: var(--color-text);">The MarketCatalogExtraction schema file was not found, so AI import is unavailable.</div>
+          {% endif %}
+          <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button type="button" class="app-btn app-btn-secondary" data-close-market-import>Cancel</button>
+            <button type="submit" class="app-btn app-btn-primary" {% if not market_catalog_ai_ready %}disabled{% endif %}>Import with AI</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -61,8 +101,14 @@
                     {% if item.category %}<span class="inline-block rounded-full px-2 py-0.5 text-xs" style="background: var(--color-bg-muted);">{{ item.category.name }}</span>{% else %}—{% endif %}
                   </td>
                   <td class="px-4 py-3" style="color: var(--color-text-muted);">{{ [item.city, item.state] | select('ne', None) | join(', ') or '—' }}</td>
-                  <td class="px-4 py-3 text-xs" style="color: var(--color-text-muted);">{{ item.recurrence_description or 'One-off' }}</td>
-                  <td class="px-4 py-3" style="color: var(--color-text);">{{ item.next_occurrence_date.strftime('%b %d, %Y') if item.next_occurrence_date else '—' }}</td>
+                  <td class="px-4 py-3 text-xs" style="color: var(--color-text-muted);">
+                    {% if not item.is_recurring and item.anchor_date %}
+                      One-time: {{ item.anchor_date.strftime('%b %d, %Y') }}
+                    {% else %}
+                      {{ item.recurrence_description or 'One-off' }}
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3" style="color: var(--color-text);">{{ (item.next_occurrence_date or item.anchor_date).strftime('%b %d, %Y') if (item.next_occurrence_date or item.anchor_date) else '—' }}</td>
                   <td class="px-4 py-3">
                     {% set lvl = item.interest_level.value if item.interest_level else 'watching' %}
                     <span class="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
@@ -104,4 +150,39 @@
       </div>
     {% endif %}
   </section>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const modal = document.getElementById('market-import-modal');
+      const openButton = document.querySelector('[data-open-market-import]');
+      const closeButtons = document.querySelectorAll('[data-close-market-import]');
+      if (!modal || !openButton) return;
+
+      function openModal() {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        const input = document.getElementById('market-import-ai-input');
+        if (input) input.focus();
+      }
+
+      function closeModal() {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        openButton.focus();
+      }
+
+      openButton.addEventListener('click', openModal);
+      closeButtons.forEach(function (button) {
+        button.addEventListener('click', closeModal);
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+          closeModal();
+        }
+      });
+    });
+  </script>
 {% endblock %}

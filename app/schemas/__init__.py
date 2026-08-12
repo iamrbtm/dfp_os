@@ -22,6 +22,11 @@ from app.schemas.market import (
     MarketTimelineEventSchema,
     MarketWeatherSnapshotSchema,
 )
+from app.schemas.market_catalog import (
+    MarketCatalogBoothTierSchema,
+    MarketCatalogListingSchema,
+    MarketCategorySchema,
+)
 from app.schemas.customer import CustomerSchema
 from app.schemas.fleet import AMSUnitSchema, PrinterSchema
 from app.schemas.inventory import (
@@ -70,6 +75,9 @@ __all__ = [
     "MarketSchema",
     "MarketTimelineEventSchema",
     "MarketWeatherSnapshotSchema",
+    "MarketCatalogBoothTierSchema",
+    "MarketCatalogListingSchema",
+    "MarketCategorySchema",
     "InventoryRecordSchema",
     "OrderItemSchema",
     "OrderSchema",

@@ -2,18 +2,47 @@
 {% block title %}Terms of Service | Dude Fish Printing{% endblock %}
 {% block content %}
 <section class="mx-auto max-w-3xl space-y-6">
-  <h1 class="text-4xl font-semibold tracking-tight">Terms of Service</h1>
-  <div class="space-y-4 text-sm">
-    <p>This is a placeholder terms of service page for Dude Fish Printing. Complete terms will be drafted before the site launches publicly.</p>
-    <p>Key points:</p>
-    <ul class="list-disc pl-6 space-y-2">
-      <li>Custom orders are non-refundable once production begins.</li>
-      <li>Physical products may be returned within 14 days if defective, for a replacement or store credit.</li>
-      <li>Turnaround times are estimates and not guarantees.</li>
-      <li>We reserve the right to refuse orders that infringe on intellectual property rights.</li>
-      <li>Online orders may use Square-hosted checkout or an approved manual-payment fallback.</li>
-      <li>Prices are subject to change without notice.</li>
-    </ul>
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]">Orders, payments, and acceptable use</p>
+    <h1 class="mt-2 text-4xl font-semibold tracking-tight">Terms of Service</h1>
+    <p class="mt-4 text-sm leading-7">These terms apply when you browse this site, request a quote, place an order, submit files or artwork, or otherwise do business with Dude Fish Printing through this website.</p>
+  </div>
+
+  <div class="space-y-5 text-sm leading-7">
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Orders and Payment</h2>
+      <p>Prices are listed in U.S. dollars unless stated otherwise. Payment may be collected at checkout, through an approved external checkout provider, or through a manual-payment method offered by the business.</p>
+      <p>An order is not guaranteed to begin production until any required payment, deposit, file review, and design confirmation steps are complete.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Custom and Personalized Work</h2>
+      <p>Custom quotes, personalized items, and made-to-order pieces are prepared specifically for the customer who requested them. Once production has started, those orders may not be cancellable or refundable except where required by law or where we agree otherwise.</p>
+      <p>You are responsible for reviewing spelling, sizing, filenames, and requested details before approving a custom order for production.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Design Rights and Acceptable Content</h2>
+      <p>You may not ask us to reproduce content that you do not have the right to use. We may refuse or cancel requests involving copyrighted characters, trademarks, official logos, unit insignia, or other protected material when usage rights are unclear or unavailable.</p>
+      <p>If you provide a model, image, logo, or other artwork, you represent that you have permission to use it for the requested purpose.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Product Characteristics</h2>
+      <p>3D printed products are physical objects made layer by layer. Minor surface texture, seam lines, color shifts, or small variations between prints are normal and are not automatically defects.</p>
+      <p>Not every product is suitable for outdoor use, food contact, high heat, or unsupervised use by small children. Product descriptions or direct communication control over any broad assumptions about suitability.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Turnaround, Pickup, and Shipping</h2>
+      <p>Estimated turnaround times are provided in good faith but are not guaranteed. Production timing may change based on printer availability, material availability, file issues, order complexity, or other operational constraints.</p>
+      <p>Pickup and shipping terms are also described on the <a href="{{ url_for('public.shipping_policy') }}" class="app-link">shipping policy page</a>.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Returns and Support</h2>
+      <p>If there is a problem with your order, contact us promptly so we can review it. Additional support details are available on the <a href="{{ url_for('public.returns') }}" class="app-link">returns and order help page</a>.</p>
+    </article>
   </div>
 </section>
 {% endblock %}

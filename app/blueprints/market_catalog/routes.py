@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
+
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 from sqlalchemy import select
@@ -18,6 +21,7 @@ from app.models import (
     UserRole,
 )
 from app.services.crud import apply_search, get_by_id, paginate_query
+from app.services.business import get_default_business
 from app.services.market_catalog import (
     archive_category,
     archive_listing,
@@ -30,7 +34,19 @@ from app.services.market_catalog import (
     update_listing,
 )
 from app.services.market_catalog_booking import book_from_catalog, suggest_booking_dates
-from app.services.market_catalog_recurrence import humanize_rrule, validate_rrule
+from app.services.market_catalog_import import (
+    extraction_to_listing_fields,
+    generate_market_catalog_extraction,
+    schema_file_exists,
+)
+from app.services.market_catalog_recurrence import (
+    build_rrule_from_wizard,
+    humanize_rrule,
+    next_two_occurrences,
+    validate_rrule,
+    wizard_state_from_listing,
+    wizard_summary,
+)
 from app.services.market_catalog_sync import sync_listing_occurrences
 from app.utils.auth import roles_required
 
@@ -186,6 +202,7 @@ def list_listings():
         category_filter=category_filter,
         interest_filter=interest_filter,
         archived=archived,
+        market_catalog_ai_ready=bool(schema_file_exists()),
     )
 
 
@@ -194,17 +211,41 @@ def list_listings():
 def create_listing_view():
     form = MarketCatalogListingForm()
     if form.validate_on_submit():
-        valid, error = validate_rrule(form.rrule.data)
-        if not valid:
-            flash(f"RRULE error: {error}", "danger")
+        fields = _listing_fields(form)
+        if fields["recurrence_error"]:
+            flash(f"Recurrence error: {fields['recurrence_error']}", "danger")
             return render_template(
                 "market_catalog/listing_form.html", form=form, mode="create"
             ), 400
+        fields.pop("recurrence_error")
         tiers = _collect_tiers_from_form()
-        listing = create_listing(actor=current_user, tiers=tiers, **_listing_fields(form))
+        listing = create_listing(actor=current_user, tiers=tiers, **fields)
         flash(f"Listing '{listing.name}' created.", "success")
         return redirect(url_for("market_catalog.detail_listing", listing_id=listing.id))
     return render_template("market_catalog/listing_form.html", form=form, mode="create")
+
+
+@bp.post("/listings/import/ai")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def import_listing_ai_view():
+    user_input = (request.form.get("ai_input") or "").strip()
+    uploaded_file = request.files.get("ai_file")
+    has_file = bool(uploaded_file and uploaded_file.filename)
+    if not user_input and not has_file:
+        flash("Add a URL, notes, prompt, or file before importing.", "danger")
+        return redirect(url_for("market_catalog.list_listings"))
+    try:
+        payload = generate_market_catalog_extraction(
+            user_input=user_input,
+            uploaded_file=uploaded_file if has_file else None,
+        )
+        fields, tiers = extraction_to_listing_fields(payload)
+        listing = create_listing(actor=current_user, tiers=tiers, **fields)
+    except Exception as exc:
+        flash(f"AI import failed: {exc}", "danger")
+        return redirect(url_for("market_catalog.list_listings"))
+    flash(f"Imported '{listing.name}' into the market catalog.", "success")
+    return redirect(url_for("market_catalog.list_listings"))
 
 
 @bp.get("/listings/<int:listing_id>")
@@ -237,15 +278,21 @@ def edit_listing_view(listing_id: int):
     if listing is None or listing.deleted_at is not None:
         return render_template("errors/404.html"), 404
     form = MarketCatalogListingForm(obj=listing)
+    # Only derive the wizard sub-fields from the stored RRULE when this is a
+    # GET. On POST (validation failure) the user's submitted formdata must win
+    # so the wizard reflects what they actually entered.
+    if request.method == "GET":
+        _populate_wizard_from_listing(form, listing)
     if form.validate_on_submit():
-        valid, error = validate_rrule(form.rrule.data)
-        if not valid:
-            flash(f"RRULE error: {error}", "danger")
+        fields = _listing_fields(form)
+        if fields["recurrence_error"]:
+            flash(f"Recurrence error: {fields['recurrence_error']}", "danger")
             return render_template(
                 "market_catalog/listing_form.html", form=form, mode="edit", listing=listing
             ), 400
+        fields.pop("recurrence_error")
         tiers = _collect_tiers_from_form()
-        update_listing(listing, actor=current_user, tiers=tiers, **_listing_fields(form))
+        update_listing(listing, actor=current_user, tiers=tiers, **fields)
         flash("Listing updated.", "success")
         return redirect(url_for("market_catalog.detail_listing", listing_id=listing.id))
     return render_template(
@@ -299,6 +346,40 @@ def listing_occurrences(listing_id: int):
     return jsonify({"occurrences": [d.isoformat() for d in occurrences]})
 
 
+@bp.post("/recurrence-preview")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def recurrence_preview():
+    form = MarketCatalogListingForm(request.form)
+    rrule, anchor_date, _is_recurring, error = _resolve_recurrence(form)
+    if error:
+        return jsonify({"error": error, "rrule": None, "human": "", "next_two": []}), 400
+    wizard = form.wizard_data()
+    if form.recurrence_override.data == "1":
+        human = humanize_rrule(rrule)
+    else:
+        human = wizard_summary(
+            pattern=wizard["pattern"],
+            weekday=wizard["weekday"],
+            nth=wizard["nth"],
+            month=wizard["month"],
+            day_of_month=wizard["day_of_month"],
+            start_month=wizard["start_month"],
+            end_month=wizard["end_month"],
+            until_date=wizard["until_date"],
+        )
+    if not human:
+        human = humanize_rrule(rrule) if rrule else "One-off market (no recurrence)."
+    next_two = next_two_occurrences(rrule, dtstart=anchor_date)
+    return jsonify(
+        {
+            "rrule": rrule,
+            "dtstart": anchor_date.isoformat() if anchor_date else None,
+            "human": human,
+            "next_two": [d.isoformat() for d in next_two],
+        }
+    )
+
+
 # ---------------------------------------------------------------------------
 # Book it
 # ---------------------------------------------------------------------------
@@ -345,7 +426,85 @@ def book_listing(listing_id: int):
 # ---------------------------------------------------------------------------
 
 
+def _populate_wizard_from_listing(form, listing: MarketCatalogListing) -> None:
+    """Server-side wizard prefill for edit pages.
+
+    ``form(obj=listing)`` only populates fields whose name matches a model
+    attribute. The wizard sub-fields (weekday, month, nth, ...) are virtual,
+    so we derive them from the stored RRULE/anchor and assign them here so
+    the correct tab opens and the inputs are correct even before JS runs.
+    """
+    state = wizard_state_from_listing(listing.rrule, listing.anchor_date)
+    form.recurrence_pattern.data = state["recurrence_pattern"]
+    form.recurrence_anchor.data = state["recurrence_anchor"]
+    form.recurrence_until.data = state["recurrence_until"]
+    form.recurrence_limit_months.data = state["recurrence_limit_months"]
+    form.recurrence_weekday.data = state["recurrence_weekday"] or None
+    form.recurrence_nth.data = state["recurrence_nth"]
+    form.recurrence_month.data = state["recurrence_month"]
+    form.recurrence_day.data = state["recurrence_day"]
+    form.recurrence_start_month.data = state["recurrence_start_month"]
+    form.recurrence_end_month.data = state["recurrence_end_month"]
+    if listing.recurrence_description:
+        form.recurrence_description.data = listing.recurrence_description
+
+
+def _resolve_recurrence(form) -> tuple[str | None, date | None, bool, str | None]:
+    """Build the RRULE + anchor date from the wizard payload.
+
+    Returns ``(rrule, anchor_date, is_recurring, error)``. ``is_recurring`` is
+    derived from the wizard result, not the form checkbox, so the stored
+    flag always matches the recurrence configuration. If the user opened
+    Advanced mode and typed a raw RRULE, that value wins over the generated one.
+    """
+    wizard = form.wizard_data()
+    rrule, dtstart, error = build_rrule_from_wizard(**wizard)
+    if error:
+        return None, None, False, error
+    is_recurring = wizard.get("pattern") != "one_off"
+    if form.recurrence_override.data == "1":
+        raw = (form.rrule.data or "").strip()
+        if raw:
+            valid, verr = validate_rrule(raw)
+            if not valid:
+                return None, None, False, verr
+            rrule = raw
+            is_recurring = bool(rrule)
+    return rrule, dtstart or form.recurrence_anchor.data, is_recurring, None
+
+
+def _recurrence_fields(form) -> dict:
+    rrule, anchor_date, is_recurring, error = _resolve_recurrence(form)
+    if error:
+        return {
+            "rrule": None,
+            "recurrence_description": None,
+            "anchor_date": None,
+            "is_recurring": False,
+            "recurrence_error": error,
+        }
+    wizard = form.wizard_data()
+    summary = wizard_summary(
+        pattern=wizard["pattern"],
+        weekday=wizard["weekday"],
+        nth=wizard["nth"],
+        month=wizard["month"],
+        day_of_month=wizard["day_of_month"],
+        start_month=wizard["start_month"],
+        end_month=wizard["end_month"],
+        until_date=wizard["until_date"],
+    )
+    return {
+        "rrule": rrule,
+        "recurrence_description": summary,
+        "anchor_date": anchor_date,
+        "is_recurring": is_recurring,
+        "recurrence_error": None,
+    }
+
+
 def _listing_fields(form):
+    recurrence = _recurrence_fields(form)
     fields = {}
     for name in (
         "name",
@@ -360,9 +519,6 @@ def _listing_fields(form):
         "default_start_time",
         "default_end_time",
         "timezone",
-        "is_recurring",
-        "rrule",
-        "recurrence_description",
         "estimated_vendor_count",
         "estimated_attendee_count",
         "power_available",
@@ -387,7 +543,25 @@ def _listing_fields(form):
         fields[name] = getattr(form, name).data
     fields["latitude"] = float(form.latitude.data) if form.latitude.data is not None else None
     fields["longitude"] = float(form.longitude.data) if form.longitude.data is not None else None
+    business = get_default_business()
+    fields["business_id"] = business.id if business else None
+    fields.update(recurrence)
+    # recurrence fields include is_recurring; pop the error sentinel before save
     return fields
+
+
+def _parse_money(value: str | None) -> "Decimal | None":
+    from decimal import Decimal, InvalidOperation
+
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    try:
+        return Decimal(cleaned)
+    except InvalidOperation:
+        return None
 
 
 def _collect_tiers_from_form() -> list[dict]:
@@ -403,21 +577,13 @@ def _collect_tiers_from_form() -> list[dict]:
         label = (labels[i] or "").strip()
         if not label:
             continue
-        try:
-            price = prices[i] if i < len(prices) else None
-        except IndexError, ValueError:
-            price = None
-        try:
-            corner = corners[i] if i < len(corners) else None
-        except IndexError, ValueError:
-            corner = None
         tiers.append(
             {
                 "label": label,
-                "dimensions": dims[i] if i < len(dims) else None,
-                "price": price,
-                "corner_premium": corner,
-                "notes": notes[i] if i < len(notes) else None,
+                "dimensions": (dims[i] or "").strip() or None if i < len(dims) else None,
+                "price": _parse_money(prices[i] if i < len(prices) else None),
+                "corner_premium": _parse_money(corners[i] if i < len(corners) else None),
+                "notes": (notes[i] or "").strip() or None if i < len(notes) else None,
                 "sort_order": int(sorts[i]) if i < len(sorts) and sorts[i] else i,
             }
         )

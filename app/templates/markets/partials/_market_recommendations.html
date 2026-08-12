@@ -32,10 +32,10 @@
           <td>{{ rec.suggested_quantity or "—" }}</td>
           <td>${{ "%.2f"|format((rec.expected_revenue_cents or 0) / 100) }}</td>
           <td>
-            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-              {% if rec.risk_level == 'low' %}bg-green-100 text-green-800
-              {% elif rec.risk_level == 'medium' %}bg-yellow-100 text-yellow-800
-              {% else %}bg-red-100 text-red-800{% endif %}">
+            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                  style="{% if rec.risk_level == 'low' %}background-color: var(--color-success-bg); color: var(--color-success);
+                          {% elif rec.risk_level == 'medium' %}background-color: var(--color-warning-bg); color: var(--color-warning);
+                          {% else %}background-color: var(--color-danger-bg); color: var(--color-danger);{% endif %}">
               {{ rec.risk_level }}
             </span>
           </td>

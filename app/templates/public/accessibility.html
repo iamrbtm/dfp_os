@@ -2,11 +2,27 @@
 {% block title %}Accessibility | Dude Fish Printing{% endblock %}
 {% block content %}
 <section class="mx-auto max-w-3xl space-y-6">
-  <h1 class="text-4xl font-semibold tracking-tight">Accessibility</h1>
-  <p class="text-lg">This placeholder page exists until final accessibility policy language is provided by the business.</p>
-  <div class="app-card p-6 space-y-3">
-    <p>We are working toward an accessible public website and operator experience.</p>
-    <p>If you need help placing an order or using the site, please use the contact page and we will help directly.</p>
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]">Accessibility Commitment</p>
+    <h1 class="mt-2 text-4xl font-semibold tracking-tight">Accessibility</h1>
+    <p class="mt-4 text-lg leading-8">Dude Fish Printing wants this website to be usable by as many people as possible, including customers using assistive technology, keyboard navigation, zoom, or alternative input methods.</p>
+  </div>
+
+  <div class="app-card p-6 space-y-4 text-sm leading-7">
+    <h2 class="text-xl font-semibold">How we approach accessibility</h2>
+    <p>We aim to use clear headings, readable color contrast, descriptive form labels, and straightforward navigation across the public storefront and customer-contact pages.</p>
+    <p>We also try to keep checkout, contact, and custom-order flows understandable without requiring specialized technical knowledge about 3D printing.</p>
+  </div>
+
+  <div class="app-card p-6 space-y-4 text-sm leading-7">
+    <h2 class="text-xl font-semibold">Known limits</h2>
+    <p>Some pages may still contain areas that need improvement, especially where new features, product media, or third-party services are involved. We treat accessibility fixes as product work, not cosmetic extras.</p>
+  </div>
+
+  <div class="app-card p-6 space-y-4 text-sm leading-7">
+    <h2 class="text-xl font-semibold">Contact Us for Accessibility Help</h2>
+    <p>If you have trouble using this site, need help placing an order, or want information in a different format, contact us through the <a href="{{ url_for('public.contact') }}" class="app-link">contact page</a>.</p>
+    <p>Please include the page you were using, what you were trying to do, and any device or browser details that may help us reproduce the issue.</p>
   </div>
 </section>
 {% endblock %}

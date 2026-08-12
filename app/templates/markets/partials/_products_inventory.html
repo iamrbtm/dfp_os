@@ -80,7 +80,7 @@
               Expected back: <strong x-text="expectedBack(items[{{ idx }}])">{{ item.expected_back }}</strong> &middot;
               Returned: <strong x-text="items[{{ idx }}].returned">{{ item.returned }}</strong>
               <span x-show="shrinkage(items[{{ idx }}]) > 0">
-                &middot; Shrinkage: <strong class="text-red-600" x-text="shrinkage(items[{{ idx }}])">{{ item.shrinkage }}</strong>
+                &middot; Shrinkage: <strong style="color: var(--color-danger);" x-text="shrinkage(items[{{ idx }}])">{{ item.shrinkage }}</strong>
               </span>
             </td>
           </tr>
@@ -105,7 +105,7 @@
         <span style="color: var(--color-text-muted);">Total Returned</span>
       </div>
       <div>
-        <span class="block text-lg font-semibold" :class="totalShrinkage > 0 ? 'text-red-600' : ''" x-text="totalShrinkage">{{ rc.total_shrinkage }}</span>
+        <span class="block text-lg font-semibold" :class="totalShrinkage > 0 ? 'shrinkage-warning' : ''" x-text="totalShrinkage">{{ rc.total_shrinkage }}</span>
         <span style="color: var(--color-text-muted);">Total Shrinkage</span>
       </div>
     </div>

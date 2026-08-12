@@ -46,7 +46,7 @@
                      x-model="items[{{ idx }}].returned">
             </td>
             <td>
-              <span :class="shrink(items[{{ idx }}]) > 0 ? 'text-red-600 font-semibold' : 'text-sm'"
+              <span :class="shrink(items[{{ idx }}]) > 0 ? 'shrinkage-warning font-semibold' : 'text-sm'"
                     x-text="shrink(items[{{ idx }}])">{{ item.shrinkage }}</span>
             </td>
           </tr>
@@ -72,7 +72,7 @@
           <span style="color: var(--color-text-muted);">Total Returned</span>
         </div>
         <div>
-          <span class="block text-lg font-semibold" :class="totalShrinkage > 0 ? 'text-red-600' : ''" x-text="totalShrinkage">{{ rc.total_shrinkage }}</span>
+          <span class="block text-lg font-semibold" :class="totalShrinkage > 0 ? 'shrinkage-warning' : ''" x-text="totalShrinkage">{{ rc.total_shrinkage }}</span>
           <span style="color: var(--color-text-muted);">Shrinkage</span>
         </div>
       </div>

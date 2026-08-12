@@ -1,0 +1,77 @@
+{
+  "name": "Sango Night Market",
+  "description": "Vibrant, producer-only farmers market held every Monday evening at Real Life Sango. Features real farmers, fresh food, and local artisans. All vendors must grow or produce their own items.",
+  "website_url": "https://reallifesango.com/sango-night-market/",
+  "category_hint": "farmers_market",
+  "interest_level": "watching",
+  "location": {
+    "location_name": "Real Life Sango",
+    "address": "3575 Sango Road",
+    "city": "Clarksville",
+    "state": "TN",
+    "zip_code": "37043",
+    "country": "US"
+  },
+  "timing": {
+    "default_start_time": "16:00",
+    "default_end_time": "20:00",
+    "timezone": "America/Chicago",
+    "is_recurring": true,
+    "recurrence_description": "Every Monday evening from Memorial Day through Fall",
+    "anchor_date": "2026-08-17",
+    "next_occurrence_date": "2026-08-17"
+  },
+  "scale": {},
+  "amenities": {
+    "power_available": false,
+    "wifi_available": false,
+    "food_available": true,
+    "restrooms_available": false,
+    "indoor": false,
+    "covered_outdoor": false,
+    "outdoor": true
+  },
+  "organizer": {
+    "name": "April Sialana (Market Director)",
+    "email": "sangonightmarket@gmail.com",
+    "phone": "2532281400"
+  },
+  "rules": {
+    "booth_rules": "All vendors must grow or produce their own items. Producer-only market."
+  },
+  "booth_tiers": [
+    {
+      "label": "Standard",
+      "notes": "Producer-only vendor booth. Specific fees not publicly listed.",
+      "sort_order": 1
+    }
+  ],
+  "field_confidence": {
+    "identity": "high",
+    "location": "high",
+    "timing": "high",
+    "scale": "low",
+    "amenities": "low",
+    "organizer": "high",
+    "rules": "medium",
+    "booth_tiers": "low"
+  },
+  "sources_consulted": [
+    {
+      "url": "https://reallifesango.com/sango-night-market/",
+      "purpose": "Primary source for market hours, dates, and venue."
+    },
+    {
+      "url": "https://marketspread.com/market/26533/sango-night-market/",
+      "purpose": "Verification of contact information and rules."
+    }
+  ],
+  "search_queries_used": [
+    "\"Sango Night Market\" vendor application Clarksville TN",
+    "site:reallifesango.com \"Apply to be a Vendor\" Sango Night Market",
+    "\"Apply to be a Vendor\" \"Sango Night Market\" \"docs.google.com\" OR \"forms.gle\" OR \"marketspread\"",
+    "\"Sango Night Market\" booth fee OR cost OR price vendor"
+  ],
+  "research_complete": true,
+  "extraction_notes": "Fetched official website and Marketspread page. Booth fees and direct application URLs were not found after 3 searches. Confirmed contact information for Market Director April Sialana, and found a market email on Visit Clarksville. Sources conflict slightly on end-of-season dates (Labor Day vs. Veterans Day) but agree on Monday evening schedules."
+}

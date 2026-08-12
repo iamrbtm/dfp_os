@@ -36,7 +36,7 @@
     {% if rc.shrinkage_pct is not none %}
       <div>
         <dt style="color: var(--color-text-muted);">Shrinkage</dt>
-        <dd class="font-semibold {% if rc.shrinkage_pct > 10 %}text-red-600{% elif rc.shrinkage_pct > 5 %}text-amber-600{% endif %}">{{ rc.shrinkage_pct }}%</dd>
+        <dd class="font-semibold" style="{% if rc.shrinkage_pct > 10 %}color: var(--color-danger);{% elif rc.shrinkage_pct > 5 %}color: var(--color-warning);{% endif %}">{{ rc.shrinkage_pct }}%</dd>
       </div>
     {% endif %}
   </dl>

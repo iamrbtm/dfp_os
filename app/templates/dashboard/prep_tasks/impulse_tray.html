@@ -1,13 +1,12 @@
 {% extends "dashboard/layout.html" %}
 {% block title %}Impulse Tray Optimizer — DFPos{% endblock %}
-{% block body_class %}bg-neutral-50{% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold text-navy">Impulse Tray Optimizer</h1>
+    <h1 class="text-2xl font-bold" style="color: var(--color-text);">Impulse Tray Optimizer</h1>
     <div class="flex gap-2">
-      <select onchange="if(this.value) window.location='?market_id='+this.value" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+      <select onchange="if(this.value) window.location='?market_id='+this.value" class="app-select" style="max-width: 16rem;">
         <option value="">All Markets</option>
         {% for m in markets %}
         <option value="{{ m.id }}" {% if current_market_id == m.id %}selected{% endif %}>{{ m.name }}</option>
@@ -18,40 +17,38 @@
 
   {% if result.total_products > 0 %}
   <div class="grid gap-6 lg:grid-cols-3 mb-6">
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-      <p class="text-xs text-gray-500 uppercase tracking-wide">Products in Tray</p>
-      <p class="text-2xl font-bold text-navy mt-1">{{ result.total_products }}</p>
+    <div class="app-card p-4">
+      <p class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Products in Tray</p>
+      <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ result.total_products }}</p>
     </div>
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-      <p class="text-xs text-gray-500 uppercase tracking-wide">Total Sold</p>
-      <p class="text-2xl font-bold text-navy mt-1">{{ result.total_sold }}</p>
+    <div class="app-card p-4">
+      <p class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Total Sold</p>
+      <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">{{ result.total_sold }}</p>
     </div>
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-      <p class="text-xs text-gray-500 uppercase tracking-wide">Total Revenue</p>
-      <p class="text-2xl font-bold text-navy mt-1">${{ "{:,.2f}".format(result.total_revenue) }}</p>
+    <div class="app-card p-4">
+      <p class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Total Revenue</p>
+      <p class="text-2xl font-bold mt-1" style="color: var(--color-text);">${{ "{:,.2f}".format(result.total_revenue) }}</p>
     </div>
   </div>
 
   {% if result.recommendations %}
-  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-    <div class="px-4 py-3 bg-gradient-to-r from-coral-50 to-teal-50 border-b border-gray-100">
-      <h2 class="text-sm font-semibold text-navy">Rotation Recommendations</h2>
+  <div class="app-card overflow-hidden mb-6">
+    <div class="app-card-header">
+      <h2 class="text-sm font-semibold" style="color: var(--color-text);">Rotation Recommendations</h2>
     </div>
-    <div class="divide-y divide-gray-100">
+    <div class="divide-y" style="border-color: var(--color-divider);">
       {% for rec in result.recommendations %}
       <div class="px-4 py-3 flex items-center gap-3">
-        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold
-          {% if rec.type == 'rotate_in' %}bg-green-100 text-green-700
-          {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold"
+              style="{% if rec.type == 'rotate_in' %}background-color: var(--color-success-bg); color: var(--color-success);{% else %}background-color: var(--color-warning-bg); color: var(--color-warning);{% endif %}">
           {% if rec.type == 'rotate_in' %}&#x2191;{% else %}&#x2193;{% endif %}
         </span>
         <div class="flex-1">
-          <p class="text-sm font-medium">{{ rec.product_name }}</p>
-          <p class="text-xs text-gray-400">{{ rec.reason }}</p>
+          <p class="text-sm font-medium" style="color: var(--color-text);">{{ rec.product_name }}</p>
+          <p class="text-xs" style="color: var(--color-text-muted);">{{ rec.reason }}</p>
         </div>
-        <span class="text-xs rounded-full px-2 py-0.5 font-medium
-          {% if rec.type == 'rotate_in' %}bg-green-100 text-green-700
-          {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+        <span class="text-xs rounded-full px-2 py-0.5 font-medium"
+              style="{% if rec.type == 'rotate_in' %}background-color: var(--color-success-bg); color: var(--color-success);{% else %}background-color: var(--color-warning-bg); color: var(--color-warning);{% endif %}">
           {{ rec.type.replace('_', ' ').title() }}
         </span>
       </div>
@@ -60,40 +57,40 @@
   </div>
   {% endif %}
 
-  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-    <div class="px-4 py-3 bg-gray-50 border-b border-gray-100">
-      <h2 class="text-sm font-semibold text-navy">Tray Placement History</h2>
+  <div class="app-card overflow-hidden">
+    <div class="app-card-header">
+      <h2 class="text-sm font-semibold" style="color: var(--color-text);">Tray Placement History</h2>
     </div>
     {% if result.placements %}
     <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200 text-sm">
-        <thead class="bg-gray-50">
+      <table class="app-table">
+        <thead>
           <tr>
-            <th class="px-4 py-3 text-left font-semibold text-gray-600">Product</th>
-            <th class="px-4 py-3 text-left font-semibold text-gray-600">Market</th>
-            <th class="px-4 py-3 text-left font-semibold text-gray-600">Qty</th>
-            <th class="px-4 py-3 text-right font-semibold text-gray-600">Sold</th>
-            <th class="px-4 py-3 text-right font-semibold text-gray-600">Revenue</th>
-            <th class="px-4 py-3 text-right font-semibold text-gray-600">Sell-Through</th>
+            <th>Product</th>
+            <th>Market</th>
+            <th>Qty</th>
+            <th class="text-right">Sold</th>
+            <th class="text-right">Revenue</th>
+            <th class="text-right">Sell-Through</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody>
           {% for p in result.placements %}
-          <tr class="hover:bg-gray-50 transition">
-            <td class="px-4 py-3 font-medium">{{ p.product.name if p.product else 'Unknown' }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ p.market.name if p.market else '-' }}</td>
-            <td class="px-4 py-3">{{ p.placement.quantity if p.placement else '-' }}</td>
-            <td class="px-4 py-3 text-right">{{ p.sell_through_qty }}</td>
-            <td class="px-4 py-3 text-right">${{ "{:,.2f}".format(p.sell_through_revenue or 0) }}</td>
-            <td class="px-4 py-3 text-right">
+          <tr>
+            <td class="font-medium" style="color: var(--color-text);">{{ p.product.name if p.product else 'Unknown' }}</td>
+            <td style="color: var(--color-text-muted);">{{ p.market.name if p.market else '-' }}</td>
+            <td style="color: var(--color-text);">{{ p.placement.quantity if p.placement else '-' }}</td>
+            <td class="text-right" style="color: var(--color-text);">{{ p.sell_through_qty }}</td>
+            <td class="text-right" style="color: var(--color-text);">${{ "{:,.2f}".format(p.sell_through_revenue or 0) }}</td>
+            <td class="text-right">
               {% if p.sell_through_rate is not none %}
-              <span class="inline-block rounded-full px-2 py-0.5 text-xs font-medium
-                {% if p.sell_through_rate >= 50 %}bg-green-100 text-green-700
-                {% elif p.sell_through_rate >= 25 %}bg-amber-100 text-amber-700
-                {% else %}bg-red-100 text-red-700{% endif %}">
+              <span class="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+                    style="{% if p.sell_through_rate >= 50 %}background-color: var(--color-success-bg); color: var(--color-success);
+                            {% elif p.sell_through_rate >= 25 %}background-color: var(--color-warning-bg); color: var(--color-warning);
+                            {% else %}background-color: var(--color-danger-bg); color: var(--color-danger);{% endif %}">
                 {{ p.sell_through_rate }}%
               </span>
-              {% else %}&mdash;{% endif %}
+              {% else %}<span style="color: var(--color-text-muted);">&mdash;</span>{% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -101,16 +98,16 @@
       </table>
     </div>
     {% else %}
-    <div class="p-8 text-center text-gray-400">No impulse tray placements found.</div>
+    <div class="p-8 text-center" style="color: var(--color-text-muted);">No impulse tray placements found.</div>
     {% endif %}
   </div>
 
   {% else %}
-  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
-    <div class="text-4xl text-gray-300 mb-2">&#x1F4CB;</div>
-    <p class="text-gray-500 text-lg font-medium">No impulse tray data yet</p>
-    <p class="text-gray-400 text-sm mt-1">Create a table layout with an Impulse Tray section to start optimizing.</p>
-    <a href="{{ url_for('table_layouts.list_layouts') }}" class="inline-block mt-4 px-4 py-2 bg-coral text-white rounded-lg text-sm font-medium hover:bg-coral-600 transition">Go to Table Layouts</a>
+  <div class="app-card p-12 text-center">
+    <div class="text-4xl mb-2" style="color: var(--color-text-soft);">&#x1F4CB;</div>
+    <p class="text-lg font-medium" style="color: var(--color-text);">No impulse tray data yet</p>
+    <p class="text-sm mt-1" style="color: var(--color-text-muted);">Create a table layout with an Impulse Tray section to start optimizing.</p>
+    <a href="{{ url_for('table_layouts.list_layouts') }}" class="app-btn app-btn-primary inline-block mt-4">Go to Table Layouts</a>
   </div>
   {% endif %}
 </div>

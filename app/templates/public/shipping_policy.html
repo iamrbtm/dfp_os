@@ -2,11 +2,40 @@
 {% block title %}Shipping Policy | Dude Fish Printing{% endblock %}
 {% block content %}
 <section class="mx-auto max-w-3xl space-y-6">
-  <h1 class="text-4xl font-semibold tracking-tight">Shipping Policy</h1>
-  <p class="text-lg">This placeholder page exists until final shipping policy language is provided by the business.</p>
-  <div class="app-card p-6 space-y-3">
-    <p>Current checkout supports local pickup and shipped orders where enabled.</p>
-    <p>Exact shipping timelines, carriers, and handling policies still need final business copy.</p>
+  <div>
+    <p class="text-sm uppercase tracking-[0.2em]">Shipping and pickup</p>
+    <h1 class="mt-2 text-4xl font-semibold tracking-tight">Shipping Policy</h1>
+    <p class="mt-4 text-sm leading-7">This policy explains how Dude Fish Printing handles order processing, shipping, delivery estimates, and local pickup for ready-made and custom items.</p>
+  </div>
+
+  <div class="space-y-5 text-sm leading-7">
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Order Processing</h2>
+      <p>Processing time depends on what you order. Ready-made items may ship or be prepared for pickup more quickly than custom or made-to-order items.</p>
+      <p>If an item requires printing, assembly, personalization, or design review, processing will take longer than an in-stock order.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Shipping and Delivery</h2>
+      <p>Shipping is available only when enabled during checkout. Delivery timing depends on processing time, carrier performance, destination, and weather or holiday conditions outside our control.</p>
+      <p>Shipping charges, if any, are shown during checkout before you place the order.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Address Accuracy</h2>
+      <p>Please make sure your shipping address is complete and correct before submitting an order. We are not responsible for delays or losses caused by incomplete or incorrect address information supplied at checkout.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Local Pickup</h2>
+      <p>When local pickup is offered, available pickup windows are shown during checkout. Orders should be picked up during the selected or confirmed window unless we agree on another arrangement.</p>
+      <p>If you need to reschedule pickup, contact us as soon as possible through the <a href="{{ url_for('public.contact') }}" class="app-link">contact page</a>.</p>
+    </article>
+
+    <article class="app-card p-6 space-y-3">
+      <h2 class="text-xl font-semibold">Problems in Transit</h2>
+      <p>If a shipped order arrives damaged or appears to be missing, contact us promptly with your order number and, when possible, photos of the package and item so we can review the issue.</p>
+    </article>
   </div>
 </section>
 {% endblock %}

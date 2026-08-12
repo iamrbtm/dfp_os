@@ -1,0 +1,85 @@
+{
+  "name": "Tomato Art Fest",
+  "description": "Annual art and music festival featuring art, food, live music, contests, and more dedicated to all-things tomato at Five Points in East Nashville.",
+  "website_url": "https://www.tomatoartfest.com/",
+  "category_hint": "craft_market",
+  "interest_level": "watching",
+  "location": {
+    "location_name": "Five Points",
+    "address": "1106 Woodland St",
+    "city": "Nashville",
+    "state": "TN",
+    "zip_code": "37206",
+    "country": "US"
+  },
+  "timing": {
+    "default_start_time": "09:00",
+    "default_end_time": "19:00",
+    "timezone": "America/Chicago",
+    "is_recurring": true,
+    "recurrence_description": "Annually in August",
+    "anchor_date": "2026-08-07",
+    "next_occurrence_date": "2026-08-07"
+  },
+  "scale": {},
+  "amenities": {
+    "power_available": false,
+    "wifi_available": false,
+    "food_available": true,
+    "restrooms_available": false,
+    "indoor": false,
+    "covered_outdoor": false,
+    "outdoor": true
+  },
+  "organizer": {
+    "name": "Good Neighbor Festivals",
+    "email": "hello@goodneighborfestivals.com",
+    "application_url": "https://www.eventeny.com/events/vendor/?id=40381"
+  },
+  "rules": {},
+  "booth_tiers": [
+    {
+      "label": "Artisan 10' x 10' Space",
+      "price": 450.00,
+      "dimensions": "10x10",
+      "sort_order": 1
+    },
+    {
+      "label": "Local Artisan Business 10' x 10' Space",
+      "price": 725.00,
+      "dimensions": "10x10",
+      "sort_order": 2
+    }
+  ],
+  "field_confidence": {
+    "identity": "high",
+    "location": "high",
+    "timing": "high",
+    "scale": "low",
+    "amenities": "medium",
+    "organizer": "high",
+    "rules": "low",
+    "booth_tiers": "high"
+  },
+  "sources_consulted": [
+    {
+      "url": "https://www.eventeny.com/events/vendor/?id=40381",
+      "purpose": "Vendor application details and pricing"
+    },
+    {
+      "url": "https://www.tomatoartfest.com/",
+      "purpose": "General event information"
+    },
+    {
+      "url": "https://goodneighborfestivals.com/contact",
+      "purpose": "Organizer contact information"
+    }
+  ],
+  "search_queries_used": [
+    "Tomato Art Fest Nashville TN 2026 dates vendor booth fee application",
+    "Tomato Art Fest Nashville TN location address schedule hours",
+    "Tomato art fest contact email Good Neighbor Festivals"
+  ],
+  "research_complete": true,
+  "extraction_notes": "Found vendor applications on Eventeny confirming dates of August 7-8, 2026. Artisan 10x10 space fee is $450; Local Artisan is $725. Food vendors require a $400 deposit + 15% of gross sales. Vendors are responsible for their own tents, tables, chairs, and power (generators permitted). Organizer email was found via Good Neighbor Festivals' official contact page."
+}

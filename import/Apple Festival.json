@@ -1,0 +1,100 @@
+{
+  "name": "Unicoi County Apple Festival",
+  "website_url": "https://unicoicountyapplefestival.com/",
+  "category_hint": "craft_market",
+  "interest_level": "watching",
+  "location": {
+    "address": "100 S Main Ave",
+    "city": "Erwin",
+    "state": "TN",
+    "zip_code": "37650",
+    "country": "US"
+  },
+  "timing": {
+    "default_start_time": "08:00",
+    "default_end_time": "20:00",
+    "timezone": "America/New_York",
+    "is_recurring": true,
+    "recurrence_description": "Annually on the first full weekend in October",
+    "anchor_date": "2026-10-02",
+    "next_occurrence_date": "2026-10-02"
+  },
+  "scale": {
+    "estimated_vendor_count": 420
+  },
+  "amenities": {
+    "power_available": true,
+    "wifi_available": false,
+    "food_available": true,
+    "restrooms_available": false,
+    "indoor": false,
+    "covered_outdoor": false,
+    "outdoor": true
+  },
+  "organizer": {
+    "name": "Unicoi County Chamber of Commerce",
+    "phone": "423-743-3000"
+  },
+  "rules": {
+    "booth_rules": "Main Street requires handmade crafts and bans resale items. Vendors must provide their own tables and tents."
+  },
+  "booth_tiers": [
+    {
+      "label": "Craft Vendor - Side Street",
+      "price": 300.00,
+      "sort_order": 1
+    },
+    {
+      "label": "Craft Vendor - Main Street (Handmade Only)",
+      "price": 350.00,
+      "sort_order": 2
+    },
+    {
+      "label": "Food Vendor",
+      "price": 550.00,
+      "sort_order": 3
+    }
+  ],
+  "field_confidence": {
+    "identity": "high",
+    "location": "high",
+    "timing": "high",
+    "scale": "medium",
+    "amenities": "medium",
+    "organizer": "high",
+    "rules": "medium",
+    "booth_tiers": "high"
+  },
+  "sources_consulted": [
+    {
+      "url": "https://unicoicountyapplefestival.com/",
+      "purpose": "General event details"
+    },
+    {
+      "url": "https://unicoicountyapplefestival.com/about/",
+      "purpose": "Event history and scale"
+    },
+    {
+      "url": "https://unicoicountyapplefestival.com/festival/schedule/",
+      "purpose": "Event timing details"
+    },
+    {
+      "url": "https://unicoicountyapplefestival.com/vendors/commercial/",
+      "purpose": "Vendor booth rules and pricing"
+    },
+    {
+      "url": "https://vendorsmap.com/events/1953",
+      "purpose": "Third party verification of dates and details"
+    }
+  ],
+  "search_queries_used": [
+    "Apple Art Fest TN",
+    "Apple Art Festival Tennessee vendor",
+    "\"Apple Art Fest\" TN",
+    "\"Apple Festival\" art TN",
+    "\"Unicoi County Apple Festival\" vendor application booth fee 2026",
+    "\"Unicoi County Apple Festival\" vendor apply"
+  ],
+  "research_complete": true,
+  "extraction_notes": "Identified 'The apple art fest in TN' as the Unicoi County Apple Festival in Erwin, TN, a major annual open-air event with 420+ vendors. Used Google search to confirm event details and locate vendor application information. Booth fees are $300 for side street and $350 for main street (handmade only). Electricity is available for $40. Vendors must provide their own tables and tents. The event is held annually on the first full weekend in October (October 2-3 in 2026). A human should verify if 3D-printing is considered 'handmade' by the organizers, as Main Street requires handmade crafts and bans resale items."
+}

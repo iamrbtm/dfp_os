@@ -31,6 +31,7 @@ This file is the live working list for AI agents and humans collaborating in thi
 - `done` Rebuilt Product Studio into isolated primary and variant accordions so each section owns its own fields, assets, previews, and cost calculations.
 - `done` Milestone 7: Booth Mode — Break-even/profit tracking screen, payment mix, expected cash, sales pace, persisted action hints, feature flag, and tests.
 - `done` Milestone 4: Products — Product readiness score, launch checklist, photo shot list, story cards, dead-stock rescue, and retirement workflow.
+- `done` Cleanup pass for dead paths and incomplete public content: removed the test-only custom-order conversion service, replaced unsupported homepage metrics, aligned feature-flag coverage with declared module flags, marked MQTT docs as future work, and finalized public policy pages.
 - `in-progress` Replace placeholder product pricing with evidence-backed cost snapshots, spool-aware material costing, historical print-job failure rates, and multi-axis profitability metrics.
 - `done` **Phase 1: AI Design Trend Scout — Database & Foundation** — Created `TrendSnapshot` and `TrendReport` models, generated migration, set up `app/services/ai/trend_scout/` directory structure.
 - `done` **Phase 2: AI Design Trend Scout — Source Integrations (The Fetchers)** — Built base utility (`_base.py` with rate limiter, UA rotation, `ScoutResult`), API fetchers (MyMiniFactory, Etsy, BGG), scrapers (MakerWorld, Printables, Reddit). All return standardized `ScoutResult` dicts. Pipeline orchestration in `trend_scout/__init__.py`.

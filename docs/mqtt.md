@@ -1,4 +1,7 @@
 # Bambu Lab MQTT Printer Monitoring & Control
+
+> Status: future design proposal only. As of August 10, 2026, the MQTT printer-monitoring module described in this document is not implemented in the live DFPos codebase. Treat file paths, module-registry snippets, Celery tasks, templates, and migration names below as planning material rather than shipped functionality.
+
 ## Architecture Overview
 ┌─────────────────────┐     ┌────────────────────────────────────────┐
 │   Browser (UI)      │◄───►│  Flask + Flask-SocketIO                │

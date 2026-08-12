@@ -112,6 +112,38 @@ def test_public_cart_page_and_checkout_page_load(client, app):
     assert b"Finish your order" in checkout_response.data
 
 
+def test_public_home_page_avoids_unsupported_metrics(client):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert b"Ideas shared" not in response.data
+    assert b"Satisfaction %" not in response.data
+    assert b"Cities reached" not in response.data
+
+
+def test_public_policy_pages_use_real_copy(client):
+    expectations = {
+        "/privacy": [b"Information We Collect", b"How We Use Information"],
+        "/terms": [b"Orders and Payment", b"Custom and Personalized Work"],
+        "/shipping-policy": [b"Order Processing", b"Shipping and Delivery"],
+        "/accessibility": [b"Accessibility Commitment", b"Contact Us for Accessibility Help"],
+    }
+
+    placeholder_phrases = [
+        b"This placeholder page exists",
+        b"This is a placeholder",
+        b"will be drafted before the site launches publicly",
+    ]
+
+    for path, required_snippets in expectations.items():
+        response = client.get(path)
+        assert response.status_code == 200
+        for snippet in required_snippets:
+            assert snippet in response.data
+        for phrase in placeholder_phrases:
+            assert phrase not in response.data
+
+
 def test_public_checkout_venmo_creates_order_and_reserves_inventory(client, app):
     with app.app_context():
         product = _create_public_product_with_inventory()

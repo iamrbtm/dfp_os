@@ -10,7 +10,7 @@
     <div class="space-y-3">
       {% for item in command.timeline_events %}
         <div class="flex gap-3 rounded-lg border p-3" style="border-color: var(--color-border);">
-          <div class="mt-1 h-3 w-3 rounded-full {% if item.completed_at %}bg-green-500{% else %}bg-blue-500{% endif %}"></div>
+          <div class="mt-1 h-3 w-3 rounded-full" style="{% if item.completed_at %}background-color: var(--color-success);{% else %}background-color: var(--color-info);{% endif %}"></div>
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <h3 class="font-semibold">{{ item.title }}</h3>

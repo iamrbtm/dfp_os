@@ -59,6 +59,7 @@ def snapshot_listing(listing: MarketCatalogListing) -> dict:
         "category_id": listing.category_id,
         "is_recurring": listing.is_recurring,
         "rrule": listing.rrule,
+        "anchor_date": str(listing.anchor_date) if listing.anchor_date else None,
         "interest_level": listing.interest_level.value if listing.interest_level else None,
         "city": listing.city,
         "state": listing.state,
@@ -176,43 +177,44 @@ def _apply_listing_fields(
     listing: MarketCatalogListing,
     *,
     name: str,
-    category_id: int | None,
-    description: str | None,
-    website_url: str | None,
-    location_name: str | None,
-    address: str | None,
-    city: str | None,
-    state: str | None,
-    zip_code: str | None,
-    latitude: float | None,
-    longitude: float | None,
-    default_start_time,
-    default_end_time,
-    timezone: str | None,
-    is_recurring: bool,
-    rrule: str | None,
-    recurrence_description: str | None,
-    estimated_vendor_count: int | None,
-    estimated_attendee_count: int | None,
-    power_available: bool,
-    wifi_available: bool,
-    food_available: bool,
-    restrooms_available: bool,
-    indoor: bool,
-    covered_outdoor: bool,
-    outdoor: bool,
-    parking_notes: str | None,
-    organizer_name: str | None,
-    organizer_email: str | None,
-    organizer_phone: str | None,
-    application_url: str | None,
-    application_contact: str | None,
-    application_deadline_description: str | None,
-    booth_rules: str | None,
-    required_documents: str | None,
-    notes: str | None,
-    interest_level: str | None,
-    business_id: int | None,
+    category_id: int | None = None,
+    description: str | None = None,
+    website_url: str | None = None,
+    location_name: str | None = None,
+    address: str | None = None,
+    city: str | None = None,
+    state: str | None = None,
+    zip_code: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    default_start_time=None,
+    default_end_time=None,
+    timezone: str | None = None,
+    is_recurring: bool = False,
+    rrule: str | None = None,
+    recurrence_description: str | None = None,
+    anchor_date=None,
+    estimated_vendor_count: int | None = None,
+    estimated_attendee_count: int | None = None,
+    power_available: bool = False,
+    wifi_available: bool = False,
+    food_available: bool = False,
+    restrooms_available: bool = False,
+    indoor: bool = False,
+    covered_outdoor: bool = False,
+    outdoor: bool = False,
+    parking_notes: str | None = None,
+    organizer_name: str | None = None,
+    organizer_email: str | None = None,
+    organizer_phone: str | None = None,
+    application_url: str | None = None,
+    application_contact: str | None = None,
+    application_deadline_description: str | None = None,
+    booth_rules: str | None = None,
+    required_documents: str | None = None,
+    notes: str | None = None,
+    interest_level: str | None = None,
+    business_id: int | None = None,
 ) -> None:
     listing.name = name.strip()
     listing.category_id = category_id
@@ -233,6 +235,7 @@ def _apply_listing_fields(
     listing.recurrence_description = recurrence_description or (
         humanize_rrule(rrule) if rrule else None
     )
+    listing.anchor_date = anchor_date or None
     listing.estimated_vendor_count = estimated_vendor_count
     listing.estimated_attendee_count = estimated_attendee_count
     listing.power_available = bool(power_available)
@@ -258,6 +261,12 @@ def _apply_listing_fields(
         except ValueError:
             listing.interest_level = MarketInterestLevel.WATCHING
     listing.business_id = business_id
+
+    # For one-off markets, the next occurrence always mirrors the anchor date
+    # so the detail page, listing list, and book flow all surface the
+    # current value. This refreshes stale pointers when the anchor is edited.
+    if not listing.is_recurring and listing.anchor_date:
+        listing.next_occurrence_date = listing.anchor_date
 
 
 def _replace_booth_tiers(listing: MarketCatalogListing, tiers: list[dict]) -> None:

@@ -363,7 +363,7 @@ def retire_current_gcode_assets(
         )
         .update(
             {ProductModelAsset.is_current: False},
-        synchronize_session="fetch",
+            synchronize_session="fetch",
         )
     )
     product.gcode_path = None

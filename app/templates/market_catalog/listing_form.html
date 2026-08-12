@@ -52,15 +52,168 @@
           <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.default_end_time.label.text }}</label>{{ form.default_end_time(class="app-input mt-1") }}</div>
           <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.timezone.label.text }}</label>{{ form.timezone(class="app-input mt-1") }}</div>
         </div>
-        <label class="inline-flex items-center gap-2 text-sm" style="color: var(--color-text);">
-          {{ form.is_recurring(class="rounded") }} {{ form.is_recurring.label.text }}
-        </label>
-        <div>
-          <label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.rrule.label.text }}</label>
-          {{ form.rrule(class="app-input mt-1 font-mono text-xs", rows=2, placeholder="FREQ=YEARLY;BYMONTH=10;BYDAY=SA;BYSETPOS=3") }}
-          <p class="text-xs mt-1" style="color: var(--color-text-muted);">Examples: <code>FREQ=YEARLY;BYMONTH=10;BYDAY=SA;BYSETPOS=3</code> (3rd Saturday of October), <code>FREQ=YEARLY;BYMONTH=7;BYMONTHDAY=4</code> (July 4th), <code>FREQ=MONTHLY;BYDAY=SU;BYSETPOS=1</code> (1st Sunday monthly).</p>
+
+        <div data-rw-wizard data-preview-url="{{ url_for('market_catalog.recurrence_preview') }}">
+          {# Real WTForms fields — rendered exactly once so each name is unique #}
+          <div hidden>
+            {{ form.recurrence_weekday }}
+            {{ form.recurrence_nth }}
+            {{ form.recurrence_month }}
+            {{ form.recurrence_day }}
+            {{ form.recurrence_start_month }}
+            {{ form.recurrence_end_month }}
+            {{ form.recurrence_until }}
+            {{ form.recurrence_anchor }}
+            {{ form.recurrence_limit_months }}
+            {{ form.rrule }}
+          </div>
+
+          <div class="flex flex-wrap gap-2" role="tablist" aria-label="Recurrence type">
+            <button type="button" class="app-btn app-btn-primary text-sm" data-rw-tab="one_off" aria-selected="true">One-off date</button>
+            <button type="button" class="app-btn app-btn-secondary text-sm" data-rw-tab="fixed_day_of_month" aria-selected="false">Fixed date</button>
+            <button type="button" class="app-btn app-btn-secondary text-sm" data-rw-tab="nth_weekday_of_month" aria-selected="false">Nth weekday</button>
+            <button type="button" class="app-btn app-btn-secondary text-sm" data-rw-tab="weekly" aria-selected="false">Weekly</button>
+          </div>
+
+          <div data-rw-panel="one_off" class="space-y-3 mt-4">
+            <div class="sm:max-w-xs">
+              <label class="block text-sm font-medium" style="color: var(--color-text);">One-time date</label>
+              <input type="date" class="app-input mt-1" data-rw-input="anchor">
+              {% for e in form.recurrence_anchor.errors %}<p class="text-xs mt-1" style="color: #b91c1c;">{{ e }}</p>{% endfor %}
+              <p class="text-xs mt-1" style="color: var(--color-text-muted);">A single market with no recurrence.</p>
+            </div>
+          </div>
+
+          <div data-rw-panel="fixed_day_of_month" class="space-y-3 mt-4" hidden>
+            <div class="grid gap-4 sm:grid-cols-2 sm:max-w-md">
+              <div>
+                <label class="block text-sm font-medium" style="color: var(--color-text);">Month</label>
+                <select class="app-input mt-1" data-rw-input="month">
+                  <option value="1">January</option><option value="2">February</option>
+                  <option value="3">March</option><option value="4">April</option>
+                  <option value="5">May</option><option value="6">June</option>
+                  <option value="7">July</option><option value="8">August</option>
+                  <option value="9">September</option><option value="10">October</option>
+                  <option value="11">November</option><option value="12">December</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium" style="color: var(--color-text);">Day of Month</label>
+                <input type="number" min="1" max="31" class="app-input mt-1" data-rw-input="day">
+              </div>
+            </div>
+            <p class="text-xs" style="color: var(--color-text-muted);">Same day every year, e.g. July 4th.</p>
+            <div class="sm:max-w-xs">
+              <label class="block text-sm font-medium" style="color: var(--color-text);">Stop After</label>
+              <input type="date" class="app-input mt-1" data-rw-input="until">
+              <p class="text-xs mt-1" style="color: var(--color-text-muted);">Optional hard stop date.</p>
+            </div>
+          </div>
+
+          <div data-rw-panel="nth_weekday_of_month" class="space-y-3 mt-4" hidden>
+            <div class="grid gap-4 sm:grid-cols-3 sm:max-w-lg">
+              <div>
+                <label class="block text-sm font-medium" style="color: var(--color-text);">Month</label>
+                <select class="app-input mt-1" data-rw-input="month">
+                  <option value="1">January</option><option value="2">February</option>
+                  <option value="3">March</option><option value="4">April</option>
+                  <option value="5">May</option><option value="6">June</option>
+                  <option value="7">July</option><option value="8">August</option>
+                  <option value="9">September</option><option value="10">October</option>
+                  <option value="11">November</option><option value="12">December</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium" style="color: var(--color-text);">Occurrence</label>
+                <select class="app-input mt-1" data-rw-input="nth">
+                  <option value="1">1st</option><option value="2">2nd</option>
+                  <option value="3">3rd</option><option value="4">4th</option>
+                  <option value="5">5th</option><option value="-1">Last</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium" style="color: var(--color-text);">Weekday</label>
+                <select class="app-input mt-1" data-rw-input="weekday">
+                  <option value="MO">Monday</option><option value="TU">Tuesday</option>
+                  <option value="WE">Wednesday</option><option value="TH">Thursday</option>
+                  <option value="FR">Friday</option><option value="SA">Saturday</option>
+                  <option value="SU">Sunday</option>
+                </select>
+              </div>
+            </div>
+            <p class="text-xs" style="color: var(--color-text-muted);">e.g. 5th Monday of June, or 3rd Saturday of October.</p>
+            <div class="sm:max-w-xs">
+              <label class="block text-sm font-medium" style="color: var(--color-text);">Stop After</label>
+              <input type="date" class="app-input mt-1" data-rw-input="until">
+              <p class="text-xs mt-1" style="color: var(--color-text-muted);">Optional hard stop date.</p>
+            </div>
+          </div>
+
+          <div data-rw-panel="weekly" class="space-y-3 mt-4" hidden>
+            <div class="grid gap-4 sm:grid-cols-2 sm:max-w-md">
+              <div>
+                <label class="block text-sm font-medium" style="color: var(--color-text);">Weekday</label>
+                <select class="app-input mt-1" data-rw-input="weekday">
+                  <option value="MO">Monday</option><option value="TU">Tuesday</option>
+                  <option value="WE">Wednesday</option><option value="TH">Thursday</option>
+                  <option value="FR">Friday</option><option value="SA">Saturday</option><option value="SU">Sunday</option>
+                </select>
+              </div>
+              <label class="inline-flex items-end gap-2 text-sm pb-2" style="color: var(--color-text);">
+                <input type="checkbox" class="rounded" data-rw-input="limit_months"> Limit to months
+              </label>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2 sm:max-w-md" data-rw-month-window hidden>
+              <div>
+                <label class="block text-sm font-medium" style="color: var(--color-text);">Start Month</label>
+                <select class="app-input mt-1" data-rw-input="start_month">
+                  <option value="1">January</option><option value="2">February</option>
+                  <option value="3">March</option><option value="4">April</option>
+                  <option value="5">May</option><option value="6">June</option>
+                  <option value="7">July</option><option value="8">August</option>
+                  <option value="9">September</option><option value="10">October</option>
+                  <option value="11">November</option><option value="12">December</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium" style="color: var(--color-text);">End Month</label>
+                <select class="app-input mt-1" data-rw-input="end_month">
+                  <option value="1">January</option><option value="2">February</option>
+                  <option value="3">March</option><option value="4">April</option>
+                  <option value="5">May</option><option value="6">June</option>
+                  <option value="7">July</option><option value="8">August</option>
+                  <option value="9">September</option><option value="10">October</option>
+                  <option value="11">November</option><option value="12">December</option>
+                </select>
+              </div>
+            </div>
+            <p class="text-xs" style="color: var(--color-text-muted);">e.g. every Saturday from March to October.</p>
+            <div class="sm:max-w-xs">
+              <label class="block text-sm font-medium" style="color: var(--color-text);">Stop After</label>
+              <input type="date" class="app-input mt-1" data-rw-input="until">
+              <p class="text-xs mt-1" style="color: var(--color-text-muted);">Optional hard stop date.</p>
+            </div>
+          </div>
+
+          <label class="inline-flex items-center gap-2 text-sm mt-4" style="color: var(--color-text);">
+            {{ form.is_recurring(class="rounded") }} {{ form.is_recurring.label.text }}
+          </label>
         </div>
-        <div><label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.recurrence_description.label.text }}</label>{{ form.recurrence_description(class="app-input mt-1", placeholder="3rd Saturday in October") }}</div>
+
+        <div class="rounded p-4 space-y-1" style="background: var(--color-bg-muted);">
+          <p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--color-text-muted);">Preview</p>
+          <p id="rw-human" class="text-sm font-medium" style="color: var(--color-text);">One-off market (no recurrence).</p>
+          <p id="rw-next" class="text-sm" style="color: var(--color-text-muted);">—</p>
+        </div>
+
+        <details data-rw-advanced>
+          <summary class="text-sm cursor-pointer" style="color: var(--color-link);">Advanced: edit raw RRULE</summary>
+          <div class="mt-2">
+            <label class="block text-sm font-medium" style="color: var(--color-text);">{{ form.rrule.label.text }}</label>
+            <textarea id="rw-advanced-rrule" class="app-input mt-1 font-mono text-xs" rows="2" placeholder="FREQ=YEARLY;BYMONTH=10;BYDAY=SA;BYSETPOS=3"></textarea>
+            <p class="text-xs mt-1" style="color: var(--color-text-muted);">Editing here switches to manual RRULE mode. The wizard will not overwrite it until you change a wizard option.</p>
+          </div>
+        </details>
       </div>
 
       <div class="app-card p-6 space-y-4">
@@ -143,22 +296,305 @@
   {% block scripts %}
   <script>
     (function() {
+      // --- Booth tier rows ---
       const container = document.getElementById('tier-rows');
       const addBtn = document.getElementById('add-tier');
-      if (!container || !addBtn) return;
-      function bindRemove(row) {
-        const btn = row.querySelector('.remove-tier');
-        if (btn) btn.addEventListener('click', () => row.remove());
+      if (container && addBtn) {
+        function bindRemove(row) {
+          const btn = row.querySelector('.remove-tier');
+          if (btn) btn.addEventListener('click', () => row.remove());
+        }
+        container.querySelectorAll('.tier-row').forEach(bindRemove);
+        addBtn.addEventListener('click', () => {
+          const tpl = container.querySelector('.tier-row');
+          if (!tpl) return;
+          const clone = tpl.cloneNode(true);
+          clone.querySelectorAll('input').forEach(i => i.value = '');
+          container.appendChild(clone);
+          bindRemove(clone);
+        });
       }
-      container.querySelectorAll('.tier-row').forEach(bindRemove);
-      addBtn.addEventListener('click', () => {
-        const tpl = container.querySelector('.tier-row');
-        if (!tpl) return;
-        const clone = tpl.cloneNode(true);
-        clone.querySelectorAll('input').forEach(i => i.value = '');
-        container.appendChild(clone);
-        bindRemove(clone);
+
+      // --- Recurrence wizard ---
+      // Visible panel inputs are plain HTML (data-rw-input); they sync into the
+      // real hidden WTForms fields (one per name) so no field name is duplicated.
+      const wizard = document.querySelector('[data-rw-wizard]');
+      if (!wizard) return;
+
+      const previewUrl = wizard.getAttribute('data-preview-url');
+      const form = wizard.closest('form');
+
+      const FIELD_FOR = {
+        anchor: 'recurrence_anchor',
+        month: 'recurrence_month',
+        day: 'recurrence_day',
+        nth: 'recurrence_nth',
+        weekday: 'recurrence_weekday',
+        start_month: 'recurrence_start_month',
+        end_month: 'recurrence_end_month',
+        until: 'recurrence_until',
+        limit_months: 'recurrence_limit_months'
+      };
+
+      const patternField = form.elements['recurrence_pattern'];
+      const overrideField = form.elements['recurrence_override'];
+      const rruleField = form.elements['rrule'];
+      const isRecurringField = form.elements['is_recurring'];
+      const humanEl = document.getElementById('rw-human');
+      const nextEl = document.getElementById('rw-next');
+      const monthWindowEl = wizard.querySelector('[data-rw-month-window]');
+      const advancedDetails = wizard.querySelector('[data-rw-advanced]');
+      const advancedTextarea = document.getElementById('rw-advanced-rrule');
+
+      const tabButtons = wizard.querySelectorAll('[data-rw-tab]');
+      const panels = wizard.querySelectorAll('[data-rw-panel]');
+
+      let previewTimer = null;
+
+      const TAB_DEFAULTS = {
+        'fixed_day_of_month': { month: '7', day: '4' },
+        'nth_weekday_of_month': { month: '10', nth: '3', weekday: 'SA' },
+        'weekly': { weekday: 'SA' },
+        'one_off': {}
+      };
+
+      function realElFor(key) { return form.elements[FIELD_FOR[key]]; }
+
+      function writeReal(key, value) {
+        const el = realElFor(key);
+        if (!el) return;
+        if (el.type === 'checkbox') {
+          el.checked = !!(value) && value !== '0' && value !== '' && value !== 'false';
+        } else {
+          el.value = value;
+        }
+      }
+
+      function updateMonthWindowVisibility() {
+        const limitEl = wizard.querySelector('[data-rw-panel="weekly"] [data-rw-input="limit_months"]');
+        if (monthWindowEl && limitEl) monthWindowEl.hidden = !limitEl.checked;
+      }
+
+      function applyDefaults(name) {
+        const defaults = TAB_DEFAULTS[name] || {};
+        Object.keys(defaults).forEach(function(key) {
+          const el = realElFor(key);
+          if (el && (el.value === '' || el.value === null || el.value === undefined)) {
+            el.value = defaults[key];
+          }
+        });
+      }
+
+      function syncVisibleFromReal(name) {
+        wizard.querySelectorAll('[data-rw-panel="' + name + '"] [data-rw-input]').forEach(function(el) {
+          const key = el.getAttribute('data-rw-input');
+          const real = realElFor(key);
+          if (!real) return;
+          if (el.type === 'checkbox') {
+            el.checked = real.type === 'checkbox' ? real.checked : (!!(real.value) && real.value !== '0');
+          } else {
+            el.value = real.value || '';
+          }
+        });
+      }
+
+      function setTab(name) {
+        tabButtons.forEach(function(btn) {
+          const active = btn.getAttribute('data-rw-tab') === name;
+          btn.classList.toggle('app-btn-primary', active);
+          btn.classList.toggle('app-btn-secondary', !active);
+          btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        panels.forEach(function(panel) {
+          panel.hidden = panel.getAttribute('data-rw-panel') !== name;
+        });
+        patternField.value = name;
+        applyDefaults(name);
+        syncVisibleFromReal(name);
+        updateMonthWindowVisibility();
+        if (isRecurringField) isRecurringField.checked = name !== 'one_off';
+        updatePreview();
+      }
+
+      tabButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          setTab(btn.getAttribute('data-rw-tab'));
+        });
       });
+
+      function collectWizardFields() {
+        const result = {};
+        const names = [
+          'recurrence_pattern', 'recurrence_override', 'recurrence_weekday',
+          'recurrence_nth', 'recurrence_month', 'recurrence_day',
+          'recurrence_start_month', 'recurrence_end_month', 'recurrence_until',
+          'recurrence_anchor', 'recurrence_limit_months', 'rrule'
+        ];
+        names.forEach(function(name) {
+          const el = form.elements[name];
+          if (!el) return;
+          if (el.type === 'checkbox') {
+            result[name] = el.checked ? '1' : '';
+          } else {
+            result[name] = el.value;
+          }
+        });
+        return result;
+      }
+
+      function updatePreview() {
+        const payload = collectWizardFields();
+        payload.recurrence_pattern = patternField.value;
+        const body = new URLSearchParams();
+        Object.keys(payload).forEach(function(key) {
+          if (payload[key] !== null && payload[key] !== undefined) {
+            body.append(key, payload[key]);
+          }
+        });
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(function() {
+          fetch(previewUrl, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': form.elements.csrf_token ? form.elements.csrf_token.value : '' },
+            body: body
+          })
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            if (data.error) {
+              humanEl.textContent = data.error;
+              nextEl.textContent = '—';
+              return;
+            }
+            humanEl.textContent = data.human || '—';
+            if (data.next_two && data.next_two.length) {
+              const fmt = data.next_two.map(function(d) {
+                const parts = d.split('-');
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return months[parseInt(parts[1], 10) - 1] + ' ' + parseInt(parts[2], 10) + ', ' + parts[0];
+              });
+              nextEl.textContent = 'Next dates: ' + fmt.join(' · ');
+            } else {
+              nextEl.textContent = data.human === 'One-off market (no recurrence).'
+                ? 'One-time only' : 'No upcoming dates';
+            }
+            if (overrideField.value === '0') {
+              rruleField.value = data.rrule || '';
+            }
+          })
+          .catch(function() {
+            nextEl.textContent = 'Preview unavailable';
+          });
+        }, 250);
+      }
+
+      // Sync visible panel inputs -> hidden real fields, then refresh preview.
+      wizard.querySelectorAll('[data-rw-input]').forEach(function(el) {
+        const key = el.getAttribute('data-rw-input');
+        function pushToReal() {
+          const value = el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value;
+          writeReal(key, value);
+          if (key === 'limit_months') updateMonthWindowVisibility();
+          if (overrideField) overrideField.value = '0';
+          if (isRecurringField) isRecurringField.checked = patternField.value !== 'one_off';
+          updatePreview();
+        }
+        el.addEventListener('change', pushToReal);
+        el.addEventListener('input', function() {
+          if (['checkbox', 'select-one', 'date', 'number', 'text'].includes(el.type)) pushToReal();
+        });
+      });
+
+      // Advanced raw RRULE editing -> drives the hidden real rrule field.
+      if (rruleField && advancedTextarea) {
+        advancedTextarea.value = rruleField.value || '';
+      }
+      if (advancedTextarea) {
+        advancedTextarea.addEventListener('input', function() {
+          if (rruleField) rruleField.value = advancedTextarea.value;
+          if (overrideField) overrideField.value = '1';
+          updatePreview();
+        });
+      }
+      if (advancedDetails) {
+        advancedDetails.addEventListener('toggle', function() {
+          if (advancedDetails.open) {
+            if (overrideField) overrideField.value = '1';
+            if (rruleField && advancedTextarea) advancedTextarea.value = rruleField.value || '';
+          }
+        });
+      }
+
+      // --- Initial state: prefill wizard from an existing RRULE ---
+      function parseRrule(str) {
+        if (!str || !str.trim()) return null;
+        let cleaned = str.trim().toUpperCase();
+        if (cleaned.indexOf('RRULE:') === 0) cleaned = cleaned.slice(6);
+        const parts = {};
+        cleaned.split(';').forEach(function(tok) {
+          const i = tok.indexOf('=');
+          if (i > 0) parts[tok.slice(0, i)] = tok.slice(i + 1);
+        });
+        return parts;
+      }
+
+      function setRealToValue(name, value) {
+        const el = form.elements[name];
+        if (!el || !el.options) return;
+        for (const opt of el.options) {
+          if (opt.value === String(value)) { el.value = String(value); return; }
+        }
+      }
+
+      function untilToDateInput(raw) {
+        if (!raw) return '';
+        let cleaned = String(raw).toUpperCase();
+        if (cleaned.indexOf('T') > -1) cleaned = cleaned.slice(0, cleaned.indexOf('T'));
+        if (cleaned.length !== 8) return '';
+        return cleaned.slice(0,4) + '-' + cleaned.slice(4,6) + '-' + cleaned.slice(6,8);
+      }
+
+      const INITIAL_PATTERN = (patternField && patternField.value) ? patternField.value : 'one_off';
+      const parts = rruleField ? parseRrule(rruleField.value) : null;
+
+      if (parts && parts.FREQ) {
+        if (parts.FREQ === 'YEARLY' && parts.BYMONTH && parts.BYMONTHDAY) {
+          setTab('fixed_day_of_month');
+          setRealToValue('recurrence_month', parts.BYMONTH);
+          writeReal('day', parts.BYMONTHDAY);
+        } else if (parts.FREQ === 'YEARLY' && parts.BYMONTH && parts.BYDAY && parts.BYSETPOS) {
+          setTab('nth_weekday_of_month');
+          setRealToValue('recurrence_month', parts.BYMONTH);
+          setRealToValue('recurrence_nth', parts.BYSETPOS);
+          const dayCode = parts.BYDAY.replace(/^[0-9+\-]+/, '').toUpperCase();
+          setRealToValue('recurrence_weekday', dayCode);
+        } else if (parts.FREQ === 'WEEKLY' && parts.BYDAY) {
+          setTab('weekly');
+          const dayCode = parts.BYDAY.replace(/^[0-9+\-]+/, '').toUpperCase();
+          setRealToValue('recurrence_weekday', dayCode);
+          if (parts.BYMONTH) {
+            const months = parts.BYMONTH.split(',').map(function(m){ return parseInt(m,10); });
+            const lmReal = form.elements['recurrence_limit_months'];
+            if (lmReal) lmReal.checked = true;
+            setRealToValue('recurrence_start_month', months[0]);
+            setRealToValue('recurrence_end_month', months[months.length - 1]);
+            if (!(months.length > 1 && months.every(function(m, i){ return i === 0 || m === months[i-1] + 1; }))) {
+              // Non-contiguous (e.g. Nov-Feb) window: keep raw RRULE as source of truth.
+              if (overrideField) overrideField.value = '1';
+            }
+          }
+        } else {
+          // Unsupported pattern -> manual mode.
+          if (overrideField) overrideField.value = '1';
+        }
+        if (parts.UNTIL) writeReal('until', untilToDateInput(parts.UNTIL));
+        if (isRecurringField) isRecurringField.checked = true;
+      } else {
+        setTab(INITIAL_PATTERN);
+      }
+
+      // Refresh visible inputs from the (possibly just-set) real field values.
+      syncVisibleFromReal(patternField.value);
+      updateMonthWindowVisibility();
     })();
   </script>
   {% endblock %}

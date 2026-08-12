@@ -177,19 +177,11 @@ def generate_hints(
     # Slow session at midpoint
     if market and market.start_time and market.end_time and market.event_date:
         now = datetime.now(UTC)
-        start_at = datetime.combine(market.event_date, market.start_time).replace(
-            tzinfo=UTC
-        )
-        close_at = datetime.combine(market.event_date, market.end_time).replace(
-            tzinfo=UTC
-        )
+        start_at = datetime.combine(market.event_date, market.start_time).replace(tzinfo=UTC)
+        close_at = datetime.combine(market.event_date, market.end_time).replace(tzinfo=UTC)
         total_duration = (close_at - start_at).total_seconds()
         elapsed = (now - start_at).total_seconds()
-        if (
-            total_duration > 0
-            and elapsed >= total_duration * 0.5
-            and summary["sale_count"] == 0
-        ):
+        if total_duration > 0 and elapsed >= total_duration * 0.5 and summary["sale_count"] == 0:
             candidates.append(
                 {
                     "key": "slow_session_midpoint",
@@ -231,9 +223,7 @@ def update_hint_status(
     hint.status = status
     hint.acted_at = datetime.now(UTC)
     if status == BoothHintStatus.SNOOZED:
-        snooze_minutes = int(
-            current_app.config.get("BOOTH_MODE_SNOOZE_MINUTES", 30)
-        )
+        snooze_minutes = int(current_app.config.get("BOOTH_MODE_SNOOZE_MINUTES", 30))
         hint.snoozed_until = datetime.now(UTC) + timedelta(minutes=snooze_minutes)
     db.session.add(hint)
     db.session.commit()
@@ -260,9 +250,7 @@ def top_sellers(session_id: int, limit: int = 8) -> list[dict]:
         .join(PosSaleItem.sale)
         .filter(
             PosSaleItem.product_id.is_not(None),
-            PosSaleItem.sale.has(
-                pos_session_id=session_id, status=PosSaleStatus.COMPLETED
-            ),
+            PosSaleItem.sale.has(pos_session_id=session_id, status=PosSaleStatus.COMPLETED),
         )
         .group_by(PosSaleItem.product_id)
         .order_by(func.sum(PosSaleItem.quantity).desc())
@@ -335,9 +323,7 @@ def _top_selling_product(session: PosSession) -> Product | None:
         .join(PosSaleItem.sale)
         .filter(
             PosSaleItem.product_id.is_not(None),
-            PosSaleItem.sale.has(
-                pos_session_id=session.id, status=PosSaleStatus.COMPLETED
-            ),
+            PosSaleItem.sale.has(pos_session_id=session.id, status=PosSaleStatus.COMPLETED),
         )
         .group_by(PosSaleItem.product_id)
         .order_by(func.sum(PosSaleItem.quantity).desc())

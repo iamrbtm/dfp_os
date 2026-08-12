@@ -85,6 +85,17 @@
 }
 
 /* --- Form inputs --- */
+input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]),
+textarea,
+select {
+  background-color: var(--color-input-bg);
+  color: var(--color-input-text);
+  border: 1px solid var(--color-input-border);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-input-placeholder);
+}
 .app-input {
   width: 100%;
   background-color: var(--color-input-bg);
@@ -187,6 +198,111 @@
 }
 .app-table tr.selected td {
   background-color: var(--color-table-selected);
+}
+.app-table tr.app-table-row-warning td {
+  background-color: var(--color-warning-bg);
+}
+.shrinkage-warning {
+  color: var(--color-danger);
+}
+
+/* --- Default dashboard table styling (theme-aware) --- */
+.app-shell table {
+  color: var(--color-text);
+}
+.app-shell table tbody td {
+  color: var(--color-text);
+}
+.app-shell table tbody td a {
+  color: var(--color-link);
+}
+.app-shell table tbody td a:hover {
+  color: var(--color-link-hover);
+}
+.app-shell table tbody td .text-gray-500,
+.app-shell table tbody td .text-gray-400 {
+  color: var(--color-text-muted);
+}
+.app-shell table thead th {
+  color: var(--color-text-muted);
+}
+.app-shell table h1,
+.app-shell table h2,
+.app-shell table h3 {
+  color: var(--color-text);
+}
+
+/* Force dark text on white cards in dark mode */
+.app-shell .bg-white {
+  color: var(--color-text);
+}
+.app-shell .bg-white table {
+  color: var(--color-text);
+}
+.app-shell .bg-white table tbody td {
+  color: var(--color-text);
+}
+
+/* Text colors mapped to theme tokens for legacy Tailwind classes in dark mode */
+[data-theme="dfp-dracula"] .text-gray-900,
+[data-theme="dfp-dracula"] .text-gray-800,
+[data-theme="dfp-dracula"] .text-gray-700,
+[data-theme="dfp-dracula"] .text-gray-600,
+[data-theme="dfp-dracula"] .text-gray-500,
+[data-theme="dfp-dracula"] .text-gray-400,
+[data-theme="dfp-one-dark-pro"] .text-gray-900,
+[data-theme="dfp-one-dark-pro"] .text-gray-800,
+[data-theme="dfp-one-dark-pro"] .text-gray-700,
+[data-theme="dfp-one-dark-pro"] .text-gray-600,
+[data-theme="dfp-one-dark-pro"] .text-gray-500,
+[data-theme="dfp-one-dark-pro"] .text-gray-400,
+[data-theme="dfp-github-dark"] .text-gray-900,
+[data-theme="dfp-github-dark"] .text-gray-800,
+[data-theme="dfp-github-dark"] .text-gray-700,
+[data-theme="dfp-github-dark"] .text-gray-600,
+[data-theme="dfp-github-dark"] .text-gray-500,
+[data-theme="dfp-github-dark"] .text-gray-400,
+[data-theme="dfp-tokyo-night"] .text-gray-900,
+[data-theme="dfp-tokyo-night"] .text-gray-800,
+[data-theme="dfp-tokyo-night"] .text-gray-700,
+[data-theme="dfp-tokyo-night"] .text-gray-600,
+[data-theme="dfp-tokyo-night"] .text-gray-500,
+[data-theme="dfp-tokyo-night"] .text-gray-400,
+[data-theme="dfp-catppuccin-mocha"] .text-gray-900,
+[data-theme="dfp-catppuccin-mocha"] .text-gray-800,
+[data-theme="dfp-catppuccin-mocha"] .text-gray-700,
+[data-theme="dfp-catppuccin-mocha"] .text-gray-600,
+[data-theme="dfp-catppuccin-mocha"] .text-gray-500,
+[data-theme="dfp-catppuccin-mocha"] .text-gray-400,
+[data-theme="dfp-dudefish-dark"] .text-gray-900,
+[data-theme="dfp-dudefish-dark"] .text-gray-800,
+[data-theme="dfp-dudefish-dark"] .text-gray-700,
+[data-theme="dfp-dudefish-dark"] .text-gray-600,
+[data-theme="dfp-dudefish-dark"] .text-gray-500,
+[data-theme="dfp-dudefish-dark"] .text-gray-400 {
+  color: var(--color-text);
+}
+[data-theme="dfp-dracula"] .text-gray-500,
+[data-theme="dfp-one-dark-pro"] .text-gray-500,
+[data-theme="dfp-github-dark"] .text-gray-500,
+[data-theme="dfp-tokyo-night"] .text-gray-500,
+[data-theme="dfp-catppuccin-mocha"] .text-gray-500,
+[data-theme="dfp-dudefish-dark"] .text-gray-500,
+[data-theme="dfp-dracula"] .text-gray-400,
+[data-theme="dfp-one-dark-pro"] .text-gray-400,
+[data-theme="dfp-github-dark"] .text-gray-400,
+[data-theme="dfp-tokyo-night"] .text-gray-400,
+[data-theme="dfp-catppuccin-mocha"] .text-gray-400,
+[data-theme="dfp-dudefish-dark"] .text-gray-400 {
+  color: var(--color-text-muted);
+}
+[data-theme="dfp-dracula"] .text-navy,
+[data-theme="dfp-one-dark-pro"] .text-navy,
+[data-theme="dfp-github-dark"] .text-navy,
+[data-theme="dfp-tokyo-night"] .text-navy,
+[data-theme="dfp-catppuccin-mocha"] .text-navy,
+[data-theme="dfp-dudefish-dark"] .text-navy {
+  color: var(--color-text);
 }
 
 /* --- Badges --- */

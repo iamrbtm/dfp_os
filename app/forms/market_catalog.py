@@ -6,6 +6,7 @@ from wtforms import (
     BooleanField,
     DateField,
     DecimalField,
+    HiddenField,
     IntegerField,
     SelectField,
     StringField,
@@ -22,6 +23,11 @@ from app.models import (
     MarketCategory,
     MarketInterestLevel,
     MarketStatus,
+)
+from app.services.market_catalog_recurrence import (
+    MONTH_CHOICES,
+    NTH_CHOICES,
+    WEEKDAY_CHOICES,
 )
 
 
@@ -97,9 +103,51 @@ class MarketCatalogListingForm(FlaskForm):
     # Recurrence
     is_recurring = BooleanField("Recurring")
     rrule = TextAreaField("RRULE", validators=[Optional()])
-    recurrence_description = StringField(
+    recurrence_description = HiddenField(
         "Recurrence Description", validators=[Optional(), Length(max=255)]
     )
+
+    # Recurrence wizard payload
+    recurrence_pattern = HiddenField(default="one_off")
+    recurrence_override = HiddenField(default="0")
+    recurrence_weekday = SelectField(
+        "Weekday",
+        choices=WEEKDAY_CHOICES,
+        validators=[Optional()],
+    )
+    recurrence_nth = SelectField(
+        "Occurrence",
+        choices=[(str(n), label) for n, label in NTH_CHOICES],
+        coerce=lambda x: int(x) if x not in (None, "") else None,
+        validators=[Optional()],
+    )
+    recurrence_month = SelectField(
+        "Month",
+        choices=[(str(n), name) for n, name in MONTH_CHOICES],
+        coerce=lambda x: int(x) if x not in (None, "") else None,
+        validators=[Optional()],
+    )
+    recurrence_day = IntegerField(
+        "Day of Month",
+        validators=[Optional(), NumberRange(min=1, max=31)],
+    )
+    recurrence_start_month = SelectField(
+        "Start Month",
+        choices=[("", "—")] + [(str(n), name) for n, name in MONTH_CHOICES],
+        coerce=lambda x: int(x) if x not in (None, "") else None,
+        validators=[Optional()],
+        default="",
+    )
+    recurrence_end_month = SelectField(
+        "End Month",
+        choices=[("", "—")] + [(str(n), name) for n, name in MONTH_CHOICES],
+        coerce=lambda x: int(x) if x not in (None, "") else None,
+        validators=[Optional()],
+        default="",
+    )
+    recurrence_until = DateField("Stop After", format="%Y-%m-%d", validators=[Optional()])
+    recurrence_anchor = DateField("Anchor Date", format="%Y-%m-%d", validators=[Optional()])
+    recurrence_limit_months = BooleanField("Limit to months")
 
     # Scale
     estimated_vendor_count = IntegerField(
@@ -148,6 +196,25 @@ class MarketCatalogListingForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.category_id.choices = _category_choices()
+        obj = kwargs.get("obj")
+        # Only fall back to the stored anchor on GET. On POST the field has
+        # already been populated from ``request.form`` and must NOT be
+        # clobbered by the previous value on the listing.
+        if (
+            obj is not None
+            and getattr(obj, "anchor_date", None) is not None
+            and self.recurrence_anchor.data is None
+        ):
+            self.recurrence_anchor.data = obj.anchor_date
+
+    def validate(self, extra_validators=None):
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        pattern = (self.recurrence_pattern.data or "one_off").strip().lower()
+        if pattern == "one_off" and not self.recurrence_anchor.data:
+            self.recurrence_anchor.errors.append("Pick a one-time date for this market.")
+            return False
+        return True
 
     def apply(self, listing: MarketCatalogListing) -> MarketCatalogListing:
         listing.name = self.name.data.strip()
@@ -167,6 +234,7 @@ class MarketCatalogListingForm(FlaskForm):
         listing.is_recurring = bool(self.is_recurring.data)
         listing.rrule = self.rrule.data or None
         listing.recurrence_description = self.recurrence_description.data or None
+        listing.anchor_date = self.recurrence_anchor.data or None
         listing.estimated_vendor_count = self.estimated_vendor_count.data
         listing.estimated_attendee_count = self.estimated_attendee_count.data
         listing.power_available = bool(self.power_available.data)
@@ -190,6 +258,19 @@ class MarketCatalogListingForm(FlaskForm):
         listing.notes = self.notes.data or None
         listing.interest_level = MarketInterestLevel(self.interest_level.data)
         return listing
+
+    def wizard_data(self) -> dict:
+        return {
+            "pattern": self.recurrence_pattern.data or "one_off",
+            "weekday": self.recurrence_weekday.data or None,
+            "nth": self.recurrence_nth.data,
+            "month": self.recurrence_month.data,
+            "day_of_month": self.recurrence_day.data,
+            "start_month": self.recurrence_start_month.data,
+            "end_month": self.recurrence_end_month.data,
+            "until_date": self.recurrence_until.data,
+            "dtstart": self.recurrence_anchor.data,
+        }
 
 
 class BookFromCatalogForm(FlaskForm):

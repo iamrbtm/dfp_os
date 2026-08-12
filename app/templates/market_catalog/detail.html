@@ -36,8 +36,16 @@
         <div class="app-card p-6">
           <h2 class="text-lg font-semibold" style="color: var(--color-text);">Recurrence &amp; Dates</h2>
           <dl class="mt-3 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Recurrence</dt><dd class="mt-0.5" style="color: var(--color-text);">{{ humanize(listing.rrule) }}</dd></div>
-            <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Next Occurrence</dt><dd class="mt-0.5 font-medium" style="color: var(--color-text);">{{ format_date(listing.next_occurrence_date) }}</dd></div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Recurrence</dt>
+              <dd class="mt-0.5" style="color: var(--color-text);">{{ listing.recurrence_description or humanize(listing.rrule) }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">
+                {% if not listing.is_recurring and listing.anchor_date %}Market Date{% else %}Next Occurrence{% endif %}
+              </dt>
+              <dd class="mt-0.5 font-medium" style="color: var(--color-text);">{{ format_date(listing.next_occurrence_date or listing.anchor_date) }}</dd>
+            </div>
             <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Last Occurrence</dt><dd class="mt-0.5" style="color: var(--color-text-muted);">{{ format_date(listing.last_occurrence_date) }}</dd></div>
             <div><dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Default Hours</dt><dd class="mt-0.5" style="color: var(--color-text);">{{ format_time(listing.default_start_time) }} – {{ format_time(listing.default_end_time) }}</dd></div>
           </dl>

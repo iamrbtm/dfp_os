@@ -1152,3 +1152,10 @@
   --radius-lg: 18px;
   --radius-xl: 24px;
 }
+
+/* Warning surfaces are bright (amber/yellow) in every theme, so a single
+   near-black text token is readable on all of them. */
+:root,
+[data-theme] {
+  --color-warning-text: #1a1a1a;
+}

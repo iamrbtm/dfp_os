@@ -19,6 +19,11 @@ from app.forms.market import (
     MarketPrepTaskForm,
     MarketTimelineEventForm,
 )
+from app.forms.market_catalog import (
+    BookFromCatalogForm,
+    MarketCatalogListingForm,
+    MarketCategoryForm,
+)
 from app.forms.customer import CustomerForm
 from app.forms.fleet import AMSUnitForm, PrinterForm
 from app.forms.inventory import (
@@ -76,6 +81,9 @@ __all__ = [
     "MarketPackingListForm",
     "MarketPrepTaskForm",
     "MarketTimelineEventForm",
+    "BookFromCatalogForm",
+    "MarketCatalogListingForm",
+    "MarketCategoryForm",
     "OrderForm",
     "OrderItemForm",
     "PaymentForm",

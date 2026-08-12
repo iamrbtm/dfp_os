@@ -143,6 +143,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_tokens_bp)
     app.register_blueprint(feature_flags_bp)
     register_api_blueprints(api)
+    _exempt_api_from_csrf(app)
     _register_redoc_view(app)
 
 
@@ -150,6 +151,25 @@ def _register_redoc_view(app: Flask) -> None:
     @app.route("/api/redoc")
     def redoc_ui():
         return render_template("api/redoc.html")
+
+
+def _exempt_api_from_csrf(app: Flask) -> None:
+    """CSRF does not apply to JSON API endpoints authenticated by bearer tokens.
+
+    flask-smorest builds views dynamically via MethodView, so per-method
+    ``csrf.exempt`` decorators never reach the view function CSRFProtect
+    actually protects. Walking ``app.url_map`` and exempting every endpoint
+    under ``/api/`` covers every API route in one place.
+    """
+    from app.extensions import csrf
+
+    for rule in app.url_map.iter_rules():
+        if not str(rule.rule).startswith("/api/"):
+            continue
+        view = app.view_functions.get(rule.endpoint)
+        if view is None:
+            continue
+        csrf.exempt(view)
 
 
 def register_healthcheck(app: Flask) -> None:
@@ -224,7 +244,7 @@ def register_security_headers(app: Flask) -> None:
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
             "img-src 'self' data: blob: https:; "
             "font-src 'self' https://fonts.gstatic.com; "
@@ -478,4 +498,9 @@ def register_context_processors(app: Flask) -> None:
             ctx["active_theme"] = current_user.theme_slug
         else:
             ctx["active_theme"] = app.config.get("DEFAULT_THEME", "dfp-github-light")
+        from app.theme_registry import THEME_MAP
+
+        active_slug = ctx["active_theme"]
+        active_theme_obj = THEME_MAP.get(active_slug)
+        ctx["active_theme_mode"] = active_theme_obj.mode if active_theme_obj else "light"
         return ctx

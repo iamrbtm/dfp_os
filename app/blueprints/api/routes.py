@@ -726,7 +726,16 @@ def _apply_market_category(instance: MarketCategory, data: dict):
 
 
 def _apply_market_catalog_listing(instance: MarketCatalogListing, data: dict):
+    from app.services.business import get_default_business
+    from app.utils import slugify
+
     instance.name = data["name"].strip()
+    if not getattr(instance, "slug", None) or getattr(instance, "slug", None) == "":
+        instance.slug = slugify(data.get("slug", "")) or slugify(instance.name)
+    if not instance.business_id:
+        business = get_default_business()
+        if business is not None:
+            instance.business_id = business.id
     instance.category_id = data.get("category_id")
     instance.description = data.get("description")
     instance.website_url = data.get("website_url")
@@ -743,6 +752,9 @@ def _apply_market_catalog_listing(instance: MarketCatalogListing, data: dict):
     instance.is_recurring = bool(data.get("is_recurring", False))
     instance.rrule = data.get("rrule")
     instance.recurrence_description = data.get("recurrence_description")
+    instance.anchor_date = data.get("anchor_date")
+    if not instance.is_recurring and instance.anchor_date and not instance.next_occurrence_date:
+        instance.next_occurrence_date = instance.anchor_date
     instance.estimated_vendor_count = data.get("estimated_vendor_count")
     instance.estimated_attendee_count = data.get("estimated_attendee_count")
     instance.power_available = bool(data.get("power_available", False))
