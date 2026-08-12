@@ -11,6 +11,7 @@ from app.services.admin_mutations import (
     snapshot_instance,
     update_resource as update_admin_resource,
 )
+from app.services.ai_gateway import list_kilo_model_options
 from app.services.settings import get_all_settings, seed_default_settings, set_setting
 from app.module_registry import module_statuses
 from app.services.business import ensure_default_business
@@ -31,6 +32,7 @@ def settings_list():
         "settings/settings.html",
         setting_groups=_group_settings(settings),
         secret_setting_keys=SECRET_SETTING_KEYS,
+        kilo_model_options=list_kilo_model_options(),
     )
 
 

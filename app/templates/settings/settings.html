@@ -6,6 +6,11 @@
 
   <form method="post" action="{{ url_for('settings.settings_update') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <datalist id="kilo-model-options">
+      {% for model in kilo_model_options %}
+      <option value="{{ model.id }}" label="{% if model.is_free %}Free - {% endif %}{{ model.name }}"></option>
+      {% endfor %}
+    </datalist>
 
     {% for group_name, group_settings in setting_groups.items() %}
     <div class="app-card p-6 mb-6">
@@ -28,6 +33,9 @@
             <option value="kilo" {% if setting.value == 'kilo' %}selected{% endif %}>Kilo Gateway</option>
             {% if setting.key == 'receipt_ai_provider' %}<option value="ollama" {% if setting.value == 'ollama' %}selected{% endif %}>Ollama</option>{% endif %}
           </select>
+          {% elif setting.key.startswith('kilo_model') %}
+          <input type="search" name="{{ setting.key }}" value="{{ setting.value }}" class="app-input" list="kilo-model-options" placeholder="Search Kilo models">
+          <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Free models are listed first, followed by paid models alphabetically. You can still type a model ID manually.</p>
           {% elif setting.type == 'boolean' %}
           <select name="{{ setting.key }}" class="app-select">
             <option value="true" {% if setting.value == 'true' %}selected{% endif %}>Enabled</option>
