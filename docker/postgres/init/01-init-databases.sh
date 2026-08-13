@@ -15,3 +15,14 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE DATABASE dfpos_test;
     GRANT ALL PRIVILEGES ON DATABASE dfpos_test TO ${POSTGRES_USER};
 EOSQL
+
+# Allow LAN clients (192.168.0.0/16) to authenticate with the
+# SCRAM-SHA-256 password stored in pg_authid. Only affects fresh
+# database initialisation; for existing databases, edit
+# /var/lib/postgresql/data/pg_hba.conf directly (or recreate the
+# data volume).
+{
+    echo ""
+    echo "# LAN clients (added by docker/postgres/init)"
+    echo "host    all             all             192.168.0.0/16         scram-sha-256"
+} >> /var/lib/postgresql/data/pg_hba.conf
