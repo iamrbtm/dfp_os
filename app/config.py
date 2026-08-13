@@ -164,6 +164,22 @@ class Config:
         os.getenv("AUDIT_LOG_FAIL_CLOSED_FOR_FINANCIAL_ACTIONS"),
         AUDIT_LOG_FAIL_CLOSED,
     )
+    AUDIT_OUTBOX_KEY = os.getenv("AUDIT_OUTBOX_KEY", "audit:outbox")
+    AUDIT_OUTBOX_MAX_SIZE = int(os.getenv("AUDIT_OUTBOX_MAX_SIZE", "100000"))
+    AUDIT_OUTBOX_FLUSH_INTERVAL_SECONDS = int(
+        os.getenv("AUDIT_OUTBOX_FLUSH_INTERVAL_SECONDS", "30")
+    )
+    AUDIT_OUTBOX_BATCH_SIZE = int(os.getenv("AUDIT_OUTBOX_BATCH_SIZE", "200"))
+    AUDIT_OUTBOX_DLQ_PATH = os.getenv(
+        "AUDIT_OUTBOX_DLQ_PATH",
+        os.path.join(
+            os.getenv("UPLOAD_FOLDER", "uploads"),
+            "audit-queue",
+        ),
+    )
+    AUDIT_REDIS_URL = os.getenv(
+        "AUDIT_REDIS_URL", os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    )
     ALLOW_NEGATIVE_INVENTORY = _as_bool(os.getenv("ALLOW_NEGATIVE_INVENTORY"), False)
     # Issue 4 — inline (synchronous) analysis is dev/test only. Never enable in prod.
     ANALYSIS_SYNC_MODE = _as_bool(os.getenv("ANALYSIS_SYNC_MODE"), False)
