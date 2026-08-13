@@ -159,6 +159,47 @@ curl -X POST -H "Authorization: Bearer $AUDIT_LOG_TOKEN" \
 `/audit-logs/` lists recent events. Click any row to see the full
 event detail (every field, before/after state, metadata, chain hash).
 
+#### The chain timeline at the bottom of the detail page
+
+Below the **Integrity chain** card, the detail page renders a
+**vertical timeline of every event for the same record**. The
+current event is highlighted with a `YOU ARE HERE` badge. Each
+event in the timeline is a clickable row that takes you to its own
+detail page.
+
+**Reading the chain-status badge on each event:**
+
+| Badge | Meaning |
+|---|---|
+| (no badge) | Link to the previous event in the timeline is intact. |
+| `FIRST` | This is the first event in this record's timeline. |
+| `BROKEN CHAIN` | This event's `previous_hash` does not match the prior event's `hash`. The card shows the expected vs actual hash so you can decide what changed. |
+| `YOU ARE HERE` | The event whose detail page you're currently viewing. |
+
+**Scope toggle:** the timeline has a small switcher in the top-right
+of the card. `Just this record` (default) shows only events for the
+exact `entity_type` + `entity_id` of the current event. `All <type> events`
+shows every event with the same `entity_type` across all records.
+The switcher uses HTMX so the toggle does not reload the page.
+
+**Navigating the chain:** click any dot in the timeline and you jump
+to that event's detail page. The current event is always marked, and
+each previous event's badge tells you whether the chain is intact.
+
+**When the chain is broken:** don't panic. The system still works —
+the chain-status badges just tell you that one event in the history
+was modified after it was written. To confirm the extent of the
+damage, hit the API directly:
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+  -d '{}' http://audit-log:8090/api/v1/audit-events/verify-chain
+```
+
+The response tells you whether the chain is valid and, if not, the id
+of the first broken event. From there, walk forward manually using
+the timeline UI to see what came after.
+
 ## Operational runbook
 
 ### Check the outbox size
