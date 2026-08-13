@@ -92,6 +92,14 @@ services:
 
   redis:
     image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - "everysec"
+      - --maxmemory-policy
+      - "noeviction"
     expose:
       - "6379"
     volumes:
