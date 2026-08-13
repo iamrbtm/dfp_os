@@ -31,3 +31,4 @@ celerybeat-schedule*
 !Not_Needed/
 !Not_Needed/**
 Not_Needed/local-tooling/
+services/audit-log/**/._.DS_Store

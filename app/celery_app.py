@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 from celery import Celery as _Celery
+from celery.signals import worker_ready
 from flask import Flask
 
 from celery.schedules import crontab
+
+logger = logging.getLogger(__name__)
 
 celery = _Celery(
     "dfp_os",
@@ -68,7 +73,34 @@ def make_celery(app: Flask | None = None) -> _Celery:
                     "schedule": float(app.config.get("AUDIT_OUTBOX_FLUSH_INTERVAL_SECONDS", 30)),
                     "options": {"queue": "celery"},
                 },
+                "audit-deadman-replay": {
+                    "task": "app.tasks.audit_outbox.replay_deadman",
+                    "schedule": float(app.config.get("AUDIT_OUTBOX_REPLAY_INTERVAL_SECONDS", 60)),
+                    "options": {"queue": "celery"},
+                },
             },
         )
 
     return celery
+
+
+@worker_ready.connect
+def _replay_audit_deadman_on_worker_ready(sender=None, **kwargs) -> None:
+    """Move any deadman'd audit events back onto the Redis outbox as
+    soon as the worker is ready to receive tasks.
+
+    The web container also calls ``replay_deadman`` at startup, but
+    if the worker comes up first (e.g. a deploy only restarts the
+    worker) the deadman files would otherwise sit idle until the
+    next web restart. Doing this in the worker means a single
+    container restart is enough to recover after an outage.
+    """
+    try:
+        from app.tasks.audit_outbox import replay_deadman_task
+
+        # ``countdown=2`` lets the worker settle into its ready state
+        # before the task starts.
+        replay_deadman_task.apply_async(countdown=2)
+        logger.info("scheduled audit deadman replay on worker_ready")
+    except Exception as exc:
+        logger.warning("could not schedule audit deadman replay: %s", exc)

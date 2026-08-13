@@ -32,3 +32,21 @@ def flush_audit_outbox() -> dict[str, int]:
                 result.get("remaining", 0),
             )
         return result
+
+
+@celery.task(name="app.tasks.audit_outbox.replay_deadman")
+def replay_deadman_task() -> int:
+    """Move deadman'd audit events from disk back onto the Redis outbox.
+
+    Scheduled once at worker startup so events captured while Redis
+    was also down are not stranded on the persistent volume.
+    """
+    from app import create_app
+    from app.services import audit_outbox
+
+    app = create_app()
+    with app.app_context():
+        replayed = audit_outbox.replay_deadman()
+        if replayed:
+            logger.info("audit deadman replay moved %d events back onto Redis", replayed)
+        return replayed

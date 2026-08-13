@@ -21,7 +21,8 @@ test-results/
 .codex/
 .superpowers/
 docs/
-scripts/
+scripts/sync-labels.sh
+scripts/worker_init.sh
 erank results/
 Not_Needed/
 pmp/

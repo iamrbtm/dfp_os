@@ -26,7 +26,12 @@ COPY --chown=appuser:appuser gunicorn.conf.py ./
 RUN mkdir -p uploads instance \
     && chown -R appuser:appuser uploads instance
 
-USER appuser
+COPY --chown=root:root scripts/docker_entrypoint.sh /usr/local/bin/docker_entrypoint.sh
+RUN chmod +x /usr/local/bin/docker_entrypoint.sh
+
+# The entrypoint runs as root so it can chown bind-mounted volumes
+# (which Docker creates as root) before the app process starts.
+ENTRYPOINT ["/usr/local/bin/docker_entrypoint.sh"]
 EXPOSE 5000
 CMD ["gunicorn", "--config", "gunicorn.conf.py", "app:create_app()"]
 

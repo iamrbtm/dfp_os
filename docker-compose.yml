@@ -15,6 +15,7 @@ x-env-app: &env-app
   AUDIT_OUTBOX_KEY: ${AUDIT_OUTBOX_KEY:-audit:outbox}
   AUDIT_OUTBOX_MAX_SIZE: ${AUDIT_OUTBOX_MAX_SIZE:-100000}
   AUDIT_OUTBOX_FLUSH_INTERVAL_SECONDS: ${AUDIT_OUTBOX_FLUSH_INTERVAL_SECONDS:-30}
+  AUDIT_OUTBOX_REPLAY_INTERVAL_SECONDS: ${AUDIT_OUTBOX_REPLAY_INTERVAL_SECONDS:-60}
   AUDIT_OUTBOX_BATCH_SIZE: ${AUDIT_OUTBOX_BATCH_SIZE:-200}
   AUDIT_OUTBOX_DLQ_PATH: ${AUDIT_OUTBOX_DLQ_PATH:-uploads/audit-queue}
   FILE_STORAGE_BACKEND: ${FILE_STORAGE_BACKEND:-s3}
@@ -171,6 +172,7 @@ services:
       - "5000:5000"
     volumes:
       - receipt_uploads:/app/uploads/receipts
+      - audit_queue:/app/uploads/audit-queue
     depends_on:
       <<: *depends-core
       slicer:
@@ -210,6 +212,7 @@ services:
       <<: *env-app
     volumes:
       - receipt_uploads:/app/uploads/receipts
+      - audit_queue:/app/uploads/audit-queue
     depends_on:
       <<: *depends-core
       slicer:
@@ -246,6 +249,7 @@ services:
       <<: *env-app
     volumes:
       - receipt_uploads:/app/uploads/receipts
+      - audit_queue:/app/uploads/audit-queue
     depends_on:
       <<: *depends-core
       slicer:
@@ -398,5 +402,6 @@ volumes:
   postgres_data:
   redis_data:
   receipt_uploads:
+  audit_queue:
   seaweedfs_data:
   tailwind_node_modules:
