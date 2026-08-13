@@ -173,12 +173,54 @@ def register_blueprints(app: Flask) -> None:
     register_api_blueprints(api)
     _exempt_api_from_csrf(app)
     _register_redoc_view(app)
+    _register_api_audit_hook(app)
 
 
 def _register_redoc_view(app: Flask) -> None:
     @app.route("/api/redoc")
     def redoc_ui():
         return render_template("api/redoc.html")
+
+
+def _register_api_audit_hook(app: Flask) -> None:
+    """Emit a generic ``api.<verb>`` audit event for every state-changing
+    call into the ``/api/v1/`` API surface.
+
+    flask-smorest's ``ResourceCollection`` / ``ResourceItem`` views all
+    delegate mutation to the audited service layer, so a per-route
+    ``@audited`` decorator would be redundant. This hook covers the
+    whole API surface in one place and lets the coverage test confirm
+    the API is audited without inspecting every ResourceCollection
+    source file.
+    """
+
+    @app.after_request
+    def _audit_api_request(response):
+        from app.services.audit import record_audit_event
+
+        try:
+            if not request.path.startswith("/api/v1/"):
+                return response
+            if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+                return response
+            # Skip the static API metadata endpoints.
+            if request.path.endswith(("/openapi.json", "/swagger.json", "/api-docs.json")):
+                return response
+            resource = request.path.removeprefix("/api/v1/").split("/", 1)[0] or "api"
+            record_audit_event(
+                action=f"api.{request.method.lower()}",
+                entity_type=resource,
+                entity_id=None,
+                metadata={
+                    "path": request.path,
+                    "status_code": response.status_code,
+                    "endpoint": request.endpoint,
+                },
+                source_module=__name__,
+            )
+        except Exception as exc:
+            app.logger.warning("api audit hook failed: %s", exc)
+        return response
 
 
 def _exempt_api_from_csrf(app: Flask) -> None:

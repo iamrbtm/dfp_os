@@ -61,8 +61,6 @@ def audited(
                 if entity_id_arg:
                     entity_id = kwargs.get(entity_id_arg)
                     if entity_id is None and args:
-                        # The decorator sits on a method whose first arg
-                        # is ``self``; try positional after self.
                         try:
                             entity_id = args[1]
                         except IndexError:
@@ -87,6 +85,7 @@ def audited(
                 logger.warning("audited decorator failed to emit %s: %s", action, exc)
             return response
 
+        wrapper._audited = True  # type: ignore[attr-defined]
         return wrapper
 
     return decorator
