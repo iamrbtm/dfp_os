@@ -24,7 +24,9 @@
       <tr class="cursor-pointer" onclick="window.location='{{ url_for('audit_logs.detail', event_id=event.id, **request.args) }}'">
         <td>{{ event.occurred_at }}</td>
         <td><a class="app-link" href="{{ url_for('audit_logs.detail', event_id=event.id, **request.args) }}" onclick="event.stopPropagation()">{{ event.action }}</a></td>
-        <td>{{ event.entity_type }}{% if event.entity_id %} #{{ event.entity_id }}{% endif %}</td>
+        <td>
+          {{ event.entity_type }}{% if event.entity_id %} <a class="app-link font-mono" href="{{ url_for('audit_logs.detail', event_id=event.id, **request.args) }}#audit-timeline" onclick="event.stopPropagation()">#{{ event.entity_id }} →</a>{% endif %}
+        </td>
         <td>{{ event.actor_display_name or event.actor_id or "—" }}</td>
         <td>{{ event.source_module or "—" }}</td>
       </tr>

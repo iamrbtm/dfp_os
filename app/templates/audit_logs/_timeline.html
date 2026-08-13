@@ -1,0 +1,115 @@
+{# Vertical timeline of audit events for a single record. Rendered
+   below the integrity-chain card on the audit event detail page.
+   Each event is a row with a connector line on the left, a dot
+   for the event, and the action / actor / timestamp. The current
+   event is highlighted; broken-chain links show a red marker. #}
+{% set current_event_id = event.id|string %}
+{% set has_timeline = timeline|length > 0 %}
+<section
+    class="app-card p-5"
+    id="audit-timeline"
+    aria-labelledby="audit-timeline-heading"
+>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+            <h2 id="audit-timeline-heading" class="text-base font-semibold" style="color: var(--color-text);">
+                Timeline
+            </h2>
+            <p class="mt-1 text-xs" style="color: var(--color-text-muted);">
+                {% if has_timeline %}
+                    {{ timeline_total }} event{% if timeline_total != 1 %}s{% endif %} for
+                    <span class="font-mono">{{ entity_type }}{% if entity_id %}#{{ entity_id }}{% endif %}</span>
+                    {% if timeline_truncated %}<span class="ml-1">(showing latest {{ timeline_total }})</span>{% endif %}
+                {% else %}
+                    No events for this record.
+                {% endif %}
+            </p>
+        </div>
+        {% if entity_type %}
+        <div class="flex items-center gap-1 rounded-md p-1 text-xs" style="background-color: var(--color-table-header);">
+            {% set other_scope = 'type' if scope == 'record' else 'record' %}
+            {% set other_label = 'All ' ~ entity_type ~ ' events' if other_scope == 'type' else 'Just this record' %}
+            <a
+                class="px-2 py-1 rounded {% if scope == 'record' %}font-semibold{% endif %}"
+                style="{% if scope == 'record' %}background-color: var(--color-card); color: var(--color-text);{% else %}color: var(--color-text-muted);{% endif %}"
+                href="{{ url_for('audit_logs.detail', event_id=current_event_id, scope='record') }}"
+                hx-get="{{ url_for('audit_logs.detail', event_id=current_event_id, scope='record', partial='timeline') }}"
+                hx-target="#audit-timeline"
+                hx-swap="outerHTML"
+                hx-push-url="true"
+            >Just this record</a>
+            <a
+                class="px-2 py-1 rounded {% if scope == 'type' %}font-semibold{% endif %}"
+                style="{% if scope == 'type' %}background-color: var(--color-card); color: var(--color-text);{% else %}color: var(--color-text-muted);{% endif %}"
+                href="{{ url_for('audit_logs.detail', event_id=current_event_id, scope='type') }}"
+                hx-get="{{ url_for('audit_logs.detail', event_id=current_event_id, scope='type', partial='timeline') }}"
+                hx-target="#audit-timeline"
+                hx-swap="outerHTML"
+                hx-push-url="true"
+            >All {{ entity_type }} events</a>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if has_timeline %}
+    <ol class="relative mt-6 space-y-1 border-l-2 pl-6" style="border-color: var(--color-table-border);">
+        {% for ev in timeline %}
+            {% set is_current = ev.id == current_event_id %}
+            {% set status = ev.chain_status or "ok" %}
+            <li class="relative pb-4">
+                <span
+                    class="absolute -left-[34px] flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold"
+                    style="{% if status == 'broken' %}background-color: var(--color-warning-bg); color: var(--color-link); border: 2px solid var(--color-link);{% elif is_current %}background-color: var(--color-link); color: var(--color-card); border: 2px solid var(--color-link);{% else %}background-color: var(--color-card); color: var(--color-text-muted); border: 2px solid var(--color-table-border);{% endif %}"
+                    title="{% if status == 'head' %}First event in this record's timeline{% elif status == 'ok' %}Chain OK{% elif status == 'broken' %}Chain broken: previous_hash mismatch{% endif %}"
+                >
+                    {% if status == 'broken' %}!{% elif status == 'head' %}1{% else %}·{% endif %}
+                </span>
+                <a
+                    href="{{ url_for('audit_logs.detail', event_id=ev.id) }}"
+                    class="block rounded-md p-3 transition-colors"
+                    style="{% if is_current %}background-color: var(--color-table-header); border: 1px solid var(--color-link);{% else %}border: 1px solid transparent;{% endif %}"
+                >
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono text-sm font-semibold" style="color: var(--color-text);">{{ ev.action }}</span>
+                            {% if is_current %}<span class="rounded px-2 py-0.5 text-[10px] font-semibold" style="background-color: var(--color-link); color: var(--color-card);">YOU ARE HERE</span>{% endif %}
+                            {% if status == 'broken' %}<span class="rounded px-2 py-0.5 text-[10px] font-semibold" style="background-color: var(--color-link); color: var(--color-card);">BROKEN CHAIN</span>{% elif status == 'head' %}<span class="rounded px-2 py-0.5 text-[10px] font-semibold" style="background-color: var(--color-table-header); color: var(--color-text-muted);">FIRST</span>{% endif %}
+                        </div>
+                        <time class="text-xs" style="color: var(--color-text-muted);">{{ ev.occurred_at }}</time>
+                    </div>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style="color: var(--color-text-muted);">
+                        {% if ev.actor_display_name or ev.actor_id %}
+                            <span>by {{ ev.actor_display_name or ev.actor_id }}{% if ev.actor_type %} <span class="font-mono">({{ ev.actor_type }})</span>{% endif %}</span>
+                        {% endif %}
+                        {% if ev.entity_id and (ev.entity_id != entity_id or ev.entity_type != entity_type) %}
+                            <span class="font-mono">{{ ev.entity_type }}#{{ ev.entity_id }}</span>
+                        {% endif %}
+                        {% if ev.source_module %}
+                            <span class="font-mono">{{ ev.source_module }}</span>
+                        {% endif %}
+                    </div>
+                    {% if status == 'broken' %}
+                    <div class="mt-2 rounded-md p-2 text-xs" style="background-color: var(--color-warning-bg); color: var(--color-text);">
+                        <div class="font-semibold">Hash mismatch</div>
+                        <div class="mt-1 font-mono break-all">expected previous_hash = {{ ev.previous_hash or "(none)" }}</div>
+                        <div class="font-mono break-all">actual prior hash = {{ (timeline[loop.index0 - 1].hash if loop.index0 > 0 else "(no prior event in this view)") or "(none)" }}</div>
+                    </div>
+                    {% endif %}
+                </a>
+            </li>
+        {% endfor %}
+    </ol>
+    {% if timeline_truncated %}
+    <p class="mt-3 text-xs" style="color: var(--color-text-muted);">
+        Showing the most recent 200 events for this view. Use the
+        <a class="app-link" href="https://github.com/iamrbtm/dfp_os" target="_blank" rel="noopener">audit-log API</a>
+        to fetch a wider range.
+    </p>
+    {% endif %}
+    {% else %}
+    <p class="mt-3 text-sm" style="color: var(--color-text-muted);">
+        This event has no entity reference, or the audit-log service
+        is unreachable. The chain integrity card above still works.
+    </p>
+    {% endif %}
+</section>
