@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
 from app.config import settings
 from app.schemas import (
@@ -272,3 +273,34 @@ async def verify_chain_endpoint(body: VerifyChainRequest) -> VerifyChainResponse
         checked_count=result["checked_count"],
         first_invalid_event_id=result["first_invalid_event_id"],
     )
+
+
+class RebuildChainRequest(BaseModel):
+    tenant_id: str | None = None
+
+
+class RebuildChainResponse(BaseModel):
+    tenant_id: str | None
+    scanned: int
+    updated: int
+    started_at: str
+    finished_at: str
+
+
+@router.post("/audit-events/rebuild-chain")
+async def rebuild_chain_endpoint(
+    body: RebuildChainRequest,
+) -> RebuildChainResponse:
+    """Walk every event in chronological order and rewrite
+    ``previous_hash`` and ``hash`` so the chain is consistent.
+
+    Destructive: existing hashes change. Use this when the
+    ``verify-chain`` endpoint reports the chain is broken and the
+    audit-log entries themselves are trusted (the events are real,
+    only the hash linkage is wrong). Idempotent: re-running it on
+    an already-correct chain reports ``updated == 0``.
+    """
+    from app.services.audit_chain import rebuild_chain
+
+    result = await rebuild_chain(tenant_id=body.tenant_id)
+    return RebuildChainResponse(**result)

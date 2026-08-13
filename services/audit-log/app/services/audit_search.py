@@ -134,20 +134,37 @@ async def get_entity_timeline_with_chain(
     """Return every event for an entity, oldest first, annotated with
     ``chain_status`` so the UI can highlight broken links.
 
+    The chain is global (per tenant) and links every event to the
+    immediately-prior event by ``occurred_at``. From the entity's
+    perspective, two adjacent entity events may have unrelated
+    global events (other orders, other users) between them — that's
+    normal traffic, not a problem.
+
     ``chain_status`` is one of:
-      * ``"head"`` — this event has ``previous_hash is None`` (first event
-        in the chain, or first event after a gap).
-      * ``"ok"`` — this event's ``previous_hash`` matches the prior
-        event's ``hash`` (no break between them).
-      * ``"broken"`` — ``previous_hash`` is set but does not match the
-        prior event's hash (or there is no prior event but one is
-        expected). The UI should show both the expected and actual
-        hashes so an operator can decide what changed.
+
+      * ``"head"`` — the first event in this entity's timeline.
+      * ``"ok"`` — this event's ``previous_hash`` points at an event
+        that actually exists in the database. The "previous" event
+        may not be the prior event in the entity's view (it may be
+        any unrelated global event between this one and the prior
+        entity event); that's normal. The chain is only "ok" if the
+        referenced event is present.
+      * ``"broken"`` — the chain is broken. Either
+        ``previous_hash`` is null mid-chain, or it does not match
+        any event in the database. The UI surfaces both expected
+        and actual hashes so an operator can see what is missing.
+        This fires when a log was never recorded or was deleted
+        out from under the chain. The chain-rebuild admin action
+        fixes these.
 
     Events are returned in ascending ``occurred_at`` order (oldest
     first) so the timeline reads top-to-bottom in chronological
     order. Use ``offset`` to skip the first N events for pagination.
     """
+    from sqlalchemy import select as sa_select
+
+    from app.models import AuditEvent
+
     stmt: Select = (
         select(AuditEvent)
         .where(AuditEvent.entity_type == entity_type, AuditEvent.entity_id == entity_id)
@@ -166,27 +183,79 @@ async def get_entity_timeline_with_chain(
         result = await session.execute(stmt)
         events = list(result.scalars().all())
 
+        if not events:
+            return []
+
+        # For each event in the entity timeline, check whether the
+        # event referenced by ``previous_hash`` actually exists in
+        # the database. The chain is "ok" if and only if every
+        # previous_hash points at a real event — even if the
+        # referenced event is from a different entity (e.g. a user
+        # login) or hundreds of events apart in occurred_at. The
+        # chain is "broken" only if the referenced event does not
+        # exist (was never recorded, or was deleted) or if
+        # previous_hash is null mid-chain.
+        #
+        # We do this in a single query: SELECT id FROM audit_events
+        # WHERE hash IN (...event.previous_hash values...).
+        previous_hash_values = [e.previous_hash for e in events if e.previous_hash]
+        existing_hashes: set[str] = set()
+        if previous_hash_values:
+            existing_q = sa_select(AuditEvent.hash).where(AuditEvent.hash.in_(previous_hash_values))
+            if tenant_id is not None:
+                existing_q = existing_q.where(AuditEvent.tenant_id == tenant_id)
+            rows = (await session.execute(existing_q)).scalars().all()
+            existing_hashes = set(rows)
+
     annotated: list[dict[str, Any]] = []
     for i, event in enumerate(events):
         event_dict = _event_to_dict(event)
-        if i == 0:
-            # First event in this entity's timeline. The chain is
-            # global (per tenant), not per-entity, so a single-event
-            # timeline is always "head" even if previous_hash points
-            # to a different entity's last event.
-            event_dict["chain_status"] = "head"
-        else:
-            prev_hash = events[i - 1].hash
-            if event.previous_hash is None:
-                # A null previous_hash mid-chain means the writer was
-                # racing with the chain rebuild at startup — flag it.
-                event_dict["chain_status"] = "broken"
-            elif event.previous_hash != prev_hash:
-                event_dict["chain_status"] = "broken"
-            else:
-                event_dict["chain_status"] = "ok"
+        event_dict["chain_status"] = _classify_chain_status(
+            event=event,
+            prior_in_entity=events[i - 1] if i > 0 else None,
+            previous_event_exists=(event.previous_hash in existing_hashes if event.previous_hash else False),
+        )
         annotated.append(event_dict)
     return annotated
+
+
+def _classify_chain_status(
+    *,
+    event,
+    prior_in_entity,
+    previous_event_exists: bool,
+) -> str:
+    """Decide the chain_status for one event.
+
+    Three outcomes:
+
+      * ``"head"`` — first event in this entity's timeline.
+      * ``"ok"`` — this event's ``previous_hash`` points at an event
+        that exists in the database. The previous event may not be
+        the prior entity event (it may be any unrelated global
+        event between this one and the prior entity event); that's
+        normal traffic and the chain is still intact. This is the
+        rule that fixes the entity-#36 false-positive: the events
+        in that entity's timeline are far apart in the global
+        chain, but the prior events do exist somewhere, so the chain
+        is "ok".
+      * ``"broken"`` — the chain is broken. Either
+        ``previous_hash`` is null mid-chain, or it does not match
+        any event in the database. This is the rule that catches a
+        real integrity issue: a log that was never recorded, or one
+        that was deleted out from under the chain. The chain-rebuild
+        admin action fixes these.
+    """
+    if prior_in_entity is None:
+        return "head"
+
+    if event.previous_hash is None:
+        return "broken"
+
+    if not previous_event_exists:
+        return "broken"
+
+    return "ok"
 
 
 def _event_to_dict(event: AuditEvent) -> dict[str, Any]:
