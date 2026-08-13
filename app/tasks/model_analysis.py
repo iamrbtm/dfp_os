@@ -51,7 +51,9 @@ from app.services.storage import (
     converted_storage_key,
     delete_storage_reference,
     download_storage_bytes,
+    download_storage_to_file,
     gcode_storage_key,
+    hash_file_sha256,
     is_s3_reference,
     normalize_storage_filename,
     planned_storage_reference,
@@ -60,6 +62,7 @@ from app.services.storage import (
     storage_slug,
     upload_bytes_to_storage,
     upload_file_to_storage,
+    upload_stream_to_storage,
 )
 
 
@@ -237,11 +240,17 @@ def pack_product_model(
     if product is None:
         return task_envelope(False, error="Product not found")
     out_path: Path | None = None
+    pmp_tmp_dir: Path | None = None
     try:
         _record_pmp_step(
             self, product, actor_id, step="started", percent=5, message="PMP packing started"
         )
-        source_bytes = download_storage_bytes(source_reference)
+        pmp_tmp_dir = Path(tempfile.mkdtemp(prefix="dfp-pmp-src-"))
+        source_local = download_storage_to_file(
+            source_reference, pmp_tmp_dir / Path(source_name).name
+        )
+        source_size = source_local.stat().st_size
+        source_sha = hash_file_sha256(source_reference)
         _record_pmp_step(
             self,
             product,
@@ -267,7 +276,7 @@ def pack_product_model(
         bed_d = float(build_vol["y"]) + 14.0
 
         result = pack_model_bytes(
-            source_bytes,
+            str(source_local),
             source_name,
             target=None,
             spacing=2.0,
@@ -293,16 +302,17 @@ def pack_product_model(
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
         stem = normalize_storage_filename(Path(source_name).stem).rsplit(".", 1)[0]
         output_name = f"{stem}__packed-plate__{timestamp}-{uuid.uuid4().hex[:6]}.3mf"
-        output_bytes = out_path.read_bytes()
         bucket = current_app.config.get("PRODUCT_ASSETS_BUCKET", "products")
         local_root = current_app.config.get("PRODUCT_ASSETS_PATH", "uploads/products")
-        output_ref = upload_bytes_to_storage(
-            output_bytes,
-            bucket=bucket,
-            key=product_storage_key(product.id, output_name),
-            local_root=local_root,
-            content_type="application/vnd.ms-package.3dmanufacturing-3dmodel+xml",
-        )
+        output_key = product_storage_key(product.id, output_name)
+        with out_path.open("rb") as packed_stream:
+            output_ref, output_sha, output_size = upload_stream_to_storage(
+                packed_stream,
+                bucket=bucket,
+                key=output_key,
+                local_root=local_root,
+                content_type="application/vnd.ms-package.3dmanufacturing-3dmodel+xml",
+            )
         metadata = {
             "schema": "dfpos.pmp-packed-plate",
             "schema_version": "1.0",
@@ -311,8 +321,8 @@ def pack_product_model(
             "source": {
                 "filename": source_name,
                 "reference": source_reference,
-                "size_bytes": len(source_bytes),
-                "sha256": hashlib.sha256(source_bytes).hexdigest(),
+                "size_bytes": source_size,
+                "sha256": source_sha,
                 "format": result["source_format"],
             },
             "pmp": {
@@ -335,8 +345,8 @@ def pack_product_model(
             "output": {
                 "filename": output_name,
                 "reference": output_ref,
-                "size_bytes": len(output_bytes),
-                "sha256": hashlib.sha256(output_bytes).hexdigest(),
+                "size_bytes": output_size,
+                "sha256": output_sha,
             },
             "generated_by": actor_id,
         }
@@ -392,6 +402,8 @@ def pack_product_model(
     finally:
         if out_path is not None:
             shutil.rmtree(out_path.parent, ignore_errors=True)
+        if pmp_tmp_dir is not None:
+            shutil.rmtree(pmp_tmp_dir, ignore_errors=True)
 
 
 def _preferred_gcode_filename(product: Product, engine_key: str) -> str:
@@ -622,10 +634,10 @@ def analyze_product_model(self, product_id: int, run_id: int) -> dict:
         work_dir = tmp_dir
 
         if is_s3_reference(file_location):
-            data = download_storage_bytes(file_location)
             ext = Path(storage_reference_name(file_location)).suffix or ".stl"
-            model_path = tmp_dir / f"model{ext}"
-            model_path.write_bytes(data)
+            model_path = download_storage_to_file(
+                file_location, tmp_dir / f"model{ext}"
+            )
         else:
             model_path = Path(file_location)
 
@@ -999,9 +1011,9 @@ def convert_product_model_for_viewer(self, product_id: int) -> dict:
             return task_envelope(True, data={"converted_path": file_location})
 
         tmp_dir = Path(tempfile.mkdtemp(prefix="dfp-convert-"))
-        data = download_storage_bytes(file_location)
-        source_path = tmp_dir / f"source{ext}"
-        source_path.write_bytes(data)
+        source_path = download_storage_to_file(
+            file_location, tmp_dir / f"source{ext}"
+        )
 
         output_path = tmp_dir / "converted.glb"
         converted = convert_to_glb(source_path, output_path)

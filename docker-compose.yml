@@ -191,7 +191,7 @@ services:
   worker:
     image: dfpos-app:local
     init: true
-    mem_limit: 1024m
+    mem_limit: 4096m
     environment:
       <<: *env-app
     volumes:
@@ -200,7 +200,16 @@ services:
       <<: *depends-core
       slicer:
         condition: service_healthy
-    command: ["celery", "-A", "app.celery_app.celery", "worker", "--loglevel=info"]
+    command:
+      - celery
+      - -A
+      - app.celery_app.celery
+      - worker
+      - --loglevel=info
+      - --concurrency=2
+      - --max-tasks-per-child=8
+      - --without-mingle
+      - --without-gossip
     develop:
       watch:
         - path: ./app

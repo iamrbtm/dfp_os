@@ -216,6 +216,86 @@ def download_storage_bytes(reference: str) -> bytes:
     return Path(reference).read_bytes()
 
 
+def download_storage_to_file(
+    reference: str,
+    destination: str | Path,
+    *,
+    chunk_size: int = 1024 * 1024,
+) -> Path:
+    """Stream a storage object to ``destination`` in chunks (Issue 21).
+
+    Avoids loading the whole object into a Python ``bytes`` object. For local
+    storage the source is ``shutil.copyfileobj`` over the open handle; for S3
+    the ``boto3`` streaming body is drained in fixed-size chunks.
+    """
+    target = Path(destination)
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    if is_s3_reference(reference):
+        bucket, key = parse_s3_reference(reference)
+        try:
+            response = _s3_client().get_object(Bucket=bucket, Key=key)
+        except ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code")
+            if error_code in {"NoSuchBucket", "NoSuchKey", "404"}:
+                abort(404)
+            current_app.logger.exception("S3 object download failed for %s", reference)
+            raise
+        body = response["Body"]
+        try:
+            with target.open("wb") as out:
+                while True:
+                    chunk = body.read(chunk_size)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+        finally:
+            body.close()
+        return target
+
+    source = Path(reference)
+    with source.open("rb") as src, target.open("wb") as out:
+        shutil.copyfileobj(src, out, length=chunk_size)
+    return target
+
+
+def hash_file_sha256(
+    reference: str,
+    *,
+    chunk_size: int = 1024 * 1024,
+) -> str:
+    """Stream-hash a storage object without materializing it in memory."""
+    digest = hashlib.sha256()
+    if is_s3_reference(reference):
+        bucket, key = parse_s3_reference(reference)
+        try:
+            response = _s3_client().get_object(Bucket=bucket, Key=key)
+        except ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code")
+            if error_code in {"NoSuchBucket", "NoSuchKey", "404"}:
+                abort(404)
+            current_app.logger.exception("S3 object hash failed for %s", reference)
+            raise
+        body = response["Body"]
+        try:
+            while True:
+                chunk = body.read(chunk_size)
+                if not chunk:
+                    break
+                digest.update(chunk)
+        finally:
+            body.close()
+        return digest.hexdigest()
+
+    with Path(reference).open("rb") as src:
+        while True:
+            chunk = src.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def delete_storage_reference(reference: str | None) -> None:
     if not reference:
         return
