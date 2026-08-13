@@ -12,6 +12,7 @@ celery = _Celery(
         "app.tasks.cost_calculation",
         "app.tasks.trend_scout",
         "app.tasks.trend_calibration",
+        "app.tasks.audit_outbox",
     ],
 )
 
@@ -61,6 +62,11 @@ def make_celery(app: Flask | None = None) -> _Celery:
                     "task": "app.tasks.trend_calibration.calibrate_trend_scout",
                     "schedule": crontab(hour=5, minute=0, day_of_month=1),
                     "options": {"soft_time_limit": 600, "time_limit": 660},
+                },
+                "audit-outbox-flush": {
+                    "task": "app.tasks.audit_outbox.flush_outbox",
+                    "schedule": float(app.config.get("AUDIT_OUTBOX_FLUSH_INTERVAL_SECONDS", 30)),
+                    "options": {"queue": "celery"},
                 },
             },
         )

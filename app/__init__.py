@@ -101,6 +101,7 @@ def register_extensions(app: Flask) -> None:
 
     with app.app_context():
         bootstrap_object_storage()
+        _replay_audit_outbox(app)
 
     login_manager.login_view = "auth.login"
     login_manager.login_message_category = "warning"
@@ -110,6 +111,33 @@ def register_extensions(app: Flask) -> None:
         if not user_id.isdigit():
             return None
         return db.session.get(User, int(user_id))
+
+
+def _replay_audit_outbox(app: Flask) -> None:
+    """On every web-app boot, move deadman'd audit events back onto Redis
+    and try to deliver anything still queued. Failures are logged; the
+    Celery beat schedule will retry.
+    """
+    if not app.config.get("AUDIT_LOG_ENABLED"):
+        return
+    try:
+        from app.services import audit_outbox
+
+        replayed = audit_outbox.replay_deadman()
+        if replayed:
+            app.logger.info("audit deadman replayed %d events onto Redis", replayed)
+        # Fire a one-shot async flush via the worker process. If we are the
+        # web process this is a no-op (the task runs in the worker).
+        try:
+            from app.tasks.audit_outbox import flush_audit_outbox
+
+            flush_audit_outbox.apply_async(countdown=2)
+        except Exception:
+            # Broker may be briefly unavailable during boot. The next beat
+            # run will catch it.
+            pass
+    except Exception as exc:
+        app.logger.warning("audit outbox replay at startup failed: %s", exc)
 
 
 def register_blueprints(app: Flask) -> None:
