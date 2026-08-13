@@ -9,6 +9,7 @@ from app.extensions import db
 from app.models import FeatureFlag, UserRole
 from app.module_registry import module_statuses
 from app.services.audit import record_audit_event
+from app.utils.audit_events import AuditAction
 from app.utils.auth import roles_required
 
 
@@ -43,7 +44,7 @@ def toggle(flag_id: int):
     db.session.commit()
 
     record_audit_event(
-        action="feature_flag.toggled",
+        action=AuditAction.FEATURE_FLAG_CHANGED.value,
         entity_type="feature_flag",
         entity_id=flag.key,
         before_state=before_state,

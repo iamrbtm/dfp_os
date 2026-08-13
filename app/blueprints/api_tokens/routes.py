@@ -8,6 +8,8 @@ from app.blueprints.api_tokens import bp
 from app.extensions import db
 from app.models import ApiToken, UserRole
 from app.services.api_tokens import AVAILABLE_API_TOKEN_SCOPES, create_api_token, revoke_api_token
+from app.services.audit import record_audit_event
+from app.utils.audit_events import AuditAction
 from app.utils.auth import roles_required
 
 
@@ -61,6 +63,19 @@ def create_token():
             scopes=selected_scopes or None,
             expires_at=expires_at,
         )
+        record_audit_event(
+            action=AuditAction.API_TOKEN_CREATED.value,
+            entity_type="api_token",
+            entity_id=str(token.id),
+            after_state={
+                "name": token.name,
+                "scopes": sorted(token.scope_set)
+                if hasattr(token, "scope_set")
+                else list(token.scopes or []),
+                "expires_at": token.expires_at.isoformat() if token.expires_at else None,
+            },
+            source_module=__name__,
+        )
 
         return render_template("api_tokens/show.html", token=token, raw_token=raw_token)
 
@@ -88,5 +103,12 @@ def revoke_token(token_id: int):
         return redirect(url_for("api_tokens.list_tokens"))
 
     revoke_api_token(token, actor_id=current_user.id)
+    record_audit_event(
+        action=AuditAction.API_TOKEN_REVOKED.value,
+        entity_type="api_token",
+        entity_id=str(token.id),
+        before_state={"name": token.name, "is_active": token.is_active},
+        source_module=__name__,
+    )
     flash("API token revoked.", "success")
     return redirect(url_for("api_tokens.list_tokens"))

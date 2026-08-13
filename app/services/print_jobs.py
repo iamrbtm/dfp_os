@@ -4,6 +4,7 @@ from app.extensions import db
 from app.models import OrderItem, PrintJob, PrintJobStatus
 from app.services.admin_mutations import create_resource, snapshot_instance, update_resource
 from app.services.audit import record_audit_event
+from app.utils.audit_events import AuditAction
 
 
 def create_print_job(instance: PrintJob, *, actor_id: int | None = None) -> PrintJob:
@@ -28,7 +29,7 @@ def create_print_job_from_order_item(
     db.session.add(job)
     db.session.commit()
     record_audit_event(
-        action="print_job.created",
+        action=AuditAction.PRINT_JOB_CREATED.value,
         entity_type="print_job",
         entity_id=job.id,
         after_state={
@@ -64,14 +65,14 @@ def update_print_job_status(
     db.session.commit()
 
     action_map = {
-        PrintJobStatus.COMPLETED: "print_job.completed",
-        PrintJobStatus.FAILED: "print_job.failed",
-        PrintJobStatus.PRINTING: "print_job.status_changed",
-        PrintJobStatus.PAUSED: "print_job.status_changed",
-        PrintJobStatus.CANCELLED: "print_job.status_changed",
-        PrintJobStatus.QUEUED: "print_job.status_changed",
+        PrintJobStatus.COMPLETED: AuditAction.PRINT_JOB_COMPLETED.value,
+        PrintJobStatus.FAILED: AuditAction.PRINT_JOB_FAILED.value,
+        PrintJobStatus.PRINTING: AuditAction.PRINT_JOB_STATUS_CHANGED.value,
+        PrintJobStatus.PAUSED: AuditAction.PRINT_JOB_STATUS_CHANGED.value,
+        PrintJobStatus.CANCELLED: AuditAction.PRINT_JOB_STATUS_CHANGED.value,
+        PrintJobStatus.QUEUED: AuditAction.PRINT_JOB_STATUS_CHANGED.value,
     }
-    action = action_map.get(new_status, "print_job.status_changed")
+    action = action_map.get(new_status, AuditAction.PRINT_JOB_STATUS_CHANGED.value)
     record_audit_event(
         action=action,
         entity_type="print_job",

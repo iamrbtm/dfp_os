@@ -58,9 +58,11 @@ class AuditAction(str, Enum):
     # ── Inventory ───────────────────────────────────────────────────────
     INVENTORY_ADJUSTED = "inventory.adjusted"
     INVENTORY_TRANSFERRED = "inventory.transferred"
+    INVENTORY_TRANSFER_RECEIVED = "inventory.transfer_received"
     INVENTORY_DEDUCTED = "inventory.deducted"
     INVENTORY_RESERVED = "inventory.reserved"
     INVENTORY_RELEASED = "inventory.released"
+    INVENTORY_RETURNED = "inventory.returned"
 
     # ── Print jobs ──────────────────────────────────────────────────────
     PRINT_JOB_CREATED = "print_job.created"
@@ -130,8 +132,8 @@ class AuditAction(str, Enum):
     ANALYTICS_AI_INSIGHT_GENERATED = "analytics.ai_insight_generated"
 
     # ── Imports / exports / uploads ─────────────────────────────────────
-    CSV_IMPORTED = "csv.imported"
-    CSV_EXPORTED = "csv.exported"
+    CSV_IMPORT = "csv.import"
+    CSV_EXPORT = "csv.export"
     FILE_UPLOADED = "file.uploaded"
 
     # ── Catch-all helpers (use sparingly) ───────────────────────────────

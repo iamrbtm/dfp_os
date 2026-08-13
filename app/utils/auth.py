@@ -9,6 +9,7 @@ from flask_login import current_user
 from app.models import UserRole
 from app.services.api_tokens import authenticate_api_token
 from app.services.audit import record_audit_event
+from app.utils.audit_events import AuditAction
 from app.utils.rate_limit import client_key, is_limited
 
 
@@ -21,7 +22,7 @@ def roles_required(*allowed_roles: UserRole):
 
             if current_user.role not in allowed_roles:
                 record_audit_event(
-                    action="authorization.failed",
+                    action=AuditAction.FAILED_AUTHORIZATION.value,
                     entity_type="route",
                     entity_id=request.endpoint,
                     metadata={

@@ -24,6 +24,7 @@ from app.models.pos import (
     PosSessionStatus,
 )
 from app.services.audit import record_audit_event
+from app.utils.audit_events import AuditAction
 from app.services.internal_demand import record_demand_event
 from app.services.inventory import deduct_finished_goods, return_inventory
 
@@ -133,7 +134,7 @@ def open_session(
     db.session.add(session)
     db.session.commit()
     record_audit_event(
-        action="pos_session.opened",
+        action=AuditAction.POS_SESSION_OPENED.value,
         entity_type="pos_session",
         entity_id=session.id,
         after_state={
@@ -169,7 +170,7 @@ def close_session(
         session.notes = (session.notes or "") + f"\nClose notes: {notes}"
     db.session.commit()
     record_audit_event(
-        action="pos_session.closed",
+        action=AuditAction.POS_SESSION_CLOSED.value,
         entity_type="pos_session",
         entity_id=session.id,
         after_state={
@@ -192,7 +193,7 @@ def void_session(session_id: int) -> PosSession:
     session.status = PosSessionStatus.VOIDED
     db.session.commit()
     record_audit_event(
-        action="pos_session.voided",
+        action=AuditAction.POS_SESSION_VOIDED.value,
         entity_type="pos_session",
         entity_id=session.id,
         source_module=__name__,
@@ -322,7 +323,7 @@ def create_sale(
 
     try:
         record_audit_event(
-            action="pos_sale.completed",
+            action=AuditAction.POS_SALE_COMPLETED.value,
             entity_type="pos_sale",
             entity_id=sale.id,
             after_state={
@@ -489,7 +490,7 @@ def refund_sale(
 
     try:
         record_audit_event(
-            action="pos_sale.refunded",
+            action=AuditAction.POS_SALE_REFUNDED.value,
             entity_type="pos_sale",
             entity_id=sale.id,
             before_state=before,

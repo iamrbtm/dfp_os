@@ -217,6 +217,7 @@ def register_request_guards(app: Flask) -> None:
             is_module_enabled,
         )
         from app.services.audit import record_audit_event
+        from app.utils.audit_events import AuditAction
 
         module_key: str | None = None
         if request.path.startswith("/api/v1/"):
@@ -235,7 +236,7 @@ def register_request_guards(app: Flask) -> None:
 
         if module_key and not is_module_enabled(module_key):
             record_audit_event(
-                action="module.disabled_access_attempted",
+                action=AuditAction.MODULE_DISABLED_ACCESS_ATTEMPTED.value,
                 entity_type="module",
                 entity_id=module_key,
                 metadata={"path": request.path, "blueprint": request.blueprint},

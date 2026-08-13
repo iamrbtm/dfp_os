@@ -7,6 +7,7 @@ from flask import current_app
 from app.extensions import db
 from app.models import InventoryMovement, InventoryMovementType, InventoryRecord
 from app.services.audit import record_audit_event
+from app.utils.audit_events import AuditAction
 
 
 @dataclass(frozen=True)
@@ -125,7 +126,7 @@ def deduct_finished_goods(
             actor_id=actor_id,
         )
         record_audit_event(
-            action="inventory.deducted",
+            action=AuditAction.INVENTORY_DEDUCTED.value,
             entity_type="inventory_record",
             entity_id=record.id,
             before_state=before,
@@ -193,7 +194,7 @@ def adjust_inventory(
         notes=notes,
     )
     record_audit_event(
-        action="inventory.adjusted",
+        action=AuditAction.INVENTORY_ADJUSTED.value,
         entity_type="inventory_record",
         entity_id=record.id,
         before_state=before,
@@ -263,7 +264,7 @@ def transfer_inventory(
         notes=notes,
     )
     record_audit_event(
-        action="inventory.transferred",
+        action=AuditAction.INVENTORY_TRANSFERRED.value,
         entity_type="inventory_record",
         entity_id=source.id,
         before_state=source_before,
@@ -277,7 +278,7 @@ def transfer_inventory(
         actor_id=actor_id,
     )
     record_audit_event(
-        action="inventory.transfer_received",
+        action=AuditAction.INVENTORY_TRANSFER_RECEIVED.value,
         entity_type="inventory_record",
         entity_id=destination.id,
         before_state=dest_before,
@@ -322,7 +323,7 @@ def reserve_inventory(
         notes=notes,
     )
     record_audit_event(
-        action="inventory.reserved",
+        action=AuditAction.INVENTORY_RESERVED.value,
         entity_type="inventory_record",
         entity_id=record.id,
         before_state=before,
@@ -366,7 +367,7 @@ def release_inventory(
         notes=notes,
     )
     record_audit_event(
-        action="inventory.released",
+        action=AuditAction.INVENTORY_RELEASED.value,
         entity_type="inventory_record",
         entity_id=record.id,
         before_state=before,
@@ -416,7 +417,7 @@ def return_inventory(
         notes=notes,
     )
     record_audit_event(
-        action="inventory.returned",
+        action=AuditAction.INVENTORY_RETURNED.value,
         entity_type="inventory_record",
         entity_id=record.id,
         before_state=before,

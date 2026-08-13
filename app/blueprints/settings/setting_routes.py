@@ -16,6 +16,7 @@ from app.services.settings import get_all_settings, seed_default_settings, set_s
 from app.module_registry import module_statuses
 from app.services.business import ensure_default_business
 from app.services.audit import record_audit_event
+from app.utils.audit_events import AuditAction
 from app.utils.auth import roles_required
 
 CRITICAL_MODULE_KEYS = {"public_site", "auth", "dashboard", "settings"}
@@ -61,7 +62,7 @@ def settings_update():
         setting_type = existing.setting_type if existing else "string"
         set_setting(key, value, setting_type=setting_type)
         record_audit_event(
-            action="settings.changed",
+            action=AuditAction.SETTING_CHANGED.value,
             entity_type="setting",
             entity_id=key,
             before_state=before,
@@ -161,7 +162,9 @@ def module_status_update():
         else:
             record.enabled = enabled
         record_audit_event(
-            action="module.status_changed",
+            action=AuditAction.MODULE_ENABLED.value
+            if enabled
+            else AuditAction.MODULE_DISABLED.value,
             entity_type="module",
             entity_id=module["key"],
             before_state=before_state,

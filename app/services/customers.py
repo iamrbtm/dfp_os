@@ -4,6 +4,7 @@ from app.extensions import db
 from app.models import Customer
 from app.services.audit import record_audit_event
 from app.services.crud import archive_instance
+from app.utils.audit_events import AuditAction
 
 
 def snapshot_customer(instance: Customer) -> dict:
@@ -22,7 +23,7 @@ def create_customer(instance: Customer, *, actor_id: int | None = None) -> Custo
     db.session.add(instance)
     db.session.commit()
     record_audit_event(
-        action="customer.created",
+        action=AuditAction.CUSTOMER_CREATED.value,
         entity_type="customer",
         entity_id=instance.id,
         after_state=snapshot_customer(instance),
@@ -38,7 +39,7 @@ def update_customer(
     db.session.add(instance)
     db.session.commit()
     record_audit_event(
-        action="customer.updated",
+        action=AuditAction.CUSTOMER_UPDATED.value,
         entity_type="customer",
         entity_id=instance.id,
         before_state=before_state,
@@ -53,7 +54,7 @@ def archive_customer(instance: Customer, *, actor_id: int | None = None) -> Cust
     before_state = snapshot_customer(instance)
     archive_instance(instance)
     record_audit_event(
-        action="customer.archived",
+        action=AuditAction.CUSTOMER_ARCHIVED.value,
         entity_type="customer",
         entity_id=instance.id,
         before_state=before_state,
