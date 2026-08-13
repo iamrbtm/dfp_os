@@ -214,6 +214,56 @@ class AuditClient:
             current_app.logger.warning("audit-log client failed: %s", e)
         return None
 
+    def entity_timeline(
+        self,
+        entity_type: str,
+        entity_id: str,
+        *,
+        tenant_id: str | None = None,
+        occurred_from: str | None = None,
+        occurred_to: str | None = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Fetch the timeline for one record, oldest first, with each
+        event annotated by ``chain_status`` (``"head"``, ``"ok"``, or
+        ``"broken"``).
+
+        Returns ``[]`` if the audit-log microservice is disabled,
+        not reachable, or the record has no events. Logs a warning
+        and returns ``[]`` on any failure — callers should treat the
+        result as best-effort and render a friendly empty state.
+        """
+        if not self._is_configured() or not entity_type or not entity_id:
+            return []
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if tenant_id is not None:
+            params["tenant_id"] = tenant_id
+        if occurred_from is not None:
+            params["occurred_from"] = occurred_from
+        if occurred_to is not None:
+            params["occurred_to"] = occurred_to
+        try:
+            with httpx.Client(
+                base_url=self.base_url,
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=10.0,
+            ) as client:
+                response = client.get(
+                    f"/api/v1/entities/{entity_type}/{entity_id}/timeline/with-chain",
+                    params=params,
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data if isinstance(data, list) else []
+        except httpx.RequestError as e:
+            current_app.logger.warning("audit-log unavailable: %s", e)
+        except httpx.HTTPStatusError as e:
+            current_app.logger.warning("audit-log error: %s", e)
+        except Exception as e:
+            current_app.logger.warning("audit-log client failed: %s", e)
+        return []
+
     def flush_outbox(self) -> dict[str, int]:
         """Drain the Redis outbox by replaying every queued event through the
         synchronous record path. Called by the Celery beat task.

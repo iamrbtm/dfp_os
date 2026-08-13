@@ -83,6 +83,8 @@ class AuditEventResponse(BaseModel):
     metadata: dict[str, Any] | None
     hash: str
     previous_hash: str | None
+    # Set only by the timeline-with-chain endpoint. None elsewhere.
+    chain_status: str | None = None
 
 
 class VerifyChainRequest(BaseModel):

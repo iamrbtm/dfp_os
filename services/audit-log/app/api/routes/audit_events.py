@@ -20,6 +20,7 @@ from app.services.audit_search import (
     get_actor_timeline,
     get_audit_event_by_id,
     get_entity_timeline,
+    get_entity_timeline_with_chain,
     search_audit_events,
     verify_chain,
 )
@@ -208,6 +209,39 @@ async def entity_timeline(
         offset=offset,
     )
     return [_event_to_response(e) for e in events]
+
+
+@router.get("/entities/{entity_type}/{entity_id}/timeline/with-chain")
+async def entity_timeline_with_chain(
+    entity_type: str,
+    entity_id: str,
+    tenant_id: str | None = Query(None),
+    occurred_from: datetime | None = Query(None),
+    occurred_to: datetime | None = Query(None),
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> list[AuditEventResponse]:
+    """Full per-entity timeline annotated with chain-integrity status.
+
+    Each event carries ``chain_status``:
+
+    * ``"head"`` — the first event in the chain (no ``previous_hash``).
+    * ``"ok"`` — ``previous_hash`` matches the prior event's ``hash``.
+    * ``"broken"`` — link mismatch. The UI should show both expected
+      and actual hashes so an operator can decide what changed.
+
+    Events are returned oldest-first so the timeline reads
+    top-to-bottom in chronological order.
+    """
+    return await get_entity_timeline_with_chain(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        tenant_id=tenant_id,
+        occurred_from=occurred_from,
+        occurred_to=occurred_to,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/actors/{actor_id}/timeline")
