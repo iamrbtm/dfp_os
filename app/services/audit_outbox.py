@@ -15,6 +15,12 @@ Design notes:
       refuses to enqueue critical events and deadman-writes non-critical
       events to ``AUDIT_OUTBOX_DLQ_PATH`` so the audit chain is never
       silently dropped.
+    * If Redis is also down, ``enqueue`` falls back to writing the event
+      to the on-disk deadman directory. The Redis client is built with
+      a hard 2s ``socket_connect_timeout`` so a network blackhole does
+      not block the caller — every code path through ``enqueue``
+      terminates in well under 5 seconds no matter what state Redis
+      and the disk are in.
     * The flush task is the only consumer; safe under multiple workers
       because each flush reads + removes atomically per entry.
 
@@ -39,7 +45,19 @@ logger = logging.getLogger(__name__)
 
 
 def _client(redis_url: str) -> redis.Redis:
-    return redis.Redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
+    # ``socket_connect_timeout`` bounds the time the OS spends trying to
+    # reach Redis when it is down. Without it a connect on a refused
+    # port can block for the kernel's default (often 60-120s), which
+    # in turn blocks the calling request and prevents the disk
+    # deadman from ever running. Two seconds is well under any
+    # realistic request budget and still tolerates a normal slow
+    # network.
+    return redis.Redis.from_url(
+        redis_url,
+        decode_responses=True,
+        socket_timeout=5,
+        socket_connect_timeout=2,
+    )
 
 
 def _key(app=None) -> str:
@@ -90,29 +108,51 @@ def enqueue(
 
     Returns True if the event was queued, False if it was deadman'd to disk
     or refused. The flush task will retry the outbox on its next run.
+
+    On any failure path — Redis unreachable, size ceiling, unexpected
+    exception — the event is written to the on-disk deadman directory
+    so nothing is silently lost. The deadman write itself is also
+    guarded: if it fails, the call returns False so the caller can
+    fail-closed for critical events.
     """
     url = _redis_url(app)
     key = _key(app)
     max_size = _max_size(app)
     try:
-        client = _client(url)
-        current_size = int(client.llen(key))
-        if current_size >= max_size:
-            if critical:
-                logger.error(
-                    "audit outbox at %d entries (>= %d); refusing critical event %s",
-                    current_size,
-                    max_size,
-                    payload.get("action"),
-                )
-                return False
-            return _deadman(payload, reason="outbox_full", app=app)
-        body = json.dumps(payload, sort_keys=True, default=str)
-        client.rpush(key, body)
-        return True
-    except redis.RedisError as exc:
-        logger.warning("audit outbox enqueue failed (%s); deadmanning to disk", exc)
-        return _deadman(payload, reason=f"redis_error: {exc}", app=app)
+        try:
+            client = _client(url)
+            current_size = int(client.llen(key))
+            if current_size >= max_size:
+                if critical:
+                    logger.error(
+                        "audit outbox at %d entries (>= %d); refusing critical event %s",
+                        current_size,
+                        max_size,
+                        payload.get("action"),
+                    )
+                    return False
+                return _deadman(payload, reason="outbox_full", app=app)
+            body = json.dumps(payload, sort_keys=True, default=str)
+            client.rpush(key, body)
+            return True
+        except redis.RedisError as exc:
+            logger.warning("audit outbox enqueue failed (%s); deadmanning to disk", exc)
+            return _deadman(payload, reason=f"redis_error: {exc}", app=app)
+    except Exception as exc:  # pragma: no cover - last-resort safety net
+        # Any other exception (OSError on the deadman write, JSON
+        # serialization error, etc.) must not silently drop the
+        # event. Try the deadman one more time and let it raise
+        # if even that fails — the caller can then fail-closed.
+        logger.exception("audit outbox enqueue hit unexpected error")
+        try:
+            return _deadman(payload, reason=f"unexpected_error: {exc}", app=app)
+        except Exception as deadman_exc:
+            logger.error(
+                "audit deadman write also failed; event lost. original=%s deadman=%s",
+                exc,
+                deadman_exc,
+            )
+            return False
 
 
 def _deadman(

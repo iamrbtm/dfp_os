@@ -98,16 +98,15 @@ def test_outbox_drain_one_removes_head(outbox_app, flush_outbox):
 
 
 def test_outbox_deadman_writes_to_disk_when_redis_unavailable(outbox_app, tmp_path):
+    """When Redis raises an error mid-call, enqueue should fall back to
+    the on-disk deadman.
+
+    Uses a mock client so the test does not depend on the test container
+    being able to reach a real Redis.
+    """
     from app.services import audit_outbox
 
-    audit_outbox.enqueue(
-        {"action": "test.deadman", "entity_type": "test", "critical": False},
-        app=outbox_app,
-    )
-    assert audit_outbox.size(app=outbox_app) == 1
-
     dlq = Path(outbox_app.config["AUDIT_OUTBOX_DLQ_PATH"])
-    # Inject a Redis error: enqueue should fall back to disk deadman.
     with patch("app.services.audit_outbox._client") as mock_client:
         import redis as redis_lib
 
@@ -122,6 +121,68 @@ def test_outbox_deadman_writes_to_disk_when_redis_unavailable(outbox_app, tmp_pa
     record = json.loads(files[0].read_text())
     assert record["payload"]["action"] == "test.deadman2"
     assert "redis_error" in record["reason"]
+
+
+def test_outbox_deadman_writes_to_disk_when_redis_unreachable(outbox_app, tmp_path):
+    """When Redis is fully unreachable (port refuses / DNS fails), enqueue
+    must terminate quickly and write to the on-disk deadman. The
+    previous bug was a missing ``socket_connect_timeout`` that let the
+    call hang for the kernel's default (60-120s) before falling
+    through to the deadman — which is why no files showed up in the
+    ``uploads/audit-queue`` directory under test.
+    """
+    import time
+
+    from app.services import audit_outbox
+
+    # Point Redis at a port nothing is listening on. The client must
+    # fail fast (under 5s) and fall back to the deadman.
+    outbox_app.config["AUDIT_REDIS_URL"] = "redis://127.0.0.1:65530"
+    outbox_app.config["AUDIT_OUTBOX_DLQ_PATH"] = str(tmp_path / "audit-queue-fallthrough")
+
+    started = time.perf_counter()
+    with outbox_app.app_context():
+        ok = audit_outbox.enqueue(
+            {"action": "test.redis_down", "entity_type": "test"},
+            app=outbox_app,
+        )
+    elapsed = time.perf_counter() - started
+    assert ok is True, "enqueue should fall through to deadman when Redis is down"
+    assert elapsed < 5, f"enqueue took {elapsed:.2f}s; expected under 5s"
+
+    dlq = Path(outbox_app.config["AUDIT_OUTBOX_DLQ_PATH"])
+    files = list(dlq.glob("*.json"))
+    assert files, "deadman file should be written even when Redis is unreachable"
+    record = json.loads(files[0].read_text())
+    assert record["payload"]["action"] == "test.redis_down"
+    assert "redis_error" in record["reason"]
+
+
+def test_outbox_returns_false_when_redis_and_disk_both_unavailable(outbox_app, tmp_path):
+    """When neither Redis nor the deadman directory can accept the
+    event, enqueue returns False. The caller can then fail-closed for
+    critical events.
+    """
+    import os
+    import tempfile
+
+    from app.services import audit_outbox
+
+    outbox_app.config["AUDIT_REDIS_URL"] = "redis://127.0.0.1:65531"
+    # Use a file (not a directory) at the parent level so ``Path.mkdir``
+    # cannot succeed in any container user.
+    blocker = tempfile.NamedTemporaryFile(delete=False, suffix=".txt")
+    blocker.close()
+    outbox_app.config["AUDIT_OUTBOX_DLQ_PATH"] = f"{blocker.name}/audit-queue"
+    try:
+        with outbox_app.app_context():
+            ok = audit_outbox.enqueue(
+                {"action": "test.triple_fail", "entity_type": "test"},
+                app=outbox_app,
+            )
+        assert ok is False
+    finally:
+        os.unlink(blocker.name)
 
 
 def test_outbox_replay_deadman_moves_files_back_to_redis(outbox_app, flush_outbox):
@@ -233,18 +294,29 @@ def test_audit_client_raises_on_critical_when_outbox_full_and_no_buffer(outbox_a
     from app.services.audit_client import AuditClient, AuditDispatchError
 
     outbox_app.config["AUDIT_OUTBOX_MAX_SIZE"] = 0
-    outbox_app.config["AUDIT_OUTBOX_DLQ_PATH"] = "/nonexistent-readonly/audit-queue"
-    client = AuditClient(base_url="http://audit-log:8090", token="t", enabled=True)
-    with patch.object(client, "_request_context", return_value={}):
-        with patch("httpx.Client.post", side_effect=ConnectionError("down")):
-            with outbox_app.app_context():
-                with pytest.raises(AuditDispatchError):
-                    client.record(
-                        action="order.refunded",
-                        entity_type="order",
-                        entity_id="1",
-                        critical=True,
-                    )
+    # Use a path that cannot be created: a file (not a directory) at the
+    # parent level. ``Path.mkdir`` raises NotADirectoryError in that
+    # case regardless of the test container's user.
+    import os
+    import tempfile
+
+    blocker = tempfile.NamedTemporaryFile(delete=False, suffix=".txt")
+    blocker.close()
+    outbox_app.config["AUDIT_OUTBOX_DLQ_PATH"] = f"{blocker.name}/audit-queue"
+    try:
+        client = AuditClient(base_url="http://audit-log:8090", token="t", enabled=True)
+        with patch.object(client, "_request_context", return_value={}):
+            with patch("httpx.Client.post", side_effect=ConnectionError("down")):
+                with outbox_app.app_context():
+                    with pytest.raises(AuditDispatchError):
+                        client.record(
+                            action="order.refunded",
+                            entity_type="order",
+                            entity_id="1",
+                            critical=True,
+                        )
+    finally:
+        os.unlink(blocker.name)
 
 
 def test_audit_client_get_returns_event(app):
