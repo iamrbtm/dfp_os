@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Audit Event {{ event.id[:8] }} | {{ app_name }}{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm uppercase tracking-[0.2em]" style="color: var(--color-link);">Admin</p>
+      <h1 class="mt-2 text-3xl font-semibold" style="color: var(--color-text);">Audit Event</h1>
+      <p class="mt-1 font-mono text-xs" style="color: var(--color-text-muted);">{{ event.id }}</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <a class="app-btn app-btn-secondary" href="{{ return_url }}">Back to log</a>
+      <a class="app-btn app-btn-secondary" href="{{ url_for('audit_logs.detail', event_id=event.id) }}?format=json" target="_blank">Raw JSON</a>
+    </div>
+  </div>
+
+  {% if not audit_configured %}
+  <div class="app-card p-4" style="background-color: var(--color-warning-bg);">
+    <p class="text-sm" style="color: var(--color-text);">Audit service is not configured in this environment.</p>
+  </div>
+  {% endif %}
+
+  <div class="app-card p-5">
+    <dl class="grid gap-4 md:grid-cols-2">
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Action</dt>
+        <dd class="mt-1 font-mono text-sm" style="color: var(--color-text);">{{ event.action }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Entity</dt>
+        <dd class="mt-1 font-mono text-sm" style="color: var(--color-text);">
+          {{ event.entity_type }}{% if event.entity_id %} <span style="color: var(--color-text-muted);">#{{ event.entity_id }}</span>{% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Actor</dt>
+        <dd class="mt-1 text-sm" style="color: var(--color-text);">
+          {{ event.actor_display_name or "—" }}
+          {% if event.actor_id %}<span class="font-mono text-xs" style="color: var(--color-text-muted);">({{ event.actor_type or "?" }}:{{ event.actor_id }})</span>{% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Source</dt>
+        <dd class="mt-1 font-mono text-sm" style="color: var(--color-text);">
+          {{ event.source_service }}{% if event.source_module %}<span style="color: var(--color-text-muted);"> / {{ event.source_module }}</span>{% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Occurred at</dt>
+        <dd class="mt-1 text-sm" style="color: var(--color-text);">{{ event.occurred_at }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Received at</dt>
+        <dd class="mt-1 text-sm" style="color: var(--color-text);">{{ event.received_at }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Tenant</dt>
+        <dd class="mt-1 font-mono text-sm" style="color: var(--color-text);">{{ event.tenant_id or "—" }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Request / IP / UA</dt>
+        <dd class="mt-1 font-mono text-xs" style="color: var(--color-text-muted);">
+          request: {{ event.request_id or "—" }}<br>
+          ip: {{ event.ip_address or "—" }}<br>
+          ua: {{ event.user_agent or "—" }}
+        </dd>
+      </div>
+    </dl>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2">
+    <div class="app-card p-5">
+      <h2 class="text-base font-semibold" style="color: var(--color-text);">Before</h2>
+      {% if event.before_state %}
+        <pre class="mt-3 overflow-x-auto rounded-md p-3 text-xs" style="background-color: var(--color-table-header); color: var(--color-text);"><code>{{ event.before_state | tojson(indent=2) }}</code></pre>
+      {% else %}
+        <p class="mt-3 text-sm" style="color: var(--color-text-muted);">No prior state recorded.</p>
+      {% endif %}
+    </div>
+    <div class="app-card p-5">
+      <h2 class="text-base font-semibold" style="color: var(--color-text);">After</h2>
+      {% if event.after_state %}
+        <pre class="mt-3 overflow-x-auto rounded-md p-3 text-xs" style="background-color: var(--color-table-header); color: var(--color-text);"><code>{{ event.after_state | tojson(indent=2) }}</code></pre>
+      {% else %}
+        <p class="mt-3 text-sm" style="color: var(--color-text-muted);">No resulting state recorded.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="app-card p-5">
+    <h2 class="text-base font-semibold" style="color: var(--color-text);">Metadata</h2>
+    {% if event.metadata %}
+      <pre class="mt-3 overflow-x-auto rounded-md p-3 text-xs" style="background-color: var(--color-table-header); color: var(--color-text);"><code>{{ event.metadata | tojson(indent=2) }}</code></pre>
+    {% else %}
+      <p class="mt-3 text-sm" style="color: var(--color-text-muted);">No metadata.</p>
+    {% endif %}
+  </div>
+
+  <div class="app-card p-5">
+    <h2 class="text-base font-semibold" style="color: var(--color-text);">Integrity chain</h2>
+    <dl class="mt-3 grid gap-4 md:grid-cols-2">
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Hash</dt>
+        <dd class="mt-1 break-all font-mono text-xs" style="color: var(--color-text);">{{ event.hash }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Previous hash</dt>
+        <dd class="mt-1 break-all font-mono text-xs" style="color: var(--color-text);">{{ event.previous_hash or "—" }}</dd>
+      </div>
+    </dl>
+  </div>
+</section>
+{% endblock %}

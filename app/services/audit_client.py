@@ -134,6 +134,28 @@ class AuditClient:
             current_app.logger.warning("audit-log client failed: %s", e)
         return []
 
+    def get(self, event_id: str) -> dict[str, Any] | None:
+        if not self._is_configured():
+            return None
+        try:
+            with httpx.Client(
+                base_url=self.base_url,
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=10.0,
+            ) as client:
+                response = client.get(f"/api/v1/audit-events/{event_id}")
+                if response.status_code == 404:
+                    return None
+                response.raise_for_status()
+                return response.json()
+        except httpx.RequestError as e:
+            current_app.logger.warning("audit-log unavailable: %s", e)
+        except httpx.HTTPStatusError as e:
+            current_app.logger.warning("audit-log error: %s", e)
+        except Exception as e:
+            current_app.logger.warning("audit-log client failed: %s", e)
+        return None
+
 
 def get_audit_client() -> AuditClient:
     config = current_app.config

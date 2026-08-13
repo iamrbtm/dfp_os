@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import render_template, request
+from flask import abort, render_template, request, url_for
 
 from app.blueprints.audit_logs import bp
 from app.services.audit_client import get_audit_client
@@ -25,5 +25,23 @@ def index():
         "audit_logs/index.html",
         events=events or [],
         filters=filters,
+        audit_configured=client._is_configured(),
+    )
+
+
+@bp.get("/<event_id>")
+@roles_required(UserRole.ADMIN)
+def detail(event_id: str):
+    client = get_audit_client()
+    event = client.get(event_id) if hasattr(client, "get") else None
+    if event is None:
+        abort(404)
+    filters = {k: request.args.get(k) for k in ("action", "entity_type", "entity_id", "actor_id")}
+    return_url = request.args.get("return") or request.referrer or url_for("audit_logs.index")
+    return render_template(
+        "audit_logs/detail.html",
+        event=event,
+        filters=filters,
+        return_url=return_url,
         audit_configured=client._is_configured(),
     )
