@@ -72,8 +72,48 @@ Branch: `phase/0-plan-and-scorecard`. Per-phase scores tracked below as phases l
 
 - [x] `docs/trend_scout_microservice_plan.md` written (condensed plan)
 - [x] Scorecard section opened for this initiative
-- [ ] `.github/PULL_REQUEST_TEMPLATE.md` (added this phase)
-- [ ] `.github/ISSUE_TEMPLATE/trend_scout_microservice.md` (added this phase)
-- [ ] `.github/workflows/ci.yml` `trend-scout-tests` job skeleton (added this phase)
-- [ ] Baseline ruff/format/pytest recorded
-- [ ] Committed and pushed to `phase/0-plan-and-scorecard`
+- [x] `.github/PULL_REQUEST_TEMPLATE.md` written
+- [x] `.github/ISSUE_TEMPLATE/trend_scout_microservice.md` written
+- [x] `.github/workflows/ci.yml` `trend-scout-tests` job skeleton added
+- [x] Baseline ruff/format/pytest recorded
+- [x] Committed and pushed to `phase/0-plan-and-scorecard`
+
+## Phase 1 — Microservice Scaffold (2026-08-13)
+
+Branch: `phase/1-ms-scaffold`. Status: complete.
+
+| Area | Before | After | Justification |
+|---|---:|---:|---|
+| Microservice / Trend Scout Extraction | 0 | 3 | Scaffold + Dockerfile + Alembic + FastAPI app + Celery (low-priority queue) + Bearer token security + compose wiring all landed. |
+| Database / Migrations | unchanged from Phase 0 | unchanged | New logical DB `trend_scout` provisioned via `docker/postgres/init/01-init-databases.sh`; async Alembic env wired; first migration creates 5 tables (trend_snapshots, trend_reports, trend_opportunity_scores, source_health_records, trend_weights). |
+| Tests | unchanged from Phase 0 | +1 file, 10 tests | `services/trend-scout/app/tests/test_smoke.py` exercises app factory, /health endpoints, OpenAPI, settings, DB module, Celery queue/priority/routing, security scopes, alembic env. All green. |
+| Docker / Deployment | unchanged from Phase 0 | +3 services | `trend-scout` (API + healthcheck), `trend-scout-worker` (Celery `-Q trend_scout --concurrency=1`), `trend-scout-migrate` (release-profile Alembic upgrade). All wired in `docker-compose.yml`. |
+| Security / Permissions | unchanged from Phase 0 | unchanged | Bearer token + scope helpers scaffolded for Phase 5 to extend. |
+| REST API | unchanged from Phase 0 | unchanged | Only health endpoints exposed in Phase 1; full API lands Phase 5. |
+
+### Phase 1 commands run
+
+- `cd services/trend-scout && uv lock && uv sync --all-extras` — 88 packages resolved cleanly.
+- `cd services/trend-scout && uv run ruff check .` — all checks passed.
+- `cd services/trend-scout && uv run ruff format --check .` — 21 files clean.
+- `cd services/trend-scout && uv run pytest -v` — **10 passed in 4.37s**.
+
+### Phase 1 deliverables checklist
+
+- [x] `services/trend-scout/` scaffolded (pyproject, Dockerfile, alembic, app/main.py, app/config.py, app/database.py, app/security.py, app/celery_app.py, health router, schemas/health.py, models, initial migration)
+- [x] Bearer token security + scope constants exported
+- [x] Celery instance with `trend_scout` queue, priority 1/10, routed tasks
+- [x] Health endpoints: `/health/live`, `/health/ping`, `/health/ready`, `/health/deep`
+- [x] Alembic async migration `0001_initial.py` for 5 tables
+- [x] `docker-compose.yml` updated: `trend-scout`, `trend-scout-worker`, `trend-scout-migrate` services + `TREND_SCOUT_*` env vars + DB provisioning in init script
+- [x] `.env.example` updated with TREND_SCOUT_* env vars
+- [x] `.github/workflows/ci.yml` `trend-scout-tests` job activated (no longer `if: false`)
+- [x] `AGENTS.md` services tree updated to include the new microservice
+- [x] README.md for the microservice
+- [x] Ruff + pytest clean on the microservice
+
+### Phase 1 risk and out-of-scope
+
+- **Risk:** the `trend-scout-worker` Celery container is wired but no actual Celery tasks are defined yet (Phase 4 fills this). Until Phase 4 lands, the worker container starts and consumes nothing.
+- **Risk:** the `trend-scout-migrate` release-profile service exists but requires the `trend_scout` logical DB to be provisioned. With the init script updated in this phase, a fresh database will provision the DB and user; existing databases need a manual `CREATE DATABASE` and `CREATE USER` before migrations can run.
+- **Out of scope:** source migration (Phase 2), analyzer (Phase 3), pipeline tasks (Phase 4), full API surface (Phase 5), Flask proxy/cutover (Phase 6), Firecrawl (Phases 7-9).

@@ -264,6 +264,9 @@ docs/
 uploads/.gitkeep
 services/
   audit-log/
+  intelligence/
+  slicer/
+  trend-scout/
 .env.example
 .gitignore
 Dockerfile

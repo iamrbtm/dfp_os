@@ -62,6 +62,18 @@ x-env-app: &env-app
   INTELLIGENCE_SERVICE_URL: http://intelligence:8091
   INTELLIGENCE_INTERNAL_API_TOKEN: ${INTELLIGENCE_INTERNAL_API_TOKEN:?INTELLIGENCE_INTERNAL_API_TOKEN must be set}
 
+  TREND_SCOUT_ENABLED: ${TREND_SCOUT_ENABLED:-true}
+  TREND_SCOUT_SERVICE_URL: http://trend-scout:8093
+  TREND_SCOUT_INTERNAL_API_TOKEN: ${TREND_SCOUT_INTERNAL_API_TOKEN:?TREND_SCOUT_INTERNAL_API_TOKEN must be set}
+  TREND_SCOUT_CELERY_QUEUE: trend_scout
+  TREND_SCOUT_CELERY_TASK_PRIORITY: 1
+  TREND_SCOUT_CELERY_DEFAULT_PRIORITY: 5
+  TREND_SCOUT_CELERY_MAX_PRIORITY: 10
+  TREND_SCOUT_FETCHER_POOL_WORKERS: 4
+  TREND_SCOUT_FETCHER_TIMEOUT_SECONDS: 30
+  TREND_SCOUT_PIPELINE_SOFT_TIME_LIMIT_SECONDS: 900
+  TREND_SCOUT_PIPELINE_HARD_TIME_LIMIT_SECONDS: 960
+
 x-depends-core: &depends-core
   db:
     condition: service_healthy
@@ -85,6 +97,9 @@ services:
       INTELLIGENCE_POSTGRES_DB: ${INTELLIGENCE_POSTGRES_DB:?INTELLIGENCE_POSTGRES_DB must be set}
       INTELLIGENCE_POSTGRES_USER: ${INTELLIGENCE_POSTGRES_USER:?INTELLIGENCE_POSTGRES_USER must be set}
       INTELLIGENCE_POSTGRES_PASSWORD: ${INTELLIGENCE_POSTGRES_PASSWORD:?INTELLIGENCE_POSTGRES_PASSWORD must be set}
+      TREND_SCOUT_POSTGRES_DB: ${TREND_SCOUT_POSTGRES_DB:?TREND_SCOUT_POSTGRES_DB must be set}
+      TREND_SCOUT_POSTGRES_USER: ${TREND_SCOUT_POSTGRES_USER:?TREND_SCOUT_POSTGRES_USER must be set}
+      TREND_SCOUT_POSTGRES_PASSWORD: ${TREND_SCOUT_POSTGRES_PASSWORD:?TREND_SCOUT_POSTGRES_PASSWORD must be set}
     expose:
       - "5432"
     # Bind host:5433 → container:5432 so external clients (Beekeeper,
@@ -358,6 +373,84 @@ services:
       audit-log:
         condition: service_started
     command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8091"]
+
+  trend-scout:
+    build: services/trend-scout
+    image: dfpos-trend-scout:local
+    init: true
+    mem_limit: 1024m
+    environment:
+      TREND_SCOUT_SERVICE_ENV: ${FLASK_ENV:-production}
+      TREND_SCOUT_SERVICE_NAME: ${TREND_SCOUT_SERVICE_NAME:-dfp-trend-scout}
+      TREND_SCOUT_API_HOST: 0.0.0.0
+      TREND_SCOUT_API_PORT: 8093
+      TREND_SCOUT_DATABASE_URL: postgresql+asyncpg://${TREND_SCOUT_POSTGRES_USER:?TREND_SCOUT_POSTGRES_USER must be set}:${TREND_SCOUT_POSTGRES_PASSWORD:?TREND_SCOUT_POSTGRES_PASSWORD must be set}@db:5432/${TREND_SCOUT_POSTGRES_DB:?TREND_SCOUT_POSTGRES_DB must be set}
+      TREND_SCOUT_REDIS_URL: redis://redis:6379/2
+      TREND_SCOUT_CELERY_BROKER_URL: redis://redis:6379/1
+      TREND_SCOUT_CELERY_RESULT_BACKEND: redis://redis:6379/1
+      TREND_SCOUT_INTERNAL_API_TOKEN: ${TREND_SCOUT_INTERNAL_API_TOKEN:?TREND_SCOUT_INTERNAL_API_TOKEN must be set}
+      TREND_SCOUT_AUDIT_LOG_BASE_URL: http://audit-log:8090
+      TREND_SCOUT_AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
+      TREND_SCOUT_AUDIT_LOG_ENABLED: ${AUDIT_LOG_ENABLED:-false}
+      TREND_SCOUT_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TREND_SCOUT_OPENAI_MODEL_TREND_SCOUT: ${OPENAI_MODEL_TREND_SCOUT:-gpt-4o-mini}
+      TREND_SCOUT_AI_PROVIDER: ${AI_PROVIDER:-openai}
+      TREND_SCOUT_FETCHER_POOL_WORKERS: ${TREND_SCOUT_FETCHER_POOL_WORKERS:-4}
+      TREND_SCOUT_FETCHER_TIMEOUT_SECONDS: ${TREND_SCOUT_FETCHER_TIMEOUT_SECONDS:-30}
+    expose:
+      - "8093"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      audit-log:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/health/live').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8093"]
+
+  trend-scout-worker:
+    build: services/trend-scout
+    image: dfpos-trend-scout:local
+    init: true
+    mem_limit: 2048m
+    environment:
+      TREND_SCOUT_SERVICE_ENV: ${FLASK_ENV:-production}
+      TREND_SCOUT_SERVICE_NAME: ${TREND_SCOUT_SERVICE_NAME:-dfp-trend-scout}
+      TREND_SCOUT_DATABASE_URL: postgresql+asyncpg://${TREND_SCOUT_POSTGRES_USER:?TREND_SCOUT_POSTGRES_USER must be set}:${TREND_SCOUT_POSTGRES_PASSWORD:?TREND_SCOUT_POSTGRES_PASSWORD must be set}@db:5432/${TREND_SCOUT_POSTGRES_DB:?TREND_SCOUT_POSTGRES_DB must be set}
+      TREND_SCOUT_REDIS_URL: redis://redis:6379/2
+      TREND_SCOUT_CELERY_BROKER_URL: redis://redis:6379/1
+      TREND_SCOUT_CELERY_RESULT_BACKEND: redis://redis:6379/1
+      TREND_SCOUT_INTERNAL_API_TOKEN: ${TREND_SCOUT_INTERNAL_API_TOKEN:?TREND_SCOUT_INTERNAL_API_TOKEN must be set}
+      TREND_SCOUT_AUDIT_LOG_BASE_URL: http://audit-log:8090
+      TREND_SCOUT_AUDIT_LOG_TOKEN: ${AUDIT_LOG_TOKEN:?AUDIT_LOG_TOKEN must be set}
+      TREND_SCOUT_AUDIT_LOG_ENABLED: ${AUDIT_LOG_ENABLED:-false}
+      TREND_SCOUT_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TREND_SCOUT_OPENAI_MODEL_TREND_SCOUT: ${OPENAI_MODEL_TREND_SCOUT:-gpt-4o-mini}
+      TREND_SCOUT_AI_PROVIDER: ${AI_PROVIDER:-openai}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "worker", "-Q", "trend_scout", "--loglevel=info", "--concurrency=1"]
+
+  trend-scout-migrate:
+    build: services/trend-scout
+    image: dfpos-trend-scout:local
+    profiles: ["release"]
+    environment:
+      TREND_SCOUT_SERVICE_ENV: ${FLASK_ENV:-production}
+      TREND_SCOUT_DATABASE_URL: postgresql+asyncpg://${TREND_SCOUT_POSTGRES_USER:?TREND_SCOUT_POSTGRES_USER must be set}:${TREND_SCOUT_POSTGRES_PASSWORD:?TREND_SCOUT_POSTGRES_PASSWORD must be set}@db:5432/${TREND_SCOUT_POSTGRES_DB:?TREND_SCOUT_POSTGRES_DB must be set}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["uv", "run", "alembic", "upgrade", "head"]
 
   slicer:
     build:
