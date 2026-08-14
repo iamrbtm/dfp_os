@@ -109,14 +109,6 @@ from app.models.table_layout import (
     MarketTableSection,
     TableSectionType,
 )
-from app.models.trend import (
-    SourceHealthRecord,
-    TrendCalibrationResult,
-    TrendOpportunityScore,
-    TrendReport,
-    TrendSnapshot,
-    TrendTaskRun,
-)
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -227,13 +219,7 @@ __all__ = [
     "SignStatus",
     "ProductStatus",
     "ProductType",
-    "SourceHealthRecord",
-    "TrendOpportunityScore",
-    "TrendReport",
     "Notification",
-    "TrendCalibrationResult",
-    "TrendTaskRun",
-    "TrendSnapshot",
     "TableSectionType",
     "MarketTableLayout",
     "MarketTableSection",

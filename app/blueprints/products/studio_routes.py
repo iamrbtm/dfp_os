@@ -48,7 +48,6 @@ from app.models import (
     PrintFailureAutopsy,
     PrintJob,
     SignAsset,
-    TrendOpportunityScore,
     UserRole,
 )
 from app.services.admin_mutations import (
@@ -88,6 +87,7 @@ from app.services.product_ops import (
     update_photo_shot,
     update_story_card,
 )
+from app.services.trend_scout_proxy import TrendScoutUnavailable, get_trend_scout_proxy
 from app.services.storage import (
     content_type_for_name,
     delete_storage_reference,
@@ -298,7 +298,6 @@ def _delete_product(product: Product) -> None:
         PrintFailureAutopsy,
         PrintJob,
         SignAsset,
-        TrendOpportunityScore,
     ]
     for model in nullable_product_models:
         db.session.query(model).filter(model.product_id == product.id).update(
@@ -1841,89 +1840,21 @@ def trend_score(product_id: int):
         return jsonify({"success": False, "error": "Product not found"}), 404
 
     try:
-        from app.services.ai.trend_scout.analyzer.trend_detector import (
-            _catalog_metrics,
-            OpportunityCandidate,
-            _score_candidate,
-            compute_velocity_and_momentum,
-        )
-        from app.services.trend_match import match_product_to_term
+        opportunities = get_trend_scout_proxy().list_opportunities(
+            include_dismissed=True,
+            limit=200,
+        ).get("items", [])
+    except TrendScoutUnavailable as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
 
-        products = db.session.query(Product).filter(Product.deleted_at.is_(None)).all()
-        catalog_metrics = _catalog_metrics(db.session)
-        _ = compute_velocity_and_momentum(db.session, lookback_weeks=8)
-    except Exception as e:
-        current_app.logger.error(
-            "Trend score catalog/metrics failed for product %s: %s", product_id, e, exc_info=True
-        )
-        return jsonify({"success": False, "error": f"Catalog/metrics calculation failed: {e}"}), 500
-
-    product_metrics = catalog_metrics.get(product.id, {})
-    units_sold = int(product_metrics.get("units_sold", 0))
-    revenue = float(product_metrics.get("revenue", 0))
-
-    try:
-        product_keyword = product.name.lower()
-        matched_sources = {"catalog"}
-        match_confidence = "exact"
-
-        for other in products:
-            if other.id == product.id:
-                continue
-            matches, confidence = match_product_to_term(product_keyword, other)
-            if matches:
-                matched_sources.add(other.name.lower())
-
-        candidate = OpportunityCandidate(
-            keyword=product_keyword,
-            title=product.name,
-            current_product=True,
-            product_id=product.id,
-            product_status=(
-                product.status.value if hasattr(product.status, "value") else str(product.status)
-            ),
-            sources=matched_sources,
-            purchase_raw=(units_sold * 10) + (revenue * 0.35),
-            inventory_available=int(product.inventory_available or 0),
-            reorder_target=int(product.reorder_target or 0),
-            units_sold=units_sold,
-            online_units_sold=int(product_metrics.get("order_units", 0)),
-            pos_units_sold=int(product_metrics.get("pos_units", 0)),
-            revenue=revenue,
-            base_price=float(product.base_price or 0),
-            estimated_profit=float(product.estimated_profit or 0),
-            estimated_print_minutes=float(
-                product.parsed_print_minutes or product.estimated_print_minutes or 0
-            ),
-            license_status=(
-                product.license_status.value
-                if hasattr(product.license_status, "value")
-                else str(product.license_status)
-            ),
-            model_commercial_use_allowed=bool(product.model_commercial_use_allowed),
-            is_public=bool(product.is_public),
-            is_pos_visible=bool(product.is_pos_visible),
-            category=product.category.name if product.category else "",
-            tags=product.tags or "",
-            match_confidence=match_confidence,
-            sell_through_rate=float(product_metrics.get("sell_through_rate", 0.0)),
-            days_since_last_sale=int(product_metrics.get("days_since_last_sale", 999)),
-            inventory_age_days=int(product_metrics.get("inventory_age_days", 0)),
-            stockout_detected=bool(product_metrics.get("stockout_detected", False)),
-            margin_pct=float(product_metrics.get("margin_pct", 0.0)),
-            last_sale_at=product_metrics.get("last_sale_at"),
-            admin_override=product.model_notes or "",
-        )
-
-        if candidate.base_price > 0:
-            candidate.prices.append(candidate.base_price)
-
-        scored = _score_candidate(candidate)
-    except Exception as e:
-        current_app.logger.error(
-            "Trend score candidate/scoring failed for product %s: %s", product_id, e, exc_info=True
-        )
-        return jsonify({"success": False, "error": f"Scoring failed: {e}"}), 500
+    scored = next((item for item in opportunities if item.get("product_id") == product.id), None)
+    if scored is None:
+        return jsonify(
+            {
+                "success": False,
+                "error": "No Trend Scout score exists for this product yet. Run the Trend Scout pipeline first.",
+            }
+        ), 404
 
     try:
         audit = get_audit_client()

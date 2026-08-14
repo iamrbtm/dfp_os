@@ -74,9 +74,6 @@ from app.models import (
     Product,
     ProductStatus,
     ProductType,
-    SourceHealthRecord,
-    TrendOpportunityScore,
-    TrendReport,
 )
 from app.models.promotion import ContentDraft, ContentStatus, SignAsset, SignStatus
 from app.models.receipt import (
@@ -123,9 +120,6 @@ from app.schemas import (
     ResourceListEnvelope,
     SettingSchema,
     SignAssetSchema,
-    TrendOpportunityScoreSchema,
-    TrendReportSchema,
-    TrendSourceHealthRecordSchema,
 )
 from app.schemas.receipt import ReceiptLineItemSchema, ReceiptSchema
 from app.services.admin_mutations import (
@@ -139,6 +133,7 @@ from app.services.admin_mutations import (
 )
 from app.services.api_tokens import revoke_api_token
 from app.services.audit import record_audit_event
+from app.services.trend_scout_proxy import TrendScoutUnavailable, get_trend_scout_proxy
 from app.services.crud import (
     apply_search,
     get_by_id,
@@ -832,48 +827,6 @@ def _apply_expense(instance: Expense, data: dict):
     instance.notes = data.get("notes")
 
 
-def _apply_trend_report(instance: TrendReport, data: dict):
-    instance.summary = data.get("summary")
-    instance.growing_categories = data.get("growing_categories")
-    instance.declining_trends = data.get("declining_trends")
-    instance.pipeline_meta = data.get("pipeline_meta")
-    if not instance.report_date:
-        instance.report_date = datetime.now(UTC)
-
-
-def _apply_trend_opportunity_score(instance: TrendOpportunityScore, data: dict):
-    instance.candidate_type = data.get("candidate_type", "potential")
-    instance.product_id = data.get("product_id")
-    instance.keyword = data.get("keyword", "")
-    instance.title = data.get("title")
-    instance.opportunity_score = data.get("opportunity_score", 0)
-    instance.purchase_intent = data.get("purchase_intent", 0)
-    instance.trend_velocity = data.get("trend_velocity", 0)
-    instance.price_resilience = data.get("price_resilience", 0)
-    instance.low_saturation = data.get("low_saturation", 0)
-    instance.local_fit = data.get("local_fit", 0)
-    instance.production_fit = data.get("production_fit", 0)
-    instance.license_risk = data.get("license_risk", 0)
-    instance.action = data.get("action", "monitor")
-    instance.inventory_available = data.get("inventory_available", 0)
-    instance.base_price = data.get("base_price", 0) or 0
-    instance.license_status = data.get("license_status")
-    instance.rank = data.get("rank")
-    instance.sources = data.get("sources")
-    instance.score_breakdown = data.get("score_breakdown")
-    instance.source_health = data.get("source_health")
-    instance.match_confidence = data.get("match_confidence")
-
-
-def _apply_trend_source_health(instance: SourceHealthRecord, data: dict):
-    instance.source = data.get("source", "")
-    instance.status = data.get("status", "success")
-    instance.keyword = data.get("keyword")
-    instance.item_count = data.get("item_count", 0)
-    instance.error_message = data.get("error_message")
-    instance.metadata_json = data.get("metadata_json")
-
-
 API_RESOURCES = {
     "businesses": ApiResourceConfig(
         "businesses", Business, BusinessSchema, ["name", "slug", "public_name"], _apply_business
@@ -1085,29 +1038,6 @@ API_RESOURCES = {
         ReceiptLineItemSchema,
         ["description", "sku"],
         _apply_receipt_line_item,
-    ),
-    "trend-reports": ApiResourceConfig(
-        "trend-reports",
-        TrendReport,
-        TrendReportSchema,
-        ["summary"],
-        _apply_trend_report,
-        list_filters=lambda stmt: stmt.order_by(TrendReport.report_date.desc()),
-    ),
-    "trend-opportunity-scores": ApiResourceConfig(
-        "trend-opportunity-scores",
-        TrendOpportunityScore,
-        TrendOpportunityScoreSchema,
-        ["keyword", "title", "action"],
-        _apply_trend_opportunity_score,
-        list_filters=lambda stmt: stmt.order_by(TrendOpportunityScore.opportunity_score.desc()),
-    ),
-    "trend-source-health": ApiResourceConfig(
-        "trend-source-health",
-        SourceHealthRecord,
-        TrendSourceHealthRecordSchema,
-        ["source", "keyword"],
-        _apply_trend_source_health,
     ),
 }
 
@@ -1477,45 +1407,17 @@ class TrendReportRun(MethodView):
         denied = require_api_scopes("trend_scout")
         if denied:
             return denied
-        from app.extensions import db
-        from app.services.ai.trend_scout import run_full_pipeline
-        from app.services.settings import get_setting
-
-        ai_provider = get_setting("ai_provider", current_app.config.get("AI_PROVIDER", "openai"))
-        api_key = get_setting("openai_api_key", current_app.config.get("OPENAI_API_KEY", ""))
-        model = get_setting(
-            "openai_model_trend_scout",
-            current_app.config.get("OPENAI_MODEL_TREND_SCOUT", "gpt-4o-mini"),
-        )
-        if ai_provider == "kilo":
-            api_key = get_setting("kilo_api_key", current_app.config.get("KILO_API_KEY", ""))
-            model = get_setting(
-                "kilo_model_trend_scout",
-                current_app.config.get("KILO_MODEL", "anthropic/claude-sonnet-4.5"),
-            )
-        result = run_full_pipeline(
-            openai_api_key=api_key,
-            openai_model=model,
-            ai_provider=ai_provider,
-        )
-        db.session.commit()
-        if result.get("success"):
+        try:
+            result = get_trend_scout_proxy().run_pipeline(trigger="api")
+        except TrendScoutUnavailable as exc:
             return {
-                "data": {
-                    "success": True,
-                    "report_id": result.get("report_id"),
-                    "total_snapshots": result.get("total_snapshots", 0),
-                    "successful_sources": result.get("successful_sources", []),
-                    "failed_sources": result.get("failed_sources", []),
+                "error": {
+                    "code": "trend_scout_unavailable",
+                    "message": str(exc),
+                    "details": {},
                 }
-            }
-        return {
-            "error": {
-                "code": "pipeline_failed",
-                "message": result.get("error", "Pipeline failed"),
-                "details": {},
-            }
-        }, 500
+            }, 503
+        return {"data": result}, 202
 
 
 @catalog_blp.route("/trend-scout/opportunities/<int:score_id>/print-now")
@@ -1528,8 +1430,9 @@ class TrendOpportunityPrintNow(MethodView):
         denied = require_api_scopes("trend_scout")
         if denied:
             return denied
-        score = db.session.get(TrendOpportunityScore, score_id)
-        if not score:
+        try:
+            score = get_trend_scout_proxy().opportunity(score_id)
+        except TrendScoutUnavailable:
             return {
                 "error": {
                     "code": "not_found",
@@ -1537,7 +1440,7 @@ class TrendOpportunityPrintNow(MethodView):
                     "details": {},
                 }
             }, 404
-        if not score.product_id:
+        if not score.get("product_id"):
             return {
                 "error": {
                     "code": "no_product",
@@ -1545,7 +1448,7 @@ class TrendOpportunityPrintNow(MethodView):
                     "details": {},
                 }
             }, 400
-        product = db.session.get(Product, score.product_id)
+        product = db.session.get(Product, score.get("product_id"))
         if not product:
             return {
                 "error": {
@@ -1556,8 +1459,8 @@ class TrendOpportunityPrintNow(MethodView):
             }, 404
         job = PrintJob(
             product_id=product.id,
-            label=f"Trend: {score.keyword}",
-            notes=f"Created from Trend Scout opportunity #{score.id} ({score.action})",
+            label=f"Trend: {score.get('keyword')}",
+            notes=f"Created from Trend Scout opportunity #{score_id} ({score.get('action')})",
             status=PrintJobStatus.QUEUED,
         )
         db.session.add(job)
@@ -1565,7 +1468,7 @@ class TrendOpportunityPrintNow(MethodView):
         record_audit_event(
             action="trend_opportunity.print_now",
             entity_type="trend_opportunity_score",
-            entity_id=str(score.id),
+            entity_id=str(score_id),
             metadata={
                 "product_id": product.id,
                 "product_name": product.name,
@@ -1593,8 +1496,9 @@ class TrendOpportunityCreateProduct(MethodView):
         denied = require_api_scopes("trend_scout")
         if denied:
             return denied
-        score = db.session.get(TrendOpportunityScore, score_id)
-        if not score:
+        try:
+            score = get_trend_scout_proxy().opportunity(score_id)
+        except TrendScoutUnavailable:
             return {
                 "error": {
                     "code": "not_found",
@@ -1603,25 +1507,25 @@ class TrendOpportunityCreateProduct(MethodView):
                 }
             }, 404
         product = Product(
-            name=score.title or score.keyword,
-            slug=score.keyword.lower().replace(" ", "-")[:120],
+            name=score.get("title") or score.get("keyword"),
+            slug=(score.get("keyword") or "trend-product").lower().replace(" ", "-")[:120],
             product_type=ProductType.PHYSICAL,
             status=ProductStatus.DRAFT,
-            sku_base=score.keyword.lower().replace(" ", "-")[:50],
+            sku_base=(score.get("keyword") or "trend-product").lower().replace(" ", "-")[:50],
             is_public=False,
             is_pos_visible=False,
-            base_price=score.base_price or 0,
+            base_price=score.get("base_price") or 0,
         )
         db.session.add(product)
         db.session.flush()
         record_audit_event(
             action="trend_opportunity.create_product",
             entity_type="trend_opportunity_score",
-            entity_id=str(score.id),
+            entity_id=str(score_id),
             metadata={
                 "product_id": product.id,
                 "product_name": product.name,
-                "keyword": score.keyword,
+                "keyword": score.get("keyword"),
             },
             source_module="api.routes",
         )
@@ -1642,8 +1546,9 @@ class TrendOpportunityRecommendationAction(MethodView):
         denied = require_api_scopes("trend_scout")
         if denied:
             return denied
-        score = db.session.get(TrendOpportunityScore, score_id)
-        if not score:
+        try:
+            score = get_trend_scout_proxy().opportunity(score_id)
+        except TrendScoutUnavailable:
             return {
                 "error": {
                     "code": "not_found",
@@ -1652,57 +1557,58 @@ class TrendOpportunityRecommendationAction(MethodView):
                 }
             }, 404
 
-        product_id = score.product_id
-        action_taken = {"action": score.action}
-        notes = f"Trend Scout {score.action} for opportunity #{score.id}: {score.keyword}"
+        product_id = score.get("product_id")
+        action = score.get("action") or score.get("recommended_action") or "watch"
+        action_taken = {"action": action}
+        notes = f"Trend Scout {action} for opportunity #{score_id}: {score.get('keyword')}"
 
-        if score.action in ("print_now", "keep_selling", "test_product", "improve_or_monitor"):
+        if action in ("print_now", "keep_selling", "test_product", "improve_or_monitor"):
             if product_id:
                 product = db.session.get(Product, product_id)
                 if product:
                     job = PrintJob(
                         product_id=product.id,
-                        label=f"Trend: {score.keyword}",
+                        label=f"Trend: {score.get('keyword')}",
                         notes=notes,
                         status=PrintJobStatus.QUEUED,
                     )
                     db.session.add(job)
                     db.session.flush()
                     action_taken["print_job_id"] = job.id
-        elif score.action == "clearance_candidate":
+        elif action == "clearance_candidate":
             if product_id:
                 product = db.session.get(Product, product_id)
                 if product:
                     old_notes = product.admin_notes or ""
                     product.admin_notes = (
-                        f"[CLEARANCE - Trend Scout #{score.id}] {old_notes}".strip()
+                        f"[CLEARANCE - Trend Scout #{score_id}] {old_notes}".strip()
                     )
-        elif score.action == "retire_review":
+        elif action == "retire_review":
             if product_id:
                 product = db.session.get(Product, product_id)
                 if product:
                     old_notes = product.admin_notes or ""
                     product.admin_notes = (
-                        f"[RETIRE REVIEW - Trend Scout #{score.id}] {old_notes}".strip()
+                        f"[RETIRE REVIEW - Trend Scout #{score_id}] {old_notes}".strip()
                     )
-        elif score.action == "license_review":
+        elif action == "license_review":
             if product_id:
                 product = db.session.get(Product, product_id)
                 if product:
                     old_notes = product.admin_notes or ""
                     product.admin_notes = (
-                        f"[LICENSE REVIEW - Trend Scout #{score.id}] {old_notes}".strip()
+                        f"[LICENSE REVIEW - Trend Scout #{score_id}] {old_notes}".strip()
                     )
 
         record_audit_event(
-            action=f"trend_opportunity.{score.action}",
+            action=f"trend_opportunity.{action}",
             entity_type="trend_opportunity_score",
-            entity_id=str(score.id),
-            metadata={"action": score.action, "product_id": product_id, "keyword": score.keyword},
+            entity_id=str(score_id),
+            metadata={"action": action, "product_id": product_id, "keyword": score.get("keyword")},
             source_module="api.routes",
         )
         db.session.commit()
-        return {"data": {"score_id": score.id, "action": score.action, "result": action_taken}}
+        return {"data": {"score_id": score_id, "action": action, "result": action_taken}}
 
 
 @catalog_blp.route("/exports/markets.csv")

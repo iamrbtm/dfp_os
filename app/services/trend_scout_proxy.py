@@ -169,6 +169,9 @@ class TrendScoutProxy:
             offset=(page - 1) * per_page,
         )
 
+    def opportunity(self, score_id: int) -> dict[str, Any]:
+        return self.get(f"/api/v1/opportunities/{score_id}")
+
     def dismiss_opportunity(self, score_id: int) -> dict[str, Any]:
         return self.post(f"/api/v1/opportunities/{score_id}/dismiss")
 

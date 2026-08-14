@@ -50,7 +50,6 @@ from app.models import (
     User,
     UserRole,
 )
-from app.services.trend_scout_weights import seed_default_weights as _seed_trend_weights
 from app.services.users import ensure_admin_user
 
 
@@ -412,8 +411,6 @@ def seed_demo_data(*, admin_email: str, admin_password: str) -> dict[str, int]:
             "description": "Enable Product Studio",
         },
     )
-
-    _seed_trend_weights()
 
     catalog_counts = _seed_market_catalog(business)
 

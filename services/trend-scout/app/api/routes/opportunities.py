@@ -126,6 +126,21 @@ async def list_opportunities(
     )
 
 
+@router.get("/{score_id}", response_model=OpportunityScore)
+async def get_opportunity(
+    score_id: int,
+    session: AsyncSession = Depends(get_session),
+    _token: str = SCOPE_READ,
+) -> OpportunityScore:
+    row = await session.get(TrendOpportunityScore, score_id)
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "opportunity_not_found", "message": f"No opportunity id={score_id}."},
+        )
+    return _to_score(row)
+
+
 @router.post("/{score_id}/dismiss", response_model=OpportunityScore)
 async def dismiss_opportunity(
     score_id: int,

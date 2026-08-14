@@ -49,11 +49,6 @@ from app.schemas.pos import (
 from app.schemas.print_job import PrintFailureAutopsySchema, PrintJobSchema
 from app.schemas.setting import SettingSchema
 from app.schemas.promotion import ContentDraftSchema, SignAssetSchema
-from app.schemas.trend import (
-    TrendOpportunityScoreSchema,
-    TrendReportSchema,
-    TrendSourceHealthRecordSchema,
-)
 
 __all__ = [
     "ReceiptLineItemSchema",
@@ -98,8 +93,5 @@ __all__ = [
     "PrintJobSchema",
     "ProductSchema",
     "SettingSchema",
-    "TrendOpportunityScoreSchema",
-    "TrendReportSchema",
-    "TrendSourceHealthRecordSchema",
     "ResourceListEnvelope",
 ]
