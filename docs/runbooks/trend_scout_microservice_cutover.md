@@ -32,6 +32,7 @@ task-run state.
 5. **Env vars set**:
    - `TREND_SCOUT_SERVICE_URL=http://trend-scout:8093` (set in `x-env-app` already)
    - `TREND_SCOUT_INTERNAL_API_TOKEN` — shared between the Flask app and the microservice
+   - `TREND_SCOUT_REDIS_URL=redis://redis:6379/2` — shared task-run monitor and Redis Streams state
    - `TREND_SCOUT_CELERY_QUEUE=trend_scout`, `TREND_SCOUT_CELERY_TASK_PRIORITY=1`
 6. **Existing monolith data migration** — there is no automatic migration from
    deleted Flask tables to the microservice DB. If old trend rows were valuable,
@@ -57,13 +58,26 @@ The cutover is env-driven. No code changes are needed at runtime.
 2. **Run the first pipeline from the new microservice**:
 
    ```bash
-   curl -fsS -H "Authorization: Bearer $TREND_SCOUT_INTERNAL_API_TOKEN" \
-      -X POST http://localhost:8093/api/v1/pipeline/run
+   RUN_RESPONSE=$(curl -fsS -H "Authorization: Bearer $TREND_SCOUT_INTERNAL_API_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"trigger":"production-smoke"}' \
+      -X POST http://localhost:8093/api/v1/pipeline/run)
+   echo "$RUN_RESPONSE" | jq
    ```
 
    The pipeline enqueues on the `trend_scout` queue at priority 1. The
    dedicated worker consumes it; the main app's worker also drains it but
    never preempts higher-priority tasks.
+
+   Verify the queued run is visible before the worker starts processing:
+
+   ```bash
+   RUN_ID=$(echo "$RUN_RESPONSE" | jq -r .run_id)
+   curl -fsS -H "Authorization: Bearer $TREND_SCOUT_INTERNAL_API_TOKEN" \
+      "http://localhost:8093/api/v1/pipeline/status/$RUN_ID" | jq
+   curl -fsS -H "Authorization: Bearer $TREND_SCOUT_INTERNAL_API_TOKEN" \
+      "http://localhost:8093/api/v1/pipeline/runs/$RUN_ID" | jq
+   ```
 
 3. **Verify the Flask proxy**:
 
@@ -142,9 +156,42 @@ The completed hard-cutover deletes:
    stats` and confirm the dedicated `trend-scout-worker` is registered. If the
    main `worker` container drains `trend_scout` before the dedicated worker,
    the dedicated worker is starved — Phase 10 surfaces that as a metric.
-4. **Pipeline run progress**. The admin UI shows `current_step` from the
-   microservice task monitor. A Redis-backed monitor is still recommended for
-   cross-process persistence.
+4. **Pipeline run progress**. The admin UI shows `current_step` and progress
+   from the Redis-backed microservice task monitor. The API and worker share
+   records through `TREND_SCOUT_REDIS_URL`, so queued/running/completed/failed/
+   revoked state survives container boundaries. A Redis outage is degraded
+   production state; the service falls back to process-local memory only to keep
+   the pipeline from crashing.
+
+## Production Verification Gate
+
+Run these checks before calling Trend Scout production-ready on a deployment:
+
+```bash
+cd services/trend-scout
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest -q -m 'not slow'
+
+cd ../firecrawl
+uv run --extra dev ruff check .
+uv run --extra dev ruff format --check .
+uv run --extra dev pytest -q
+
+cd ../..
+uv run pytest -q tests/test_trend_scout_proxy.py
+uv run pytest --collect-only -q
+uv run python -c "from app import create_app; app=create_app(); print(len(app.url_map._rules))"
+```
+
+Docker build note: `trend-scout` and `trend-scout-worker` share the same image
+tag (`dfpos-trend-scout:local`). Build the shared image once instead of building
+both services concurrently:
+
+```bash
+docker compose build trend-scout
+docker compose --profile firecrawl build firecrawl-api
+```
 
 ## Firecrawl Adapter
 

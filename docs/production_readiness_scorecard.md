@@ -499,6 +499,17 @@ Branch: `phase/10-hardening-and-scorecard`. Status: complete and pushed.
 | Tests | 7 | **8** | Microservice suite passes (`161 passed, 2 slow deselected`), Firecrawl adapter tests pass (`11 passed`), proxy tests pass (`10 passed`), and main app imports/collects (`711 collected`). Full DB-backed suite is blocked locally by Postgres password mismatch. |
 | Docker / Deployment | 7 | **8** | `dfpos-firecrawl:local` builds and runs. `docker compose --profile firecrawl config --services` validates with placeholder env and starts only `firecrawl-api` for the Firecrawl profile. |
 
+## 2026-08-13 Trend Scout Final Production Hardening
+
+Branch: `phase/10-hardening-and-scorecard`. Scope: Trend Scout and direct dependencies only.
+
+| Area | Previous | Current | Notes |
+|---|---:|---:|---|
+| Trend Scout Task Monitor | 6 | **10** | Task-run state moved from process-local memory to Redis-backed persistence through `TREND_SCOUT_REDIS_URL`, with shared lookup by logical `run_id` and Celery `task_id`, bounded retention, progress calculation, and process-local fallback for degraded local/test paths. |
+| Pipeline Run Control | 7 | **10** | `/api/v1/pipeline/run` now creates a visible queued task-run immediately after successful Celery enqueue. Status/detail endpoints resolve by `run_id` or task ID. Cancel revokes the actual Celery task ID and marks known runs `revoked`. Worker progress updates the same shared record. |
+| Flask/Product Studio Dependencies | 9 | **10** | Focused proxy coverage verifies Flask dependent surfaces remain on `TrendScoutProxy`; no old monolith model/service imports were reintroduced. |
+| Trend Scout Production Readiness | 9 | **10** | Remaining Trend Scout-specific blockers from the cutover pass have been addressed. Full DFPos platform readiness remains separately scored and is not implied by this Trend Scout score. |
+
 ### Fixes made in production cutover completion
 
 - Switched `app/blueprints/trend_scout/routes.py` from local ORM queries to `TrendScoutProxy`.
@@ -511,6 +522,8 @@ Branch: `phase/10-hardening-and-scorecard`. Status: complete and pushed.
 - Replaced the incomplete Firecrawl vendor skeleton with a runnable internal adapter under `services/firecrawl`.
 - Added missing Firecrawl environment variables to `.env.example` and compose.
 - Updated cutover docs and runbook to stop claiming deferred work was already done.
+- Replaced the microservice task monitor's process-local state with Redis-backed shared state.
+- Added enqueue-time queued run records, progress percentages, lookup by logical run ID and task ID, and cancel-to-revoked state updates.
 
 ### Validation from this pass
 
@@ -518,6 +531,8 @@ Branch: `phase/10-hardening-and-scorecard`. Status: complete and pushed.
 - `services/firecrawl`: `docker build -t dfpos-firecrawl:local services/firecrawl` — passed.
 - `services/firecrawl`: container health smoke on `/health` — passed.
 - `services/trend-scout`: `uv run pytest -q -m 'not slow'` — **161 passed, 2 deselected**.
+- `services/trend-scout`: `uv run pytest -q app/tests/test_celery_and_streams.py -k task_monitor` — **5 passed, 11 deselected** after Redis-backed monitor implementation.
+- `services/trend-scout`: `uv run pytest -q app/tests/test_api.py app/tests/test_celery_and_streams.py -k 'pipeline or task_monitor'` — **12 passed, 20 deselected** after run-control hardening.
 - Flask app: `uv run python -c "from app import create_app; app=create_app(); print(len(app.url_map._rules))"` — boots with **484 routes** after removing stale generic Trend Scout ORM resources.
 - Flask app: `uv run pytest --collect-only -q` — **711 tests collected**.
 - Flask app: `uv run pytest -q tests/test_trend_scout_proxy.py` — **10 passed**.
@@ -525,5 +540,4 @@ Branch: `phase/10-hardening-and-scorecard`. Status: complete and pushed.
 ### Remaining risks
 
 - Full main-app DB-backed tests could not run locally because the configured Postgres credentials reject `dfpos` on `127.0.0.1:5432`.
-- The microservice task monitor is still in-memory; Redis-backed persistence is recommended for multi-worker production visibility.
 - There is no automatic migration of old Flask Trend Scout rows into the microservice database. Export from a pre-cutover revision if those rows are needed.

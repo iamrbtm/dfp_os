@@ -53,6 +53,7 @@ Celery beat (existing) ──► app.tasks.dispatch_trend_scout_run ──HTTP P
 
 - **Shared Postgres, new logical DB `trend_scout`** — same pattern as `intelligence` and `audit`. Provisioned via `docker/postgres/init/`.
 - **Redis DB 2** for Firecrawl trend scout streams (DB 0 = audit outbox, DB 1 = Celery broker, DB 2 = new).
+- **Redis-backed task monitor** on Redis DB 2 stores queued/running/completed/failed/revoked pipeline state so the API and worker containers share run visibility by logical `run_id` and Celery `task_id`.
 - **Celery task lives in the microservice** (option B). Beat stays in the main app and dispatches via a 5-line HTTP POST.
 - **Queue partition `trend_scout`, priority 1/10** — Trend Scout is low priority. Main app's default queue stays at high priority. A dedicated `trend-scout-worker` container subscribes only to the low-priority queue with `concurrency=1`; the existing main worker is also allowed to drain it (low-priority) when idle so the dedicated worker is not wasted.
 - **Firecrawl-compatible internal adapter** in `services/firecrawl/`, hardened with bearer auth, SSRF blocking for local/internal URLs, bounded response size, and a narrow `/v2/scrape` API surface. Upstream Firecrawl vendoring remains a future legal/security-reviewed option; production no longer references an incomplete upstream checkout.
@@ -197,6 +198,7 @@ A phase is "production-ready" when:
 - Product Studio no longer imports the monolith analyzer. It reads the latest product-linked score from the microservice.
 - `.env.example` now includes the Firecrawl adapter variables.
 - `docker compose --profile firecrawl` starts the internal adapter (`firecrawl-api`) instead of requiring incomplete upstream sidecars.
+- The final production hardening pass replaced process-local task-run state with Redis-backed persistence and made pipeline enqueue/cancel/status endpoints production-safe across API/worker containers.
 
 ## 10. Audit events (full list for this initiative)
 
