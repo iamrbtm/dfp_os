@@ -187,3 +187,13 @@ def test_prefix_constants() -> None:
     assert weights.PREFIX_BUYER == "trend_buyer."
     assert weights.PREFIX_METRIC == "trend_metric."
     assert weights.PREFIX_SOURCE_ENABLED == "trend_source_enabled."
+
+
+def test_trend_weight_unique_constraint_is_group_scoped() -> None:
+    constraints = {
+        constraint.name: tuple(column.name for column in constraint.columns)
+        for constraint in TrendWeight.__table__.constraints
+        if constraint.name
+    }
+    assert constraints["uq_trend_weights_group_key"] == ("group", "key")
+    assert "uq_trend_weights_key" not in constraints

@@ -32,6 +32,20 @@ from app.services.weights import load_all_weights, scoring_version
 logger = logging.getLogger(__name__)
 
 
+def _coerce_scraped_at(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc)
+
+
 async def _persist_opportunity_scores(
     session: AsyncSession,
     report: TrendReport,
@@ -79,7 +93,7 @@ async def _persist_source_health(
                 error_message=sh.get("error_message"),
                 throttled=False,
                 throttle_reason=None,
-                scraped_at=sh.get("scraped_at") or datetime.now(timezone.utc),
+                scraped_at=_coerce_scraped_at(sh.get("scraped_at")),
                 metadata_json=sh.get("metadata") or {},
             )
         )

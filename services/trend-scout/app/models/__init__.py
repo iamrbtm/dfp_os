@@ -134,7 +134,7 @@ class SourceHealthRecord(PrimaryKeyMixin, TimestampMixin, Base):
 
 class TrendWeight(PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "trend_weights"
-    __table_args__ = (UniqueConstraint("key", name="uq_trend_weights_key"),)
+    __table_args__ = (UniqueConstraint("group", "key", name="uq_trend_weights_group_key"),)
 
     key: Mapped[str] = mapped_column(String(128), nullable=False)
     value: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)

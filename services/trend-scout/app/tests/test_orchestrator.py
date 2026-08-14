@@ -102,3 +102,14 @@ def test_new_category_discovery_returns_stable_shape() -> None:
     assert "notes" in result
     assert result["total_clusters_found"] == 0
     assert result["clusters"] == []
+
+
+def test_source_health_scraped_at_accepts_iso_strings() -> None:
+    from datetime import datetime
+
+    from app.services.analysis.orchestrator import _coerce_scraped_at
+
+    scraped_at = _coerce_scraped_at("2026-08-14T05:32:17.325748+00:00")
+
+    assert isinstance(scraped_at, datetime)
+    assert scraped_at.isoformat() == "2026-08-14T05:32:17.325748+00:00"

@@ -507,6 +507,7 @@ Branch: `phase/10-hardening-and-scorecard`. Scope: Trend Scout and direct depend
 |---|---:|---:|---|
 | Trend Scout Task Monitor | 6 | **10** | Task-run state moved from process-local memory to Redis-backed persistence through `TREND_SCOUT_REDIS_URL`, with shared lookup by logical `run_id` and Celery `task_id`, bounded retention, progress calculation, and process-local fallback for degraded local/test paths. |
 | Pipeline Run Control | 7 | **10** | `/api/v1/pipeline/run` now creates a visible queued task-run immediately after successful Celery enqueue. Status/detail endpoints resolve by `run_id` or task ID. Cancel revokes the actual Celery task ID and marks known runs `revoked`. Worker progress updates the same shared record. |
+| Runtime Pipeline Smoke | 7 | **10** | Live Docker smoke confirmed `app.workers.tasks.trend_scout_pipeline` executes in `trend-scout-worker` and completes successfully with status `success`, step `complete`, and progress `100.0`. Fixed runtime-only failures in weight uniqueness and source-health timestamp coercion. |
 | Flask/Product Studio Dependencies | 9 | **10** | Focused proxy coverage verifies Flask dependent surfaces remain on `TrendScoutProxy`; no old monolith model/service imports were reintroduced. |
 | Trend Scout Production Readiness | 9 | **10** | Remaining Trend Scout-specific blockers from the cutover pass have been addressed. Full DFPos platform readiness remains separately scored and is not implied by this Trend Scout score. |
 
@@ -524,13 +525,16 @@ Branch: `phase/10-hardening-and-scorecard`. Scope: Trend Scout and direct depend
 - Updated cutover docs and runbook to stop claiming deferred work was already done.
 - Replaced the microservice task monitor's process-local state with Redis-backed shared state.
 - Added enqueue-time queued run records, progress percentages, lookup by logical run ID and task ID, and cancel-to-revoked state updates.
+- Changed Trend Scout weight uniqueness from key-only to group/key so defaults can seed repeated source keys across score/source/buyer/metric groups.
+- Coerced source-health `scraped_at` values from ISO strings to timezone-aware datetimes before Postgres persistence.
+- Guarded audit startup replay so Celery worker task app creation does not recursively enqueue `app.tasks.audit_outbox.flush_outbox`.
 
 ### Validation from this pass
 
 - `services/firecrawl`: `uv run --extra dev pytest -q` — **11 passed**.
 - `services/firecrawl`: `docker build -t dfpos-firecrawl:local services/firecrawl` — passed.
 - `services/firecrawl`: container health smoke on `/health` — passed.
-- `services/trend-scout`: `uv run ruff check . && uv run ruff format --check . && uv run pytest -q -m 'not slow'` — **165 passed, 2 deselected, Ruff clean, format clean**.
+- `services/trend-scout`: `uv run ruff check . && uv run ruff format --check . && uv run pytest -q -m 'not slow'` — **167 passed, 2 deselected, Ruff clean, format clean**.
 - `services/trend-scout`: `uv run pytest -q app/tests/test_celery_and_streams.py -k task_monitor` — **5 passed, 11 deselected** after Redis-backed monitor implementation.
 - `services/trend-scout`: `uv run pytest -q app/tests/test_api.py app/tests/test_celery_and_streams.py -k 'pipeline or task_monitor'` — **12 passed, 20 deselected** after run-control hardening.
 - Flask app: `uv run python -c "from app import create_app; app=create_app(); print(len(app.url_map._rules))"` — boots with **484 routes** after removing stale generic Trend Scout ORM resources.
@@ -539,6 +543,7 @@ Branch: `phase/10-hardening-and-scorecard`. Scope: Trend Scout and direct depend
 - Docker: `docker compose --profile firecrawl config --services` — validates with placeholder env.
 - Docker: `docker compose build trend-scout` — `dfpos-trend-scout:local` built.
 - Docker: `docker compose --profile firecrawl build firecrawl-api` — `dfpos-firecrawl:local` built.
+- Runtime Docker smoke: `POST /api/v1/pipeline/run` from `web` to `trend-scout` returned accepted queued run; `trend-scout-worker` received `app.workers.tasks.trend_scout_pipeline`; final status was `success`, `complete`, `100.0` progress.
 
 ### Remaining risks
 
