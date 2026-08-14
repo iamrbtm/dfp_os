@@ -156,3 +156,43 @@ Branch: `phase/2-sources-migrated`. Status: complete.
 - **Risk:** the Flask `/api/internal/internal-demand` endpoint does not yet exist; the `internal_demand` source will fail to fetch until Phase 6 (cutover) lands the endpoint.
 - **Risk:** E501 line-length is suppressed for migrated source files via `per-file-ignores` because user-agent strings in those files exceed the 120-column limit and we preserve them verbatim.
 - **Out of scope:** analyzer + scoring + backtest (Phase 3), Celery pipeline tasks (Phase 4), full API surface (Phase 5), Flask proxy/cutover (Phase 6), Firecrawl (Phases 7-9).
+
+## Phase 3 — Analyzer + Scoring + Backtest (2026-08-13)
+
+Branch: `phase/3-analyzer-and-scoring`. Status: complete.
+
+| Area | Before | After | Justification |
+|---|---:|---:|---|
+| Microservice / Trend Scout Extraction | 5 | 7 | Analyzer pipeline landed end-to-end: velocity / momentum / opportunity scoring / category discovery stubs / backtest / calibration. |
+| Tests | 37 non-slow + 2 slow | 91 non-slow + 2 slow (+54) | Scoring math (16 tests), weights module (16 tests), backtest + calibration (12 tests), orchestrator + AI provider (5 tests), source health (4 tests already counted), scores math edge cases. |
+| Cost Engine | unchanged from Phase 2 | unchanged | Cost Engine in the monolith is a separate module untouched here. |
+| Analytics | unchanged from Phase 2 | unchanged | Trend Scout analytics (the focus of this initiative) is the source of the score deltas. |
+| Documentation | unchanged from Phase 2 | unchanged | Plan doc references Phase 3 deliverables; deeper docs land in Phase 10. |
+
+### Phase 3 files added (services/trend-scout/)
+
+- `app/services/weights.py`: full weights module (DEFAULT_SCORE_WEIGHTS, DEFAULT_SOURCE_WEIGHTS including the 7 Firecrawl targets, DEFAULT_BUYER_SOURCE_WEIGHTS, DEFAULT_METRIC_WEIGHTS), async loaders, validate_score_weights, seed_default_weights, scoring_version (deterministic sha256 hash).
+- `app/services/ai_provider.py`: OpenAI synthesis with deterministic fallback that never invents metrics.
+- `app/services/analysis/__init__.py`, `orchestrator.py`, `trend_detector.py`, `opportunity_scoring.py`, `new_category_discovery.py`: 7-dimension scoring, velocity/momentum from snapshot history, license/local keyword signals, growing/declining extraction, opportunity ranking.
+- `app/services/backtest.py`: synthetic-history-safe backtest (rmse/mae/r2/precision_at_k), no_data path, tuning hints.
+- `app/services/calibration.py`: persists backtest results into TrendWeight table (group `calibration_run:<timestamp>`), regression detector across the latest two runs.
+
+### Phase 3 tests added
+
+- `app/tests/test_scoring.py` — 16 tests covering scoring math, keyword signals, action thresholds, velocity/top-opportunity on empty DB.
+- `app/tests/test_weights.py` — 16 tests covering default weights, Firecrawl source weights (Etsy lowest), validation, deterministic version hashing, async loaders.
+- `app/tests/test_backtest.py` — 12 tests covering RMSE/MAE/R²/Precision@K math, tuning hints, no-data path, calibration persistence, regression detection.
+- `app/tests/test_orchestrator.py` — 5 tests covering AI provider fallback paths and orchestrator imports.
+
+### Phase 3 commands run
+
+- `cd services/trend-scout && uv run ruff check .` — all checks passed.
+- `cd services/trend-scout && uv run ruff format --check .` — 53 files clean.
+- `cd services/trend-scout && uv run pytest -v -m "not slow"` — **91 passed in 34.93s**, 2 slow deselected.
+
+### Phase 3 risk and out-of-scope
+
+- **Risk:** the new ``trend_detector.py`` is intentionally simplified relative to the monolith's 1,131-line version. Velocity / momentum / opportunity math are equivalent at the data-model level but the deeper NLP/prompt synthesis layer lands fully in Phase 10.
+- **Risk:** ``new_category_discovery`` returns an empty cluster set by design in Phase 3. Phase 10 adds DBSCAN + text-embedding-3-small.
+- **Risk:** calibration rows are stored in the ``trend_weights`` table under group ``calibration_run:<timestamp>`` to avoid adding a new table. This is fine for retrieval but a dedicated ``trend_calibration_results`` table is a possible Phase 10 follow-up if query patterns become complex.
+- **Out of scope:** Celery pipeline tasks (Phase 4), full API surface (Phase 5), Flask proxy/cutover (Phase 6), Firecrawl (Phases 7-9).

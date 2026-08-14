@@ -57,6 +57,10 @@ select = ["E", "F", "I", "N", "W"]
 # Source files migrated from the Flask app have long user-agent strings we
 # intentionally preserve verbatim. The line-length rule is the casualty.
 "app/sources/*.py" = ["E501"]
+# Tests use nested helper classes whose inner method names must differ from
+# the outer class's `self` to avoid shadowing. The verbose N805 names are
+# intentional.
+"app/tests/*.py" = ["N805"]
 
 [build-system]
 requires = ["setuptools>=75"]
