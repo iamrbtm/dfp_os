@@ -496,7 +496,7 @@ Branch: `phase/10-hardening-and-scorecard`. Status: complete and pushed.
 | Firecrawl Self-Host / Adapter | 2 | **7** | Replaced incomplete upstream-vendor skeleton with a production-buildable internal Firecrawl-compatible adapter. Docker image builds, health smoke passes, bearer auth and localhost SSRF guard are tested. Upstream Firecrawl vendoring remains optional future work. |
 | REST API | 7 | **8** | Removed stale ORM-backed `trend-reports`, `trend-opportunity-scores`, and `trend-source-health` generic Flask resources. Trend Scout data is served by the microservice API. |
 | Documentation | 8 | **9** | Plan and cutover runbook now reflect the actual hard cutover, deleted files, Firecrawl adapter profile, and rollback requirements. |
-| Tests | 7 | **8** | Microservice suite passes (`161 passed, 2 slow deselected`), Firecrawl adapter tests pass (`11 passed`), proxy tests pass (`10 passed`), and main app imports/collects (`711 collected`). Full DB-backed suite is blocked locally by Postgres password mismatch. |
+| Tests | 7 | **8** | Microservice suite passes (`165 passed, 2 slow deselected`), Firecrawl adapter tests pass (`11 passed`), proxy tests pass, and main app imports/collects (`711 collected`). Full DB-backed suite is blocked locally by Postgres password mismatch. |
 | Docker / Deployment | 7 | **8** | `dfpos-firecrawl:local` builds and runs. `docker compose --profile firecrawl config --services` validates with placeholder env and starts only `firecrawl-api` for the Firecrawl profile. |
 
 ## 2026-08-13 Trend Scout Final Production Hardening
@@ -530,12 +530,15 @@ Branch: `phase/10-hardening-and-scorecard`. Scope: Trend Scout and direct depend
 - `services/firecrawl`: `uv run --extra dev pytest -q` — **11 passed**.
 - `services/firecrawl`: `docker build -t dfpos-firecrawl:local services/firecrawl` — passed.
 - `services/firecrawl`: container health smoke on `/health` — passed.
-- `services/trend-scout`: `uv run pytest -q -m 'not slow'` — **161 passed, 2 deselected**.
+- `services/trend-scout`: `uv run ruff check . && uv run ruff format --check . && uv run pytest -q -m 'not slow'` — **165 passed, 2 deselected, Ruff clean, format clean**.
 - `services/trend-scout`: `uv run pytest -q app/tests/test_celery_and_streams.py -k task_monitor` — **5 passed, 11 deselected** after Redis-backed monitor implementation.
 - `services/trend-scout`: `uv run pytest -q app/tests/test_api.py app/tests/test_celery_and_streams.py -k 'pipeline or task_monitor'` — **12 passed, 20 deselected** after run-control hardening.
 - Flask app: `uv run python -c "from app import create_app; app=create_app(); print(len(app.url_map._rules))"` — boots with **484 routes** after removing stale generic Trend Scout ORM resources.
 - Flask app: `uv run pytest --collect-only -q` — **711 tests collected**.
 - Flask app: `uv run pytest -q tests/test_trend_scout_proxy.py` — **10 passed**.
+- Docker: `docker compose --profile firecrawl config --services` — validates with placeholder env.
+- Docker: `docker compose build trend-scout` — `dfpos-trend-scout:local` built.
+- Docker: `docker compose --profile firecrawl build firecrawl-api` — `dfpos-firecrawl:local` built.
 
 ### Remaining risks
 
