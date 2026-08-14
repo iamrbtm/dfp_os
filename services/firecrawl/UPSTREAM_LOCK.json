@@ -1,0 +1,10 @@
+{
+  "vendor": "firecrawl",
+  "upstream_repository": "https://github.com/firecrawl/firecrawl",
+  "upstream_license": "AGPL-3.0",
+  "upstream_pinned_tag": "v1.0.0",
+  "upstream_pinned_commit_sha": "<fill-via-pin-update-cli>",
+  "first_vendored": "2026-08-13",
+  "last_reviewed": "2026-08-13",
+  "notes": "Pinned at the first stable v1 release. Phase 10 will replace this hash with the actual upstream SHA when the vendor command runs."
+}

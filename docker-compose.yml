@@ -442,17 +442,104 @@ services:
         condition: service_healthy
     command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "worker", "-Q", "trend_scout", "--loglevel=info", "--concurrency=1"]
 
-  trend-scout-migrate:
+trend-scout-migrate:
     build: services/trend-scout
     image: dfpos-trend-scout:local
     profiles: ["release"]
     environment:
       TREND_SCOUT_SERVICE_ENV: ${FLASK_ENV:-production}
-      TREND_SCOUT_DATABASE_URL: postgresql+asyncpg://${TREND_SCOUT_POSTGRES_USER:?TREND_SCOUT_POSTGRES_USER must be set}:${TREND_SCOUT_POSTGRES_PASSWORD:?TREND_SCOUT_POSTGRES_PASSWORD must be set}@db:5432/${TREND_SCOUT_POSTGRES_DB:?TREND_SCOUT_POSTGRES_DB must be set}
+      TREND_SCOUT_DATABASE_URL: postgresql+asyncpg://${TREND_SCOUT_POSTGRES_USER}:${TREND_SCOUT_POSTGRES_PASSWORD}@db:5432/${TREND_SCOUT_POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy
     command: ["uv", "run", "alembic", "upgrade", "head"]
+
+  # ── Firecrawl self-host (Phase 7+) — opt-in via FIRECRAWL_ENABLED=true ──
+  firecrawl-api:
+    build: services/firecrawl
+    image: dfpos-firecrawl:local
+    init: true
+    mem_limit: 2048m
+    profiles: ["firecrawl"]
+    environment:
+      USE_DB_AUTHENTICATION: "true"
+      BULL_AUTH_KEY: ${FIRECRAWL_BULL_AUTH_KEY:?FIRECRAWL_BULL_AUTH_KEY must be set}
+      BULL_QUEUE_ADMIN_ENABLED: "false"
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:?FIRECRAWL_API_KEY must be set}
+      NUQ_POSTGRES_URL: postgresql+psycopg://${FIRECRAWL_NUQ_USER}:${FIRECRAWL_NUQ_PASSWORD}@firecrawl-nuq:5432/firecrawl_nuq
+      REDIS_URL: redis://firecrawl-redis:6379
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    depends_on:
+      firecrawl-redis:
+        condition: service_healthy
+      firecrawl-rabbitmq:
+        condition: service_healthy
+      firecrawl-nuq:
+        condition: service_healthy
+      firecrawl-playwright:
+        condition: service_started
+    command: ["uv", "run", "uvicorn", "firecrawl.main:app", "--host", "0.0.0.0", "--port", "3002"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3002/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  firecrawl-playwright:
+    image: microfost/firecrawl-playwright:latest
+    profiles: ["firecrawl"]
+    init: true
+    mem_limit: 4096m
+    environment:
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    volumes:
+      - firecrawl_playwright_cache:/ms-playwright
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  firecrawl-redis:
+    image: redis:7-alpine
+    profiles: ["firecrawl"]
+    volumes:
+      - firecrawl_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  firecrawl-rabbitmq:
+    image: rabbitmq:3-management
+    profiles: ["firecrawl"]
+    volumes:
+      - firecrawl_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  firecrawl-nuq:
+    image: postgres:16
+    profiles: ["firecrawl"]
+    environment:
+      POSTGRES_DB: firecrawl_nuq
+      POSTGRES_USER: ${FIRECRAWL_NUQ_USER:?FIRECRAWL_NUQ_USER must be set}
+      POSTGRES_PASSWORD: ${FIRECRAWL_NUQ_PASSWORD:?FIRECRAWL_NUQ_PASSWORD must be set}
+    volumes:
+      - firecrawl_nuq_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   slicer:
     build:
@@ -506,3 +593,7 @@ volumes:
   audit_queue:
   seaweedfs_data:
   tailwind_node_modules:
+  firecrawl_redis_data:
+  firecrawl_rabbitmq_data:
+  firecrawl_nuq_data:
+  firecrawl_playwright_cache:

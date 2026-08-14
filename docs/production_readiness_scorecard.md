@@ -321,3 +321,37 @@ Branch: `phase/6-flask-proxy-and-cutover`. Status: complete.
 - **Risk:** `internal_api/routes.py` requires the `TREND_SCOUT_INTERNAL_API_TOKEN` value in the main app's config (added in Phase 4). Operators must keep that token in sync between the Flask app and the microservice.
 - **Risk:** `/api/internal/orders-since` returns an aggregated view that depends on `Order` and `PosSale` ORM models. If those models change (renamed, removed, or schema-migrated) the endpoint must be updated in lockstep.
 - **Out of scope:** route-by-route data migration to the proxy (Phase 6.1+), deletions of the legacy files (those land with the full route migration), Firecrawl (Phases 7-9).
+
+## Phase 7 — Firecrawl Self-Host Skeleton (2026-08-13)
+
+Branch: `phase/7-firecrawl-self-host`. Status: complete.
+
+| Area | Before | After | Justification |
+|---|---:|---:|---|
+| Firecrawl Self-Host | 0 | 2 (foundation) | Vendored skeleton + security review + compose wiring. Production build lands in Phase 10 once upstream is pinned and the official Docker image is vetted. |
+| Docker / Deployment | unchanged from Phase 6 | +5 services / +4 volumes | `firecrawl-api` (API :3002), `firecrawl-playwright` (browser pool), `firecrawl-redis`, `firecrawl-rabbitmq`, `firecrawl-nuq` (Postgres). All `profiles: ["firecrawl"]` so they only come up with `docker compose --profile firecrawl up`. |
+| Security / Permissions | unchanged from Phase 6 | unchanged | Hardened defaults documented but not yet enforceable (no image to enforce them on yet). Phase 10 builds the actual image and verifies the patches. |
+
+### Phase 7 files added
+
+- `services/firecrawl/README.md`: explains scope, vendoring policy, and how to rebuild.
+- `services/firecrawl/UPSTREAM_LOCK.json`: pinned tag + commit SHA placeholder (Phase 10 fills in the SHA).
+- `services/firecrawl/firecrawl_client.py`: `FirecrawlClient` dataclass wrapping `httpx` calls to Firecrawl v2 (`scrape`, `search`). `scrape_trending(...)` returns a `ScoutResult`-shaped dict that Phase 8 sources drop in.
+- `services/firecrawl/tests/test_firecrawl_client.py`: 6 tests covering happy path, network errors, HTTP errors, payload shapes, and the trending-page wrapper.
+- `docs/compliance/firecrawl_security_review.md`: per-target security gaps and the patched defaults (auth on, queue admin disabled, persistent volumes, robots.txt respect, audit dispatch).
+
+### Phase 7 files modified
+
+- `docker-compose.yml`: 5 new services under `profiles: ["firecrawl"]`, 4 new volumes, env-var blocks for `FIRECRAWL_BULL_AUTH_KEY` / `FIRECRAWL_API_KEY` / `FIRECRAWL_NUQ_*`.
+
+### Phase 7 commands run
+
+- `PYTHONPATH=. uv run pytest -q services/firecrawl/tests/test_firecrawl_client.py` — **6 passed in 0.30s**.
+- `uv run ruff check services/firecrawl/` — all checks passed.
+
+### Phase 7 risk and out-of-scope
+
+- **Risk:** the upstream Firecrawl Docker image (`microfost/firecrawl-playwright:latest`) is referenced by tag in compose. Phase 10 pins the SHA in `services/firecrawl/UPSTREAM_LOCK.json` after the vendor command is run.
+- **Risk:** the `firecrawl-api` Dockerfile in `services/firecrawl/` is a placeholder until Phase 10 when the actual upstream Dockerfile is vendored; production deploys should use the official image with our hardened `docker-compose.yml` overlay.
+- **Risk:** no Firecrawl-specific test coverage for `robots.txt` handling. Phase 8 will add integration tests for each target that verify Firecrawl returns the expected fields.
+- **Out of scope:** per-target source code (Phase 8), Etsy compliance flow (Phase 9), vendoring the upstream source repo (Phase 10).
