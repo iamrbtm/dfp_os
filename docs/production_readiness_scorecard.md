@@ -117,3 +117,42 @@ Branch: `phase/1-ms-scaffold`. Status: complete.
 - **Risk:** the `trend-scout-worker` Celery container is wired but no actual Celery tasks are defined yet (Phase 4 fills this). Until Phase 4 lands, the worker container starts and consumes nothing.
 - **Risk:** the `trend-scout-migrate` release-profile service exists but requires the `trend_scout` logical DB to be provisioned. With the init script updated in this phase, a fresh database will provision the DB and user; existing databases need a manual `CREATE DATABASE` and `CREATE USER` before migrations can run.
 - **Out of scope:** source migration (Phase 2), analyzer (Phase 3), pipeline tasks (Phase 4), full API surface (Phase 5), Flask proxy/cutover (Phase 6), Firecrawl (Phases 7-9).
+
+## Phase 2 — Sources Migrated (2026-08-13)
+
+Branch: `phase/2-sources-migrated`. Status: complete.
+
+| Area | Before | After | Justification |
+|---|---:|---:|---|
+| Source Coverage | unchanged from Phase 1 | unchanged | All 10 existing sources migrated to the microservice unchanged in behavior. |
+| Microservice / Trend Scout Extraction | 3 | 5 | Fetcher pipeline + snapshot persistence + per-source imports landed. |
+| Tests | 10 smoke tests | +27 (37 total non-slow, 2 slow) | per-source unit tests (10), fetcher pipeline partition tests (4), snapshot persistence tests (6), audit dispatch tests (4), slow marker added; CI uses `-m 'not slow'`. |
+| Audit Logging | unchanged from Phase 1 | unchanged | `audit_dispatch.py` helper added; `internal_demand.py` imports it (Phase 3 wires the rest). |
+
+### Phase 2 files added (services/trend-scout/)
+
+- `app/sources/_base.py`, `bgg.py`, `etsy.py`, `google_trends.py`, `last30days.py`, `makerworld.py`, `myminifactory.py`, `pinterest.py`, `printables.py`, `reddit.py`, `tiktok.py` (copied from the monolith with import paths rewritten)
+- `app/sources/internal_demand.py` (rewritten to call the Flask /api/internal/internal-demand endpoint via httpx; gracefully returns a structured error until Phase 6 wires the endpoint)
+- `app/sources/__init__.py` (re-exports all 11 sources + helpers)
+- `app/services/fetcher_pipeline.py` (DB_FETCHERS / EXTERNAL_FETCHERS / run_all_sources / aggregate_source_health)
+- `app/services/snapshot_persistence.py` (async persist_snapshots, persist_source_health, create_empty_report, latest_source_health)
+- `app/services/audit_dispatch.py` (httpx-based dispatch_audit_event with best-effort semantics)
+
+### Phase 2 tests added
+
+- `app/tests/test_sources.py` — 12 tests (10 per source + 2 base).
+- `app/tests/test_fetcher_pipeline.py` — 6 tests (4 fast + 2 slow).
+- `app/tests/test_snapshot_persistence.py` — 6 tests.
+- `app/tests/test_audit_dispatch.py` — 4 tests.
+
+### Phase 2 commands run
+
+- `cd services/trend-scout && uv run ruff check .` — all checks passed.
+- `cd services/trend-scout && uv run ruff format --check .` — 41 files clean.
+- `cd services/trend-scout && uv run pytest -v -m "not slow"` — **37 passed in 33.99s**.
+
+### Phase 2 risk and out-of-scope
+
+- **Risk:** the Flask `/api/internal/internal-demand` endpoint does not yet exist; the `internal_demand` source will fail to fetch until Phase 6 (cutover) lands the endpoint.
+- **Risk:** E501 line-length is suppressed for migrated source files via `per-file-ignores` because user-agent strings in those files exceed the 120-column limit and we preserve them verbatim.
+- **Out of scope:** analyzer + scoring + backtest (Phase 3), Celery pipeline tasks (Phase 4), full API surface (Phase 5), Flask proxy/cutover (Phase 6), Firecrawl (Phases 7-9).

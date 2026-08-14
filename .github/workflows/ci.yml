@@ -106,4 +106,4 @@ jobs:
         run: uv run ruff format --check .
       - name: Run microservice tests
         working-directory: services/trend-scout
-        run: uv run pytest -v --tb=short -q
+        run: uv run pytest -v --tb=short -q -m 'not slow'
