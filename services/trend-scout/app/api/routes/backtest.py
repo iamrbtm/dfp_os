@@ -10,9 +10,7 @@ from app.security import SCOPE_READ, SCOPE_WRITE, verify_internal_token
 from app.services.backtest import (
     run_backtest,
 )
-from app.services.calibration import (
-    run_calibration as calibration_service,
-)
+from app.services import calibration as calibration_service
 
 router = APIRouter(
     prefix="",
@@ -59,12 +57,18 @@ async def run_calibration_route(
 ) -> dict[str, Any]:
     """Run the calibration (backtest + tuning hints) and persist a record."""
     async with async_session_factory() as session:
-        record = await calibration_service(session, trigger="manual")
+        runner = getattr(calibration_service, "run_calibration", calibration_service)
+        record = await runner(session, trigger="manual")
     return record
 
 
 @router.get("/calibration/history")
 async def calibration_history(_token: str = SCOPE_READ) -> dict[str, Any]:
     async with async_session_factory() as session:
-        history = await calibration_service.get_calibration_history(session, limit=20)
+        history_loader = getattr(calibration_service, "get_calibration_history", None)
+        if history_loader is None:
+            history_loader = getattr(calibration_service, "get_history", None)
+        if history_loader is None:
+            return {"items": []}
+        history = await history_loader(session, limit=20)
     return {"items": history}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import os
+from math import ceil
 from datetime import datetime, timezone
 
 from flask import abort, jsonify, redirect, render_template, request, Response, session, url_for
@@ -20,41 +21,66 @@ from app.models import (
     PrintJobStatus,
     Product,
     Setting,
-    SourceHealthRecord,
-    TrendCalibrationResult,
-    TrendOpportunityScore,
-    TrendReport,
     UserRole,
 )
 from app.services.audit import record_audit_event
-from app.services.trend_scout_backtest import run_backtest
-from app.services.trend_scout_calibration import (
-    check_regression,
-    get_calibration_history,
-    run_and_store_calibration,
-)
-from app.services.trend_scout_history import get_biggest_movers, get_score_history
-from app.services.trend_scout_task_monitor import (
-    cancel_task_run,
-    create_task_run,
-    get_recent_task_runs,
-    get_task_run,
-)
-from app.services.trend_scout_weights import (
-    DEFAULT_SCORE_WEIGHTS,
-    DEFAULT_SOURCE_WEIGHTS,
-    DEFAULT_BUYER_SOURCE_WEIGHTS,
-    DEFAULT_METRIC_WEIGHTS,
-    PREFIX_SCORE,
-    PREFIX_SOURCE,
-    PREFIX_BUYER,
-    PREFIX_METRIC,
-    PREFIX_SOURCE_ENABLED,
-    load_all_weights,
-    load_source_enabled_state,
-    save_weight,
-)
+from app.services.trend_scout_proxy import TrendScoutUnavailable, get_trend_scout_proxy
 from app.utils.auth import roles_required
+
+
+class AttrDict(dict):
+    """Dict with attribute access for existing Jinja templates."""
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError as exc:
+            raise AttributeError(key) from exc
+
+
+class ProxyPagination:
+    def __init__(self, items: list[dict], page: int, per_page: int, total: int):
+        self.items = [_objectify(item) for item in items]
+        self.page = page
+        self.per_page = per_page
+        self.total = total
+        self.pages = max(1, ceil(total / per_page)) if per_page else 1
+
+
+def _parse_dt(value):
+    if not value or isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _objectify(value):
+    if isinstance(value, dict):
+        out = AttrDict()
+        for key, item in value.items():
+            out[key] = _objectify(item)
+        for key in ("report_date", "created_at", "scraped_at", "run_date"):
+            if key in out:
+                out[key] = _parse_dt(out[key])
+        return out
+    if isinstance(value, list):
+        return [_objectify(item) for item in value]
+    return value
+
+
+def _json_error(exc: Exception, status_code: int = 503):
+    return jsonify({"error": "trend_scout_unavailable", "message": str(exc)}), status_code
+
+
+def _pagination_from_response(payload: dict, page: int, per_page: int) -> ProxyPagination:
+    return ProxyPagination(
+        payload.get("items", []),
+        page=page,
+        per_page=per_page,
+        total=int(payload.get("total") or 0),
+    )
 
 _PROVIDER_CONFIG_CHECKS: dict[str, list[tuple[str, str]]] = {
     "etsy": [("ETSY_API_KEY", "API key")],
@@ -112,42 +138,44 @@ def _freshness_score(scraped_at: datetime | None) -> int:
     return 20
 
 
-def _ranked_opportunity_ordering():
-    return (
-        TrendOpportunityScore.rank.is_(None).asc(),
-        TrendOpportunityScore.rank.asc(),
-        TrendOpportunityScore.opportunity_score.desc(),
-    )
+def _latest_report_and_reports(proxy):
+    latest_payload = proxy.latest_report()
+    latest = _objectify(latest_payload) if latest_payload else None
+    all_reports = _objectify(proxy.list_reports(limit=20).get("items", []))
+    return latest, all_reports
 
 
 @bp.get("/")
 @roles_required(UserRole.ADMIN)
 def index():
-    latest = db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).first()
-    all_reports = (
-        db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).limit(20).all()
-    )
-    source_health = []
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
-
-    scores_pagination = None
-    if latest:
-        source_health = (
-            db.session.query(SourceHealthRecord)
-            .filter(SourceHealthRecord.report_id == latest.id)
-            .order_by(SourceHealthRecord.source)
-            .all()
-        )
-        scores_query = (
-            db.session.query(TrendOpportunityScore)
-            .filter(
-                TrendOpportunityScore.report_id == latest.id,
-                TrendOpportunityScore.dismissed.is_(False),
+    try:
+        proxy = get_trend_scout_proxy()
+        latest, all_reports = _latest_report_and_reports(proxy)
+        source_health = _objectify(proxy.source_health(limit=100).get("items", [])) if latest else []
+        scores_pagination = None
+        if latest:
+            scores_pagination = _pagination_from_response(
+                proxy.report_opportunities(latest.id, page=page, per_page=per_page),
+                page,
+                per_page,
             )
-            .order_by(*_ranked_opportunity_ordering())
+    except TrendScoutUnavailable as exc:
+        return (
+            render_template(
+                "trend_scout/index.html",
+                latest=None,
+                all_reports=[],
+                source_health=[],
+                provider_setup=_provider_setup_status(),
+                scores_pagination=None,
+                freshness_label=_freshness_label,
+                freshness_score=_freshness_score,
+                service_error=str(exc),
+            ),
+            503,
         )
-        scores_pagination = db.paginate(scores_query, page=page, per_page=per_page, error_out=False)
 
     provider_setup = _provider_setup_status()
     return render_template(
@@ -165,59 +193,31 @@ def index():
 @bp.get("/api/latest")
 @roles_required(UserRole.ADMIN)
 def latest_report():
-    report = db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).first()
+    report = get_trend_scout_proxy().latest_report()
     if not report:
         return jsonify({"found": False})
-    return jsonify(
-        {
-            "found": True,
-            "id": report.id,
-            "report_date": report.report_date.isoformat(),
-            "summary": report.summary,
-            "top_opportunities": report.top_opportunities,
-            "growing_categories": report.growing_categories,
-            "declining_trends": report.declining_trends,
-            "pipeline_meta": report.pipeline_meta,
-            "created_at": report.created_at.isoformat(),
-        }
-    )
+    report["found"] = True
+    return jsonify(report)
 
 
 @bp.post("/run")
 @roles_required(UserRole.ADMIN)
 def run_pipeline():
-    from app.services.ai.trend_scout import enabled_fetcher_count
-    from app.tasks.trend_scout import trend_scout_pipeline
-
-    task = trend_scout_pipeline.delay()
-    session["trend_scout_task_id"] = task.id
-
     try:
-        create_task_run(
-            task_id=f"manual-{task.id}",
-            trigger="manual",
-            total_steps=enabled_fetcher_count() + 1,
-            celery_task_id=task.id,
-        )
-    except Exception:
-        pass
-
-    return jsonify({"task_id": task.id, "status": "dispatched"})
+        payload = get_trend_scout_proxy().run_pipeline(trigger="manual")
+    except TrendScoutUnavailable as exc:
+        return _json_error(exc)
+    session["trend_scout_task_id"] = payload.get("run_id") or payload.get("task_id")
+    return jsonify({"task_id": payload.get("task_id"), "run_id": payload.get("run_id"), "status": payload.get("status", "queued")})
 
 
 @bp.get("/run/status/<task_id>")
 @roles_required(UserRole.ADMIN)
 def run_status(task_id: str):
-    result = celery.AsyncResult(task_id)
-    meta = result.info if hasattr(result, "info") and result.info else {}
-    return jsonify(
-        {
-            "task_id": task_id,
-            "state": result.state,
-            "meta": meta,
-            "result": result.result if result.ready() else None,
-        }
-    )
+    try:
+        return jsonify(get_trend_scout_proxy().pipeline_status(task_id))
+    except TrendScoutUnavailable as exc:
+        return _json_error(exc)
 
 
 @bp.get("/pipeline/progress")
@@ -226,27 +226,23 @@ def pipeline_progress():
     task_id = session.get("trend_scout_task_id")
     if not task_id:
         return '<div id="pipeline-progress" class="hidden"></div>'
-
-    result = celery.AsyncResult(task_id)
-    meta = result.info if hasattr(result, "info") and result.info else {}
-
-    if result.state in ("SUCCESS", "FAILURE"):
+    try:
+        payload = get_trend_scout_proxy().pipeline_status(task_id)
+    except TrendScoutUnavailable:
+        return '<div id="pipeline-progress" class="hidden"></div>'
+    state = payload.get("state", "unknown")
+    if state in ("success", "failed", "unknown"):
         session.pop("trend_scout_task_id", None)
         return '<div id="pipeline-progress" class="hidden"></div>'
-
-    current = meta.get("current", 0)
-    total = meta.get("total", 1)
-    step = meta.get("step", "")
-    status = meta.get("status", "running")
-    percent = int((current / total) * 100) if total > 0 else 0
+    percent = int(payload.get("progress") or 0)
 
     return render_template(
         "trend_scout/_pipeline_progress.html",
-        current=current,
-        total=total,
+        current=percent,
+        total=100,
         percent=percent,
-        step=step,
-        status=status,
+        step=payload.get("completed_step") or "Trend Scout pipeline running",
+        status=state,
         task_running=True,
     )
 
@@ -254,15 +250,15 @@ def pipeline_progress():
 @bp.get("/api/reports")
 @roles_required(UserRole.ADMIN)
 def report_list():
-    reports = db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).limit(50).all()
+    reports = get_trend_scout_proxy().list_reports(limit=50).get("items", [])
     return jsonify(
         [
             {
-                "id": r.id,
-                "report_date": r.report_date.isoformat(),
-                "summary": (r.summary or "")[:200],
-                "opportunity_count": len(r.top_opportunities) if r.top_opportunities else 0,
-                "growing_count": len(r.growing_categories) if r.growing_categories else 0,
+                "id": r.get("id"),
+                "report_date": r.get("report_date"),
+                "summary": (r.get("summary") or "")[:200],
+                "opportunity_count": len(r.get("top_opportunities") or []),
+                "growing_count": len(r.get("growing_categories") or []),
             }
             for r in reports
         ]
@@ -272,50 +268,18 @@ def report_list():
 @bp.get("/api/persisted-scores")
 @roles_required(UserRole.ADMIN)
 def persisted_scores():
-    report = db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).first()
+    proxy = get_trend_scout_proxy()
+    report = proxy.latest_report()
     if not report:
         return jsonify({"found": False, "scores": []})
-
-    scores = (
-        db.session.query(TrendOpportunityScore)
-        .filter(TrendOpportunityScore.report_id == report.id)
-        .filter(TrendOpportunityScore.dismissed.is_(False))
-        .order_by(*_ranked_opportunity_ordering())
-        .all()
-    )
+    scores = proxy.list_opportunities(report_id=report["id"], include_dismissed=False, limit=200).get("items", [])
 
     return jsonify(
         {
             "found": True,
-            "report_id": report.id,
-            "report_date": report.report_date.isoformat(),
-            "scores": [
-                {
-                    "id": s.id,
-                    "keyword": s.keyword,
-                    "title": s.title or s.keyword,
-                    "candidate_type": s.candidate_type,
-                    "product_id": s.product_id,
-                    "opportunity_score": s.opportunity_score,
-                    "purchase_intent": s.purchase_intent,
-                    "trend_velocity": s.trend_velocity,
-                    "price_resilience": s.price_resilience,
-                    "low_saturation": s.low_saturation,
-                    "local_fit": s.local_fit,
-                    "production_fit": s.production_fit,
-                    "license_risk": s.license_risk,
-                    "action": s.action,
-                    "inventory_available": s.inventory_available,
-                    "base_price": str(s.base_price),
-                    "license_status": s.license_status,
-                    "rank": s.rank,
-                    "sources": s.sources,
-                    "score_breakdown": s.score_breakdown,
-                    "match_confidence": s.match_confidence,
-                    "dismissed": s.dismissed,
-                }
-                for s in scores
-            ],
+            "report_id": report["id"],
+            "report_date": report.get("report_date"),
+            "scores": scores,
         }
     )
 
@@ -323,33 +287,17 @@ def persisted_scores():
 @bp.get("/api/source-health")
 @roles_required(UserRole.ADMIN)
 def source_health():
-    report = db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).first()
+    proxy = get_trend_scout_proxy()
+    report = proxy.latest_report()
     if not report:
         return jsonify({"found": False, "records": []})
-
-    records = (
-        db.session.query(SourceHealthRecord)
-        .filter(SourceHealthRecord.report_id == report.id)
-        .order_by(SourceHealthRecord.source)
-        .all()
-    )
+    records = proxy.source_health(limit=200).get("items", [])
 
     return jsonify(
         {
             "found": True,
-            "report_id": report.id,
-            "records": [
-                {
-                    "id": r.id,
-                    "source": r.source,
-                    "status": r.status,
-                    "keyword": r.keyword,
-                    "item_count": r.item_count,
-                    "error_message": r.error_message,
-                    "scraped_at": r.scraped_at.isoformat() if r.scraped_at else None,
-                }
-                for r in records
-            ],
+            "report_id": report["id"],
+            "records": records,
         }
     )
 
@@ -362,57 +310,30 @@ def api_report_scores(report_id: int):
     action_filter = request.args.get("action")
     include_dismissed = request.args.get("include_dismissed", "0") == "1"
 
-    report = db.session.get(TrendReport, report_id)
-    if not report:
-        return jsonify({"found": False}), 404
-
-    query = db.session.query(TrendOpportunityScore).filter(
-        TrendOpportunityScore.report_id == report_id,
+    proxy = get_trend_scout_proxy()
+    try:
+        report = proxy.report_by_id(report_id)
+    except TrendScoutUnavailable as exc:
+        return _json_error(exc, 404)
+    payload = proxy.report_opportunities(
+        report_id,
+        action=action_filter,
+        include_dismissed=include_dismissed,
+        page=page,
+        per_page=per_page,
     )
-    if not include_dismissed:
-        query = query.filter(TrendOpportunityScore.dismissed.is_(False))
-    if action_filter:
-        query = query.filter(TrendOpportunityScore.action == action_filter)
-
-    query = query.order_by(*_ranked_opportunity_ordering())
-    pagination = db.paginate(query, page=page, per_page=per_page, error_out=False)
+    pagination = _pagination_from_response(payload, page, per_page)
 
     return jsonify(
         {
             "found": True,
-            "report_id": report.id,
-            "report_date": report.report_date.isoformat(),
+            "report_id": report["id"],
+            "report_date": report.get("report_date"),
             "page": pagination.page,
             "per_page": pagination.per_page,
             "total": pagination.total,
             "pages": pagination.pages,
-            "scores": [
-                {
-                    "id": s.id,
-                    "keyword": s.keyword,
-                    "title": s.title or s.keyword,
-                    "candidate_type": s.candidate_type,
-                    "product_id": s.product_id,
-                    "opportunity_score": s.opportunity_score,
-                    "purchase_intent": s.purchase_intent,
-                    "trend_velocity": s.trend_velocity,
-                    "price_resilience": s.price_resilience,
-                    "low_saturation": s.low_saturation,
-                    "local_fit": s.local_fit,
-                    "production_fit": s.production_fit,
-                    "license_risk": s.license_risk,
-                    "action": s.action,
-                    "inventory_available": s.inventory_available,
-                    "base_price": str(s.base_price),
-                    "license_status": s.license_status,
-                    "rank": s.rank,
-                    "sources": s.sources,
-                    "score_breakdown": s.score_breakdown,
-                    "match_confidence": s.match_confidence,
-                    "dismissed": s.dismissed,
-                }
-                for s in pagination.items
-            ],
+            "scores": pagination.items,
         }
     )
 
@@ -422,7 +343,22 @@ def api_report_scores(report_id: int):
 def api_score_history():
     keyword = request.args.get("keyword")
     limit = request.args.get("limit", 20, type=int)
-    history = get_score_history(keyword=keyword, limit=limit)
+    proxy = get_trend_scout_proxy()
+    history = []
+    for report in proxy.list_reports(limit=limit).get("items", []):
+        items = proxy.list_opportunities(report_id=report["id"], include_dismissed=True, limit=200).get("items", [])
+        for item in items:
+            if keyword and item.get("keyword") != keyword:
+                continue
+            history.append(
+                {
+                    "report_id": report["id"],
+                    "report_date": report.get("report_date"),
+                    "keyword": item.get("keyword"),
+                    "opportunity_score": item.get("opportunity_score"),
+                    "action": item.get("action"),
+                }
+            )
     return jsonify({"history": history})
 
 
@@ -430,14 +366,55 @@ def api_score_history():
 @roles_required(UserRole.ADMIN)
 def api_biggest_movers():
     top_n = request.args.get("top_n", 10, type=int)
-    movers = get_biggest_movers(top_n=top_n)
+    proxy = get_trend_scout_proxy()
+    reports = proxy.list_reports(limit=2).get("items", [])
+    movers = []
+    if len(reports) >= 2:
+        latest, previous = reports[0], reports[1]
+        current = {
+            item["keyword"]: item
+            for item in proxy.list_opportunities(report_id=latest["id"], include_dismissed=True, limit=200).get("items", [])
+        }
+        prior = {
+            item["keyword"]: item
+            for item in proxy.list_opportunities(report_id=previous["id"], include_dismissed=True, limit=200).get("items", [])
+        }
+        for keyword, item in current.items():
+            old = prior.get(keyword)
+            if not old:
+                continue
+            movers.append(
+                {
+                    "keyword": keyword,
+                    "current_score": item.get("opportunity_score", 0),
+                    "previous_score": old.get("opportunity_score", 0),
+                    "delta": item.get("opportunity_score", 0) - old.get("opportunity_score", 0),
+                }
+            )
+        movers = sorted(movers, key=lambda row: abs(row["delta"]), reverse=True)[:top_n]
     return jsonify({"movers": movers})
 
 
 @bp.get("/score-history/<string:keyword>")
 @roles_required(UserRole.ADMIN)
 def score_history_page(keyword: str):
-    history = get_score_history(keyword=keyword, limit=50)
+    proxy = get_trend_scout_proxy()
+    history = []
+    for report in proxy.list_reports(limit=50).get("items", []):
+        items = proxy.list_opportunities(report_id=report["id"], include_dismissed=True, limit=200).get("items", [])
+        for item in items:
+            if item.get("keyword") == keyword:
+                history.append(
+                    _objectify(
+                        {
+                            "report_id": report["id"],
+                            "report_date": report.get("report_date"),
+                            "keyword": keyword,
+                            "opportunity_score": item.get("opportunity_score"),
+                            "action": item.get("action"),
+                        }
+                    )
+                )
     return render_template(
         "trend_scout/score_history.html",
         keyword=keyword,
@@ -448,17 +425,15 @@ def score_history_page(keyword: str):
 @bp.post("/api/opportunities/<int:score_id>/dismiss")
 @roles_required(UserRole.ADMIN)
 def api_dismiss_opportunity(score_id: int):
-    score = db.session.get(TrendOpportunityScore, score_id)
-    if not score:
-        return jsonify({"error": "not_found"}), 404
-    score.dismissed = True
-    score.dismissed_at = datetime.now(timezone.utc)
-    db.session.commit()
+    try:
+        score = get_trend_scout_proxy().dismiss_opportunity(score_id)
+    except TrendScoutUnavailable as exc:
+        return _json_error(exc, 404)
     record_audit_event(
         action="trend_scout.opportunity.dismissed",
         entity_type="trend_opportunity_score",
         entity_id=str(score_id),
-        metadata={"keyword": score.keyword, "report_id": score.report_id},
+        metadata={"keyword": score.get("keyword"), "report_id": score.get("report_id")},
         source_module=__name__,
     )
     return jsonify({"status": "dismissed"})
@@ -467,17 +442,15 @@ def api_dismiss_opportunity(score_id: int):
 @bp.post("/api/opportunities/<int:score_id>/undo-dismiss")
 @roles_required(UserRole.ADMIN)
 def api_undo_dismiss(score_id: int):
-    score = db.session.get(TrendOpportunityScore, score_id)
-    if not score:
-        return jsonify({"error": "not_found"}), 404
-    score.dismissed = False
-    score.dismissed_at = None
-    db.session.commit()
+    try:
+        score = get_trend_scout_proxy().undismiss_opportunity(score_id)
+    except TrendScoutUnavailable as exc:
+        return _json_error(exc, 404)
     record_audit_event(
         action="trend_scout.opportunity.undismissed",
         entity_type="trend_opportunity_score",
         entity_id=str(score_id),
-        metadata={"keyword": score.keyword, "report_id": score.report_id},
+        metadata={"keyword": score.get("keyword"), "report_id": score.get("report_id")},
         source_module=__name__,
     )
     return jsonify({"status": "undismissed"})
@@ -507,28 +480,116 @@ def _load_profile(name: str) -> dict | None:
     return None
 
 
+def _weights_from_proxy(proxy) -> dict:
+    defaults = proxy.weight_defaults()
+    weights = {
+        "score_weights": dict(defaults.get("score", {})),
+        "source_weights": dict(defaults.get("source", {})),
+        "buyer_source_weights": dict(defaults.get("buyer", {})),
+        "metric_weights": dict(defaults.get("metric", {})),
+    }
+    for entry in proxy.list_weights(limit=500).get("items", []):
+        group = entry.get("group")
+        key = entry.get("key")
+        if not key:
+            continue
+        target = {
+            "score": "score_weights",
+            "source": "source_weights",
+            "buyer": "buyer_source_weights",
+            "metric": "metric_weights",
+        }.get(group)
+        if target:
+            weights[target][key] = float(entry.get("value", 0))
+    return weights
+
+
+def _calibration_view_model(row: dict) -> AttrDict:
+    summary = row.get("summary") or {}
+    return _objectify(
+        {
+            "id": row.get("id") or abs(hash(row.get("_group", row.get("run_date", "")))) % 10_000_000,
+            "run_date": row.get("run_date"),
+            "trigger": row.get("trigger", "manual"),
+            "report_count": row.get("report_count", 0),
+            "score_count": summary.get("score_count", 0),
+            "mae": summary.get("mae"),
+            "rmse": summary.get("rmse"),
+            "precision_at_high_score": summary.get("precision_at_high_score")
+            or summary.get("top_hit_rate"),
+            "recall_of_sellers": summary.get("recall_of_sellers"),
+            "f1_score": summary.get("f1") or summary.get("f1_score"),
+            "zero_seller_rate": summary.get("zero_seller_rate"),
+            "total_units_sold": summary.get("total_units_sold", 0),
+            "summary": summary,
+            "tuning_hints": row.get("tuning_hints", []),
+            "status": row.get("status"),
+            "error": row.get("error"),
+        }
+    )
+
+
+def _backtest_view_model(payload: dict, lookback: int, window: int) -> AttrDict:
+    summary = payload.get("summary") or {}
+    predictions = payload.get("predictions") or []
+    current_weights = summary.get("current_weights") or {}
+    return _objectify(
+        {
+            "status": payload.get("status", "ok"),
+            "message": payload.get("message") or "No backtest data available yet.",
+            "report_count": payload.get("report_count", 0),
+            "score_count": summary.get("score_count", len(predictions)),
+            "sales_window_days": window,
+            "stats": {
+                "total_units_sold": summary.get("total_units_sold", 0),
+                "mae": summary.get("mae", 0),
+                "rmse": summary.get("rmse", 0),
+                "precision_at_high_score": summary.get("precision_at_high_score", 0),
+                "recall_of_sellers": summary.get("recall_of_sellers", 0),
+                "f1": summary.get("f1", 0),
+                "zero_seller_rate": summary.get("zero_seller_rate", 0),
+                "zero_seller_count": summary.get("zero_seller_count", 0),
+                "avg_predicted_score": summary.get("avg_predicted_score", 0),
+                "min_predicted_score": summary.get("min_predicted_score", 0),
+                "max_predicted_score": summary.get("max_predicted_score", 0),
+            },
+            "top_k_analysis": summary.get("top_k_analysis", {}),
+            "component_analysis": summary.get("component_analysis", []),
+            "action_analysis": summary.get("action_analysis", {}),
+            "tuning_hints": summary.get("tuning_hints", []),
+            "current_weights": current_weights,
+            "predictions": predictions[:500],
+            "lookback_reports": lookback,
+        }
+    )
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 @roles_required(UserRole.ADMIN)
 def settings():
+    proxy = get_trend_scout_proxy()
     if request.method == "POST":
         action = request.form.get("action")
 
         if action == "save_weights":
             weight_type = request.form.get("weight_type", "score")
             prefix_map = {
-                "score": (PREFIX_SCORE, DEFAULT_SCORE_WEIGHTS),
-                "source": (PREFIX_SOURCE, DEFAULT_SOURCE_WEIGHTS),
-                "buyer": (PREFIX_BUYER, DEFAULT_BUYER_SOURCE_WEIGHTS),
-                "metric": (PREFIX_METRIC, DEFAULT_METRIC_WEIGHTS),
+                "score": ("score", proxy.weight_defaults().get("score", {})),
+                "source": ("source", proxy.weight_defaults().get("source", {})),
+                "buyer": ("buyer", proxy.weight_defaults().get("buyer", {})),
+                "metric": ("metric", proxy.weight_defaults().get("metric", {})),
             }
-            prefix, defaults = prefix_map.get(weight_type, (PREFIX_SCORE, DEFAULT_SCORE_WEIGHTS))
+            group, defaults = prefix_map.get(weight_type, ("score", proxy.weight_defaults().get("score", {})))
+            entries = []
             for key in defaults:
                 val = request.form.get(f"weight_{key}")
                 if val is not None:
                     try:
-                        save_weight(prefix, key, float(val))
+                        entries.append({"group": group, "key": key, "value": float(val)})
                     except ValueError, TypeError:
                         pass
+            if entries:
+                proxy.save_weights(entries)
             record_audit_event(
                 action="trend_scout.settings.weights_saved",
                 entity_type="settings",
@@ -542,7 +603,7 @@ def settings():
             if profile_name:
                 import json
 
-                weights = load_all_weights()
+                weights = _weights_from_proxy(proxy)
                 existing = (
                     db.session.query(Setting)
                     .filter(Setting.key == _profile_storage_key(profile_name))
@@ -580,15 +641,19 @@ def settings():
                         "metric_weights",
                     ):
                         prefix_map = {
-                            "score_weights": PREFIX_SCORE,
-                            "source_weights": PREFIX_SOURCE,
-                            "buyer_source_weights": PREFIX_BUYER,
-                            "metric_weights": PREFIX_METRIC,
+                            "score_weights": "score",
+                            "source_weights": "source",
+                            "buyer_source_weights": "buyer",
+                            "metric_weights": "metric",
                         }
-                        prefix = prefix_map.get(group_key)
-                        if prefix and group_key in profile:
-                            for key, val in profile[group_key].items():
-                                save_weight(prefix, key, float(val))
+                        group = prefix_map.get(group_key)
+                        if group and group_key in profile:
+                            proxy.save_weights(
+                                [
+                                    {"group": group, "key": key, "value": float(val)}
+                                    for key, val in profile[group_key].items()
+                                ]
+                            )
                     record_audit_event(
                         action="trend_scout.settings.profile_loaded",
                         entity_type="settings",
@@ -609,20 +674,7 @@ def settings():
             source_key = request.form.get("source_key", "")
             enabled = request.form.get("enabled", "1") == "1"
             if source_key:
-                setting_key = PREFIX_SOURCE_ENABLED + source_key
-                existing = db.session.query(Setting).filter(Setting.key == setting_key).first()
-                if existing:
-                    existing.value = "1" if enabled else "0"
-                else:
-                    db.session.add(
-                        Setting(
-                            key=setting_key,
-                            value="1" if enabled else "0",
-                            description=f"Trend Scout source enabled: {source_key}",
-                            type="boolean",
-                        )
-                    )
-                db.session.commit()
+                proxy.toggle_source(source_key, enabled)
                 record_audit_event(
                     action="trend_scout.settings.source_toggled",
                     entity_type="settings",
@@ -633,11 +685,14 @@ def settings():
 
         return redirect(url_for("trend_scout.settings"))
 
-    weights = load_all_weights()
+    weights = _weights_from_proxy(proxy)
     profiles = _list_profiles()
-    source_keys = list(DEFAULT_SOURCE_WEIGHTS)
-
-    source_enabled_state = load_source_enabled_state(source_keys)
+    defaults = proxy.weight_defaults()
+    source_keys = list(defaults.get("source", {}))
+    source_enabled_state = {
+        item["source"]: bool(item["enabled"])
+        for item in proxy.list_source_toggles().get("items", [])
+    }
 
     return render_template(
         "trend_scout/settings.html",
@@ -645,8 +700,8 @@ def settings():
         profiles=profiles,
         source_keys=source_keys,
         source_enabled_state=source_enabled_state,
-        DEFAULT_SCORE_WEIGHTS=DEFAULT_SCORE_WEIGHTS,
-        DEFAULT_SOURCE_WEIGHTS=DEFAULT_SOURCE_WEIGHTS,
+        DEFAULT_SCORE_WEIGHTS=defaults.get("score", {}),
+        DEFAULT_SOURCE_WEIGHTS=defaults.get("source", {}),
     )
 
 
@@ -656,51 +711,43 @@ def settings():
 @bp.get("/reports/<int:report_id>")
 @roles_required(UserRole.ADMIN)
 def report_detail(report_id: int):
-    report = db.session.get(TrendReport, report_id)
-    if not report:
+    proxy = get_trend_scout_proxy()
+    try:
+        report = _objectify(proxy.report_by_id(report_id))
+    except TrendScoutUnavailable:
         abort(404)
 
     compare_id = request.args.get("compare", type=int)
     compare_report = None
     if compare_id:
-        compare_report = db.session.get(TrendReport, compare_id)
+        try:
+            compare_report = _objectify(proxy.report_by_id(compare_id))
+        except TrendScoutUnavailable:
+            compare_report = None
 
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
     action_filter = request.args.get("action")
 
-    query = db.session.query(TrendOpportunityScore).filter(
-        TrendOpportunityScore.report_id == report_id,
-        TrendOpportunityScore.dismissed.is_(False),
+    scores_pagination = _pagination_from_response(
+        proxy.report_opportunities(report_id, action=action_filter, page=page, per_page=per_page),
+        page,
+        per_page,
     )
-    if action_filter:
-        query = query.filter(TrendOpportunityScore.action == action_filter)
-
-    query = query.order_by(*_ranked_opportunity_ordering())
-    scores_pagination = db.paginate(query, page=page, per_page=per_page, error_out=False)
 
     compare_scores = None
     if compare_report:
-        cq = db.session.query(TrendOpportunityScore).filter(
-            TrendOpportunityScore.report_id == compare_report.id,
-            TrendOpportunityScore.dismissed.is_(False),
-        )
-        if action_filter:
-            cq = cq.filter(TrendOpportunityScore.action == action_filter)
-        compare_scores = {
-            s.keyword: s.opportunity_score for s in cq.order_by(TrendOpportunityScore.keyword).all()
-        }
+        compare_items = proxy.report_opportunities(
+            compare_report.id,
+            action=action_filter,
+            include_dismissed=False,
+            page=1,
+            per_page=200,
+        ).get("items", [])
+        compare_scores = {s["keyword"]: s.get("opportunity_score", 0) for s in compare_items}
 
-    source_health = (
-        db.session.query(SourceHealthRecord)
-        .filter(SourceHealthRecord.report_id == report.id)
-        .order_by(SourceHealthRecord.source)
-        .all()
-    )
-
-    all_reports = (
-        db.session.query(TrendReport).order_by(TrendReport.report_date.desc()).limit(100).all()
-    )
+    source_health = _objectify(proxy.source_health(limit=200).get("items", []))
+    all_reports = _objectify(proxy.list_reports(limit=100).get("items", []))
 
     return render_template(
         "trend_scout/report_detail.html",
@@ -716,19 +763,12 @@ def report_detail(report_id: int):
 @bp.get("/reports/<int:report_id>/csv")
 @roles_required(UserRole.ADMIN)
 def report_csv(report_id: int):
-    report = db.session.get(TrendReport, report_id)
-    if not report:
+    proxy = get_trend_scout_proxy()
+    try:
+        proxy.report_by_id(report_id)
+    except TrendScoutUnavailable:
         abort(404)
-
-    scores = (
-        db.session.query(TrendOpportunityScore)
-        .filter(
-            TrendOpportunityScore.report_id == report_id,
-            TrendOpportunityScore.dismissed.is_(False),
-        )
-        .order_by(*_ranked_opportunity_ordering())
-        .all()
-    )
+    scores = proxy.report_opportunities(report_id, include_dismissed=False, page=1, per_page=200).get("items", [])
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -757,24 +797,24 @@ def report_csv(report_id: int):
     for s in scores:
         writer.writerow(
             [
-                s.rank,
-                s.keyword,
-                s.title,
-                s.candidate_type,
-                s.action,
-                s.opportunity_score,
-                s.purchase_intent,
-                s.trend_velocity,
-                s.price_resilience,
-                s.low_saturation,
-                s.local_fit,
-                s.production_fit,
-                s.license_risk,
-                s.inventory_available,
-                str(s.base_price),
-                s.license_status or "",
-                s.match_confidence or "",
-                ", ".join(s.sources) if s.sources else "",
+                s.get("rank"),
+                s.get("keyword"),
+                s.get("title"),
+                s.get("candidate_type"),
+                s.get("action"),
+                s.get("opportunity_score"),
+                s.get("purchase_intent"),
+                s.get("trend_velocity"),
+                s.get("price_resilience"),
+                s.get("low_saturation"),
+                s.get("local_fit"),
+                s.get("production_fit"),
+                s.get("license_risk"),
+                s.get("inventory_available"),
+                str(s.get("base_price")),
+                s.get("license_status") or "",
+                s.get("match_confidence") or "",
+                ", ".join(s.get("sources") or []),
             ]
         )
 
@@ -954,38 +994,41 @@ def action_flag_license_review():
 @bp.get("/monitor")
 @roles_required(UserRole.ADMIN)
 def task_monitor():
-    runs = get_recent_task_runs(limit=100)
+    runs = _objectify(get_trend_scout_proxy().task_runs(limit=100).get("items", []))
     return render_template("trend_scout/monitor.html", runs=runs)
 
 
 @bp.get("/monitor/<run_id>")
 @roles_required(UserRole.ADMIN)
 def task_monitor_detail(run_id: str):
-    run = get_task_run(run_id)
-    if not run:
+    try:
+        run = _objectify(get_trend_scout_proxy().task_run(run_id))
+    except TrendScoutUnavailable:
         abort(404)
     report = None
-    if run.report_id:
-        report = db.session.get(TrendReport, run.report_id)
+    if run.get("report_id"):
+        try:
+            report = _objectify(get_trend_scout_proxy().report_by_id(run.report_id))
+        except TrendScoutUnavailable:
+            report = None
     return render_template("trend_scout/monitor_detail.html", run=run, report=report)
 
 
 @bp.post("/monitor/<run_id>/cancel")
 @roles_required(UserRole.ADMIN)
 def task_monitor_cancel(run_id: str):
-    run = get_task_run(run_id)
-    if not run:
-        return jsonify({"error": "not_found"}), 404
-    if run.status not in ("pending", "running"):
-        return jsonify({"error": f"Cannot cancel task with status '{run.status}'"}), 400
-    if run.celery_task_id:
-        celery.control.revoke(run.celery_task_id, terminate=True)
-    cancel_task_run(run_id)
+    try:
+        run = get_trend_scout_proxy().task_run(run_id)
+        if run.get("status") not in ("pending", "running"):
+            return jsonify({"error": f"Cannot cancel task with status '{run.get('status')}'"}), 400
+        get_trend_scout_proxy().pipeline_cancel(run_id)
+    except TrendScoutUnavailable as exc:
+        return _json_error(exc, 404)
     record_audit_event(
         action="trend_scout.task_cancelled",
         entity_type="trend_task_run",
         entity_id=run_id,
-        metadata={"celery_task_id": run.celery_task_id, "trigger": run.trigger},
+        metadata={"celery_task_id": run.get("celery_task_id"), "trigger": run.get("trigger")},
         source_module=__name__,
     )
     return jsonify({"status": "cancelled"})
@@ -994,24 +1037,23 @@ def task_monitor_cancel(run_id: str):
 @bp.post("/monitor/<run_id>/retry")
 @roles_required(UserRole.ADMIN)
 def task_monitor_retry(run_id: str):
-    run = get_task_run(run_id)
-    if not run:
-        return jsonify({"error": "not_found"}), 404
-    if run.status != "failed":
-        return jsonify({"error": f"Can only retry failed tasks, status is '{run.status}'"}), 400
-
-    from app.tasks.trend_scout import trend_scout_pipeline
-
-    task = trend_scout_pipeline.delay()
-    session["trend_scout_task_id"] = task.id
+    proxy = get_trend_scout_proxy()
+    try:
+        run = proxy.task_run(run_id)
+        if run.get("status") != "failed":
+            return jsonify({"error": f"Can only retry failed tasks, status is '{run.get('status')}'"}), 400
+        payload = proxy.run_pipeline(trigger=f"retry:{run_id}")
+    except TrendScoutUnavailable as exc:
+        return _json_error(exc, 404)
+    session["trend_scout_task_id"] = payload.get("run_id") or payload.get("task_id")
     record_audit_event(
         action="trend_scout.task_retried",
         entity_type="trend_task_run",
         entity_id=run_id,
-        metadata={"new_celery_task_id": task.id, "trigger": run.trigger},
+        metadata={"new_celery_task_id": payload.get("task_id"), "trigger": run.get("trigger")},
         source_module=__name__,
     )
-    return jsonify({"task_id": task.id, "status": "dispatched"})
+    return jsonify({"task_id": payload.get("task_id"), "run_id": payload.get("run_id"), "status": "dispatched"})
 
 
 # -- Phase 11: Calibration History & Comparison --
@@ -1020,22 +1062,23 @@ def task_monitor_retry(run_id: str):
 @bp.get("/calibration")
 @roles_required(UserRole.ADMIN)
 def calibration():
+    proxy = get_trend_scout_proxy()
     if request.args.get("run") == "1":
-        result = run_and_store_calibration(trigger="manual")
+        result = proxy.run_calibration()
         record_audit_event(
             action="trend_scout.calibration.manual_run",
             entity_type="trend_calibration_result",
-            entity_id=str(result.id),
+            entity_id=str(result.get("id") or result.get("run_id") or "manual"),
             metadata={
-                "mae": result.mae,
-                "precision": result.precision_at_high_score,
-                "report_count": result.report_count,
+                "mae": result.get("mae"),
+                "precision": result.get("precision_at_high_score"),
+                "report_count": result.get("report_count"),
             },
             source_module=__name__,
         )
         return redirect(url_for("trend_scout.calibration"))
 
-    history = get_calibration_history(limit=20)
+    history = [_calibration_view_model(item) for item in proxy.calibration_history().get("items", [])]
     comparison = None
     regression = None
     if len(history) >= 2:
@@ -1060,7 +1103,6 @@ def calibration():
             "prev": prev,
             "curr": curr,
         }
-        regression = check_regression()
 
     return render_template(
         "trend_scout/calibration.html",
@@ -1073,7 +1115,8 @@ def calibration():
 @bp.get("/calibration/<int:cal_id>")
 @roles_required(UserRole.ADMIN)
 def calibration_detail(cal_id: int):
-    cal = db.session.get(TrendCalibrationResult, cal_id)
+    history = [_calibration_view_model(item) for item in get_trend_scout_proxy().calibration_history().get("items", [])]
+    cal = next((item for item in history if item.get("id") == cal_id), None)
     if not cal:
         abort(404)
     return render_template("trend_scout/calibration_detail.html", cal=cal)
@@ -1182,5 +1225,5 @@ def action_add_to_market_prep():
 def backtest():
     lookback = request.args.get("lookback", 12, type=int)
     window = request.args.get("window", 60, type=int)
-    result = run_backtest(db.session, lookback_reports=lookback, sales_window_days=window)
-    return render_template("trend_scout/backtest.html", result=result)
+    result = get_trend_scout_proxy().run_backtest(lookback_reports=lookback, sales_window_days=window)
+    return render_template("trend_scout/backtest.html", result=_backtest_view_model(result, lookback, window))

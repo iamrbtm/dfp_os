@@ -113,8 +113,21 @@ class TrendScoutProxy:
             rep["opportunity_scores"] = scores
         return reports
 
-    def source_health(self) -> dict[str, Any]:
-        return self.get("/api/v1/source-health")
+    def source_health(
+        self,
+        source: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if source:
+            params["source"] = source
+        if status:
+            params["status"] = status
+        return self.get("/api/v1/source-health", params=params)
+
+    def latest_source_health(self) -> dict[str, Any]:
+        return self.get("/api/v1/source-health/latest")
 
     def list_opportunities(
         self,
@@ -138,6 +151,24 @@ class TrendScoutProxy:
             params["action"] = action
         return self.get("/api/v1/opportunities", params=params)
 
+    def report_opportunities(
+        self,
+        report_id: int,
+        action: str | None = None,
+        include_dismissed: bool = False,
+        page: int = 1,
+        per_page: int = 50,
+    ) -> dict[str, Any]:
+        page = max(1, page)
+        per_page = min(max(1, per_page), 200)
+        return self.list_opportunities(
+            report_id=report_id,
+            action=action,
+            include_dismissed=include_dismissed,
+            limit=per_page,
+            offset=(page - 1) * per_page,
+        )
+
     def dismiss_opportunity(self, score_id: int) -> dict[str, Any]:
         return self.post(f"/api/v1/opportunities/{score_id}/dismiss")
 
@@ -153,8 +184,10 @@ class TrendScoutProxy:
     def weight_defaults(self) -> dict[str, Any]:
         return self.get("/api/v1/weights/defaults")
 
-    def list_weights(self, group: str | None = None) -> dict[str, Any]:
-        params = {"group": group} if group else None
+    def list_weights(self, group: str | None = None, limit: int = 200) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if group:
+            params["group"] = group
         return self.get("/api/v1/weights", params=params)
 
     def save_weights(self, entries: list[dict[str, Any]]) -> dict[str, Any]:
@@ -174,6 +207,12 @@ class TrendScoutProxy:
 
     def pipeline_cancel(self, run_id: str) -> dict[str, Any]:
         return self.post(f"/api/v1/pipeline/cancel/{run_id}")
+
+    def task_runs(self, limit: int = 100) -> dict[str, Any]:
+        return self.get("/api/v1/pipeline/runs", params={"limit": limit})
+
+    def task_run(self, run_id: str) -> dict[str, Any]:
+        return self.get(f"/api/v1/pipeline/runs/{run_id}")
 
     def calibration_history(self) -> dict[str, Any]:
         return self.get("/api/v1/calibration/history")

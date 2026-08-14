@@ -26,20 +26,64 @@ async def get_session() -> AsyncSession:
 
 
 def _to_score(row: TrendOpportunityScore) -> OpportunityScore:
+    breakdown = row.score_breakdown or {}
+
+    def _num(key: str, fallback: float = 0.0) -> float:
+        value = breakdown.get(key, fallback)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return fallback
+
+    def _int(key: str, fallback: int = 0) -> int:
+        return int(round(_num(key, fallback)))
+
+    risk_raw = breakdown.get("license_risk_score") or breakdown.get("license_risk") or row.license_risk
+    if isinstance(risk_raw, str):
+        risk_score = {"low": 20, "medium": 50, "high": 80, "unknown": 50}.get(
+            risk_raw.lower(), 50
+        )
+        license_status = risk_raw
+    else:
+        risk_score = int(round(float(risk_raw or 0)))
+        license_status = breakdown.get("license_status")
+
+    score = int(round(float(row.score)))
+    velocity = int(round(float(row.velocity)))
+    sources = breakdown.get("sources") or [row.source]
+    if isinstance(sources, str):
+        sources = [sources]
+
     return OpportunityScore(
         id=row.id,
         report_id=row.report_id,
         keyword=row.keyword,
         source=row.source,
         score=float(row.score),
+        title=breakdown.get("title") or row.keyword,
+        candidate_type=breakdown.get("candidate_type") or "potential",
+        product_id=breakdown.get("product_id"),
+        opportunity_score=score,
+        action=row.recommended_action,
+        rank=breakdown.get("rank"),
         recommended_action=row.recommended_action,
         velocity=float(row.velocity),
+        trend_velocity=velocity,
         momentum=float(row.momentum),
-        purchase_intent=float(row.purchase_intent),
-        license_risk=row.license_risk,
+        purchase_intent=int(round(float(row.purchase_intent))),
+        price_resilience=_int("price_resilience"),
+        low_saturation=_int("low_saturation"),
+        local_fit=int(round(float(row.local_relevance))),
+        production_fit=_int("production_fit"),
+        license_risk=risk_score,
+        license_status=license_status,
         local_relevance=float(row.local_relevance),
+        inventory_available=breakdown.get("inventory_available"),
+        base_price=breakdown.get("base_price"),
+        sources=sources,
+        match_confidence=breakdown.get("match_confidence"),
         dismissed=bool(row.dismissed),
-        score_breakdown=row.score_breakdown or {},
+        score_breakdown=breakdown,
     )
 
 
@@ -67,6 +111,14 @@ async def list_opportunities(
     rows = list((await session.execute(stmt)).scalars().all())
 
     count_stmt = select(func.count(TrendOpportunityScore.id))
+    if report_id is not None:
+        count_stmt = count_stmt.where(TrendOpportunityScore.report_id == report_id)
+    if source:
+        count_stmt = count_stmt.where(TrendOpportunityScore.source == source)
+    if action:
+        count_stmt = count_stmt.where(TrendOpportunityScore.recommended_action == action)
+    if not include_dismissed:
+        count_stmt = count_stmt.where(TrendOpportunityScore.dismissed.is_(False))
     total = int((await session.execute(count_stmt)).scalar() or 0)
     return OpportunityListResponse(
         items=[_to_score(r) for r in rows],

@@ -29,6 +29,7 @@ def create_task_run(
             "run_id": run_id,
             "trigger": trigger,
             "total_steps": total_steps,
+            "completed_steps": 0,
             "current_step": "created",
             "status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat(),

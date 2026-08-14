@@ -14,6 +14,7 @@ from app.schemas.api import (
 )
 from app.security import SCOPE_READ, SCOPE_WRITE, verify_internal_token
 from app.workers.task_monitor import (
+    get_task_run,
     list_task_runs,
 )
 
@@ -78,6 +79,28 @@ async def run_status(
         completed_step=None,
         progress=None,
     )
+
+
+@router.get("/runs")
+async def task_runs(
+    limit: int = 100,
+    _token: str = SCOPE_READ,
+) -> dict[str, list[dict]]:
+    return {"items": list_task_runs(limit=limit)}
+
+
+@router.get("/runs/{run_id}")
+async def task_run_detail(
+    run_id: str,
+    _token: str = SCOPE_READ,
+) -> dict:
+    run = get_task_run(run_id)
+    if not run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "task_run_not_found", "message": f"No task run {run_id}."},
+        )
+    return run
 
 
 @router.post("/cancel/{run_id}")

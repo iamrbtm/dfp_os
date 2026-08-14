@@ -22,14 +22,20 @@ async def get_session() -> AsyncSession:
 
 
 def _to_summary(row: TrendReport) -> ReportSummary:
+    pipeline_metadata = row.pipeline_metadata or {}
     return ReportSummary(
         id=row.id,
         report_date=row.report_date,
         summary=row.summary,
+        top_opportunities=row.top_opportunities or [],
+        growing_categories=row.growing_categories or [],
+        declining_trends=row.declining_categories or [],
         scoring_version=row.scoring_version,
         business_id=row.business_id,
         run_id=row.run_id,
-        pipeline_metadata=row.pipeline_metadata or {},
+        pipeline_metadata=pipeline_metadata,
+        pipeline_meta=pipeline_metadata,
+        created_at=row.created_at,
     )
 
 

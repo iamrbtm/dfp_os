@@ -10,10 +10,15 @@ class ReportSummary(BaseModel):
     id: int
     report_date: datetime
     summary: str
+    top_opportunities: list[Any] = Field(default_factory=list)
+    growing_categories: list[Any] = Field(default_factory=list)
+    declining_trends: list[Any] = Field(default_factory=list)
     scoring_version: str
     business_id: int | None = None
     run_id: str | None = None
     pipeline_metadata: dict[str, Any] = Field(default_factory=dict)
+    pipeline_meta: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
 
 
 class ReportListResponse(BaseModel):
@@ -27,12 +32,28 @@ class OpportunityScore(BaseModel):
     keyword: str
     source: str
     score: float
+    title: str | None = None
+    candidate_type: str = "potential"
+    product_id: int | None = None
+    opportunity_score: int
+    action: str
+    rank: int | None = None
     recommended_action: str
     velocity: float
+    trend_velocity: int
     momentum: float
-    purchase_intent: float
-    license_risk: str
+    purchase_intent: int
+    price_resilience: int = 0
+    low_saturation: int = 0
+    local_fit: int = 0
+    production_fit: int = 0
+    license_risk: int = 0
+    license_status: str | None = None
     local_relevance: float
+    inventory_available: int | None = None
+    base_price: float | None = None
+    sources: list[str] = Field(default_factory=list)
+    match_confidence: float | None = None
     dismissed: bool
     score_breakdown: dict[str, Any] = Field(default_factory=dict)
 
