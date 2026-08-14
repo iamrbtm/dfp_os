@@ -7,7 +7,14 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from services.firecrawl.firecrawl_client import FirecrawlClient, scrape_trending
+try:
+    from services.firecrawl.firecrawl_client import FirecrawlClient, scrape_trending
+
+    CLIENT_PATCH_PATH = "services.firecrawl.firecrawl_client.httpx.Client"
+except ModuleNotFoundError:  # service-local pytest run
+    from firecrawl_client import FirecrawlClient, scrape_trending
+
+    CLIENT_PATCH_PATH = "firecrawl_client.httpx.Client"
 
 
 @pytest.fixture
@@ -38,7 +45,7 @@ def test_scrape_returns_payload(client: FirecrawlClient) -> None:
         )
     )
 
-    with patch("services.firecrawl.firecrawl_client.httpx.Client", return_value=fake):
+    with patch(CLIENT_PATCH_PATH, return_value=fake):
         result = client.scrape("https://example.com/x")
 
     assert result["success"] is True
@@ -52,7 +59,7 @@ def test_scrape_handles_network_error(client: FirecrawlClient) -> None:
     fake.__exit__ = MagicMock(return_value=False)
     fake.request = MagicMock(side_effect=httpx.ConnectError("boom"))
 
-    with patch("services.firecrawl.firecrawl_client.httpx.Client", return_value=fake):
+    with patch(CLIENT_PATCH_PATH, return_value=fake):
         result = client.scrape("https://example.com/x")
 
     assert result["success"] is False
@@ -65,7 +72,7 @@ def test_scrape_handles_http_error(client: FirecrawlClient) -> None:
     fake.__exit__ = MagicMock(return_value=False)
     fake.request = MagicMock(return_value=_make_response(503))
 
-    with patch("services.firecrawl.firecrawl_client.httpx.Client", return_value=fake):
+    with patch(CLIENT_PATCH_PATH, return_value=fake):
         result = client.scrape("https://example.com/x")
 
     assert result["success"] is False
@@ -80,7 +87,7 @@ def test_search_payload_shape(client: FirecrawlClient) -> None:
         return_value=_make_response(200, {"success": True, "data": []})
     )
 
-    with patch("services.firecrawl.firecrawl_client.httpx.Client", return_value=fake):
+    with patch(CLIENT_PATCH_PATH, return_value=fake):
         client.search("3D printed dragon", limit=5)
 
     args, kwargs = fake.request.call_args
@@ -111,7 +118,7 @@ def test_scrape_trending_returns_extracted_items(client: FirecrawlClient) -> Non
         )
     )
 
-    with patch("services.firecrawl.firecrawl_client.httpx.Client", return_value=fake):
+    with patch(CLIENT_PATCH_PATH, return_value=fake):
         result = scrape_trending(
             client,
             target_url="https://example.com/trending",
@@ -136,7 +143,7 @@ def test_scrape_trending_handles_failure(client: FirecrawlClient) -> None:
         return_value=_make_response(503)
     )
 
-    with patch("services.firecrawl.firecrawl_client.httpx.Client", return_value=fake):
+    with patch(CLIENT_PATCH_PATH, return_value=fake):
         result = scrape_trending(
             client,
             target_url="https://example.com/trending",

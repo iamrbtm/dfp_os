@@ -73,6 +73,17 @@ x-env-app: &env-app
   TREND_SCOUT_FETCHER_TIMEOUT_SECONDS: 30
   TREND_SCOUT_PIPELINE_SOFT_TIME_LIMIT_SECONDS: 900
   TREND_SCOUT_PIPELINE_HARD_TIME_LIMIT_SECONDS: 960
+  FIRECRAWL_ENABLED: ${FIRECRAWL_ENABLED:-false}
+  FIRECRAWL_API_URL: ${FIRECRAWL_API_URL:-http://firecrawl-api:3002}
+  FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+  FIRECRAWL_RESPECT_ROBOTS_TXT: ${FIRECRAWL_RESPECT_ROBOTS_TXT:-true}
+  FIRECRAWL_WEEKLY_CREDIT_CAP: ${FIRECRAWL_WEEKLY_CREDIT_CAP:-2000}
+  FIRECRAWL_DISABLE_TARGETS: ${FIRECRAWL_DISABLE_TARGETS:-}
+  FIRECRAWL_ALLOW_ETSY: ${FIRECRAWL_ALLOW_ETSY:-false}
+  FIRECRAWL_ETSY_RUN_PROBABILITY: ${FIRECRAWL_ETSY_RUN_PROBABILITY:-0.15}
+  FIRECRAWL_ETSY_MIN_DAYS_BETWEEN_RUNS: ${FIRECRAWL_ETSY_MIN_DAYS_BETWEEN_RUNS:-14}
+  FIRECRAWL_ETSY_MIN_INTERVAL_SECONDS: ${FIRECRAWL_ETSY_MIN_INTERVAL_SECONDS:-30}
+  FIRECRAWL_ETSY_MAX_PAGES_PER_RUN: ${FIRECRAWL_ETSY_MAX_PAGES_PER_RUN:-20}
 
 x-depends-core: &depends-core
   db:
@@ -399,6 +410,17 @@ services:
       TREND_SCOUT_AI_PROVIDER: ${AI_PROVIDER:-openai}
       TREND_SCOUT_FETCHER_POOL_WORKERS: ${TREND_SCOUT_FETCHER_POOL_WORKERS:-4}
       TREND_SCOUT_FETCHER_TIMEOUT_SECONDS: ${TREND_SCOUT_FETCHER_TIMEOUT_SECONDS:-30}
+      FIRECRAWL_ENABLED: ${FIRECRAWL_ENABLED:-false}
+      FIRECRAWL_API_URL: ${FIRECRAWL_API_URL:-http://firecrawl-api:3002}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      FIRECRAWL_RESPECT_ROBOTS_TXT: ${FIRECRAWL_RESPECT_ROBOTS_TXT:-true}
+      FIRECRAWL_WEEKLY_CREDIT_CAP: ${FIRECRAWL_WEEKLY_CREDIT_CAP:-2000}
+      FIRECRAWL_DISABLE_TARGETS: ${FIRECRAWL_DISABLE_TARGETS:-}
+      FIRECRAWL_ALLOW_ETSY: ${FIRECRAWL_ALLOW_ETSY:-false}
+      FIRECRAWL_ETSY_RUN_PROBABILITY: ${FIRECRAWL_ETSY_RUN_PROBABILITY:-0.15}
+      FIRECRAWL_ETSY_MIN_DAYS_BETWEEN_RUNS: ${FIRECRAWL_ETSY_MIN_DAYS_BETWEEN_RUNS:-14}
+      FIRECRAWL_ETSY_MIN_INTERVAL_SECONDS: ${FIRECRAWL_ETSY_MIN_INTERVAL_SECONDS:-30}
+      FIRECRAWL_ETSY_MAX_PAGES_PER_RUN: ${FIRECRAWL_ETSY_MAX_PAGES_PER_RUN:-20}
     expose:
       - "8093"
     depends_on:
@@ -442,7 +464,7 @@ services:
         condition: service_healthy
     command: ["uv", "run", "celery", "-A", "app.celery_app.celery", "worker", "-Q", "trend_scout", "--loglevel=info", "--concurrency=1"]
 
-trend-scout-migrate:
+  trend-scout-migrate:
     build: services/trend-scout
     image: dfpos-trend-scout:local
     profiles: ["release"]
@@ -459,26 +481,13 @@ trend-scout-migrate:
     build: services/firecrawl
     image: dfpos-firecrawl:local
     init: true
-    mem_limit: 2048m
+    mem_limit: 512m
     profiles: ["firecrawl"]
     environment:
-      USE_DB_AUTHENTICATION: "true"
-      BULL_AUTH_KEY: ${FIRECRAWL_BULL_AUTH_KEY:?FIRECRAWL_BULL_AUTH_KEY must be set}
-      BULL_QUEUE_ADMIN_ENABLED: "false"
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:?FIRECRAWL_API_KEY must be set}
-      NUQ_POSTGRES_URL: postgresql+psycopg://${FIRECRAWL_NUQ_USER}:${FIRECRAWL_NUQ_PASSWORD}@firecrawl-nuq:5432/firecrawl_nuq
-      REDIS_URL: redis://firecrawl-redis:6379
-      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-    depends_on:
-      firecrawl-redis:
-        condition: service_healthy
-      firecrawl-rabbitmq:
-        condition: service_healthy
-      firecrawl-nuq:
-        condition: service_healthy
-      firecrawl-playwright:
-        condition: service_started
-    command: ["uv", "run", "uvicorn", "firecrawl.main:app", "--host", "0.0.0.0", "--port", "3002"]
+      FIRECRAWL_ADAPTER_MAX_RESPONSE_BYTES: ${FIRECRAWL_ADAPTER_MAX_RESPONSE_BYTES:-1500000}
+      FIRECRAWL_ADAPTER_TIMEOUT_SECONDS: ${FIRECRAWL_ADAPTER_TIMEOUT_SECONDS:-20}
+      FIRECRAWL_ADAPTER_USER_AGENT: "${FIRECRAWL_ADAPTER_USER_AGENT:-DFPosTrendScout/0.1 (+internal research; contact Dude Fish Printing)}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3002/health').read()"]
       interval: 30s
@@ -488,7 +497,7 @@ trend-scout-migrate:
 
   firecrawl-playwright:
     image: microfost/firecrawl-playwright:latest
-    profiles: ["firecrawl"]
+    profiles: ["firecrawl-upstream"]
     init: true
     mem_limit: 4096m
     environment:
@@ -504,7 +513,7 @@ trend-scout-migrate:
 
   firecrawl-redis:
     image: redis:7-alpine
-    profiles: ["firecrawl"]
+    profiles: ["firecrawl-upstream"]
     volumes:
       - firecrawl_redis_data:/data
     healthcheck:
@@ -515,7 +524,7 @@ trend-scout-migrate:
 
   firecrawl-rabbitmq:
     image: rabbitmq:3-management
-    profiles: ["firecrawl"]
+    profiles: ["firecrawl-upstream"]
     volumes:
       - firecrawl_rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -527,11 +536,11 @@ trend-scout-migrate:
 
   firecrawl-nuq:
     image: postgres:16
-    profiles: ["firecrawl"]
+    profiles: ["firecrawl-upstream"]
     environment:
       POSTGRES_DB: firecrawl_nuq
-      POSTGRES_USER: ${FIRECRAWL_NUQ_USER:?FIRECRAWL_NUQ_USER must be set}
-      POSTGRES_PASSWORD: ${FIRECRAWL_NUQ_PASSWORD:?FIRECRAWL_NUQ_PASSWORD must be set}
+      POSTGRES_USER: ${FIRECRAWL_NUQ_USER:-dfp_firecrawl}
+      POSTGRES_PASSWORD: ${FIRECRAWL_NUQ_PASSWORD:-change-me-firecrawl-nuq-password}
     volumes:
       - firecrawl_nuq_data:/var/lib/postgresql/data
     healthcheck:
