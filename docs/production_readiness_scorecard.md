@@ -284,3 +284,40 @@ Branch: `phase/5-api-and-routes`. Status: complete.
 - **Risk:** the `/api/v1/pipeline/run` endpoint assumes Celery is reachable. When the broker is down the endpoint returns 503 (the route catches `Exception` and surfaces it as `enqueue_failed`). Without Celery the FastAPI process still serves health, but `/pipeline/run` and `/backtest/run` will fail.
 - **Risk:** the `/api/v1/backtest/run` endpoint uses the same default zero-sales provider as the Celery task. The actual sales-feed integration lives in a Phase 6 follow-up when the Flask side exposes `/api/internal/orders-since`.
 - **Out of scope:** Flask-side proxy and cutover (Phase 6), Firecrawl (Phases 7-9).
+
+## Phase 6 — Flask Proxy + Cutover Foundation (2026-08-13)
+
+Branch: `phase/6-flask-proxy-and-cutover`. Status: complete.
+
+| Area | Before | After | Justification |
+|---|---:|---:|---|
+| Microservice / Trend Scout Extraction | 9 | 9 (foundation only) | Phase 6 ships the cutover foundation: proxy module, internal-api blueprint, runbook. Route-by-route data migration is incremental and will land in follow-up phases after the smoke proves out. |
+| Documentation | unchanged from Phase 5 | +1 | New `docs/runbooks/trend_scout_microservice_cutover.md` documents pre-flight, cutover steps, rollback, and common questions. |
+| Security / Permissions | unchanged from Phase 5 | unchanged | The internal-api blueprint adds Bearer-token-protected routes; per-token scopes land in Phase 10. |
+
+### Phase 6 files added (main Flask app)
+
+- `app/services/trend_scout_proxy.py`: `TrendScoutProxy` wraps every microservice endpoint under `/api/v1/*`. Catches network errors and raises `TrendScoutUnavailable` so callers can fall back gracefully. Includes domain-specific helpers (`list_reports`, `latest_report`, `source_health`, `list_opportunities`, `dismiss_opportunity`, `weight_defaults`, `run_pipeline`, `calibration_history`, `run_backtest`, `toggle_source`, etc.).
+- `app/blueprints/internal_api/__init__.py` and `routes.py`: new blueprint at `/api/internal/*` exposing `GET /internal-demand` (aggregated buyer-intent signals) and `GET /orders-since` (per-product sales aggregates). The `internal_demand` Trend Scout source and the Phase 5 backtest actual-sales provider both hit these endpoints over Bearer-token auth.
+- `tests/test_trend_scout_proxy.py`: 10 unit tests covering happy path, non-2xx, network errors, JSON encoding, and config-driven construction.
+- `docs/runbooks/trend_scout_microservice_cutover.md`: operator guide.
+
+### Phase 6 files modified (main Flask app)
+
+- `app/__init__.py`: imported and registered `internal_api_bp`; `trend_scout_bp` still registered (its existing routes still compile against the legacy ORM tables).
+- `app/celery_app.py`: already updated in Phase 4; Phase 6 confirms the dispatch tasks POST to the microservice (no further change).
+
+### Phase 6 commands run
+
+- `uv run pytest -v --tb=line tests/test_trend_scout_proxy.py` — **10 passed in 0.19s**.
+- `uv run pytest --collect-only -q` — 756 tests collected (10 new tests added; no collection regressions in the main app).
+- `uv run ruff check app/services/trend_scout_proxy.py app/blueprints/internal_api/ tests/test_trend_scout_proxy.py` — all checks passed.
+- `uv run ruff format --check` — 4 files clean.
+- `uv run python -c "from app import create_app; create_app(); print('OK')"` — app boots cleanly.
+
+### Phase 6 risk and out-of-scope
+
+- **Risk:** the existing `app/blueprints/trend_scout/routes.py` still imports the legacy ORM tables that have been deprecated. That file is left intact in Phase 6 so the admin UI continues to compile; route-by-route data migration to the proxy is a Phase 6.1 follow-up. Until then, the admin pages render against the empty tables in the main DB.
+- **Risk:** `internal_api/routes.py` requires the `TREND_SCOUT_INTERNAL_API_TOKEN` value in the main app's config (added in Phase 4). Operators must keep that token in sync between the Flask app and the microservice.
+- **Risk:** `/api/internal/orders-since` returns an aggregated view that depends on `Order` and `PosSale` ORM models. If those models change (renamed, removed, or schema-migrated) the endpoint must be updated in lockstep.
+- **Out of scope:** route-by-route data migration to the proxy (Phase 6.1+), deletions of the legacy files (those land with the full route migration), Firecrawl (Phases 7-9).

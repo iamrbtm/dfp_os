@@ -26,6 +26,7 @@ from app.blueprints.market_catalog import bp as market_catalog_bp
 from app.blueprints.notifications import bp as notifications_bp
 from app.blueprints.inventory import bp as inventory_bp
 from app.blueprints.intelligence import bp as intelligence_bp
+from app.blueprints.internal_api import bp as internal_api_bp
 from app.blueprints.orders import bp as orders_bp
 from app.blueprints.pos import bp as pos_bp
 from app.blueprints.prep_tasks import bp as prep_tasks_bp
@@ -167,6 +168,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(notifications_bp)
     app.register_blueprint(expenses_bp)
     app.register_blueprint(trend_scout_bp)
+    app.register_blueprint(internal_api_bp)
     app.register_blueprint(audit_logs_bp)
     app.register_blueprint(api_tokens_bp)
     app.register_blueprint(feature_flags_bp)
