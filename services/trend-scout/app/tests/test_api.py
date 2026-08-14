@@ -191,6 +191,87 @@ def test_pipeline_status_unknown_when_run_not_found() -> None:
     assert response.json()["state"] == "unknown"
 
 
+def test_pipeline_run_is_visible_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api.routes import pipeline as pipeline_route
+    from app.main import create_app
+    from app.workers import task_monitor
+
+    task_monitor._task_runs.clear()
+    monkeypatch.setattr(task_monitor, "_redis_client", None)
+
+    fake_async_result = MagicMock()
+    fake_async_result.id = "celery-visible-1"
+    monkeypatch.setattr(pipeline_route.celery, "send_task", lambda *args, **kwargs: fake_async_result)
+
+    app = create_app()
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/pipeline/run",
+            json={"trigger": "manual", "run_id": "run-visible-1"},
+            headers=_auth_headers(),
+        )
+        assert response.status_code == 202
+
+        status_response = client.get(
+            "/api/v1/pipeline/status/run-visible-1",
+            headers=_auth_headers(),
+        )
+        detail_by_run = client.get(
+            "/api/v1/pipeline/runs/run-visible-1",
+            headers=_auth_headers(),
+        )
+        detail_by_task = client.get(
+            "/api/v1/pipeline/runs/celery-visible-1",
+            headers=_auth_headers(),
+        )
+
+    assert status_response.status_code == 200
+    assert status_response.json()["state"] == "queued"
+    assert status_response.json()["progress"] == 0.0
+    assert detail_by_run.status_code == 200
+    assert detail_by_task.status_code == 200
+    assert detail_by_run.json() == detail_by_task.json()
+    assert detail_by_run.json()["task_id"] == "celery-visible-1"
+
+
+def test_pipeline_cancel_updates_known_run_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api.routes import pipeline as pipeline_route
+    from app.main import create_app
+    from app.workers import task_monitor
+
+    task_monitor._task_runs.clear()
+    monkeypatch.setattr(task_monitor, "_redis_client", None)
+    task_monitor.create_task_run(
+        "celery-cancel-1",
+        trigger="manual",
+        total_steps=12,
+        run_id="run-cancel-1",
+    )
+
+    revoked: list[str] = []
+    monkeypatch.setattr(
+        pipeline_route.celery.control,
+        "revoke",
+        lambda task_id, terminate=False: revoked.append(task_id),
+    )
+
+    app = create_app()
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/pipeline/cancel/run-cancel-1",
+            headers=_auth_headers(),
+        )
+        detail = client.get(
+            "/api/v1/pipeline/runs/run-cancel-1",
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "revoked"
+    assert revoked == ["celery-cancel-1"]
+    assert detail.json()["status"] == "revoked"
+
+
 def test_calibration_run_returns_record(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.api.routes import backtest as backtest_route
     from app.main import create_app

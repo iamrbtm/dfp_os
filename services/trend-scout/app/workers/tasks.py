@@ -62,6 +62,7 @@ def trend_scout_pipeline(self, *, run_id: str | None = None, trigger: str = "sch
         run_full_pipeline(
             session_factory=_factory,
             run_id=run_id,
+            task_id=task_id,
             trigger=trigger,
             progress_callback=lambda completed, total, step, status: self.update_state(
                 state="PROGRESS",

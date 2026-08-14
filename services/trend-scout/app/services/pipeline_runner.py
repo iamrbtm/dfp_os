@@ -28,6 +28,7 @@ from app.services.weights import seed_default_weights
 from app.workers.task_monitor import (
     complete_task_run,
     create_task_run,
+    get_task_run,
     start_task_run,
     update_task_progress,
 )
@@ -41,6 +42,7 @@ ProgressCallback = Callable[[int, int, str, str], None]
 async def run_full_pipeline(
     session_factory: Callable[[], Awaitable[AsyncSession]],
     run_id: str | None = None,
+    task_id: str | None = None,
     trigger: str = "scheduled",
     business_id: int | None = None,
     progress_callback: ProgressCallback | None = None,
@@ -53,18 +55,24 @@ async def run_full_pipeline(
     run_id = run_id or datetime.now(timezone.utc).strftime("run-%Y%m%dT%H%M%S")
     started_at = datetime.now(timezone.utc).isoformat()
 
-    internal_task_id = f"pipeline-{run_id}"
-    create_task_run(
-        task_id=internal_task_id,
-        trigger=trigger,
-        total_steps=12,
-        run_id=run_id,
-    )
-    start_task_run(internal_task_id)
+    monitor_task_id = task_id or f"pipeline-{run_id}"
+    if not get_task_run(monitor_task_id):
+        create_task_run(
+            task_id=monitor_task_id,
+            trigger=trigger,
+            total_steps=12,
+            run_id=run_id,
+        )
+    start_task_run(monitor_task_id)
+
+    completed_steps = 0
 
     async def _step(step: str, status: str = "completed") -> None:
+        nonlocal completed_steps
+        completed_steps = min(completed_steps + 1, 12)
         update_task_progress(
-            task_id=internal_task_id,
+            task_id=monitor_task_id,
+            completed_steps=completed_steps,
             current_step=step,
             status=status,
         )
@@ -105,7 +113,7 @@ async def run_full_pipeline(
             await session.close()
 
         await _step("complete", status="completed")
-        complete_task_run(internal_task_id, status="success")
+        complete_task_run(monitor_task_id, status="success")
 
         return {
             "run_id": run_id,
@@ -117,7 +125,7 @@ async def run_full_pipeline(
         }
     except Exception as exc:
         logger.exception("Pipeline run %s failed", run_id)
-        complete_task_run(internal_task_id, status="failed", error=str(exc))
+        complete_task_run(monitor_task_id, status="failed", error=str(exc))
         await _step("failed", status="failed")
         return {
             "run_id": run_id,

@@ -14,8 +14,10 @@ from app.schemas.api import (
 )
 from app.security import SCOPE_READ, SCOPE_WRITE, verify_internal_token
 from app.workers.task_monitor import (
+    create_task_run,
     get_task_run,
     list_task_runs,
+    update_task_progress,
 )
 
 router = APIRouter(
@@ -49,6 +51,14 @@ async def run_pipeline(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"code": "enqueue_failed", "message": str(exc)},
         ) from exc
+    create_task_run(
+        task_id=async_result.id,
+        trigger=request.trigger,
+        total_steps=12,
+        run_id=run_id,
+        metadata={"source": "api"},
+    )
+    update_task_progress(async_result.id, current_step="queued", status="queued")
     return PipelineRunResponse(
         accepted=True,
         run_id=run_id,
@@ -66,12 +76,11 @@ async def run_status(
     runs = list_task_runs(limit=200)
     for run in runs:
         if run.get("run_id") == run_id or run.get("task_id") == run_id:
-            progress = 100.0 if run.get("status") == "success" else 0.0 if run.get("status") == "failed" else None
             return PipelineStatusResponse(
                 run_id=run_id,
                 state=run.get("status", "unknown"),
                 completed_step=run.get("current_step"),
-                progress=progress,
+                progress=run.get("progress"),
             )
     return PipelineStatusResponse(
         run_id=run_id,
@@ -109,11 +118,15 @@ async def cancel_run(
     _token: str = SCOPE_WRITE,
 ) -> dict[str, str]:
     """Revoke a queued task by id (best-effort)."""
+    run = get_task_run(run_id)
+    task_id = str(run.get("task_id") if run else run_id)
     try:
-        celery.control.revoke(run_id, terminate=False)
+        celery.control.revoke(task_id, terminate=False)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"code": "cancel_failed", "message": str(exc)},
         ) from exc
+    if run:
+        update_task_progress(task_id, current_step="revoked", status="revoked")
     return {"run_id": run_id, "status": "revoked"}
