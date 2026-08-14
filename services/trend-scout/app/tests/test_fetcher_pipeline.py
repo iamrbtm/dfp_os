@@ -131,7 +131,7 @@ def test_aggregate_source_health_counts_items_and_groups_errors() -> None:
     health = fetcher_pipeline.aggregate_source_health(fake_results)
     assert len(health) == 2
     etsy = next(h for h in health if h["source"] == "etsy")
-    assert etsy["status"] == "error"
+    assert etsy["status"] == "degraded"
     assert etsy["item_count"] == 3
     assert "HTTP 500" in etsy["error_message"]
     makerworld = next(h for h in health if h["source"] == "makerworld")

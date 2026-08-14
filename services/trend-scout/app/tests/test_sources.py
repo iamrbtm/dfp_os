@@ -63,6 +63,7 @@ def test_base_scout_result_to_dict_round_trip() -> None:
 
 
 def test_internal_demand_returns_structured_when_token_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TREND_SCOUT_INTERNAL_API_TOKEN", raising=False)
     monkeypatch.delenv("TREND_SCOUT_FLASK_INTERNAL_TOKEN", raising=False)
     monkeypatch.setenv("TREND_SCOUT_FLASK_BASE_URL", "http://127.0.0.1:1")
     from app.sources.internal_demand import fetch_internal_demand
@@ -74,6 +75,25 @@ def test_internal_demand_returns_structured_when_token_missing(monkeypatch: pyte
         "buyer_intent",
         "pipeline_error",
     )
+
+
+def test_internal_demand_uses_shared_internal_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.sources import internal_demand
+
+    captured: dict[str, object] = {}
+
+    def fake_fetch(**kwargs: object) -> list[ScoutResult]:
+        captured.update(kwargs)
+        return [ScoutResult(source="internal_demand", keyword_or_category="buyer_intent")]
+
+    monkeypatch.setenv("TREND_SCOUT_INTERNAL_API_TOKEN", "shared-token")
+    monkeypatch.delenv("TREND_SCOUT_FLASK_INTERNAL_TOKEN", raising=False)
+    monkeypatch.setattr(internal_demand, "_fetch_internal_demand_sync", fake_fetch)
+
+    results = internal_demand.fetch_internal_demand()
+
+    assert results[0].source == "internal_demand"
+    assert captured["token"] == "shared-token"
 
 
 def test_bgg_returns_list_or_graceful_error(short_timeout_session: requests.Session) -> None:
@@ -171,3 +191,14 @@ def test_last30days_returns_structured_result(short_timeout_session: requests.Se
 
     results = _call_fetcher("last30days", fetch_trending, short_timeout_session)
     assert results[0].source == "last30days"
+
+
+def test_last30days_empty_env_uses_default_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.sources import last30days
+
+    monkeypatch.setenv("LAST30DAYS_RAW_FILE", "")
+
+    results = last30days.fetch_trending()
+
+    assert results[0].source == "last30days"
+    assert last30days.DEFAULT_RAW_FILE in "; ".join(results[0].errors)

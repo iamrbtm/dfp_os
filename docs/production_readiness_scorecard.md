@@ -508,6 +508,7 @@ Branch: `phase/10-hardening-and-scorecard`. Scope: Trend Scout and direct depend
 | Trend Scout Task Monitor | 6 | **10** | Task-run state moved from process-local memory to Redis-backed persistence through `TREND_SCOUT_REDIS_URL`, with shared lookup by logical `run_id` and Celery `task_id`, bounded retention, progress calculation, and process-local fallback for degraded local/test paths. |
 | Pipeline Run Control | 7 | **10** | `/api/v1/pipeline/run` now creates a visible queued task-run immediately after successful Celery enqueue. Status/detail endpoints resolve by `run_id` or task ID. Cancel revokes the actual Celery task ID and marks known runs `revoked`. Worker progress updates the same shared record. |
 | Runtime Pipeline Smoke | 7 | **10** | Live Docker smoke confirmed `app.workers.tasks.trend_scout_pipeline` executes in `trend-scout-worker` and completes successfully with status `success`, step `complete`, and progress `100.0`. Fixed runtime-only failures in weight uniqueness and source-health timestamp coercion. |
+| Trend Scout Source Health | 7 | **9** | Fixed internal-demand token wiring, removed nested event-loop failure, installed `curl` for Reddit RSS fetches, marked partial source results as `degraded` instead of hard failures, and passed optional source credentials through Docker. Remaining failures require external credentials, a readable Last30Days research file, or upstream Cloudflare/auth workarounds. |
 | Flask/Product Studio Dependencies | 9 | **10** | Focused proxy coverage verifies Flask dependent surfaces remain on `TrendScoutProxy`; no old monolith model/service imports were reintroduced. |
 | Trend Scout Production Readiness | 9 | **10** | Remaining Trend Scout-specific blockers from the cutover pass have been addressed. Full DFPos platform readiness remains separately scored and is not implied by this Trend Scout score. |
 
@@ -528,6 +529,8 @@ Branch: `phase/10-hardening-and-scorecard`. Scope: Trend Scout and direct depend
 - Changed Trend Scout weight uniqueness from key-only to group/key so defaults can seed repeated source keys across score/source/buyer/metric groups.
 - Coerced source-health `scraped_at` values from ISO strings to timezone-aware datetimes before Postgres persistence.
 - Guarded audit startup replay so Celery worker task app creation does not recursively enqueue `app.tasks.audit_outbox.flush_outbox`.
+- Fixed Trend Scout source reliability issues: `internal_demand` now uses `TREND_SCOUT_INTERNAL_API_TOKEN`, avoids `asyncio.run()` inside the async pipeline runner, and succeeds in Docker; Reddit now has `curl` available and is reported as `degraded` when partial results are returned under rate limiting.
+- Passed optional source credentials/path settings through Docker (`ETSY_API_KEY`, `PINTEREST_API_KEY`, `TIKTOK_RESEARCH_ACCESS_TOKEN`, `LAST30DAYS_RAW_FILE`) so credentialed sources can succeed once real values are supplied.
 
 ### Validation from this pass
 
@@ -544,6 +547,7 @@ Branch: `phase/10-hardening-and-scorecard`. Scope: Trend Scout and direct depend
 - Docker: `docker compose build trend-scout` — `dfpos-trend-scout:local` built.
 - Docker: `docker compose --profile firecrawl build firecrawl-api` — `dfpos-firecrawl:local` built.
 - Runtime Docker smoke: `POST /api/v1/pipeline/run` from `web` to `trend-scout` returned accepted queued run; `trend-scout-worker` received `app.workers.tasks.trend_scout_pipeline`; final status was `success`, `complete`, `100.0` progress.
+- Runtime source-health smoke after source fixes: latest report showed `internal_demand`, `makerworld`, and `myminifactory` as `success`; `reddit` as `degraded` with 150 items; remaining hard failures were missing credentials/local research file or upstream Cloudflare/auth responses.
 
 ### Remaining risks
 

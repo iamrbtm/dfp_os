@@ -128,7 +128,7 @@ def _clean_keyword(title: str) -> str:
 
 
 def fetch_trending(session=None, limiter=None) -> list[ScoutResult]:
-    raw_file = os.getenv("LAST30DAYS_RAW_FILE", DEFAULT_RAW_FILE)
+    raw_file = os.getenv("LAST30DAYS_RAW_FILE") or DEFAULT_RAW_FILE
 
     if not os.path.isfile(raw_file):
         return [

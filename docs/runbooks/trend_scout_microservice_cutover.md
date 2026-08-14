@@ -96,9 +96,22 @@ The cutover is env-driven. No code changes are needed at runtime.
 4. **Verify source health shows the microservice runs**:
 
    ```bash
-   curl -fsS -H "Authorization: Bearer $TREND_SCOUT_INTERNAL_API_TOKEN" \
-     http://localhost:8093/api/v1/source-health
-   ```
+    curl -fsS -H "Authorization: Bearer $TREND_SCOUT_INTERNAL_API_TOKEN" \
+      http://localhost:8093/api/v1/source-health
+    ```
+
+    Some sources are intentionally credential- or network-dependent:
+    - `internal_demand` should be `success` when `TREND_SCOUT_INTERNAL_API_TOKEN`
+      is shared by Flask and the microservice.
+    - `reddit` may be `degraded` when it returns useful RSS items but some feeds
+      rate-limit with `HTTP 429`.
+    - `etsy`, `pinterest`, and `tiktok` require `ETSY_API_KEY`,
+      `PINTEREST_API_KEY`, and approved `TIKTOK_RESEARCH_ACCESS_TOKEN` values.
+    - `last30days` requires `LAST30DAYS_RAW_FILE` to point at a readable raw
+      research markdown file inside the container.
+    - `bgg` and `printables` can return upstream Cloudflare/auth challenges from
+      Docker networks. Treat those as external blocking unless a compliant API or
+      explicitly enabled scrape adapter is configured.
 
 5. **Watch the queue behavior for one week**:
 

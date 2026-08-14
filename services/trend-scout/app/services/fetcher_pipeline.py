@@ -128,16 +128,21 @@ def _source_health_from_results(results: list[dict[str, Any]]) -> list[dict[str,
                 "error_message": None,
                 "scraped_at": r.get("scraped_at"),
                 "metadata": r.get("metadata", {}),
+                "_errors": [],
             }
-        errors = r.get("errors", [])
-        if errors:
-            source_map[source]["status"] = "error"
-            source_map[source]["error_message"] = "; ".join(errors)
         items = r.get("items", [])
         source_map[source]["item_count"] += len(items)
+        errors = r.get("errors", [])
+        if errors:
+            source_map[source]["_errors"].extend(errors)
         kw = r.get("keyword_or_category")
         if kw and kw not in ("pipeline_error", "not_configured", "configured", "analysis", ""):
             source_map[source]["keyword"] = kw
+    for row in source_map.values():
+        errors = row.pop("_errors", [])
+        if errors:
+            row["status"] = "degraded" if row["item_count"] else "error"
+            row["error_message"] = "; ".join(errors)
     return list(source_map.values())
 
 

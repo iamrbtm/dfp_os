@@ -9,7 +9,6 @@ result so the source health row surfaces the gap rather than crashing.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from collections import defaultdict
@@ -73,39 +72,28 @@ def fetch_internal_demand(
     base_url = (
         flask_base_url or os.getenv("TREND_SCOUT_FLASK_BASE_URL") or os.getenv("APP_BASE_URL") or "http://web:5000"
     )
-    token = flask_token or os.getenv("TREND_SCOUT_FLASK_INTERNAL_TOKEN", "")
+    token = (
+        flask_token or os.getenv("TREND_SCOUT_INTERNAL_API_TOKEN") or os.getenv("TREND_SCOUT_FLASK_INTERNAL_TOKEN", "")
+    )
 
     if not token:
         result = ScoutResult(
             source="internal_demand",
             keyword_or_category="not_configured",
-            errors=["TREND_SCOUT_FLASK_INTERNAL_TOKEN not set; internal demand endpoint requires authentication"],
+            errors=["TREND_SCOUT_INTERNAL_API_TOKEN not set; internal demand endpoint requires authentication"],
         )
         result.metadata["note"] = (
-            "Set TREND_SCOUT_FLASK_INTERNAL_TOKEN (shared with the Flask app) "
+            "Set TREND_SCOUT_INTERNAL_API_TOKEN (shared with the Flask app) "
             "and ensure the Flask /api/internal/internal-demand endpoint is reachable."
         )
         return [result]
 
     try:
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(
-                _fetch_internal_demand_async(
-                    base_url=base_url,
-                    token=token,
-                    lookback_days=lookback_days,
-                    timeout_seconds=timeout_seconds,
-                )
-            )
-        return asyncio.run(
-            _fetch_internal_demand_async(
-                base_url=base_url,
-                token=token,
-                lookback_days=lookback_days,
-                timeout_seconds=timeout_seconds,
-            )
+        return _fetch_internal_demand_sync(
+            base_url=base_url,
+            token=token,
+            lookback_days=lookback_days,
+            timeout_seconds=timeout_seconds,
         )
     except Exception as exc:
         logger.warning("[internal_demand] Fetcher FAILED: %s", exc)
@@ -117,7 +105,7 @@ def fetch_internal_demand(
         return [result]
 
 
-async def _fetch_internal_demand_async(
+def _fetch_internal_demand_sync(
     base_url: str,
     token: str,
     lookback_days: int,
@@ -127,18 +115,18 @@ async def _fetch_internal_demand_async(
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     params = {"lookback_days": lookback_days}
 
-    async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-        try:
-            resp = await client.get(url, headers=headers, params=params)
-        except httpx.HTTPError as exc:
-            logger.warning("[internal_demand] HTTP error: %s", exc)
-            return [
-                ScoutResult(
-                    source="internal_demand",
-                    keyword_or_category="pipeline_error",
-                    errors=[str(exc)],
-                )
-            ]
+    try:
+        with httpx.Client(timeout=timeout_seconds) as client:
+            resp = client.get(url, headers=headers, params=params)
+    except httpx.HTTPError as exc:
+        logger.warning("[internal_demand] HTTP error: %s", exc)
+        return [
+            ScoutResult(
+                source="internal_demand",
+                keyword_or_category="pipeline_error",
+                errors=[str(exc)],
+            )
+        ]
 
     if resp.status_code != 200:
         result = ScoutResult(
