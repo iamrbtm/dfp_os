@@ -1,7 +1,7 @@
 # Trend Scout Microservice + Firecrawl Plan
 
-Status: **Active — Phase 0 baseline**
-Branch: `phase/0-plan-and-scorecard`
+Status: **Executed — production cutover completed on `phase/10-hardening-and-scorecard`**
+Branch: `phase/10-hardening-and-scorecard`
 Owners: Jeremy (DFPos)
 Source: condensed from the full planning conversation logged in chat history.
 
@@ -55,7 +55,7 @@ Celery beat (existing) ──► app.tasks.dispatch_trend_scout_run ──HTTP P
 - **Redis DB 2** for Firecrawl trend scout streams (DB 0 = audit outbox, DB 1 = Celery broker, DB 2 = new).
 - **Celery task lives in the microservice** (option B). Beat stays in the main app and dispatches via a 5-line HTTP POST.
 - **Queue partition `trend_scout`, priority 1/10** — Trend Scout is low priority. Main app's default queue stays at high priority. A dedicated `trend-scout-worker` container subscribes only to the low-priority queue with `concurrency=1`; the existing main worker is also allowed to drain it (low-priority) when idle so the dedicated worker is not wasted.
-- **Self-hosted Firecrawl** in `services/firecrawl/`, vendored at a pinned release tag, hardened (auth on, persistent volumes, security reviewed). AGPL-3.0 implications noted; no modifications to upstream code without legal review.
+- **Firecrawl-compatible internal adapter** in `services/firecrawl/`, hardened with bearer auth, SSRF blocking for local/internal URLs, bounded response size, and a narrow `/v2/scrape` API surface. Upstream Firecrawl vendoring remains a future legal/security-reviewed option; production no longer references an incomplete upstream checkout.
 
 ## 3. Firecrawl target matrix (final)
 
@@ -152,7 +152,7 @@ A phase is "production-ready" when:
 
 ### Created
 - `services/trend-scout/` (new microservice, ~30 files)
-- `services/firecrawl/` (vendored Firecrawl, hardened)
+- `services/firecrawl/` (production-buildable Firecrawl-compatible internal adapter)
 - `docs/trend_scout_microservice_plan.md` (this file)
 - `docs/compliance/firecrawl_etsy_opt_in.md`
 - `docs/compliance/firecrawl_security_review.md`
@@ -161,8 +161,8 @@ A phase is "production-ready" when:
 - `.github/PULL_REQUEST_TEMPLATE.md`
 - `.github/ISSUE_TEMPLATE/trend_scout_microservice.md`
 - `.github/workflows/ci.yml` (with `trend-scout-tests` job)
-- `tests/trend_scout/` (new test directory, ~49 files)
-- `docker/postgres/init/03_trend_scout.sql` (DB provisioning)
+- `services/trend-scout/app/tests/` (microservice tests)
+- `docker/postgres/init/01-init-databases.sh` (DB provisioning)
 
 ### Modified
 - `docker-compose.yml` (new services, new env, new volumes, queue flags on existing workers)
@@ -173,7 +173,7 @@ A phase is "production-ready" when:
 - `app/__init__.py` (drop direct trend-scout blueprint import)
 - `app/module_registry.py` (preserve entry, update route table)
 - `app/cli.py` (drop trend_scout_group)
-- `app/pyproject.toml` (drop deps moved to microservice)
+- `pyproject.toml` (main app dependency cleanup is tracked separately where shared deps still serve other modules)
 - `docs/production_readiness_scorecard.md` (appended per-phase delta)
 - `docs/trend_scout_setup.md` (rewrite for new architecture)
 - `docs/AI Design Trend Scout Implementation.md` (mark superseded)
@@ -188,6 +188,15 @@ A phase is "production-ready" when:
 - `app/models/trend.py` (moved)
 - `app/tasks/trend_scout.py` (moved)
 - `app/tasks/trend_calibration.py` (moved)
+
+### Execution notes from production cutover pass
+
+- The Flask admin Trend Scout routes now read/write through `app.services.trend_scout_proxy.TrendScoutProxy`.
+- Old monolith ORM models, analyzer, source fetchers, weights/backtest/calibration/history/prune helpers, Celery tasks, schemas, and monolith tests were deleted.
+- The generic Flask API no longer exposes `trend-reports`, `trend-opportunity-scores`, or `trend-source-health` as main-database ORM resources; Trend Scout data is served by the microservice API.
+- Product Studio no longer imports the monolith analyzer. It reads the latest product-linked score from the microservice.
+- `.env.example` now includes the Firecrawl adapter variables.
+- `docker compose --profile firecrawl` starts the internal adapter (`firecrawl-api`) instead of requiring incomplete upstream sidecars.
 
 ## 10. Audit events (full list for this initiative)
 

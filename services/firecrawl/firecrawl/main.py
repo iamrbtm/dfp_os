@@ -80,7 +80,9 @@ def _text_from_html(html: str) -> tuple[str, list[dict[str, str]]]:
     return text[:50000], links[:100]
 
 
-def _extract_items(markdown: str, links: list[dict[str, str]], source_url: str) -> list[dict[str, Any]]:
+def _extract_items(
+    markdown: str, links: list[dict[str, str]], source_url: str
+) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for entry in links:
         title = entry.get("title", "").strip()
@@ -106,7 +108,9 @@ def _extract_items(markdown: str, links: list[dict[str, str]], source_url: str) 
         if len(items) >= 30:
             break
     if not items:
-        first_line = next((line.strip() for line in markdown.splitlines() if line.strip()), "Trend result")
+        first_line = next(
+            (line.strip() for line in markdown.splitlines() if line.strip()), "Trend result"
+        )
         items.append(
             {
                 "title": first_line[:180],
@@ -145,7 +149,9 @@ async def scrape(payload: ScrapeRequest) -> dict[str, Any]:
     except httpx.HTTPError as exc:
         return {"success": False, "error": str(exc)}
 
-    markdown, links = _text_from_html(content.decode(response.encoding or "utf-8", errors="replace"))
+    markdown, links = _text_from_html(
+        content.decode(response.encoding or "utf-8", errors="replace")
+    )
     data: dict[str, Any] = {"markdown": markdown, "metadata": {"sourceURL": url}}
     if "extract" in payload.formats:
         data["extract"] = _extract_items(markdown, links, url)

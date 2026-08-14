@@ -38,7 +38,9 @@ def test_scrape_blocks_internal_url(monkeypatch) -> None:
 def test_scrape_returns_markdown_and_extract(monkeypatch) -> None:
     client = _client(monkeypatch)
     response_mock = MagicMock()
-    response_mock.content = b"<html><title>Trending</title><a href='/dragon'>Rainbow Dragon</a></html>"
+    response_mock.content = (
+        b"<html><title>Trending</title><a href='/dragon'>Rainbow Dragon</a></html>"
+    )
     response_mock.encoding = "utf-8"
     response_mock.raise_for_status = MagicMock()
 

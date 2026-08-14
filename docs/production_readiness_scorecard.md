@@ -485,3 +485,45 @@ The scorecard below documents the final state.
 | 10 | `phase/10-hardening-and-scorecard` | E2E smoke + final docs + this scorecard. |
 
 **161 non-slow tests pass; 2 slow tests deselected. Lint and format clean across both codebases.**
+
+## 2026-08-13 Production Cutover Completion
+
+Branch: `phase/10-hardening-and-scorecard`. Status: complete and pushed.
+
+| Area | Previous | Current | Notes |
+|---|---:|---:|---|
+| Microservice / Trend Scout Extraction | 9 | **10** | Flask admin routes, custom Trend Scout API actions, Product Studio trend-score lookup, task monitor, settings, calibration, and backtest now use the microservice proxy. Legacy Flask ORM/service/task/schema files were deleted. |
+| Firecrawl Self-Host / Adapter | 2 | **7** | Replaced incomplete upstream-vendor skeleton with a production-buildable internal Firecrawl-compatible adapter. Docker image builds, health smoke passes, bearer auth and localhost SSRF guard are tested. Upstream Firecrawl vendoring remains optional future work. |
+| REST API | 7 | **8** | Removed stale ORM-backed `trend-reports`, `trend-opportunity-scores`, and `trend-source-health` generic Flask resources. Trend Scout data is served by the microservice API. |
+| Documentation | 8 | **9** | Plan and cutover runbook now reflect the actual hard cutover, deleted files, Firecrawl adapter profile, and rollback requirements. |
+| Tests | 7 | **8** | Microservice suite passes (`161 passed, 2 slow deselected`), Firecrawl adapter tests pass (`11 passed`), proxy tests pass (`10 passed`), and main app imports/collects (`711 collected`). Full DB-backed suite is blocked locally by Postgres password mismatch. |
+| Docker / Deployment | 7 | **8** | `dfpos-firecrawl:local` builds and runs. `docker compose --profile firecrawl config --services` validates with placeholder env and starts only `firecrawl-api` for the Firecrawl profile. |
+
+### Fixes made in production cutover completion
+
+- Switched `app/blueprints/trend_scout/routes.py` from local ORM queries to `TrendScoutProxy`.
+- Added richer microservice API response fields so existing templates render against microservice data.
+- Added microservice task-run list/detail endpoints for the Flask task monitor.
+- Added microservice opportunity detail endpoint for API/Product Studio actions.
+- Removed the legacy Flask Trend Scout model, schemas, analyzer, source fetchers, weight/backtest/calibration/history/prune services, task monitor, Celery tasks, and monolith tests.
+- Removed stale Trend Scout model/schema exports from the Flask app.
+- Removed the old `flask trend-scout` CLI group; operational runs now go through the microservice API/worker.
+- Replaced the incomplete Firecrawl vendor skeleton with a runnable internal adapter under `services/firecrawl`.
+- Added missing Firecrawl environment variables to `.env.example` and compose.
+- Updated cutover docs and runbook to stop claiming deferred work was already done.
+
+### Validation from this pass
+
+- `services/firecrawl`: `uv run --extra dev pytest -q` — **11 passed**.
+- `services/firecrawl`: `docker build -t dfpos-firecrawl:local services/firecrawl` — passed.
+- `services/firecrawl`: container health smoke on `/health` — passed.
+- `services/trend-scout`: `uv run pytest -q -m 'not slow'` — **161 passed, 2 deselected**.
+- Flask app: `uv run python -c "from app import create_app; app=create_app(); print(len(app.url_map._rules))"` — boots with **484 routes** after removing stale generic Trend Scout ORM resources.
+- Flask app: `uv run pytest --collect-only -q` — **711 tests collected**.
+- Flask app: `uv run pytest -q tests/test_trend_scout_proxy.py` — **10 passed**.
+
+### Remaining risks
+
+- Full main-app DB-backed tests could not run locally because the configured Postgres credentials reject `dfpos` on `127.0.0.1:5432`.
+- The microservice task monitor is still in-memory; Redis-backed persistence is recommended for multi-worker production visibility.
+- There is no automatic migration of old Flask Trend Scout rows into the microservice database. Export from a pre-cutover revision if those rows are needed.

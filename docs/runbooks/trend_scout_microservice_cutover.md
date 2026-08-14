@@ -1,15 +1,15 @@
 # Trend Scout Microservice — Cutover Runbook
 
-This runbook walks the operator through cutting the Trend Scout admin UI off
-the monolithic Flask DB and onto the new `services/trend-scout` microservice.
+This runbook walks the operator through running Trend Scout after the completed
+cutover from the monolithic Flask DB to the `services/trend-scout` microservice.
 
 ## Why this runbook exists
 
 The Trend Scout pipeline moved from the Flask app into the microservice over
-phases 0–5. Phase 6 is the cutover itself: the Flask admin UI now reads
-trend data from the microservice over HTTP via
-`app.services.trend_scout_proxy.TrendScoutProxy`. The microservice is the
-new source of truth for `trend_reports`, `trend_snapshots`,
+phases 0–10, then this production pass completed the hard cutover. The Flask
+admin UI and Trend Scout-specific Flask API actions now read trend data from
+the microservice over HTTP via `app.services.trend_scout_proxy.TrendScoutProxy`.
+The microservice is the source of truth for `trend_reports`, `trend_snapshots`,
 `trend_opportunity_scores`, `source_health_records`, `trend_weights`, and
 task-run state.
 
@@ -33,9 +33,9 @@ task-run state.
    - `TREND_SCOUT_SERVICE_URL=http://trend-scout:8093` (set in `x-env-app` already)
    - `TREND_SCOUT_INTERNAL_API_TOKEN` — shared between the Flask app and the microservice
    - `TREND_SCOUT_CELERY_QUEUE=trend_scout`, `TREND_SCOUT_CELERY_TASK_PRIORITY=1`
-6. **Existing data is captured (optional)** — Phase 6 ships with no rows in
-   the trend tables per the plan; if you ran an old pipeline before
-   cutting over, those rows are still in `dfp_trend_scout` and remain queryable.
+6. **Existing monolith data migration** — there is no automatic migration from
+   deleted Flask tables to the microservice DB. If old trend rows were valuable,
+   export them from a pre-cutover revision before deploying this branch.
 
 ## Cutover steps
 
@@ -57,21 +57,19 @@ The cutover is env-driven. No code changes are needed at runtime.
 2. **Run the first pipeline from the new microservice**:
 
    ```bash
-   docker compose exec web flask --app app:create_app trend-scout-cli run  # legacy CLI removed in Phase 6
-   # or via the Flask proxy that the admin UI now uses:
    curl -fsS -H "Authorization: Bearer $TREND_SCOUT_INTERNAL_API_TOKEN" \
-     -X POST http://localhost:8093/api/v1/pipeline/run
+      -X POST http://localhost:8093/api/v1/pipeline/run
    ```
 
    The pipeline enqueues on the `trend_scout` queue at priority 1. The
    dedicated worker consumes it; the main app's worker also drains it but
    never preempts higher-priority tasks.
 
-3. **Switch the Flask proxy on**:
+3. **Verify the Flask proxy**:
 
-   The Flask admin UI reads through `app.services.trend_scout_proxy`
-   starting with this PR. No additional flag is needed. If you want to
-   confirm the proxy works without disturbing anything, hit an admin route:
+   The Flask admin UI reads through `app.services.trend_scout_proxy`. No
+   additional flag is needed. If you want to confirm the proxy works without
+   disturbing anything, hit an admin route:
 
    ```bash
    # Login, then:
@@ -101,20 +99,20 @@ The cutover is env-driven. No code changes are needed at runtime.
 
 ## Rollback
 
-The microservice runs alongside the Flask app; nothing in the monolith was
-deleted before Phase 6 ships. Rollback path:
+The hard cutover deletes the legacy Flask Trend Scout implementation. Rollback
+requires reverting to the previous git revision or restoring from backup.
 
-1. **Stop dispatching to the microservice** — set
-   `TREND_SCOUT_SERVICE_URL=http://localhost:0` (or any unreachable URL). The
-   `TrendScoutProxy.TrendScoutUnavailable` exception will surface 503s in the
-   admin UI, which is what you want during a rollback to avoid partial reads.
-2. **If you need the old DB tables back**: they were NOT deleted in Phase 6
-   (cuts over behind the proxy only). Flip `app.blueprints.trend_scout.routes`
-   import back to the previous git revision and restart the web container.
+1. **Stop writes** — stop `trend-scout-worker` first so no new reports are
+   generated during rollback.
+2. **Revert application code** — deploy the last pre-hard-cutover commit if you
+   need the old Flask tables and CLI back.
+3. **Restore old database tables if needed** — use database backups/migrations
+   from the pre-cutover deployment. The current branch no longer maps those
+   tables in SQLAlchemy.
 
 ## What got deleted in Phase 6
 
-Phase 6's hard-cutover step deletes:
+The completed hard-cutover deletes:
 
 - `app/models/trend.py` — TrendSnapshot / TrendReport / TrendOpportunityScore /
   SourceHealthRecord / TrendCalibrationResult / TrendWeight / TrendReportHistory
@@ -128,7 +126,7 @@ Phase 6's hard-cutover step deletes:
 - `app/services/trend_scout_calibration.py` — replaced by
   `services/trend-scout/app/services/calibration.py`.
 - `app/services/trend_scout_history.py` and `app/services/trend_scout_prune.py`
-  — admin-only helpers; follow-up work in Phase 10.
+   — replaced by microservice endpoints and Flask proxy view-model shims.
 - `app/tasks/trend_scout.py` and `app/tasks/trend_calibration.py` — replaced
   by `app/tasks/dispatch_trend_scout.py` which POSTs to the microservice.
 
@@ -145,8 +143,23 @@ Phase 6's hard-cutover step deletes:
    main `worker` container drains `trend_scout` before the dedicated worker,
    the dedicated worker is starved — Phase 10 surfaces that as a metric.
 4. **Pipeline run progress**. The admin UI shows `current_step` from the
-   in-memory task monitor (`app.workers.task_monitor`). A Redis-backed
-   monitor is a Phase 10 follow-up.
+   microservice task monitor. A Redis-backed monitor is still recommended for
+   cross-process persistence.
+
+## Firecrawl Adapter
+
+The `firecrawl` compose profile now starts a production-buildable internal
+adapter at `services/firecrawl`, not an incomplete upstream Firecrawl checkout.
+Enable it with:
+
+```bash
+FIRECRAWL_API_KEY=change-me docker compose --profile firecrawl up -d firecrawl-api
+```
+
+The adapter exposes `/health`, `/v2/scrape`, and `/v2/search`. Search returns an
+empty result by design; Trend Scout uses configured target URLs to control crawl
+scope. The upstream Firecrawl sidecars remain under the separate
+`firecrawl-upstream` profile for future vendor work only.
 
 ## Common questions
 

@@ -32,7 +32,7 @@ def _to_score(row: TrendOpportunityScore) -> OpportunityScore:
         value = breakdown.get(key, fallback)
         try:
             return float(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return fallback
 
     def _int(key: str, fallback: int = 0) -> int:
@@ -40,9 +40,7 @@ def _to_score(row: TrendOpportunityScore) -> OpportunityScore:
 
     risk_raw = breakdown.get("license_risk_score") or breakdown.get("license_risk") or row.license_risk
     if isinstance(risk_raw, str):
-        risk_score = {"low": 20, "medium": 50, "high": 80, "unknown": 50}.get(
-            risk_raw.lower(), 50
-        )
+        risk_score = {"low": 20, "medium": 50, "high": 80, "unknown": 50}.get(risk_raw.lower(), 50)
         license_status = risk_raw
     else:
         risk_score = int(round(float(risk_raw or 0)))

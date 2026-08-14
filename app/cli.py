@@ -204,4 +204,3 @@ def migrate_file_paths() -> None:
     click.echo(f"\nMigration complete. {migrated} records updated.")
     if errors:
         click.echo(f"{errors} errors occurred (see above).", err=True)
-

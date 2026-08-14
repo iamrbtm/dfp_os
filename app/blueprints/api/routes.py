@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC
 
-from flask import Response, current_app, g, jsonify, request
+from flask import Response, g, jsonify, request
 from flask.views import MethodView
 from flask_smorest import Blueprint
 from marshmallow import Schema, fields

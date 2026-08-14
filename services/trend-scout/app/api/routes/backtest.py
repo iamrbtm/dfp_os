@@ -7,10 +7,10 @@ from fastapi import APIRouter, Depends
 from app.database import async_session_factory
 from app.schemas.api import BacktestRunRequest, BacktestRunResponse
 from app.security import SCOPE_READ, SCOPE_WRITE, verify_internal_token
+from app.services import calibration as calibration_service
 from app.services.backtest import (
     run_backtest,
 )
-from app.services import calibration as calibration_service
 
 router = APIRouter(
     prefix="",

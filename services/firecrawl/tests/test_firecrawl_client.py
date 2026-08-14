@@ -19,9 +19,7 @@ except ModuleNotFoundError:  # service-local pytest run
 
 @pytest.fixture
 def client() -> FirecrawlClient:
-    return FirecrawlClient(
-        base_url="http://firecrawl:3002", api_key="test-key"
-    )
+    return FirecrawlClient(base_url="http://firecrawl:3002", api_key="test-key")
 
 
 def _make_response(status_code: int, payload: dict | None = None) -> MagicMock:
@@ -49,7 +47,7 @@ def test_scrape_returns_payload(client: FirecrawlClient) -> None:
         result = client.scrape("https://example.com/x")
 
     assert result["success"] is True
-    args, kwargs = fake.request.call_args
+    _args, kwargs = fake.request.call_args
     assert kwargs["json"]["url"] == "https://example.com/x"
 
 
@@ -83,9 +81,7 @@ def test_search_payload_shape(client: FirecrawlClient) -> None:
     fake = MagicMock()
     fake.__enter__ = MagicMock(return_value=fake)
     fake.__exit__ = MagicMock(return_value=False)
-    fake.request = MagicMock(
-        return_value=_make_response(200, {"success": True, "data": []})
-    )
+    fake.request = MagicMock(return_value=_make_response(200, {"success": True, "data": []}))
 
     with patch(CLIENT_PATCH_PATH, return_value=fake):
         client.search("3D printed dragon", limit=5)
@@ -139,9 +135,7 @@ def test_scrape_trending_handles_failure(client: FirecrawlClient) -> None:
     fake = MagicMock()
     fake.__enter__ = MagicMock(return_value=fake)
     fake.__exit__ = MagicMock(return_value=False)
-    fake.request = MagicMock(
-        return_value=_make_response(503)
-    )
+    fake.request = MagicMock(return_value=_make_response(503))
 
     with patch(CLIENT_PATCH_PATH, return_value=fake):
         result = scrape_trending(

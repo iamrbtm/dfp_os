@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from flask import abort, jsonify, redirect, render_template, request, Response, session, url_for
 
 from app.blueprints.trend_scout import bp
-from app.celery_app import celery
 from app.extensions import db
 from app.models import (
     Market,
@@ -82,6 +81,7 @@ def _pagination_from_response(payload: dict, page: int, per_page: int) -> ProxyP
         total=int(payload.get("total") or 0),
     )
 
+
 _PROVIDER_CONFIG_CHECKS: dict[str, list[tuple[str, str]]] = {
     "etsy": [("ETSY_API_KEY", "API key")],
     "google_trends": [("SERPAPI_API_KEY", "SerpAPI key")],
@@ -153,7 +153,9 @@ def index():
     try:
         proxy = get_trend_scout_proxy()
         latest, all_reports = _latest_report_and_reports(proxy)
-        source_health = _objectify(proxy.source_health(limit=100).get("items", [])) if latest else []
+        source_health = (
+            _objectify(proxy.source_health(limit=100).get("items", [])) if latest else []
+        )
         scores_pagination = None
         if latest:
             scores_pagination = _pagination_from_response(
@@ -208,7 +210,13 @@ def run_pipeline():
     except TrendScoutUnavailable as exc:
         return _json_error(exc)
     session["trend_scout_task_id"] = payload.get("run_id") or payload.get("task_id")
-    return jsonify({"task_id": payload.get("task_id"), "run_id": payload.get("run_id"), "status": payload.get("status", "queued")})
+    return jsonify(
+        {
+            "task_id": payload.get("task_id"),
+            "run_id": payload.get("run_id"),
+            "status": payload.get("status", "queued"),
+        }
+    )
 
 
 @bp.get("/run/status/<task_id>")
@@ -272,7 +280,9 @@ def persisted_scores():
     report = proxy.latest_report()
     if not report:
         return jsonify({"found": False, "scores": []})
-    scores = proxy.list_opportunities(report_id=report["id"], include_dismissed=False, limit=200).get("items", [])
+    scores = proxy.list_opportunities(
+        report_id=report["id"], include_dismissed=False, limit=200
+    ).get("items", [])
 
     return jsonify(
         {
@@ -346,7 +356,9 @@ def api_score_history():
     proxy = get_trend_scout_proxy()
     history = []
     for report in proxy.list_reports(limit=limit).get("items", []):
-        items = proxy.list_opportunities(report_id=report["id"], include_dismissed=True, limit=200).get("items", [])
+        items = proxy.list_opportunities(
+            report_id=report["id"], include_dismissed=True, limit=200
+        ).get("items", [])
         for item in items:
             if keyword and item.get("keyword") != keyword:
                 continue
@@ -373,11 +385,15 @@ def api_biggest_movers():
         latest, previous = reports[0], reports[1]
         current = {
             item["keyword"]: item
-            for item in proxy.list_opportunities(report_id=latest["id"], include_dismissed=True, limit=200).get("items", [])
+            for item in proxy.list_opportunities(
+                report_id=latest["id"], include_dismissed=True, limit=200
+            ).get("items", [])
         }
         prior = {
             item["keyword"]: item
-            for item in proxy.list_opportunities(report_id=previous["id"], include_dismissed=True, limit=200).get("items", [])
+            for item in proxy.list_opportunities(
+                report_id=previous["id"], include_dismissed=True, limit=200
+            ).get("items", [])
         }
         for keyword, item in current.items():
             old = prior.get(keyword)
@@ -401,7 +417,9 @@ def score_history_page(keyword: str):
     proxy = get_trend_scout_proxy()
     history = []
     for report in proxy.list_reports(limit=50).get("items", []):
-        items = proxy.list_opportunities(report_id=report["id"], include_dismissed=True, limit=200).get("items", [])
+        items = proxy.list_opportunities(
+            report_id=report["id"], include_dismissed=True, limit=200
+        ).get("items", [])
         for item in items:
             if item.get("keyword") == keyword:
                 history.append(
@@ -508,7 +526,8 @@ def _calibration_view_model(row: dict) -> AttrDict:
     summary = row.get("summary") or {}
     return _objectify(
         {
-            "id": row.get("id") or abs(hash(row.get("_group", row.get("run_date", "")))) % 10_000_000,
+            "id": row.get("id")
+            or abs(hash(row.get("_group", row.get("run_date", "")))) % 10_000_000,
             "run_date": row.get("run_date"),
             "trigger": row.get("trigger", "manual"),
             "report_count": row.get("report_count", 0),
@@ -579,7 +598,9 @@ def settings():
                 "buyer": ("buyer", proxy.weight_defaults().get("buyer", {})),
                 "metric": ("metric", proxy.weight_defaults().get("metric", {})),
             }
-            group, defaults = prefix_map.get(weight_type, ("score", proxy.weight_defaults().get("score", {})))
+            group, defaults = prefix_map.get(
+                weight_type, ("score", proxy.weight_defaults().get("score", {}))
+            )
             entries = []
             for key in defaults:
                 val = request.form.get(f"weight_{key}")
@@ -768,7 +789,9 @@ def report_csv(report_id: int):
         proxy.report_by_id(report_id)
     except TrendScoutUnavailable:
         abort(404)
-    scores = proxy.report_opportunities(report_id, include_dismissed=False, page=1, per_page=200).get("items", [])
+    scores = proxy.report_opportunities(
+        report_id, include_dismissed=False, page=1, per_page=200
+    ).get("items", [])
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -1041,7 +1064,9 @@ def task_monitor_retry(run_id: str):
     try:
         run = proxy.task_run(run_id)
         if run.get("status") != "failed":
-            return jsonify({"error": f"Can only retry failed tasks, status is '{run.get('status')}'"}), 400
+            return jsonify(
+                {"error": f"Can only retry failed tasks, status is '{run.get('status')}'"}
+            ), 400
         payload = proxy.run_pipeline(trigger=f"retry:{run_id}")
     except TrendScoutUnavailable as exc:
         return _json_error(exc, 404)
@@ -1053,7 +1078,9 @@ def task_monitor_retry(run_id: str):
         metadata={"new_celery_task_id": payload.get("task_id"), "trigger": run.get("trigger")},
         source_module=__name__,
     )
-    return jsonify({"task_id": payload.get("task_id"), "run_id": payload.get("run_id"), "status": "dispatched"})
+    return jsonify(
+        {"task_id": payload.get("task_id"), "run_id": payload.get("run_id"), "status": "dispatched"}
+    )
 
 
 # -- Phase 11: Calibration History & Comparison --
@@ -1078,7 +1105,9 @@ def calibration():
         )
         return redirect(url_for("trend_scout.calibration"))
 
-    history = [_calibration_view_model(item) for item in proxy.calibration_history().get("items", [])]
+    history = [
+        _calibration_view_model(item) for item in proxy.calibration_history().get("items", [])
+    ]
     comparison = None
     regression = None
     if len(history) >= 2:
@@ -1115,7 +1144,10 @@ def calibration():
 @bp.get("/calibration/<int:cal_id>")
 @roles_required(UserRole.ADMIN)
 def calibration_detail(cal_id: int):
-    history = [_calibration_view_model(item) for item in get_trend_scout_proxy().calibration_history().get("items", [])]
+    history = [
+        _calibration_view_model(item)
+        for item in get_trend_scout_proxy().calibration_history().get("items", [])
+    ]
     cal = next((item for item in history if item.get("id") == cal_id), None)
     if not cal:
         abort(404)
@@ -1225,5 +1257,9 @@ def action_add_to_market_prep():
 def backtest():
     lookback = request.args.get("lookback", 12, type=int)
     window = request.args.get("window", 60, type=int)
-    result = get_trend_scout_proxy().run_backtest(lookback_reports=lookback, sales_window_days=window)
-    return render_template("trend_scout/backtest.html", result=_backtest_view_model(result, lookback, window))
+    result = get_trend_scout_proxy().run_backtest(
+        lookback_reports=lookback, sales_window_days=window
+    )
+    return render_template(
+        "trend_scout/backtest.html", result=_backtest_view_model(result, lookback, window)
+    )

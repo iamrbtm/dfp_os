@@ -1840,10 +1840,14 @@ def trend_score(product_id: int):
         return jsonify({"success": False, "error": "Product not found"}), 404
 
     try:
-        opportunities = get_trend_scout_proxy().list_opportunities(
-            include_dismissed=True,
-            limit=200,
-        ).get("items", [])
+        opportunities = (
+            get_trend_scout_proxy()
+            .list_opportunities(
+                include_dismissed=True,
+                limit=200,
+            )
+            .get("items", [])
+        )
     except TrendScoutUnavailable as exc:
         return jsonify({"success": False, "error": str(exc)}), 503
 
