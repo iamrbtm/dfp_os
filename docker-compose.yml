@@ -243,6 +243,8 @@ services:
       - -A
       - app.celery_app.celery
       - worker
+      - -Q
+      - celery,trend_scout
       - --loglevel=info
       - --concurrency=2
       - --max-tasks-per-child=8

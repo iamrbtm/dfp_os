@@ -196,6 +196,9 @@ class Config:
     INTELLIGENCE_INTERNAL_API_TOKEN = os.getenv("INTELLIGENCE_INTERNAL_API_TOKEN", "")
     SLICER_ENABLED = _as_bool(os.getenv("SLICER_ENABLED"), False)
     SLICER_SERVICE_URL = os.getenv("SLICER_SERVICE_URL", "http://slicer:8092")
+    TREND_SCOUT_ENABLED = _as_bool(os.getenv("TREND_SCOUT_ENABLED"), True)
+    TREND_SCOUT_SERVICE_URL = os.getenv("TREND_SCOUT_SERVICE_URL", "http://trend-scout:8093")
+    TREND_SCOUT_INTERNAL_API_TOKEN = os.getenv("TREND_SCOUT_INTERNAL_API_TOKEN", "")
     SLICER_INTERNAL_API_TOKEN = os.getenv("SLICER_INTERNAL_API_TOKEN", "")
     SLICER_ARTIFACT_MAX_BYTES = _positive_int(
         os.getenv("SLICER_ARTIFACT_MAX_BYTES", str(512 * 1024 * 1024)),

@@ -196,3 +196,55 @@ Branch: `phase/3-analyzer-and-scoring`. Status: complete.
 - **Risk:** ``new_category_discovery`` returns an empty cluster set by design in Phase 3. Phase 10 adds DBSCAN + text-embedding-3-small.
 - **Risk:** calibration rows are stored in the ``trend_weights`` table under group ``calibration_run:<timestamp>`` to avoid adding a new table. This is fine for retrieval but a dedicated ``trend_calibration_results`` table is a possible Phase 10 follow-up if query patterns become complex.
 - **Out of scope:** Celery pipeline tasks (Phase 4), full API surface (Phase 5), Flask proxy/cutover (Phase 6), Firecrawl (Phases 7-9).
+
+## Phase 4 — Celery + Redis Streams (2026-08-13)
+
+Branch: `phase/4-celery-and-streams`. Status: complete.
+
+| Area | Before | After | Justification |
+|---|---:|---:|---|
+| Microservice / Trend Scout Extraction | 7 | 8 | Pipeline runner + Celery tasks + Redis Streams worker wired; main-app dispatch tasks added so the existing beat schedule continues to fire but routes to the microservice through a 5-line HTTP POST. |
+| Tests | 91 non-slow + 2 slow | 105 non-slow + 2 slow (+14) | Queue priority tests, dispatch routing, task monitor lifecycle, stream worker enqueue/drain, pipeline runner signature. |
+| Audit Logging | unchanged from Phase 3 | unchanged | Audit dispatch will be wired into the pipeline runner in Phase 10. |
+| Docker / Deployment | unchanged from Phase 3 | unchanged | docker-compose.yml already had `trend-scout-worker` from Phase 1; no service changes were needed in Phase 4. |
+
+### Phase 4 files added (services/trend-scout/)
+
+- `app/services/pipeline_runner.py`: top-level ``run_full_pipeline`` composing fetchers + snapshots + analyzer + AI synthesis + source health.
+- `app/workers/tasks.py`: real Celery tasks ``trend_scout_pipeline`` and ``calibrate_trend_scout``. Low-priority queue routing via Celery's `task_routes`.
+- `app/workers/stream_worker.py`: Redis Streams consumer for `trend:run:requests` with backpressure, replay on restart, and consumer-group semantics.
+- `app/workers/task_monitor.py`: in-memory task-run monitor (create/start/progress/complete/list). Cross-process Redis-backed storage is a Phase 10 follow-up.
+
+### Phase 4 files modified (main Flask app)
+
+- `app/celery_app.py`: added priority/queue config (broker_transport_options, task_queues, task_routes), removed old `app.tasks.trend_scout` and `app.tasks.trend_calibration` from `include`, added `app.tasks.dispatch_trend_scout`. Beat schedule now points to the dispatch tasks with `queue=trend_scout` and `priority=1`.
+- `app/tasks/dispatch_trend_scout.py` (new): short-lived Celery tasks that POST to `TREND_SCOUT_SERVICE_URL` to enqueue a run. Heavy lifting stays in the microservice.
+- `app/config.py`: added `TREND_SCOUT_ENABLED`, `TREND_SCOUT_SERVICE_URL`, `TREND_SCOUT_INTERNAL_API_TOKEN`.
+
+### Phase 4 files modified (compose)
+
+- `docker-compose.yml`: main `worker` command now consumes `-Q celery,trend_scout` so the trend-scout dispatch is picked up by the existing main worker at low priority.
+
+### Phase 4 tests added
+
+- `app/tests/test_celery_and_streams.py` — 14 tests covering:
+  - Celery queue + priority config (trend_scout queue, x-max-priority=10, priority_steps, queue_order_strategy)
+  - Celery routing for `app.workers.tasks.*` to `trend_scout` queue at priority 1
+  - Pipeline + calibration tasks are registered
+  - Task monitor lifecycle (create/start/progress/complete/failure)
+  - Redis Streams: enqueue returns entry id, drain returns False on empty stream, run_worker is a no-op when streams disabled
+  - Pipeline runner signature contract
+
+### Phase 4 commands run
+
+- `cd services/trend-scout && uv run ruff check .` — all checks passed.
+- `cd services/trend-scout && uv run ruff format --check .` — 57 files clean.
+- `cd services/trend-scout && uv run pytest -v -m "not slow"` — **105 passed in 36.27s**, 2 slow deselected.
+- `cd /mnt/storage/docker/dfpos && uv run pytest --collect-only -q` — 746 tests collected (no collection regressions in the main app).
+
+### Phase 4 risk and out-of-scope
+
+- **Risk:** the priority routing test only validates the configuration; the actual preempt behavior is verified with a Celery integration test in Phase 10.
+- **Risk:** the task monitor is in-memory. If the microservice restarts mid-run, the run row is lost. Phase 10 stores task-run state in Redis.
+- **Risk:** the main app's old ``app.tasks.trend_scout`` and ``app.tasks.trend_calibration`` files are still on disk. They are no longer in Celery's ``include`` list and are not registered, so they are no-ops. Phase 6 deletes them.
+- **Out of scope:** FastAPI surface for `/api/v1/pipeline/run` and `/api/v1/calibration/run` (Phase 5 wires the API; Phase 4 only provides the Celery tasks). The Flask-side dispatch tasks exist in Phase 4 but their HTTP target lands in Phase 5.
