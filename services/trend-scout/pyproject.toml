@@ -59,8 +59,11 @@ select = ["E", "F", "I", "N", "W"]
 "app/sources/*.py" = ["E501"]
 # Tests use nested helper classes whose inner method names must differ from
 # the outer class's `self` to avoid shadowing. The verbose N805 names are
-# intentional.
+# intentional. The FastAPI schema and DB model both export SourceHealthRecord;
+# the aliasing SHRS keeps the route readable while the N814 'lowercase'
+# rule wants it short.
 "app/tests/*.py" = ["N805"]
+"app/api/routes/*.py" = ["N814"]
 
 [build-system]
 requires = ["setuptools>=75"]

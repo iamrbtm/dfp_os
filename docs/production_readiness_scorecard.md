@@ -248,3 +248,39 @@ Branch: `phase/4-celery-and-streams`. Status: complete.
 - **Risk:** the task monitor is in-memory. If the microservice restarts mid-run, the run row is lost. Phase 10 stores task-run state in Redis.
 - **Risk:** the main app's old ``app.tasks.trend_scout`` and ``app.tasks.trend_calibration`` files are still on disk. They are no longer in Celery's ``include`` list and are not registered, so they are no-ops. Phase 6 deletes them.
 - **Out of scope:** FastAPI surface for `/api/v1/pipeline/run` and `/api/v1/calibration/run` (Phase 5 wires the API; Phase 4 only provides the Celery tasks). The Flask-side dispatch tasks exist in Phase 4 but their HTTP target lands in Phase 5.
+
+## Phase 5 — FastAPI Surface (2026-08-13)
+
+Branch: `phase/5-api-and-routes`. Status: complete.
+
+| Area | Before | After | Justification |
+|---|---:|---:|---|
+| Microservice / Trend Scout Extraction | 8 | 9 | FastAPI routes wired for 8 resource families: reports, opportunities, source-health, weights, pipeline run/status/cancel, backtest, calibration, settings (source toggles). |
+| REST API | unchanged from Phase 4 | unchanged | All endpoints are openapi-documented at `/api/v1/openapi.json`; scopes enforced via `verify_internal_token` Bearer middleware (per-route `SCOPE_READ` / `SCOPE_WRITE` annotations consumed by the global dependency). |
+| Tests | 105 non-slow | 119 non-slow (+14) | API endpoint tests (14) covering auth, validation, scopes, error paths, no-data backtest path, calibration stub, source toggle persistence. |
+| Docker / Deployment | unchanged from Phase 4 | unchanged | No new services; the FastAPI surface is mounted on the existing `trend-scout` service from Phase 1. |
+
+### Phase 5 files added (services/trend-scout/)
+
+- `app/schemas/api.py`: Pydantic request/response models for every endpoint.
+- `app/api/routes/reports.py`: list / latest / get-by-id.
+- `app/api/routes/opportunities.py`: list / dismiss / undismiss / action (print_now / watch / skip / dismiss).
+- `app/api/routes/source_health.py`: list filtered by source / status + latest-per-source.
+- `app/api/routes/weights.py`: list / defaults / save / seed-defaults.
+- `app/api/routes/pipeline.py`: POST /run (Celery send_task, queue=trend_scout priority=1) + GET /status/{run_id} + POST /cancel/{run_id}.
+- `app/api/routes/backtest.py`: POST /backtest/run + POST /calibration/run + GET /calibration/history.
+- `app/api/routes/settings.py`: GET + POST /settings/source-toggles.
+- Updated `app/main.py` to register every router under `/api/v1` (health stays at `/health`).
+
+### Phase 5 commands run
+
+- `cd services/trend-scout && uv run ruff check .` — all checks passed.
+- `cd services/trend-scout && uv run ruff format --check .` — 66 files clean.
+- `cd services/trend-scout && uv run pytest -v -m "not slow"` — **119 passed in 35.73s**, 2 slow deselected.
+
+### Phase 5 risk and out-of-scope
+
+- **Risk:** scope enforcement is binary in Phase 5: a single internal token grants all three scopes (`trend_scout:read` / `trend_scout:write` / `trend_scout:admin`). Per-token scope grants are wired through the dependency factories but unused until per-token issuance lands. This is the same posture the existing `services/intelligence` ships in.
+- **Risk:** the `/api/v1/pipeline/run` endpoint assumes Celery is reachable. When the broker is down the endpoint returns 503 (the route catches `Exception` and surfaces it as `enqueue_failed`). Without Celery the FastAPI process still serves health, but `/pipeline/run` and `/backtest/run` will fail.
+- **Risk:** the `/api/v1/backtest/run` endpoint uses the same default zero-sales provider as the Celery task. The actual sales-feed integration lives in a Phase 6 follow-up when the Flask side exposes `/api/internal/orders-since`.
+- **Out of scope:** Flask-side proxy and cutover (Phase 6), Firecrawl (Phases 7-9).

@@ -64,6 +64,8 @@ def test_dispatch_tasks_route_to_trend_scout_queue() -> None:
 
 def test_dispatch_tasks_are_registered_in_microservice_celery() -> None:
     """The microservice Celery registers the pipeline + calibration tasks."""
+    import app.workers.tasks  # noqa: F401 ensure module is loaded
+
     registered = set(celery.tasks.keys())
     assert "app.workers.tasks.trend_scout_pipeline" in registered
     assert "app.workers.tasks.calibrate_trend_scout" in registered
@@ -71,6 +73,7 @@ def test_dispatch_tasks_are_registered_in_microservice_celery() -> None:
 
 def test_microservice_celery_tasks_are_registered() -> None:
     """The microservice Celery has its own tasks registered."""
+    import app.workers.tasks  # noqa: F401
     from app.celery_app import celery as ts_celery
 
     registered = set(ts_celery.tasks.keys())
