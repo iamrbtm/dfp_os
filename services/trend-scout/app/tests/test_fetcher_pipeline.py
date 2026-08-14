@@ -26,6 +26,8 @@ EXPECTED_ALL_SOURCES = {
     "pinterest",
     "google_trends",
     "tiktok",
+    "firecrawl_standard",
+    "firecrawl_mmf",
 }
 
 
@@ -36,8 +38,11 @@ def test_all_fetcher_names_registered() -> None:
 def test_db_and_external_fetchers_partition_is_correct() -> None:
     db_names = set(fetcher_pipeline.DB_FETCHERS.keys())
     external_names = set(fetcher_pipeline.EXTERNAL_FETCHERS.keys())
-    assert db_names.union(external_names) == EXPECTED_ALL_SOURCES
+    firecrawl_names = set(fetcher_pipeline.FIRECRAWL_FETCHER_REGISTRY.keys())
+    assert db_names.union(external_names).union(firecrawl_names) == EXPECTED_ALL_SOURCES
     assert db_names.isdisjoint(external_names)
+    assert db_names.isdisjoint(firecrawl_names)
+    assert external_names.isdisjoint(firecrawl_names)
     assert db_names == {"internal_demand"}
 
 

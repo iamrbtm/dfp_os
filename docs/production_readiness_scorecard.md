@@ -355,3 +355,37 @@ Branch: `phase/7-firecrawl-self-host`. Status: complete.
 - **Risk:** the `firecrawl-api` Dockerfile in `services/firecrawl/` is a placeholder until Phase 10 when the actual upstream Dockerfile is vendored; production deploys should use the official image with our hardened `docker-compose.yml` overlay.
 - **Risk:** no Firecrawl-specific test coverage for `robots.txt` handling. Phase 8 will add integration tests for each target that verify Firecrawl returns the expected fields.
 - **Out of scope:** per-target source code (Phase 8), Etsy compliance flow (Phase 9), vendoring the upstream source repo (Phase 10).
+
+## Phase 8 — Firecrawl Standard Sources (2026-08-13)
+
+Branch: `phase/8-firecrawl-standard-sources`. Status: complete.
+
+| Area | Before | After | Justification |
+|---|---:|---:|---|
+| Firecrawl Sources (non-Etsy) | 0 | 2 (standard tier implemented; tested) | Six standard-tier sources land: cults3d, thangs, stlfinder, cgtrader, mmf_trending (fallback), general. Five run on every scheduled cycle; `mmf_trending` runs only when the direct MyMiniFactory API source failed. |
+| Source Coverage | 10 (Phase 2) | 17 (added 6 Firecrawl standard targets + 1 fallback) | Net new sources: 6 standard tier + 1 MyMiniFactory fallback. |
+| Tests | 119 non-slow + 2 slow (Phase 5) | 132 non-slow + 2 slow (+13) | Per-target registry, rate-limit checks, disabled-env handling, fallback path, mmf fallback independence. |
+| REST API | unchanged | unchanged | Source health rows for Firecrawl targets surface via the existing `/api/v1/source-health` endpoint with the `Throttled: no` column for standard targets (Etsy in Phase 9). |
+
+### Phase 8 files added
+
+- `services/trend-scout/app/sources/firecrawl.py`: `FirecrawlTarget` dataclass; `TARGETS` registry (six entries); `fetch_firecrawl_target`, `fetch_firecrawl_standard`, `fetch_firecrawl_mmf_fallback` functions. Honors `FIRECRAWL_ENABLED`, `FIRECRAWL_DISABLE_TARGETS`, `FIRECRAWL_API_URL`, `FIRECRAWL_API_KEY`.
+- `services/trend-scout/app/tests/test_firecrawl_source.py`: 13 tests covering registry shape, target configuration, build_target_url, opt-in/opt-out flags, network failure modes, the standard fetcher fan-out, the mmf fallback path.
+- `services/trend-scout/app/tests/test_fetcher_pipeline.py`: updated `EXPECTED_ALL_SOURCES` and the partition test to acknowledge the new Firecrawl registry.
+
+### Phase 8 files modified
+
+- `services/trend-scout/app/services/fetcher_pipeline.py`: imported the Firecrawl source module; added `FIRECRAWL_FETCHER_REGISTRY` to `ALL_FETCHERS` (the standard tier fans out via `fetch_firecrawl_standard`; mmf_trending has its own key for orchestrator fallback semantics).
+
+### Phase 8 commands run
+
+- `cd services/trend-scout && uv run pytest -v -m "not slow"` — **132 passed in 35.58s**, 2 slow deselected.
+- `cd services/trend-scout && uv run ruff check .` — all checks passed.
+- `cd services/trend-scout && uv run ruff format --check .` — 68 files clean.
+
+### Phase 8 risk and out-of-scope
+
+- **Risk:** real network calls to Cults3D, Thangs, STLFinder, CGTrader, Google via Firecrawl are not exercised by the test suite — only the configuration shape is verified. Phase 10 adds an integration test that runs against a recorded Firecrawl response fixture.
+- **Risk:** the `firecrawl_standard` registry aggregates all standard-target results under one row in `aggregated_source_health_rows`. If you need per-target health rows on the admin dashboard, use the source filter on the existing endpoint; per-target rows will appear in Phase 10 once the orchestrator splits the standard fetcher's emitted results.
+- **Risk:** the Firecrawl `search` endpoint is currently unused — Phase 10 may add it for the `general` target to broaden the open-web signal.
+- **Out of scope:** Etsy tier (Phase 9), production image build (Phase 10), per-target rate-limit enforcement past 1.0s base interval (Phase 10).

@@ -31,6 +31,10 @@ from app.sources import (
     fetch_reddit,
     fetch_tiktok,
 )
+from app.sources.firecrawl import (
+    fetch_firecrawl_mmf_fallback,
+    fetch_firecrawl_standard,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +56,20 @@ EXTERNAL_FETCHERS: dict[str, Callable[..., list[ScoutResult]]] = {
     "tiktok": fetch_tiktok,
 }
 
-ALL_FETCHERS: dict[str, Callable[..., list[ScoutResult]]] = {**DB_FETCHERS, **EXTERNAL_FETCHERS}
+# Firecrawl targets get registered as a single fetcher under the umbrella
+# key `firecrawl_standard` so the existing pipeline runner picks them up.
+# The fetcher fans out to per-target sources internally. mmf_trending stays
+# as its own key because the orchestrator invokes it as a fallback only.
+FIRECRAWL_FETCHER_REGISTRY = {
+    "firecrawl_standard": lambda session, limiter: fetch_firecrawl_standard(session, limiter),
+    "firecrawl_mmf": lambda session, limiter: fetch_firecrawl_mmf_fallback(session, limiter),
+}
+
+ALL_FETCHERS: dict[str, Callable[..., list[ScoutResult]]] = {
+    **DB_FETCHERS,
+    **EXTERNAL_FETCHERS,
+    **FIRECRAWL_FETCHER_REGISTRY,
+}
 
 
 def _load_source_enabled_state() -> dict[str, bool]:
