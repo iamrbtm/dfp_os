@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -127,6 +128,8 @@ def _replay_audit_outbox(app: Flask) -> None:
         replayed = audit_outbox.replay_deadman()
         if replayed:
             app.logger.info("audit deadman replayed %d events onto Redis", replayed)
+        if any("celery" in arg for arg in sys.argv):
+            return
         # Fire a one-shot async flush via the worker process. If we are the
         # web process this is a no-op (the task runs in the worker).
         try:

@@ -426,3 +426,32 @@ def test_audited_decorator_emits_event_with_status_and_duration(app):
     assert captured[0]["entity_id"] == "42"
     assert captured[0]["metadata"]["status_code"] == 200
     assert captured[0]["metadata"]["duration_ms"] >= 0
+
+
+def test_audit_startup_replay_does_not_enqueue_flush_inside_celery_process(monkeypatch):
+    from flask import Flask
+
+    from app import _replay_audit_outbox
+
+    calls: list[str] = []
+
+    class _FakeOutbox:
+        @staticmethod
+        def replay_deadman() -> int:
+            return 0
+
+    class _FakeTask:
+        @staticmethod
+        def apply_async(**kwargs):
+            calls.append(str(kwargs))
+
+    app = Flask(__name__)
+    app.config["AUDIT_LOG_ENABLED"] = True
+
+    monkeypatch.setattr("sys.argv", ["celery", "-A", "app.celery_app.celery", "worker"])
+    monkeypatch.setattr("app.services.audit_outbox", _FakeOutbox)
+    monkeypatch.setattr("app.tasks.audit_outbox.flush_audit_outbox", _FakeTask)
+
+    _replay_audit_outbox(app)
+
+    assert calls == []

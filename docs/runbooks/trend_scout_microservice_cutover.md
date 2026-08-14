@@ -218,5 +218,31 @@ scope. The upstream Firecrawl sidecars remain under the separate
   market vendor should never be slowed by a weekly trend report running in
   parallel. Main app tasks (audit outbox flush, model analysis) take priority.
 - **Can I run the microservice without the dedicated worker?** Yes — the main
-  `worker` container's command includes `-Q celery,trend_scout`. The dedicated
-  worker is added for capacity isolation; removing it does not break the queue.
+   `worker` container's command includes `-Q celery,trend_scout`. The dedicated
+   worker is added for capacity isolation; removing it does not break the queue.
+
+## Troubleshooting
+
+- **I ran the pipeline but only see `app.tasks.audit_outbox.flush_outbox` in the
+  worker log.** Check the correct containers first:
+
+  ```bash
+  docker compose ps trend-scout trend-scout-worker worker beat
+  docker compose logs --since=10m trend-scout trend-scout-worker
+  ```
+
+  The heavy Trend Scout task is `app.workers.tasks.trend_scout_pipeline` and it
+  appears in `trend-scout-worker`, not necessarily the main Flask `worker`. If
+  `trend-scout` and `trend-scout-worker` are absent from `docker compose ps`,
+  start them and run migrations:
+
+  ```bash
+  docker compose build trend-scout
+  docker compose --profile release run --rm trend-scout-migrate
+  docker compose up -d trend-scout trend-scout-worker
+  ```
+
+  The app also guards audit startup replay so Celery task app creation does not
+  recursively enqueue `flush_outbox` tasks. If audit flushes still appear every
+  second, inspect `AUDIT_OUTBOX_FLUSH_INTERVAL_SECONDS` and ensure only one beat
+  container is running.
