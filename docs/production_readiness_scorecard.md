@@ -389,3 +389,40 @@ Branch: `phase/8-firecrawl-standard-sources`. Status: complete.
 - **Risk:** the `firecrawl_standard` registry aggregates all standard-target results under one row in `aggregated_source_health_rows`. If you need per-target health rows on the admin dashboard, use the source filter on the existing endpoint; per-target rows will appear in Phase 10 once the orchestrator splits the standard fetcher's emitted results.
 - **Risk:** the Firecrawl `search` endpoint is currently unused — Phase 10 may add it for the `general` target to broaden the open-web signal.
 - **Out of scope:** Etsy tier (Phase 9), production image build (Phase 10), per-target rate-limit enforcement past 1.0s base interval (Phase 10).
+
+## Phase 9 — Firecrawl Etsy (Throttled, Opt-In) (2026-08-13)
+
+Branch: `phase/9-firecrawl-etsy-throttled`. Status: complete.
+
+| Area | Before | After | Justification |
+|---|---:|---:|---|
+| Firecrawl Etsy (throttled, opt-in) | 0 | 3 | Implementation + compliance flow + operator documentation. The Etsy tier is default-OFF; the compliance file is mandatory for runtime opt-in; random throttle + min-days gate prevents predictability. |
+| Compliance (new area) | n/a | 1 | New scorecard area: Etsy opt-in documentation, acknowledgment CLI, and boot-time refusal flow. |
+| Tests | 132 non-slow + 2 slow (Phase 8) | 149 non-slow + 2 slow (+17) | Compliance acknowledgment lifecycle, opt-in gate, throttle randomness, deterministic-by-run_id, env-var overrides, etsy fetch when selected vs throttled. |
+| Security / Permissions | unchanged from Phase 8 | unchanged | Etsy's throttled tier keeps source weight at 0.4× so it cannot dominate scoring even on successful runs. |
+
+### Phase 9 files added
+
+- `services/trend-scout/app/compliance/__init__.py`: `record_acknowledgment`, `is_acknowledgment_valid`, `gate_etsy_opt_in`. Compliance file path defaults to `compliance/etsy_opt_in.json` (gitignored).
+- `services/trend-scout/app/cli.py`: `acknowledge-etsy-risk` Click command. Wired in Phase 9 so the operator can run it before flipping `FIRECRAWL_ALLOW_ETSY=true`.
+- `services/trend-scout/app/tests/test_etsy_tier.py`: 17 tests covering the compliance flow + throttle gating + Etsy fetcher when selected vs skipped.
+- `docs/compliance/firecrawl_etsy_opt_in.md`: operator-facing acknowledgment doc, legal posture, rollback path.
+
+### Phase 9 files modified
+
+- `services/trend-scout/app/sources/firecrawl.py`: added `ETSY_TARGET` registry entry (5 queries, 20 pages/run, 30s interval), `_etsy_target`, `_etsy_should_run` (deterministic random draw + min-days gate), `mark_etsy_ran` (records the last Etsy fetch time), `fetch_firecrawl_etsy` (new fetcher key honoring throttle). Updated env-var documentation in the module docstring.
+- `services/trend-scout/app/services/fetcher_pipeline.py`: registered `firecrawl_etsy` in `FIRECRAWL_FETCHER_REGISTRY` so the existing pipeline runner picks it up alongside the standard fetcher.
+- `services/trend-scout/app/tests/test_fetcher_pipeline.py`: added `firecrawl_etsy` to `EXPECTED_ALL_SOURCES`.
+
+### Phase 9 commands run
+
+- `cd services/trend-scout && uv run pytest -v -m "not slow"` — **149 passed in 36.16s**, 2 slow deselected.
+- `cd services/trend-scout && uv run ruff check .` — all checks passed.
+- `cd services/trend-scout && uv run ruff format --check .` — 70 files clean.
+
+### Phase 9 risk and out-of-scope
+
+- **Risk:** Etsy IP blackflag will happen at some point. The throttled tier is the primary mitigation; Phase 10 adds credit-cap circuit breaking and a residential proxy follow-up note.
+- **Risk:** the in-memory `mark_etsy_ran` writes to `os.environ` only. A process restart loses the timestamp; the next run therefore is not subject to the min-days gate. Phase 10 backs the timestamp with Redis.
+- **Risk:** no integration test verifies the actual Firecrawl Etsy responses — only the throttling logic. Phase 10 records fixtures.
+- **Out of scope:** Redis-backed Etsy timestamp (Phase 10), residential proxy follow-up (Phase 10), `acknowledge-etsy-risk` CLI registered in the microservice's `create_app()` (Phase 10 wires `register_cli(app)`).

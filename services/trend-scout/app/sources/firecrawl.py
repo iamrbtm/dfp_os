@@ -1,6 +1,8 @@
 """Firecrawl multi-target fetcher for the Trend Scout microservice.
 
-Implements the standard tier per ``docs/trend_scout_microservice_plan.md``:
+Implements both tiers per ``docs/trend_scout_microservice_plan.md``:
+
+STANDARD tier (runs every cycle):
 
 - firecrawl_cults3d       (Cults3D)
 - firecrawl_thangs        (Thangs)
@@ -9,18 +11,23 @@ Implements the standard tier per ``docs/trend_scout_microservice_plan.md``:
 - firecrawl_mmf           (MyMiniFactory trending fallback)
 - firecrawl_general       (open-web discovery)
 
-The Etsy tier (Phase 9) lives alongside this in the same file but is a
-separate class. Each target emits one ``ScoutResult`` per query.
+THROTTLED tier (randomized with min-days gate, opt-in required):
 
-This source also reports source-health rows. Per-target failures are
-isolated: a broken target does not block the others. Configurable via env::
+- firecrawl_etsy          (Etsy)
 
-    FIRECRAWL_ENABLED=false|true        master switch (default false)
+Each target emits one ``ScoutResult`` per query. Configurable via env::
+
+    FIRECRAWL_ENABLED=false|true                   master switch (default false)
     FIRECRAWL_API_URL=http://...
     FIRECRAWL_API_KEY=...
     FIRECRAWL_RESPECT_ROBOTS_TXT=true
     FIRECRAWL_WEEKLY_CREDIT_CAP=2000
-    FIRECRAWL_DISABLE_TARGETS=cgtrader,general  comma-separated opt-out
+    FIRECRAWL_DISABLE_TARGETS=cgtrader,general     comma-separated opt-out
+    FIRECRAWL_ALLOW_ETSY=true                      opt-in for Etsy tier
+    FIRECRAWL_ETSY_RUN_PROBABILITY=0.15            random draw threshold (default ~1-in-7)
+    FIRECRAWL_ETSY_MIN_DAYS_BETWEEN_RUNS=14        minimum gap between Etsy fetches
+    FIRECRAWL_ETSY_MIN_INTERVAL_SECONDS=30        per-call rate limit
+    FIRECRAWL_ETSY_MAX_PAGES_PER_RUN=20           hard cap on Etsy queries
 """
 
 from __future__ import annotations
@@ -30,6 +37,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -42,15 +50,33 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class FirecrawlTarget:
-    key: str  # "cults3d", "thangs", ...
-    display_name: str  # "Cults3D"
-    base_url: str  # https://cults3d.com
+    key: str
+    display_name: str
+    base_url: str
     search_queries: list[str]
     rate_limit_seconds: float = 5.0
     pages_per_run: int = 30
-    throttled: bool = False  # True for Etsy (Phase 9)
+    throttled: bool = False
     require_explicit_opt_in: bool = False
-    fallback_only: bool = False  # True for mmf_trending
+    fallback_only: bool = False
+
+
+ETSY_TARGET = FirecrawlTarget(
+    key="etsy",
+    display_name="Etsy (scraped, throttled)",
+    base_url="https://www.etsy.com",
+    search_queries=[
+        "3D printed dragon",
+        "3D printed fidget",
+        "custom keychain",
+        "3D printed earrings",
+        "3D printed planter",
+    ],
+    rate_limit_seconds=30.0,
+    pages_per_run=20,
+    throttled=True,
+    require_explicit_opt_in=True,
+)
 
 
 TARGETS: dict[str, FirecrawlTarget] = {
@@ -122,6 +148,20 @@ TARGETS: dict[str, FirecrawlTarget] = {
 }
 
 
+def _etsy_target() -> FirecrawlTarget:
+    target = FirecrawlTarget(
+        key=ETSY_TARGET.key,
+        display_name=ETSY_TARGET.display_name,
+        base_url=ETSY_TARGET.base_url,
+        search_queries=list(ETSY_TARGET.search_queries),
+        rate_limit_seconds=float(os.getenv("FIRECRAWL_ETSY_MIN_INTERVAL_SECONDS", "30")),
+        pages_per_run=int(os.getenv("FIRECRAWL_ETSY_MAX_PAGES_PER_RUN", "20")),
+        throttled=True,
+        require_explicit_opt_in=True,
+    )
+    return target
+
+
 def _enabled_targets() -> dict[str, FirecrawlTarget]:
     enabled = {k: v for k, v in TARGETS.items() if not v.fallback_only}
     disabled = {name.strip() for name in os.getenv("FIRECRAWL_DISABLE_TARGETS", "").split(",") if name.strip()}
@@ -130,10 +170,57 @@ def _enabled_targets() -> dict[str, FirecrawlTarget]:
     return enabled
 
 
+def _etsy_allowed() -> bool:
+    return os.getenv("FIRECRAWL_ALLOW_ETSY", "false").lower() == "true"
+
+
+def _etsy_compliance_ok() -> bool:
+    from app.compliance import gate_etsy_opt_in
+
+    allowed, _ = gate_etsy_opt_in(_etsy_allowed())
+    return allowed
+
+
+def _etsy_should_run(run_id_seed: str) -> tuple[bool, str]:
+    """Random draw + min-days gate."""
+    if not _etsy_allowed():
+        return False, "opt_in_disabled"
+    if not _etsy_compliance_ok():
+        return False, "compliance_missing"
+    min_days = int(os.getenv("FIRECRAWL_ETSY_MIN_DAYS_BETWEEN_RUNS", "14"))
+    probability = float(os.getenv("FIRECRAWL_ETSY_RUN_PROBABILITY", "0.15"))
+
+    last_run_iso = os.getenv("FIRECRAWL_ETSY_LAST_RUN_AT")
+    if last_run_iso:
+        try:
+            last_run = datetime.fromisoformat(last_run_iso)
+            days_since = (datetime.now(timezone.utc) - last_run).days
+            if days_since < min_days:
+                return False, f"min_days_not_met ({days_since}/{min_days})"
+        except ValueError:
+            pass
+
+    digest = hashlib.sha256(f"{run_id_seed}:etsy".encode()).hexdigest()
+    draw = int(digest[:8], 16) / 0xFFFFFFFF
+    if draw > probability:
+        return False, f"random_skip (draw={draw:.3f} > prob={probability})"
+    return True, "selected"
+
+
+def mark_etsy_ran() -> None:
+    """Record the current time as Etsy's last run timestamp.
+
+    Phase 9 stores this in-process (os.environ). Phase 10 backs it with Redis
+    so it survives process restarts.
+    """
+    os.environ["FIRECRAWL_ETSY_LAST_RUN_AT"] = datetime.now(timezone.utc).isoformat()
+
+
 def _build_target_url(target: FirecrawlTarget, query: str) -> str:
-    """Return the URL Firecrawl should scrape for a target + query."""
     if target.key == "general":
         return f"{target.base_url}/search?q={query}"
+    if target.key == "etsy":
+        return f"{target.base_url}/search?q={query.replace(' ', '+')}&sort=most_relevant"
     slug = query.replace(" ", "-").lower()
     return f"{target.base_url}/en/{slug}"
 
@@ -148,12 +235,13 @@ def _firecrawl_disabled_result(source: str) -> list[ScoutResult]:
     ]
 
 
-def _firecrawl_unreachable_result(source: str, exc: Exception) -> list[ScoutResult]:
+def _firecrawl_throttled_result(source: str, reason: str) -> list[ScoutResult]:
     return [
         ScoutResult(
             source=source,
-            keyword_or_category="pipeline_error",
-            errors=[f"Firecrawl error: {exc}"],
+            keyword_or_category="throttled",
+            errors=[],
+            metadata={"throttled": True, "throttle_reason": reason, "items": []},
         )
     ]
 
@@ -166,7 +254,6 @@ def fetch_firecrawl_target(
     run_id_seed: str,
     on_progress: Any | None = None,
 ) -> list[ScoutResult]:
-    """Fetch a single Firecrawl target across its query list."""
     if not settings.audit_log_enabled and not os.getenv("FIRECRAWL_API_URL"):
         return _firecrawl_disabled_result(target.key)
 
@@ -182,7 +269,8 @@ def fetch_firecrawl_target(
         return _firecrawl_disabled_result(target.key)
 
     api_url = os.getenv(
-        "FIRECRAWL_API_URL", settings.firecrawl_api_url if hasattr(settings, "firecrawl_api_url") else ""
+        "FIRECRAWL_API_URL",
+        settings.firecrawl_api_url if hasattr(settings, "firecrawl_api_url") else "",
     )
     api_key = os.getenv("FIRECRAWL_API_KEY", "")
     if not api_url or not api_key:
@@ -191,10 +279,10 @@ def fetch_firecrawl_target(
     client = FirecrawlClient(base_url=api_url, api_key=api_key)
 
     results: list[ScoutResult] = []
-    for query in target.search_queries[: max(1, target.pages_per_run // len(target.search_queries) + 1)]:
+    cap = max(1, target.pages_per_run // len(target.search_queries) + 1)
+    for query in target.search_queries[:cap]:
         result = ScoutResult(source=target.key, keyword_or_category=query)
         url = _build_target_url(target, query)
-        time.sleep(0)  # limiter placeholder; per-call budget enforced below
 
         run_hash = hashlib.sha256(f"{run_id_seed}:{target.key}:{query}".encode()).hexdigest()[:8]
         try:
@@ -222,7 +310,6 @@ def fetch_firecrawl_standard(
     session: requests.Session,
     limiter: Any,
 ) -> list[ScoutResult]:
-    """Fetch all enabled standard-tier Firecrawl targets."""
     if os.getenv("FIRECRAWL_ENABLED", "false").lower() != "true":
         return []
     enabled = _enabled_targets()
@@ -242,11 +329,31 @@ def fetch_firecrawl_standard(
     return all_results
 
 
+def fetch_firecrawl_etsy(
+    session: requests.Session,
+    limiter: Any,
+) -> list[ScoutResult]:
+    """Etsy tier with random throttling + min-days gate + compliance gate."""
+    run_id_seed = os.getenv("TREND_SCOUT_RUN_ID") or str(time.time())
+    should_run, reason = _etsy_should_run(run_id_seed)
+    if not should_run:
+        return _firecrawl_throttled_result("etsy", reason)
+
+    target = _etsy_target()
+    results = fetch_firecrawl_target(
+        session,
+        limiter,
+        target,
+        run_id_seed=run_id_seed,
+    )
+    mark_etsy_ran()
+    return results
+
+
 def fetch_firecrawl_mmf_fallback(
     session: requests.Session,
     limiter: Any,
 ) -> list[ScoutResult]:
-    """Fallback that runs only when the primary MyMiniFactory source failed."""
     if os.getenv("FIRECRAWL_ENABLED", "false").lower() != "true":
         return []
     target = TARGETS["mmf_trending"]

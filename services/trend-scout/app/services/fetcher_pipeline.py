@@ -32,6 +32,7 @@ from app.sources import (
     fetch_tiktok,
 )
 from app.sources.firecrawl import (
+    fetch_firecrawl_etsy,
     fetch_firecrawl_mmf_fallback,
     fetch_firecrawl_standard,
 )
@@ -60,9 +61,11 @@ EXTERNAL_FETCHERS: dict[str, Callable[..., list[ScoutResult]]] = {
 # key `firecrawl_standard` so the existing pipeline runner picks them up.
 # The fetcher fans out to per-target sources internally. mmf_trending stays
 # as its own key because the orchestrator invokes it as a fallback only.
+# Etsy is its own key because it has its own throttle + opt-in gates.
 FIRECRAWL_FETCHER_REGISTRY = {
     "firecrawl_standard": lambda session, limiter: fetch_firecrawl_standard(session, limiter),
     "firecrawl_mmf": lambda session, limiter: fetch_firecrawl_mmf_fallback(session, limiter),
+    "firecrawl_etsy": lambda session, limiter: fetch_firecrawl_etsy(session, limiter),
 }
 
 ALL_FETCHERS: dict[str, Callable[..., list[ScoutResult]]] = {

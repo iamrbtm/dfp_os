@@ -28,6 +28,7 @@ EXPECTED_ALL_SOURCES = {
     "tiktok",
     "firecrawl_standard",
     "firecrawl_mmf",
+    "firecrawl_etsy",
 }
 
 
