@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -138,6 +139,70 @@ def test_task_monitor_list_orders_by_recency() -> None:
     ids = [r["task_id"] for r in runs]
     assert "a" in ids
     assert "b" in ids
+
+
+class _FakeRedis:
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.sorted_sets: dict[str, dict[str, float]] = {}
+
+    def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self.values[key] = value
+
+    def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+    def zadd(self, key: str, mapping: dict[str, float]) -> None:
+        self.sorted_sets.setdefault(key, {}).update(mapping)
+
+    def zrevrange(self, key: str, start: int, end: int) -> list[str]:
+        values = sorted(
+            self.sorted_sets.get(key, {}).items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+        if end == -1:
+            selected = values[start:]
+        else:
+            selected = values[start : end + 1]
+        return [item[0] for item in selected]
+
+
+def test_task_monitor_persists_records_to_redis(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.workers import task_monitor
+
+    fake = _FakeRedis()
+    monkeypatch.setattr(task_monitor, "_redis_client", fake)
+
+    create_task_run("task-redis-1", trigger="manual", total_steps=4, run_id="run-redis-1")
+    start_task_run("task-redis-1")
+    update_task_progress("task-redis-1", completed_steps=2, current_step="analyzing")
+
+    by_run_id = get_task_run("run-redis-1")
+    by_task_id = get_task_run("task-redis-1")
+
+    assert by_run_id is not None
+    assert by_run_id == by_task_id
+    assert by_run_id["task_id"] == "task-redis-1"
+    assert by_run_id["run_id"] == "run-redis-1"
+    assert by_run_id["completed_steps"] == 2
+    assert by_run_id["current_step"] == "analyzing"
+    assert by_run_id["progress"] == 50.0
+    assert json.loads(fake.values["trend_scout:task_runs:alias:run-redis-1"]) == {"task_id": "task-redis-1"}
+
+
+def test_task_monitor_redis_list_orders_by_recency(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.workers import task_monitor
+
+    fake = _FakeRedis()
+    monkeypatch.setattr(task_monitor, "_redis_client", fake)
+
+    create_task_run("redis-old", trigger="manual", total_steps=1)
+    create_task_run("redis-new", trigger="manual", total_steps=1)
+
+    ids = [run["task_id"] for run in list_task_runs(limit=2)]
+
+    assert ids == ["redis-new", "redis-old"]
 
 
 @pytest.mark.asyncio
