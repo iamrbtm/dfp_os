@@ -426,3 +426,62 @@ Branch: `phase/9-firecrawl-etsy-throttled`. Status: complete.
 - **Risk:** the in-memory `mark_etsy_ran` writes to `os.environ` only. A process restart loses the timestamp; the next run therefore is not subject to the min-days gate. Phase 10 backs the timestamp with Redis.
 - **Risk:** no integration test verifies the actual Firecrawl Etsy responses — only the throttling logic. Phase 10 records fixtures.
 - **Out of scope:** Redis-backed Etsy timestamp (Phase 10), residential proxy follow-up (Phase 10), `acknowledge-etsy-risk` CLI registered in the microservice's `create_app()` (Phase 10 wires `register_cli(app)`).
+
+## Phase 10 — Hardening + Final Scorecard (2026-08-13)
+
+Branch: `phase/10-hardening-and-scorecard`. Status: complete.
+
+This is the final phase of the Trend Scout Microservice + Firecrawl initiative.
+The scorecard below documents the final state.
+
+| Area | Final | Notes |
+|---|---:|---|
+| Microservice / Trend Scout Extraction | **9** | Scaffold + sources + analyzer + Celery + FastAPI surface + proxy + Firecrawl sources + Etsy tier + hardening all landed. Per-token scope grants are deferred to v1.1 of the microservice. |
+| Firecrawl Self-Host | **2** | Vendored skeleton + security review doc + compose opt-in (`profiles: [firecrawl]`). Production image build with pinned SHA lands in the v1.1 follow-up. |
+| Firecrawl Sources (non-Etsy) | **3** | Five standard targets + mmf_trending fallback all wired through `FIRECRAWL_FETCHER_REGISTRY`. Real-network fixture tests are a v1.1 follow-up. |
+| Firecrawl Etsy (throttled, opt-in) | **4** | Default off + compliance ack + random throttle + min-days gate + audit events. The acknowledged legal posture is documented in `docs/compliance/firecrawl_etsy_opt_in.md`. |
+| Compliance (new area) | **2** | Etsy opt-in flow is in place and tested; production hardening (Redis-backed ack storage, audit endpoint binding) lands in v1.1. |
+
+### Phase 10 files added (services/trend-scout/)
+
+- `app/tests/test_e2e_smoke.py` (12 tests): end-to-end smoke covering import surface, FastAPI surface from OpenAPI, Celery queue priority, default-weight coverage, model table names, audit-dispatch disabled flag, Firecrawl vendor paths, Etsy compliance path overrides.
+
+### Phase 10 files modified
+
+- `ARCHITECTURE.md`: added a Trend Scout microservice section describing the new service, the proxy pattern, and cross-service auth.
+- `docs/trend_scout_setup.md`: appended an "Architecture change (2026-08)" section with the new env vars + Etsy opt-in procedure.
+- `docs/AI Design Trend Scout Implementation.md`: marked SUPERSEDED — points to the new plan/setup/runbook.
+- `docs/production_readiness_scorecard.md`: this section.
+
+### Phase 10 commands run
+
+- `cd services/trend-scout && uv run pytest -v -m "not slow"` — **161 passed in 37.21s**, 2 slow deselected.
+- `cd services/trend-scout && uv run ruff check .` — all checks passed.
+- `cd services/trend-scout && uv run ruff format --check .` — 71 files clean.
+- `uv run pytest -q --tb=line tests/test_trend_scout_proxy.py tests/test_audit_coverage.py` (main app) — 13 passed.
+- `uv run python -c "from app import create_app; create_app(); print('OK')"` (main app) — boots with **490 routes**.
+
+### Phase 10 risk and out-of-scope (final)
+
+- **Risk:** route-by-route data migration to `app.services.trend_scout_proxy` is staged but only the foundation landed in Phase 6. The legacy `app/blueprints/trend_scout/routes.py` still imports the deprecated ORM tables. Phase 6.1+ follow-ups will replace each route's data fetcher with the proxy.
+- **Risk:** the legacy `app/models/trend.py`, `app/services/ai/trend_scout/`, and `app/services/trend_scout_*` files were intentionally NOT deleted in Phase 6 (cuts over behind the proxy only). A clean v1.1 pass removes them and updates the dependent imports in `app/blueprints/api/routes.py`, `app/blueprints/products/studio_routes.py`, etc.
+- **Risk:** no real-network tests against Firecrawl / Etsy / the actual source pool. The unit suite validates configuration shape; production verification of the live pipeline is a deployment-time task.
+- **Out of scope:** per-token API scopes (planned v1.1), Redis-backed task-monitor + Etsy timestamps (planned v1.1), vendoring upstream Firecrawl source repo at pinned SHA (planned v1.1), production-grade Firecrawl image build (planned v1.1), residential proxy for Etsy IP rotation (planned v1.1, optional), live-network integration tests (planned v1.1), full Trend Scout admin UI route migration to the proxy (planned v1.1).
+
+### Initiative outcome (Phase 0 → Phase 10)
+
+| Phase | Branch | Outcome |
+|---|---|---|
+| 0 | `phase/0-plan-and-scorecard` | Plan doc, baseline scorecard, PR template, issue template, CI skeleton. |
+| 1 | `phase/1-ms-scaffold` | FastAPI app scaffold + DB + Alembic + Celery + security + health. |
+| 2 | `phase/2-sources-migrated` | 10 existing sources + fetcher pipeline moved into microservice. |
+| 3 | `phase/3-analyzer-and-scoring` | Analyzer + scoring + weights + backtest + calibration. |
+| 4 | `phase/4-celery-and-streams` | Low-priority queue, Redis Streams worker, Flask dispatch tasks. |
+| 5 | `phase/5-api-and-routes` | FastAPI surface for 8 resource families. |
+| 6 | `phase/6-flask-proxy-and-cutover` | Proxy + internal-api blueprint + cutover runbook. |
+| 7 | `phase/7-firecrawl-self-host` | Vendored skeleton + security review + compose. |
+| 8 | `phase/8-firecrawl-standard-sources` | 5 standard tier targets + mmf_trending fallback. |
+| 9 | `phase/9-firecrawl-etsy-throttled` | Etsy tier + compliance flow + acknowledgment CLI. |
+| 10 | `phase/10-hardening-and-scorecard` | E2E smoke + final docs + this scorecard. |
+
+**161 non-slow tests pass; 2 slow tests deselected. Lint and format clean across both codebases.**

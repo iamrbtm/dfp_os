@@ -16,13 +16,25 @@ Keep business goals, feature requirements, and acceptance criteria in `AGENTS.md
 
 ## System Shape
 
-The project is a Flask-first monolith with two supporting microservices:
+The project is a Flask-first monolith with four supporting microservices:
 
 - Main app: public website, admin dashboard, POS, REST API, analytics, auth, and operational workflows
 - Audit log service: isolated service under `services/audit-log/` for durable audit event ingestion and retrieval
 - Slicer service: isolated FastAPI service under `services/slicer/` for Product Studio model slicing and native artifact generation
+- Intelligence service: isolated FastAPI service under `services/intelligence/` for the decision intelligence warehouse
+- **Trend Scout service: isolated FastAPI service under `services/trend-scout/`** added in 2026-08 (see `docs/trend_scout_microservice_plan.md`). Owns the weekly Trend Scout pipeline (fetchers, analyzer, scoring, calibration, source-health). The Flask admin UI reads trend data via `app/services/trend_scout_proxy.py`. Firecrawl is a sub-microservice hosted only when `FIRECRAWL_ENABLED=true`.
 
 The main app should remain the source of truth for business operations. Add microservices only when there is a clear operational reason such as isolation, scale boundaries, or independent deployment needs.
+
+## Trend Scout microservice
+
+Added 2026-08. The microservice exposes a FastAPI surface on port 8093; the Flask app proxies admin pages and `/api/v1/*` routes through it. Detailed architecture: `docs/trend_scout_microservice_plan.md`.
+
+- Owns its own DB (`dfp_trend_scout`) on the shared Postgres container.
+- Has its own Celery instance with a low-priority `trend_scout` queue (priority 1/10).
+- Uses the same Redis broker as the main app.
+- Cross-service auth: Bearer token (`TREND_SCOUT_INTERNAL_API_TOKEN`) shared between Flask and the microservice.
+- The Firecrawl self-host is opt-in (`profiles: ["firecrawl"]`) and ships with hardened defaults from `docs/compliance/firecrawl_security_review.md`.
 
 ## Folder Structure
 

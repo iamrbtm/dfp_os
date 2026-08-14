@@ -241,3 +241,55 @@ The `SourceHealthRecord` model links to `TrendReport` and stores:
 - `error_message` — error detail if status is error
 - `scraped_at` — UTC timestamp of the fetch
 - `metadata_json` — optional JSON blob for extended data
+
+## Architecture change (2026-08)
+
+The Trend Scout now runs as a separate microservice (`services/trend-scout/`)
+on port 8093, with its own DB (`dfp_trend_scout`) and its own Celery queue
+(`trend_scout`, priority 1). The Flask app reads trend data through
+`app/services/trend_scout_proxy.py` and dispatches pipeline runs through
+`app/tasks/dispatch_trend_scout.py`. Detailed reference: the
+`docs/runbooks/trend_scout_microservice_cutover.md` runbook and the source
+doc `docs/trend_scout_microservice_plan.md`.
+
+### Updated env for the microservice layout
+
+Add these to your `.env`:
+
+```env
+# Trend Scout microservice (Flask -> microservice auth)
+TREND_SCOUT_SERVICE_URL=http://trend-scout:8093
+TREND_SCOUT_INTERNAL_API_TOKEN=<shared-secret>
+TREND_SCOUT_POSTGRES_DB=dfp_trend_scout
+TREND_SCOUT_POSTGRES_USER=dfp_trend_scout
+TREND_SCOUT_POSTGRES_PASSWORD=<db-password>
+TREND_SCOUT_REDIS_URL=redis://redis:6379/2
+TREND_SCOUT_CELERY_BROKER_URL=redis://redis:6379/1
+TREND_SCOUT_CELERY_RESULT_BACKEND=redis://redis:6379/1
+
+# Firecrawl (optional, opt-in)
+FIRECRAWL_ENABLED=false
+FIRECRAWL_API_URL=http://firecrawl-api:3002
+FIRECRAWL_API_KEY=<firecrawl-key>
+FIRECRAWL_BULL_AUTH_KEY=<bull-secret>
+
+# Etsy throttling (only if FIRECRAWL_ALLOW_ETSY=true)
+FIRECRAWL_ALLOW_ETSY=false
+FIRECRAWL_ETSY_RUN_PROBABILITY=0.15
+FIRECRAWL_ETSY_MIN_DAYS_BETWEEN_RUNS=14
+```
+
+### Etsy opt-in
+
+If you want Firecrawl's Etsy tier running, write the compliance
+acknowledgment file once before flipping the env vars:
+
+```bash
+uv run flask --app services/trend-scout:create_app acknowledge-etsy-risk \
+  --note "Read docs/compliance/firecrawl_etsy_opt_in.md. Risk understood."
+```
+
+Then set `FIRECRAWL_ALLOW_ETSY=true` and `FIRECRAWL_ENABLED=true` and restart
+the microservice. The fetch will run roughly once in seven cycles with a
+minimum 14-day gap. See `docs/compliance/firecrawl_etsy_opt_in.md` for the
+full posture.

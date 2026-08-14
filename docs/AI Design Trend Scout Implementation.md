@@ -1,4 +1,17 @@
-### **Master Prompt: AI Design Trend Scout Implementation**
+### **SUPERSEDED — 2026-08-13**
+
+This document is the original 2026 implementation spec for the in-monolith
+Trend Scout. As of 2026-08-13 the Trend Scout has been extracted into a
+dedicated microservice (`services/trend-scout/`). The authoritative plan
+and design doc is `docs/trend_scout_microservice_plan.md`. The setup guide
+is `docs/trend_scout_setup.md` and the cutover runbook is
+`docs/runbooks/trend_scout_microservice_cutover.md`. This file is retained
+for historical reference only; do not follow its phase breakdown — it
+describes a different (pre-extraction) architecture.
+
+---
+
+### **Master Prompt: AI Design Trend Scout Implementation** (historical, pre-extraction)
 
 **Context:** You are an expert full-stack Python/Flask developer tasked with building a massive new feature for "DFPos" (a local 3D printing farm OS and point-of-sale system). This feature is called the **AI Design Trend Scout**. It is an autonomous agent that monitors the 3D printing ecosystem to detect rising product trends, analyze business viability, and generate weekly actionable reports.
 
