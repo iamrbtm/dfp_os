@@ -41,3 +41,39 @@ This scorecard reflects the current hardening pass. Scores are conservative and 
 | Security / Permissions | 8 | Production config rejects default secrets, security headers are set, login/API auth rate limits are configurable, docs auth is required outside development, and intelligence query-token auth was removed. | In-memory rate limiting is process-local; production should use Redis-backed limiting. | Added security config, docs auth, intelligence auth, and rate-limit tests. |
 | Docker / Deployment | 7 | Docker image fails CSS build failures, uses `npm ci`, runs as non-root, exposes only intended ports, moves migrations to a release-profile service, and compose now requires explicit credentials. | `npm`, `uv`, and full Docker build were not available here; image build must be verified in CI/dev workstation. | `docker compose --env-file .env.example config` succeeds; npm build could not run because npm is missing. |
 | Tests | 7 | Added focused unit/API/E2E scaffolding for remediated issues. | `uv`, `pytest`, and `npm` are unavailable in this environment, so tests were syntax-checked but not executed. | `python3 -m py_compile` passed for changed Python files. |
+
+## 2026-08-13 Trend Scout Microservice + Firecrawl Initiative — Phase 0 Baseline
+
+Branch: `phase/0-plan-and-scorecard`. Per-phase scores tracked below as phases land.
+
+| Area | Phase 0 baseline | Notes |
+|---|---:|---|
+| Microservice / Trend Scout Extraction | 0 | Not started. Plan written, scorecard section opened. |
+| Firecrawl Self-Host | 0 | Not started. Vendor + hardening required. |
+| Firecrawl Sources (non-Etsy) | 0 | Not started. Targets planned: cults3d, thangs, stlfinder, cgtrader, mmf_trending (fallback), general. |
+| Firecrawl Etsy (throttled, opt-in) | 0 | Not started. Default off. Compliance flow designed. |
+| Source Coverage (overall) | unchanged from prior score | 10 existing sources + 7 new Firecrawl targets planned |
+| Audit Logging | unchanged from prior score | 22 new audit events planned for this initiative |
+| Security / Permissions | unchanged from prior score | Bearer token + scope enforcement planned for new microservice API |
+| REST API | unchanged from prior score | New microservice owns `/api/v1/*` for trend-scout; Flask becomes proxy |
+| Database / Migrations | unchanged from prior score | New logical DB `trend_scout` on shared Postgres, Alembic async |
+| Tests | unchanged from prior score | ~324 new tests planned across 11 phases |
+| Docker / Deployment | unchanged from prior score | 5 new Firecrawl services + 2 new trend-scout services + new volumes |
+| Documentation | unchanged from prior score | New `docs/trend_scout_microservice_plan.md` added |
+| SaaS-Later Readiness | unchanged from prior score | Microservice is single-tenant; multi-tenant posture unchanged |
+
+### Phase 0 pre-existing baseline issues (recorded, not fixed in this phase)
+
+- `uv run ruff check .` reports 5 pre-existing errors in `app/tasks/model_analysis.py`, `services/audit-log/app/tests/test_rebuild_chain.py`, and `tests/test_milestone7_booth_mode.py`. These are unrelated to the Trend Scout initiative and will be addressed in a separate cleanup pass to keep the per-phase diffs focused.
+- `uv run ruff format --check .` reports 6 pre-existing format issues across `app/tasks/model_analysis.py`, `migrations/versions/add_market_id_to_custom_request.py`, `migrations/versions/d5e6f7a8b9c0_market_catalog.py`, `services/audit-log/app/tests/test_entity_timeline_with_chain.py`, `tests/test_milestone7_booth_mode.py`, and `tests/test_openapi_spec.py`. Same reasoning — out of scope for Phase 0.
+- `uv run pytest --collect-only` collected 746 tests. Full-suite run was not attempted in Phase 0 because the env-level run is slow; the per-phase test runs in later phases will exercise the relevant subsets. A 3-test audit coverage subset was confirmed green (3 passed in 3.31s).
+
+### Phase 0 deliverables checklist
+
+- [x] `docs/trend_scout_microservice_plan.md` written (condensed plan)
+- [x] Scorecard section opened for this initiative
+- [ ] `.github/PULL_REQUEST_TEMPLATE.md` (added this phase)
+- [ ] `.github/ISSUE_TEMPLATE/trend_scout_microservice.md` (added this phase)
+- [ ] `.github/workflows/ci.yml` `trend-scout-tests` job skeleton (added this phase)
+- [ ] Baseline ruff/format/pytest recorded
+- [ ] Committed and pushed to `phase/0-plan-and-scorecard`
