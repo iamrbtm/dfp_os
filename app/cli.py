@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import click
 from flask import current_app
 from pathlib import Path
@@ -114,6 +116,21 @@ def market_catalog_sync() -> None:
 
     advanced = sync_all_listings()
     click.echo(f"Listings advanced: {advanced}")
+
+
+@market_catalog_group.command("import-tennesseefairs")
+@click.option("--commit", is_flag=True, help="Persist records (default is a dry-run preview).")
+def import_tennesseefairs(commit: bool) -> None:
+    """Import Tennessee Fairs calendar + directory into the Markets catalog via Firecrawl.
+
+    Uses the registered "tennesseefairs" importer. Defaults to a dry-run that
+    prints a JSON preview. Pass --commit to write MarketCatalogListing rows
+    (deduplicated across sources by name/website/county+state).
+    """
+    from app.services.market_catalog_importers.registry import run_importer
+
+    summary = run_importer(key="tennesseefairs", dry_run=not commit, actor=None)
+    click.echo(json.dumps(summary, indent=2, default=str))
 
 
 @migrate_group.command("file-paths")

@@ -27,30 +27,63 @@
           <button type="button" class="app-btn app-btn-secondary" data-close-market-import aria-label="Close">×</button>
         </div>
 
-        <div class="mt-6 border-b" style="border-color: var(--color-border);">
-          <button type="button" class="rounded-t-xl px-4 py-2 text-sm font-semibold" style="background: var(--color-bg-muted); color: var(--color-text); border: 1px solid var(--color-border); border-bottom-color: transparent;">AI</button>
+        <div class="mt-6 flex gap-2 border-b" style="border-color: var(--color-border);">
+          <button type="button" data-tab-btn="ai" class="rounded-t-xl px-4 py-2 text-sm font-semibold" style="background: var(--color-bg-muted); color: var(--color-text); border: 1px solid var(--color-border); border-bottom-color: transparent;">AI</button>
+          <button type="button" data-tab-btn="websites" class="rounded-t-xl px-4 py-2 text-sm font-semibold" style="background: transparent; color: var(--color-text-muted); border: 1px solid transparent;">Websites</button>
         </div>
 
-        <form method="post" action="{{ url_for('market_catalog.import_listing_ai_view') }}" enctype="multipart/form-data" class="mt-5 space-y-5">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div>
-            <label for="market-import-ai-input" class="block text-sm font-medium" style="color: var(--color-text);">Input</label>
-            <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Use one source at a time when possible: a URL, pasted event copy, raw HTML, or a prompt.</p>
-            <textarea id="market-import-ai-input" name="ai_input" rows="10" class="app-input mt-2 w-full" placeholder="input: <input data goes here>"></textarea>
-          </div>
-          <div>
-            <label for="market-import-ai-file" class="block text-sm font-medium" style="color: var(--color-text);">Optional file</label>
-            <input id="market-import-ai-file" name="ai_file" type="file" class="app-input mt-2 w-full" accept="image/*,.txt,.html,.htm,.json,.md,.csv,.pdf">
-            <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Images are sent directly to AI. Text-like files are included as text. PDFs may need pasted text if the model cannot read the upload.</p>
-          </div>
-          {% if not market_catalog_ai_ready %}
-            <div class="rounded-xl border p-3 text-sm" style="border-color: var(--color-border); background: var(--color-warning-soft, #fef3c7); color: var(--color-text);">The MarketCatalogExtraction schema file was not found, so AI import is unavailable.</div>
+        <div data-tab-panel="ai" class="mt-5 space-y-5">
+          <form method="post" action="{{ url_for('market_catalog.import_listing_ai_view') }}" enctype="multipart/form-data" class="space-y-5">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+              <label for="market-import-ai-input" class="block text-sm font-medium" style="color: var(--color-text);">Input</label>
+              <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Use one source at a time when possible: a URL, pasted event copy, raw HTML, or a prompt.</p>
+              <textarea id="market-import-ai-input" name="ai_input" rows="10" class="app-input mt-2 w-full" placeholder="input: <input data goes here>"></textarea>
+            </div>
+            <div>
+              <label for="market-import-ai-file" class="block text-sm font-medium" style="color: var(--color-text);">Optional file</label>
+              <input id="market-import-ai-file" name="ai_file" type="file" class="app-input mt-2 w-full" accept="image/*,.txt,.html,.htm,.json,.md,.csv,.pdf">
+              <p class="mt-1 text-xs" style="color: var(--color-text-muted);">Images are sent directly to AI. Text-like files are included as text. PDFs may need pasted text if the model cannot read the upload.</p>
+            </div>
+            {% if not market_catalog_ai_ready %}
+              <div class="rounded-xl border p-3 text-sm" style="border-color: var(--color-border); background: var(--color-warning-soft, #fef3c7); color: var(--color-text);">The MarketCatalogExtraction schema file was not found, so AI import is unavailable.</div>
+            {% endif %}
+            <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button type="button" class="app-btn app-btn-secondary" data-close-market-import>Cancel</button>
+              <button type="submit" class="app-btn app-btn-primary" {% if not market_catalog_ai_ready %}disabled{% endif %}>Import with AI</button>
+            </div>
+          </form>
+        </div>
+
+        <div data-tab-panel="websites" class="mt-5 hidden space-y-4">
+          {% if importers %}
+            {% for imp in importers %}
+              <div class="app-card p-4">
+                <h3 class="font-semibold" style="color: var(--color-text);">{{ imp.name }}</h3>
+                <p class="mt-1 text-sm" style="color: var(--color-text-muted);">{{ imp.description }}</p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  {% for u in imp.source_urls %}
+                    <a href="{{ u }}" target="_blank" rel="noopener" class="app-link text-xs">{{ u }}</a>
+                  {% endfor %}
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <form method="post" hx-post="{{ url_for('market_catalog.run_import_view', key=imp.key) }}" hx-target="#import-result" hx-swap="innerHTML" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="app-btn app-btn-secondary text-sm">Dry run</button>
+                  </form>
+                  <form method="post" hx-post="{{ url_for('market_catalog.run_import_view', key=imp.key) }}" hx-target="#import-result" hx-swap="innerHTML" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="commit" value="1">
+                    <button type="submit" class="app-btn app-btn-primary text-sm">Import</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-sm" style="color: var(--color-text-muted);">No web importers configured yet.</p>
           {% endif %}
-          <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <button type="button" class="app-btn app-btn-secondary" data-close-market-import>Cancel</button>
-            <button type="submit" class="app-btn app-btn-primary" {% if not market_catalog_ai_ready %}disabled{% endif %}>Import with AI</button>
-          </div>
-        </form>
+          <div id="import-result" class="mt-2"></div>
+        </div>
       </div>
     </div>
 
@@ -182,6 +215,24 @@
         if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
           closeModal();
         }
+      });
+
+      const tabButtons = document.querySelectorAll('[data-tab-btn]');
+      const tabPanels = document.querySelectorAll('[data-tab-panel]');
+      tabButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const target = btn.getAttribute('data-tab-btn');
+          tabButtons.forEach(function (b) {
+            const active = b === btn;
+            b.style.background = active ? 'var(--color-bg-muted)' : 'transparent';
+            b.style.color = active ? 'var(--color-text)' : 'var(--color-text-muted)';
+            b.style.borderColor = active ? 'var(--color-border)' : 'transparent';
+            b.style.borderBottomColor = active ? 'transparent' : '';
+          });
+          tabPanels.forEach(function (panel) {
+            panel.classList.toggle('hidden', panel.getAttribute('data-tab-panel') !== target);
+          });
+        });
       });
     });
   </script>

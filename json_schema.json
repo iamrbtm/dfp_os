@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dudefish.os/schemas/market_catalog_import.json",
+  "title": "MarketCatalogImport",
+  "description": "Universal envelope for any market/event/fair catalog scrape. Each entry maps to a MarketCatalogListing row.",
+  "type": "object",
+  "required": ["schema_version", "source", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "2.0.0" },
+    "source": {
+      "type": "object",
+      "required": ["url", "scraped_at"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "description": "Human label for the source site, e.g. 'Tennessee Fairs'" },
+        "url": { "type": "string", "format": "uri" },
+        "page_title": { "type": "string" },
+        "scraped_at": { "type": "string", "format": "date-time" },
+        "scraper": { "type": "string", "description": "Importer/module identifier" },
+        "query_or_context": { "type": "string", "description": "Search term, category page, county, etc." },
+        "locale": { "type": "string", "examples": ["en-US"] }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 0,
+      "items": { "$ref": "#/$defs/entry" }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string" },
+          "entry_index": { "type": "integer" },
+          "field": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "description": "Market/fair/event name" },
+        "description": { "type": "string" },
+        "website_url": { "type": "string", "format": "uri" },
+        "interest_level": {
+          "type": "string",
+          "enum": ["watching", "interested", "priority"]
+        },
+        "location": { "$ref": "#/$defs/location" },
+        "timing": { "$ref": "#/$defs/timing" },
+        "scale": { "$ref": "#/$defs/scale" },
+        "amenities": { "$ref": "#/$defs/amenities" },
+        "organizer": { "$ref": "#/$defs/organizer" },
+        "rules": { "$ref": "#/$defs/rules" },
+        "notes": { "type": "string" }
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "location_name": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "zip_code": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_start_time": { "type": "string", "description": "HH:MM (24h)" },
+        "default_end_time": { "type": "string", "description": "HH:MM (24h)" },
+        "timezone": { "type": "string", "examples": ["America/Chicago"] },
+        "is_recurring": { "type": "boolean" },
+        "rrule": { "type": "string" },
+        "recurrence_description": { "type": "string" },
+        "anchor_date": { "type": "string", "format": "date" },
+        "next_occurrence_date": { "type": "string", "format": "date" }
+      }
+    },
+    "scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "estimated_vendor_count": { "type": "integer", "minimum": 0 },
+        "estimated_attendee_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "amenities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "power_available": { "type": "boolean" },
+        "wifi_available": { "type": "boolean" },
+        "food_available": { "type": "boolean" },
+        "restrooms_available": { "type": "boolean" },
+        "indoor": { "type": "boolean" },
+        "covered_outdoor": { "type": "boolean" },
+        "outdoor": { "type": "boolean" },
+        "parking_notes": { "type": "string" }
+      }
+    },
+    "organizer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "application_url": { "type": "string", "format": "uri" },
+        "application_contact": { "type": "string" },
+        "application_deadline_description": { "type": "string" }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "booth_rules": { "type": "string" },
+        "required_documents": { "type": "string" }
+      }
+    }
+  }
+}

@@ -216,6 +216,11 @@ class Config:
 
     DEFAULT_THEME = "dfp-dudefish-light"
 
+    # Firecrawl self-host (used by market-catalog web importers)
+    FIRECRAWL_API_URL = os.getenv("FIRECRAWL_API_URL", "http://localhost:9500")
+    FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "")
+    FIRECRAWL_TIMEOUT_SECONDS = float(os.getenv("FIRECRAWL_TIMEOUT_SECONDS", "30"))
+
 
 class DevelopmentConfig(Config):
     DEBUG = True

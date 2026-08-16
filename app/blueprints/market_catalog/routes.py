@@ -39,6 +39,7 @@ from app.services.market_catalog_import import (
     generate_market_catalog_extraction,
     schema_file_exists,
 )
+from app.services.market_catalog_importers.registry import list_importers, run_importer
 from app.services.market_catalog_recurrence import (
     build_rrule_from_wizard,
     humanize_rrule,
@@ -203,6 +204,7 @@ def list_listings():
         interest_filter=interest_filter,
         archived=archived,
         market_catalog_ai_ready=bool(schema_file_exists()),
+        importers=list_importers(),
     )
 
 
@@ -246,6 +248,30 @@ def import_listing_ai_view():
         return redirect(url_for("market_catalog.list_listings"))
     flash(f"Imported '{listing.name}' into the market catalog.", "success")
     return redirect(url_for("market_catalog.list_listings"))
+
+
+@bp.post("/imports/<key>/run")
+@roles_required(UserRole.ADMIN, UserRole.STAFF)
+def run_import_view(key: str):
+    """Run a registered web importer (dry-run by default, --commit via form)."""
+    dry_run = request.form.get("commit") != "1"
+    try:
+        summary = run_importer(key, dry_run=dry_run, actor=current_user)
+    except Exception as exc:  # surface Firecrawl/network/parse errors in the modal
+        return (
+            render_template(
+                "market_catalog/_import_run_result.html",
+                error=str(exc),
+                key=key,
+            ),
+            200,
+        )
+    return render_template(
+        "market_catalog/_import_run_result.html",
+        summary=summary,
+        key=key,
+        dry_run=dry_run,
+    )
 
 
 @bp.get("/listings/<int:listing_id>")

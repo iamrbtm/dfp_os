@@ -26,6 +26,7 @@ test-results/
 test.json
 celerybeat-schedule*
 *.db
+._.DS_Store
 
 # Preserve intentionally archived files even when their original names are ignored.
 !Not_Needed/

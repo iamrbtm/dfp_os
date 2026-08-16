@@ -1,0 +1,88 @@
+{% if error %}
+  <div class="rounded-xl border p-4 text-sm" style="border-color: var(--color-border); background: #fee2e2; color: #b91c1c;">
+    <p class="font-semibold">Import failed</p>
+    <p class="mt-1 break-words">{{ error }}</p>
+  </div>
+{% else %}
+  <div class="rounded-xl border p-4 text-sm" style="border-color: var(--color-border);">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+            style="background: {% if summary.schema_valid %}var(--color-bg-muted){% else %}#fee2e2{% endif %};
+                   color: {% if summary.schema_valid %}var(--color-text-muted){% else %}#b91c1c{% endif %};">
+        {{ 'schema valid' if summary.schema_valid else 'schema invalid' }}
+      </span>
+      <span class="text-xs" style="color: var(--color-text-muted);">
+        {{ 'Dry run (no changes)' if dry_run else 'Committed to Market Catalog' }}
+      </span>
+      {% if not summary.schema_valid and summary.schema_error %}
+        <span class="text-xs" style="color: #b91c1c;">— {{ summary.schema_error }}</span>
+      {% endif %}
+    </div>
+
+    <dl class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Calendar</dt>
+        <dd class="text-lg font-semibold" style="color: var(--color-text);">{{ summary.calendar_count }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Directory</dt>
+        <dd class="text-lg font-semibold" style="color: var(--color-text);">{{ summary.directory_count }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Merged</dt>
+        <dd class="text-lg font-semibold" style="color: var(--color-text);">{{ summary.merged_count }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide" style="color: var(--color-text-muted);">Created</dt>
+        <dd class="text-lg font-semibold" style="color: var(--color-text);">{{ summary.created }}</dd>
+      </div>
+    </dl>
+
+    {% if summary.errors %}
+      <ul class="mt-3 list-disc pl-5 text-xs" style="color: #b91c1c;">
+        {% for e in summary.errors %}<li>{{ e.name }}: {{ e.error }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if summary.preview %}
+      <details class="mt-3" {% if not dry_run %}open{% endif %}>
+        <summary class="cursor-pointer text-xs font-medium" style="color: var(--color-link);">
+          Preview ({{ summary.preview|length }})
+        </summary>
+        <div class="mt-2 max-h-64 overflow-auto rounded-lg border" style="border-color: var(--color-border);">
+          <table class="w-full text-xs">
+            <thead>
+              <tr style="color: var(--color-text-muted);">
+                <th class="px-3 py-2 text-left font-semibold">Name</th>
+                <th class="px-3 py-2 text-left font-semibold">City</th>
+                <th class="px-3 py-2 text-left font-semibold">Next date</th>
+                <th class="px-3 py-2 text-left font-semibold">Contact</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in summary.preview %}
+                <tr class="border-t" style="border-color: var(--color-border);">
+                  <td class="px-3 py-2" style="color: var(--color-text);">{{ p.name }}</td>
+                  <td class="px-3 py-2" style="color: var(--color-text-muted);">{{ p.city or '—' }}</td>
+                  <td class="px-3 py-2" style="color: var(--color-text-muted);">{{ p.anchor_date or '—' }}</td>
+                  <td class="px-3 py-2" style="color: var(--color-text-muted);">{{ 'yes' if p.has_contact else 'no' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    {% endif %}
+
+    {% if not dry_run %}
+      <p class="mt-3 text-xs" style="color: var(--color-text-muted);">
+        Listings created: <strong>{{ summary.created }}</strong> ·
+        skipped (duplicates): <strong>{{ summary.skipped }}</strong>.
+      </p>
+    {% else %}
+      <p class="mt-3 text-xs" style="color: var(--color-text-muted);">
+        This was a dry run. Use <strong>Import</strong> to write these listings to the catalog.
+      </p>
+    {% endif %}
+  </div>
+{% endif %}
