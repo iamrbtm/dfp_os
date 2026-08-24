@@ -209,7 +209,7 @@ def download_storage_bytes(reference: str) -> bytes:
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code")
             if error_code in {"NoSuchBucket", "NoSuchKey", "404"}:
-                abort(404)
+                abort(404, description=f"Storage object not found: {reference}")
             current_app.logger.exception("S3 object download failed for %s", reference)
             raise
         return response["Body"].read()
@@ -238,7 +238,7 @@ def download_storage_to_file(
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code")
             if error_code in {"NoSuchBucket", "NoSuchKey", "404"}:
-                abort(404)
+                abort(404, description=f"Storage object not found: {reference}")
             current_app.logger.exception("S3 object download failed for %s", reference)
             raise
         body = response["Body"]
@@ -273,7 +273,7 @@ def hash_file_sha256(
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code")
             if error_code in {"NoSuchBucket", "NoSuchKey", "404"}:
-                abort(404)
+                abort(404, description=f"Storage object not found: {reference}")
             current_app.logger.exception("S3 object hash failed for %s", reference)
             raise
         body = response["Body"]

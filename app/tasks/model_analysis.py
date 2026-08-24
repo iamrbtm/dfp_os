@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-import hashlib
 import json
 import logging
 import uuid
@@ -50,7 +49,6 @@ from app.services.materials import material_default_temp, resolve_density
 from app.services.storage import (
     converted_storage_key,
     delete_storage_reference,
-    download_storage_bytes,
     download_storage_to_file,
     gcode_storage_key,
     hash_file_sha256,

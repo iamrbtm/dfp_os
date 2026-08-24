@@ -200,6 +200,7 @@ services:
     mem_limit: 1024m
     environment:
       <<: *env-app
+      FIRECRAWL_API_URL: ${FIRECRAWL_API_URL:-http://firecrawl-api:3002}
     ports:
       - "5000:5000"
     volumes:
